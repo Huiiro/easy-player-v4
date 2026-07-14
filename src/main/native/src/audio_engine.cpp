@@ -38,6 +38,8 @@ bool AudioEngine::play() {
     if (state_ == EngineState::Playing) return true;
     if (state_ != EngineState::Ready && state_ != EngineState::Paused) return false;
 
+    bool resuming = (state_ == EngineState::Paused);
+
     // Ensure we have a backend
     if (!backend_) {
         backend_ = std::make_unique<DSoundBackend>();
@@ -63,16 +65,20 @@ bool AudioEngine::play() {
         }
     }
 
-    // Start decoder thread
-    decoder_running_ = true;
-    decoder_thread_ = std::make_unique<std::thread>(&AudioEngine::decoder_thread_func, this);
+    // Start decoder thread (only if not already running)
+    if (!decoder_running_) {
+        decoder_running_ = true;
+        decoder_thread_ = std::make_unique<std::thread>(&AudioEngine::decoder_thread_func, this);
+    }
 
-    // Start position timer
-    timer_running_ = true;
-    position_timer_ = std::make_unique<std::thread>(&AudioEngine::position_timer_func, this);
+    // Start position timer (only if not already running)
+    if (!timer_running_) {
+        timer_running_ = true;
+        position_timer_ = std::make_unique<std::thread>(&AudioEngine::position_timer_func, this);
+    }
 
     set_state(EngineState::Playing);
-    LOG_INFO("Playback started: " + track_info_.file_path);
+    LOG_INFO(resuming ? "Playback resumed" : "Playback started: " + track_info_.file_path);
     return true;
 }
 

@@ -190,9 +190,11 @@ AudioFormat DSoundBackend::open(
     }
 
     // ── Step 2: Create secondary streaming buffer ──
-    // Use ~200ms of audio, double-buffered via notifications
-    impl_->buffer_frames = (fmt.nSamplesPerSec * 2) / 10; // 200ms
-    impl_->buffer_bytes = impl_->buffer_frames * fmt.nBlockAlign * 2; // double-buffered
+    // Double-buffered: each half = 200ms, total = 400ms
+    // Notification at 0% and 50% to fill the just-played half
+    int half_frames = (fmt.nSamplesPerSec * 2) / 10;             // 200ms worth of frames
+    impl_->buffer_frames = half_frames;
+    impl_->buffer_bytes = half_frames * fmt.nBlockAlign * 2;     // total buffer = 2 halves
     impl_->write_cursor = 0;
 
     DSBUFFERDESC desc2 = {};
@@ -213,19 +215,33 @@ AudioFormat DSoundBackend::open(
     current_format_.bit_depth = fmt.wBitsPerSample;
     current_format_.channels = fmt.nChannels;
 
-    buffer_frames_ = impl_->buffer_frames / 2; // half buffer per notify
-    latency_ms_ = (double)impl_->buffer_frames / fmt.nSamplesPerSec * 1000.0;
+    buffer_frames_ = half_frames; // half buffer = 200ms
+    latency_ms_ = (double)(half_frames * 2) / fmt.nSamplesPerSec * 1000.0; // total 400ms
 
     LOG_INFO("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
-             std::to_string(fmt.nChannels) + "ch, buffer=" +
-             std::to_string(impl_->buffer_frames) + " frames (" +
-             std::to_string(latency_ms_) + "ms latency)");
+             std::to_string(fmt.nChannels) + "ch, " +
+             std::to_string(half_frames) + "f/half × 2, " +
+             std::to_string(latency_ms_) + "ms total latency");
 
     return current_format_;
 }
 
 bool DSoundBackend::start() {
     if (!impl_->secondary || active_) return false;
+
+    // ── Pre-fill the entire secondary buffer with silence ──
+    {
+        void* ptr1 = nullptr;
+        DWORD bytes1 = 0;
+        void* ptr2 = nullptr;
+        DWORD bytes2 = 0;
+        HRESULT hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+        if (SUCCEEDED(hr)) {
+            if (ptr1) std::memset(ptr1, 0, bytes1);
+            if (ptr2) std::memset(ptr2, 0, bytes2);
+            impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        }
+    }
 
     // Create notify events
     impl_->notify_events[0] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
@@ -250,7 +266,7 @@ bool DSoundBackend::start() {
         nullptr, 0, dsound_thread_proc, impl_.get(), 0, nullptr);
 
     active_ = true;
-    LOG_INFO("DSoundBackend started");
+    LOG_INFO("DSoundBackend started (" + std::to_string(impl_->buffer_bytes) + " bytes buffer)");
     return true;
 }
 
