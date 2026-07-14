@@ -4,6 +4,8 @@ out
 .DS_Store
 .eslintcache
 *.log*
+.idea/
+.vscode/
 
 # Native addon build
 build/
@@ -11,5 +13,7 @@ build/
 *.dll
 *.dylib
 *.so
+*.exp
+*.lib
 src/main/native/deps/ffmpeg/
 src/main/native/deps/libsamplerate/
