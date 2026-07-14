@@ -2,6 +2,7 @@
 #include "logger.h"
 
 #include <atomic>
+#include <vector>
 #define NOMINMAX
 #include <windows.h>
 #include <dsound.h>
@@ -47,8 +48,9 @@ unsigned __stdcall dsound_thread_proc(void* param) {
 
         if (!impl->running.load(std::memory_order_acquire)) break;
 
-        // Determine which half of the buffer to fill
-        int half = (result == WAIT_OBJECT_0) ? 0 : 1;
+        // Notification at position 0: cursor just finished half 1 → fill half 1
+        // Notification at buffer_bytes/2: cursor just finished half 0 → fill half 0
+        int half = (result == WAIT_OBJECT_0) ? 1 : 0;
         int offset = half * impl->buffer_bytes / 2;
         int lock_size = impl->buffer_bytes / 2;
 
@@ -229,15 +231,25 @@ AudioFormat DSoundBackend::open(
 bool DSoundBackend::start() {
     if (!impl_->secondary || active_) return false;
 
-    // ── Pre-fill the entire secondary buffer with silence ──
+    // ── Pre-fill the first half of the buffer with audio ──
+    // (the second half gets filled on the first notification)
     {
         void* ptr1 = nullptr;
         DWORD bytes1 = 0;
         void* ptr2 = nullptr;
         DWORD bytes2 = 0;
-        HRESULT hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+        int half_bytes = impl_->buffer_bytes / 2;
+        HRESULT hr = impl_->secondary->Lock(0, half_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
         if (SUCCEEDED(hr)) {
-            if (ptr1) std::memset(ptr1, 0, bytes1);
+            int frames = half_bytes / (impl_->wave_format.nChannels * sizeof(short));
+            std::vector<float> f32_buf(frames * impl_->wave_format.nChannels);
+            impl_->callback(f32_buf.data(), frames, impl_->wave_format.nChannels);
+            short* s16_ptr1 = static_cast<short*>(ptr1);
+            int samples1 = bytes1 / sizeof(short);
+            for (int i = 0; i < samples1 && i < frames * impl_->wave_format.nChannels; ++i) {
+                float sample = f32_buf[i];
+                s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+            }
             if (ptr2) std::memset(ptr2, 0, bytes2);
             impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
         }
