@@ -76,6 +76,7 @@ private:
     std::unique_ptr<RingBuffer> ring_buffer_;
     std::unique_ptr<std::thread> decoder_thread_;
     std::atomic<bool> decoder_running_{false};
+    std::atomic<int> seek_generation_{0};  // incremented on each seek to invalidate stale decoder output
 
     // ── Position timer ──
     std::unique_ptr<std::thread> position_timer_;

@@ -133,6 +133,8 @@ bool AudioEngine::seek(double position_ms) {
 
     int64_t sample_pos = (int64_t)(position_ms / 1000.0 * track_info_.sample_rate);
 
+    // Invalidate any in-flight decoder data, then reset the ring buffer
+    seek_generation_.fetch_add(1, std::memory_order_release);
     if (ring_buffer_) ring_buffer_->reset();
     track_ended_fired_ = false;
     if (!decoder_.seek(sample_pos)) return false;
@@ -210,6 +212,8 @@ void AudioEngine::decoder_thread_func() {
             continue;
         }
 
+        // Snapshot generation before decode so we can detect a concurrent seek
+        int gen = seek_generation_.load(std::memory_order_acquire);
         int decode_chunk = std::min(target, 4096);
         std::vector<float> buffer(decode_chunk * channels);
 
@@ -219,6 +223,11 @@ void AudioEngine::decoder_thread_func() {
             LOG_INFO("Decoder reached EOF");
             decoder_running_ = false;
             break;
+        }
+
+        // If a seek happened while we were decoding, discard this stale data
+        if (seek_generation_.load(std::memory_order_acquire) != gen) {
+            continue; // skip write, will retry with new position
         }
 
         ring_buffer_->write(buffer.data(), decoded, 100);
