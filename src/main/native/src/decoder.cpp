@@ -1,12 +1,25 @@
 #include "decoder.h"
 #include "logger.h"
+#include <fstream>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
+#include <libavutil/error.h>
 #include <libavutil/opt.h>
 }
+
+namespace {
+
+// Convert FFmpeg error code to human-readable string
+std::string av_err_str(int errnum) {
+    char buf[256];
+    av_strerror(errnum, buf, sizeof(buf));
+    return std::string(buf);
+}
+
+} // namespace
 
 struct Decoder::Impl {
     AVFormatContext* fmt_ctx = nullptr;
@@ -34,9 +47,20 @@ Decoder::~Decoder() {
 bool Decoder::open(const std::string& file_path) {
     close();
 
+    // Verify file exists and is readable
+    {
+        std::ifstream test(file_path, std::ios::binary);
+        if (!test.is_open()) {
+            LOG_ERROR("File not found or not readable: " + file_path);
+            return false;
+        }
+        test.close();
+    }
+
+    LOG_INFO("Opening file: " + file_path);
     int ret = avformat_open_input(&impl_->fmt_ctx, file_path.c_str(), nullptr, nullptr);
     if (ret < 0) {
-        LOG_ERROR("avformat_open_input failed: " + file_path);
+        LOG_ERROR("avformat_open_input failed [" + av_err_str(ret) + "]: " + file_path);
         return false;
     }
 
@@ -69,7 +93,7 @@ bool Decoder::open(const std::string& file_path) {
 
     ret = avcodec_open2(impl_->codec_ctx, codec, nullptr);
     if (ret < 0) {
-        LOG_ERROR("avcodec_open2 failed");
+        LOG_ERROR("avcodec_open2 failed [" + av_err_str(ret) + "]");
         close();
         return false;
     }

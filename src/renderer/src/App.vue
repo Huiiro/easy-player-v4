@@ -43,6 +43,25 @@ function formatTime(ms: number): string {
   const sec = totalSec % 60
   return `${min}:${sec.toString().padStart(2, '0')}`
 }
+
+async function copyLog(entry: { timestamp: number; level: string; message: string }) {
+  const time = new Date(entry.timestamp).toLocaleTimeString()
+  const text = `[${time}] [${entry.level.toUpperCase()}] ${entry.message}`
+  try {
+    await navigator.clipboard.writeText(text)
+    console.log('[App] Copied to clipboard')
+  } catch {
+    // fallback for older browsers
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.left = '-9999px'
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+  }
+}
 </script>
 
 <template>
@@ -143,6 +162,7 @@ function formatTime(ms: number): string {
           :key="i"
           :class="'log-entry log-' + entry.level"
         >
+          <button class="log-copy-btn" title="Copy log" @click="copyLog(entry)">📋</button>
           <span class="log-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
           <span class="log-level">[{{ entry.level.toUpperCase() }}]</span>
           <span class="log-msg">{{ entry.message }}</span>
@@ -286,6 +306,22 @@ function formatTime(ms: number): string {
   gap: 8px;
 }
 .log-entry:hover { background: #1a1a1a; }
+.log-entry:hover .log-copy-btn { opacity: 1; }
+.log-copy-btn {
+  opacity: 0;
+  background: none;
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.65rem;
+  padding: 0 3px;
+  line-height: 1;
+  margin-right: 2px;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.log-copy-btn:active { background: #333; }
 .log-debug { color: #888; }
 .log-info  { color: #ccc; }
 .log-warn  { color: #f0ad4e; }

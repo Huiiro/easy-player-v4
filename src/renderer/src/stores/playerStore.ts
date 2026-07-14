@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { PlaybackState, TrackInfo } from '../types/audio'
 import { audioBridge } from '../services/audioBridge'
+import { useLogStore } from './logStore'
 
 export const usePlayerStore = defineStore('player', () => {
   // ── State ──
@@ -75,6 +76,18 @@ export const usePlayerStore = defineStore('player', () => {
       audioBridge.onPositionChanged((data) => {
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
+      })
+    )
+
+    // Forward engine errors to the log store
+    unsubs.push(
+      audioBridge.onError((data) => {
+        const logStore = useLogStore()
+        logStore.addEntry({
+          level: 'error',
+          message: `[${data.code}] ${data.message}`,
+          timestamp: Date.now()
+        })
       })
     )
   }
