@@ -4,6 +4,7 @@
 #include "ring_buffer.h"
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 
@@ -77,6 +78,7 @@ private:
     std::unique_ptr<std::thread> decoder_thread_;
     std::atomic<bool> decoder_running_{false};
     std::atomic<int> seek_generation_{0};  // incremented on each seek to invalidate stale decoder output
+    std::mutex decoder_mutex_;             // protects decoder from concurrent seek/decode
 
     // ── Position timer ──
     std::unique_ptr<std::thread> position_timer_;
