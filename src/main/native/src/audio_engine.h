@@ -89,4 +89,7 @@ private:
     StateChangedCallback state_cb_;
     PositionCallback pos_cb_;
     ErrorCallback error_cb_;
+
+    // ── Track ended detection (audio thread only) ──
+    bool track_ended_fired_ = false;
 };

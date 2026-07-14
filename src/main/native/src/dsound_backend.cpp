@@ -63,14 +63,17 @@ unsigned __stdcall dsound_thread_proc(void* param) {
         if (FAILED(hr)) continue;
 
         // Fill with interleaved float from our pipeline
-        int frames_per_half = lock_size / (impl->wave_format.nChannels * sizeof(short));
-        float* f32_output = static_cast<float*>(_alloca(frames_per_half * impl->wave_format.nChannels * sizeof(float)));
-        int rendered = impl->callback(f32_output, frames_per_half, impl->wave_format.nChannels);
+        int channels = impl->wave_format.nChannels;
+        int frames_per_half = lock_size / (channels * sizeof(short));
+        if (frames_per_half <= 0) { impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2); continue; }
+        std::vector<float> f32_output(frames_per_half * channels);
+        int rendered = impl->callback(f32_output.data(), frames_per_half, channels);
 
         // Convert f32 → s16
         short* s16_ptr1 = static_cast<short*>(ptr1);
         int samples1 = bytes1 / sizeof(short);
-        for (int i = 0; i < samples1 && i < rendered * impl->wave_format.nChannels; ++i) {
+        int total_samples = rendered * channels;
+        for (int i = 0; i < samples1 && i < total_samples; ++i) {
             float sample = f32_output[i];
             s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
         }
@@ -79,7 +82,7 @@ unsigned __stdcall dsound_thread_proc(void* param) {
             short* s16_ptr2 = static_cast<short*>(ptr2);
             int samples2 = bytes2 / sizeof(short);
             int offset_samples = samples1;
-            for (int i = 0; i < samples2 && (offset_samples + i) < rendered * impl->wave_format.nChannels; ++i) {
+            for (int i = 0; i < samples2 && (offset_samples + i) < total_samples; ++i) {
                 float sample = f32_output[offset_samples + i];
                 s16_ptr2[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
             }

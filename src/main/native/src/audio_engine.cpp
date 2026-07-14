@@ -25,6 +25,7 @@ bool AudioEngine::open(const std::string& file_path) {
     }
 
     track_info_ = decoder_.track_info();
+    track_ended_fired_ = false;
 
     // Create ring buffer: ~750ms capacity
     int buffer_frames = (int)(track_info_.sample_rate * 0.75);
@@ -133,6 +134,7 @@ bool AudioEngine::seek(double position_ms) {
     int64_t sample_pos = (int64_t)(position_ms / 1000.0 * track_info_.sample_rate);
 
     if (ring_buffer_) ring_buffer_->reset();
+    track_ended_fired_ = false;
     if (!decoder_.seek(sample_pos)) return false;
 
     return true;
@@ -254,6 +256,16 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
 
     if (read < frames) {
         glitch_count_.fetch_add(1, std::memory_order_relaxed);
+    }
+
+    // Check for end-of-stream: decoder stopped AND ring buffer is (nearly) empty
+    if (!track_ended_fired_ && !decoder_running_ && ring_buffer_->frames_available() == 0) {
+        track_ended_fired_ = true;
+        LOG_INFO("Track ended (EOF reached)");
+        // Notify via state callback
+        if (state_cb_) {
+            state_cb_(EngineState::Stopped);
+        }
     }
 
     // Apply volume (atomic load)

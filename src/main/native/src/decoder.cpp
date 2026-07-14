@@ -299,6 +299,14 @@ bool Decoder::seek(int64_t sample_position) {
     if (!impl_->fmt_ctx || !impl_->codec_ctx) return false;
 
     AVStream* stream = impl_->fmt_ctx->streams[impl_->stream_index];
+    if (stream->time_base.num <= 0 || stream->time_base.den <= 0) {
+        LOG_WARN("Invalid stream time_base, seek skipped");
+        return false;
+    }
+    if (track_info_.sample_rate <= 0) {
+        LOG_WARN("Invalid sample rate, seek skipped");
+        return false;
+    }
     AVRational sample_timebase = {1, track_info_.sample_rate};
     int64_t seek_target = av_rescale_q(sample_position,
                                         sample_timebase,
