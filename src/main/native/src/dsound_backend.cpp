@@ -17,7 +17,8 @@
 
 struct DSoundBackend::Impl {
     IDirectSound8* ds8 = nullptr;
-    IDirectSoundBuffer* primary = nullptr;
+    IDirectSoundBuffer* primary = nullptr;    // primary buffer: sets output format only
+    IDirectSoundBuffer* secondary = nullptr;  // secondary buffer: actual playback
     IDirectSoundNotify8* notify = nullptr;
     HANDLE notify_events[2] = {nullptr, nullptr};
     HANDLE thread_handle = nullptr;
@@ -39,7 +40,7 @@ unsigned __stdcall dsound_thread_proc(void* param) {
     // Set thread priority to highest (Pro Audio equivalent)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
-    impl->primary->Play(0, 0, DSBPLAY_LOOPING);
+    impl->secondary->Play(0, 0, DSBPLAY_LOOPING);
 
     while (impl->running.load(std::memory_order_acquire)) {
         DWORD result = WaitForMultipleObjects(2, impl->notify_events, FALSE, INFINITE);
@@ -56,7 +57,7 @@ unsigned __stdcall dsound_thread_proc(void* param) {
         void* ptr2 = nullptr;
         DWORD bytes2 = 0;
 
-        HRESULT hr = impl->primary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+        HRESULT hr = impl->secondary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
         if (FAILED(hr)) continue;
 
         // Fill with interleaved float from our pipeline
@@ -82,10 +83,10 @@ unsigned __stdcall dsound_thread_proc(void* param) {
             }
         }
 
-        impl->primary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
     }
 
-    impl->primary->Stop();
+    impl->secondary->Stop();
     return 0;
 }
 
@@ -168,11 +169,11 @@ AudioFormat DSoundBackend::open(
     fmt.nBlockAlign = fmt.nChannels * fmt.wBitsPerSample / 8;
     fmt.nAvgBytesPerSec = fmt.nSamplesPerSec * fmt.nBlockAlign;
 
-    // Create primary buffer
+    // ── Step 1: Create primary buffer (sets output format) ──
     DSBUFFERDESC desc = {};
     desc.dwSize = sizeof(DSBUFFERDESC);
     desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
-    desc.dwBufferBytes = fmt.nAvgBytesPerSec; // 1 second
+    desc.dwBufferBytes = 0; // Must be 0 for primary buffer
 
     IDirectSoundBuffer* primary = nullptr;
     hr = ds8->CreateSoundBuffer(&desc, &primary, nullptr);
@@ -182,12 +183,31 @@ AudioFormat DSoundBackend::open(
     }
     impl_->primary = primary;
 
-    // Set primary buffer format — this determines the output format
-    primary->SetFormat(&fmt);
+    // Set primary buffer format — this controls hardware output format
+    hr = primary->SetFormat(&fmt);
+    if (FAILED(hr)) {
+        LOG_WARN("SetFormat on primary buffer failed, continuing anyway");
+    }
 
-    impl_->buffer_frames = 1024;
+    // ── Step 2: Create secondary streaming buffer ──
+    // Use ~200ms of audio, double-buffered via notifications
+    impl_->buffer_frames = (fmt.nSamplesPerSec * 2) / 10; // 200ms
     impl_->buffer_bytes = impl_->buffer_frames * fmt.nBlockAlign * 2; // double-buffered
     impl_->write_cursor = 0;
+
+    DSBUFFERDESC desc2 = {};
+    desc2.dwSize = sizeof(DSBUFFERDESC);
+    desc2.dwFlags = DSBCAPS_GLOBALFOCUS | DSBCAPS_CTRLPOSITIONNOTIFY | DSBCAPS_GETCURRENTPOSITION2;
+    desc2.dwBufferBytes = impl_->buffer_bytes;
+    desc2.lpwfxFormat = &fmt;
+
+    IDirectSoundBuffer* secondary = nullptr;
+    hr = ds8->CreateSoundBuffer(&desc2, &secondary, nullptr);
+    if (FAILED(hr)) {
+        LOG_ERROR("CreateSoundBuffer (secondary) failed: hr=0x" + std::to_string(hr));
+        return {};
+    }
+    impl_->secondary = secondary;
 
     current_format_.sample_rate = fmt.nSamplesPerSec;
     current_format_.bit_depth = fmt.wBitsPerSample;
@@ -198,22 +218,23 @@ AudioFormat DSoundBackend::open(
 
     LOG_INFO("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
              std::to_string(fmt.nChannels) + "ch, buffer=" +
-             std::to_string(impl_->buffer_frames) + " frames");
+             std::to_string(impl_->buffer_frames) + " frames (" +
+             std::to_string(latency_ms_) + "ms latency)");
 
     return current_format_;
 }
 
 bool DSoundBackend::start() {
-    if (!impl_->primary || active_) return false;
+    if (!impl_->secondary || active_) return false;
 
     // Create notify events
     impl_->notify_events[0] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     impl_->notify_events[1] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
 
-    // Set up notifications at 0% and 50% of the buffer
+    // Set up notifications at 0% and 50% of the secondary buffer
     IDirectSoundNotify8* notify = nullptr;
-    HRESULT hr = impl_->primary->QueryInterface(IID_IDirectSoundNotify8,
-                                                 (void**)&notify);
+    HRESULT hr = impl_->secondary->QueryInterface(IID_IDirectSoundNotify8,
+                                                   (void**)&notify);
     if (SUCCEEDED(hr) && notify) {
         impl_->notify = notify;
         DSBPOSITIONNOTIFY positions[2];
@@ -262,8 +283,12 @@ void DSoundBackend::close() {
     for (auto& ev : impl_->notify_events) {
         if (ev) { CloseHandle(ev); ev = nullptr; }
     }
+    if (impl_->secondary) {
+        impl_->secondary->Stop();
+        impl_->secondary->Release();
+        impl_->secondary = nullptr;
+    }
     if (impl_->primary) {
-        impl_->primary->Stop();
         impl_->primary->Release();
         impl_->primary = nullptr;
     }
