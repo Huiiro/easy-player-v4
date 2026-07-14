@@ -133,6 +133,11 @@ bool AudioEngine::seek(double position_ms) {
 
     int64_t sample_pos = (int64_t)(position_ms / 1000.0 * track_info_.sample_rate);
 
+    double pos_before = this->position_ms();
+    int buf_before = ring_buffer_ ? ring_buffer_->frames_available() : -1;
+    LOG_INFO("Seek requested: " + std::to_string(position_ms) + "ms -> " +
+             std::to_string(sample_pos) + " samples (buf=" + std::to_string(buf_before) + "f)");
+
     // Lock decoder mutex to prevent concurrent decode() while we seek
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
@@ -142,9 +147,14 @@ bool AudioEngine::seek(double position_ms) {
         if (!decoder_.seek(sample_pos)) return false;
     }
 
+    int buf_after = ring_buffer_ ? ring_buffer_->frames_available() : -1;
+    LOG_INFO("Seek: ring buffer after reset: " + std::to_string(buf_after) + "f, decoder at " +
+             std::to_string(decoder_.position()) + " samples");
+
     // Flush hardware buffer to clear stale audio from before the seek
     if (backend_) {
         backend_->flush();
+        LOG_INFO("Seek: backend flushed");
     }
 
     return true;
