@@ -86,6 +86,28 @@ bool Decoder::open(const std::string& file_path) {
 
     LOG_INFO("Opening file: " + file_path);
     int ret = avformat_open_input(&impl_->fmt_ctx, file_path.c_str(), nullptr, nullptr);
+
+#ifdef _WIN32
+    // If UTF-8 path fails, try the system's ANSI code page (e.g., GBK for Chinese Windows)
+    if (ret < 0) {
+        int wlen = MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, nullptr, 0);
+        if (wlen > 0) {
+            std::wstring wpath(wlen, L'\0');
+            MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, &wpath[0], wlen);
+            // Convert wide to system ANSI code page
+            int alen = WideCharToMultiByte(CP_ACP, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
+            if (alen > 0) {
+                std::string ansi_path(alen, '\0');
+                WideCharToMultiByte(CP_ACP, 0, wpath.c_str(), -1, &ansi_path[0], alen, nullptr, nullptr);
+                // Remove null terminator
+                if (!ansi_path.empty() && ansi_path.back() == '\0') ansi_path.pop_back();
+                LOG_INFO("Retrying with ANSI path: " + ansi_path);
+                ret = avformat_open_input(&impl_->fmt_ctx, ansi_path.c_str(), nullptr, nullptr);
+            }
+        }
+    }
+#endif
+
     if (ret < 0) {
         LOG_ERROR("avformat_open_input failed [" + av_err_str(ret) + "]: " + file_path);
         return false;
