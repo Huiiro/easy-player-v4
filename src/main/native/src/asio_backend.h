@@ -20,6 +20,7 @@ public:
     bool start() override;
     bool stop() override;
     void close() override;
+    void flush() override {}
 
     BackendType type() const override { return BackendType::ASIO; }
     AudioFormat current_format() const override { return current_format_; }

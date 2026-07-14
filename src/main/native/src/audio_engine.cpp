@@ -139,6 +139,11 @@ bool AudioEngine::seek(double position_ms) {
     track_ended_fired_ = false;
     if (!decoder_.seek(sample_pos)) return false;
 
+    // Flush hardware buffer to clear stale audio from before the seek
+    if (backend_) {
+        backend_->flush();
+    }
+
     return true;
 }
 

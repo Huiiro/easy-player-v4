@@ -56,4 +56,8 @@ public:
 
     virtual int buffer_size_frames() const = 0;
     virtual double latency_ms() const = 0;
+
+    // Discard buffered audio and reset the playback buffer.
+    // Called after seek to prevent old audio from playing.
+    virtual void flush() = 0;
 };

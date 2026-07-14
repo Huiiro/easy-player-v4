@@ -20,6 +20,7 @@ public:
     bool start() override;
     bool stop() override;
     void close() override;
+    void flush() override {}
 
     BackendType type() const override {
         return exclusive_ ? BackendType::WASAPI_EXCLUSIVE : BackendType::WASAPI_SHARED;

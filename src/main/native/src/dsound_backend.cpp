@@ -304,6 +304,48 @@ bool DSoundBackend::stop() {
     return true;
 }
 
+void DSoundBackend::flush() {
+    if (!impl_->secondary) return;
+
+    // Lock the entire secondary buffer and fill with fresh audio data
+    void* ptr1 = nullptr;
+    DWORD bytes1 = 0;
+    void* ptr2 = nullptr;
+    DWORD bytes2 = 0;
+    HRESULT hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+    if (FAILED(hr)) return;
+
+    int channels = impl_->wave_format.nChannels;
+    int total_frames = impl_->buffer_bytes / (channels * sizeof(short));
+    std::vector<float> f32_buf(total_frames * channels);
+
+    // Fill with audio from the pipeline (will be new data after ring buffer reset)
+    impl_->callback(f32_buf.data(), total_frames, channels);
+
+    // Convert f32 → s16 and write to both parts
+    short* s16_ptr1 = static_cast<short*>(ptr1);
+    int samples1 = bytes1 / sizeof(short);
+    int total_samples = total_frames * channels;
+    for (int i = 0; i < samples1 && i < total_samples; ++i) {
+        float sample = f32_buf[i];
+        s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+    }
+
+    if (ptr2) {
+        short* s16_ptr2 = static_cast<short*>(ptr2);
+        int samples2 = bytes2 / sizeof(short);
+        for (int i = 0; i < samples2 && (samples1 + i) < total_samples; ++i) {
+            float sample = f32_buf[samples1 + i];
+            s16_ptr2[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+        }
+    }
+
+    impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+
+    // Reset play cursor to the start of the buffer
+    impl_->secondary->SetCurrentPosition(0);
+}
+
 void DSoundBackend::close() {
     if (active_) stop();
 

@@ -41,7 +41,8 @@ public:
             }
 
             int to_write = std::min(avail, total_samples - written);
-            int pos = write_pos_.load(std::memory_order_relaxed) % buffer_.size();
+            // Acquire: must see reset() from JS thread (which uses seq_cst)
+            int pos = write_pos_.load(std::memory_order_acquire) % buffer_.size();
 
             int first = std::min(to_write, (int)buffer_.size() - pos);
             std::memcpy(buffer_.data() + pos, data + written, first * sizeof(float));
@@ -66,7 +67,8 @@ public:
         int underflow = total_samples - to_read;
 
         if (to_read > 0) {
-            int pos = read_pos_.load(std::memory_order_relaxed) % buffer_.size();
+            // Acquire: must see reset() from JS thread (which uses seq_cst)
+            int pos = read_pos_.load(std::memory_order_acquire) % buffer_.size();
             int first = std::min(to_read, (int)buffer_.size() - pos);
             std::memcpy(data, buffer_.data() + pos, first * sizeof(float));
             if (to_read > first) {
@@ -84,10 +86,12 @@ public:
         return (to_read + underflow) / channels_;
     }
 
-    // Discard all buffered data (called on seek).
+    // Discard all buffered data (called on seek from JS thread).
+    // Uses seq_cst because a THIRD thread (JS) writes to both positions,
+    // breaking the SPSC assumption. Audio and decoder threads must see this.
     void reset() {
-        write_pos_.store(0, std::memory_order_release);
-        read_pos_.store(0, std::memory_order_release);
+        write_pos_.store(0, std::memory_order_seq_cst);
+        read_pos_.store(0, std::memory_order_seq_cst);
         cv_.notify_one();
     }
 
