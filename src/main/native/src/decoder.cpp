@@ -1,6 +1,10 @@
 #include "decoder.h"
 #include "logger.h"
-#include <fstream>
+
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#endif
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -18,6 +22,33 @@ std::string av_err_str(int errnum) {
     av_strerror(errnum, buf, sizeof(buf));
     return std::string(buf);
 }
+
+#ifdef _WIN32
+// Convert UTF-8 string to wide string (UTF-16) for Windows file APIs
+std::wstring utf8_to_wide(const std::string& utf8) {
+    if (utf8.empty()) return L"";
+    int len = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+    if (len <= 0) return L"";
+    std::wstring result(len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &result[0], len);
+    result.resize(len - 1); // remove null terminator
+    return result;
+}
+
+// Check if a file exists and is readable using wide-char path (Windows)
+bool file_exists(const std::string& utf8_path) {
+    std::wstring wpath = utf8_to_wide(utf8_path);
+    DWORD attrs = GetFileAttributesW(wpath.c_str());
+    return attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY);
+}
+#else
+// POSIX: standard ifstream check works with UTF-8
+#include <fstream>
+bool file_exists(const std::string& path) {
+    std::ifstream test(path, std::ios::binary);
+    return test.is_open();
+}
+#endif
 
 } // namespace
 
@@ -47,14 +78,10 @@ Decoder::~Decoder() {
 bool Decoder::open(const std::string& file_path) {
     close();
 
-    // Verify file exists and is readable
-    {
-        std::ifstream test(file_path, std::ios::binary);
-        if (!test.is_open()) {
-            LOG_ERROR("File not found or not readable: " + file_path);
-            return false;
-        }
-        test.close();
+    // Verify file exists and is readable (uses wide-char API on Windows)
+    if (!file_exists(file_path)) {
+        LOG_ERROR("File not found or not readable: " + file_path);
+        return false;
     }
 
     LOG_INFO("Opening file: " + file_path);
