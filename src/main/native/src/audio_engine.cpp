@@ -1,10 +1,13 @@
 #include "audio_engine.h"
 #include "dsound_backend.h"
+#include "wasapi_backend.h"
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
+#include <unordered_set>
+#include <vector>
 
-AudioEngine::AudioEngine() : current_backend_type_(BackendType::DIRECTSOUND) {}
+AudioEngine::AudioEngine() {}
 
 AudioEngine::~AudioEngine() {
     stop();
@@ -43,7 +46,19 @@ bool AudioEngine::play() {
 
     // Ensure we have a backend
     if (!backend_) {
-        backend_ = std::make_unique<DSoundBackend>();
+        // Create the backend based on user-selected type
+        switch (current_backend_type_) {
+            case BackendType::WASAPI_SHARED:
+                backend_ = std::make_unique<WasapiBackend>(false);
+                break;
+            case BackendType::WASAPI_EXCLUSIVE:
+                backend_ = std::make_unique<WasapiBackend>(true);
+                break;
+            case BackendType::DIRECTSOUND:
+            default:
+                backend_ = std::make_unique<DSoundBackend>();
+                break;
+        }
 
         AudioFormat requested;
         requested.sample_rate = track_info_.sample_rate;
@@ -54,7 +69,7 @@ bool AudioEngine::play() {
             return this->audio_callback(output, frames, channels);
         };
 
-        AudioFormat actual = backend_->open(L"default", requested, cb);
+        AudioFormat actual = backend_->open(current_device_id_, requested, cb);
         if (actual.sample_rate == 0) {
             if (error_cb_) error_cb_(-2, "Failed to open audio device");
             return false;
@@ -138,23 +153,51 @@ bool AudioEngine::seek(double position_ms) {
     LOG_INFO("Seek requested: " + std::to_string(position_ms) + "ms -> " +
              std::to_string(sample_pos) + " samples (buf=" + std::to_string(buf_before) + "f)");
 
-    // Lock decoder mutex to prevent concurrent decode() while we seek
+    int prefetched = 0;
+
+    // Lock decoder mutex to prevent concurrent decode() while we seek and prefill
+    // the ring buffer with fresh audio for the backend flush below.
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
         seek_generation_.fetch_add(1, std::memory_order_release);
-        if (ring_buffer_) ring_buffer_->reset();
         track_ended_fired_ = false;
         if (!decoder_.seek(sample_pos)) return false;
+
+        if (ring_buffer_) {
+            ring_buffer_->reset();
+
+            int channels = track_info_.channels;
+            int desired_frames = backend_
+                ? backend_->buffer_size_frames() * 2
+                : track_info_.sample_rate / 10;
+            int max_frames = ring_buffer_->write_available() / channels;
+            desired_frames = std::max(0, std::min(desired_frames, max_frames));
+
+            while (prefetched < desired_frames) {
+                int chunk = std::min(4096, desired_frames - prefetched);
+                std::vector<float> buffer(chunk * channels);
+                int decoded = decoder_.decode(buffer.data(), chunk);
+                if (decoded <= 0) break;
+                ring_buffer_->write(buffer.data(), decoded, 0);
+                prefetched += decoded;
+                if (decoded < chunk) break;
+            }
+        }
     }
 
     int buf_after = ring_buffer_ ? ring_buffer_->frames_available() : -1;
     LOG_INFO("Seek: ring buffer after reset: " + std::to_string(buf_after) + "f, decoder at " +
-             std::to_string(decoder_.position()) + " samples");
+             std::to_string(decoder_.position()) + " samples, prefetched " +
+             std::to_string(prefetched) + "f");
 
     // Flush hardware buffer to clear stale audio from before the seek
     if (backend_) {
         backend_->flush();
         LOG_INFO("Seek: backend flushed");
+    }
+
+    if (pos_cb_) {
+        pos_cb_(position_ms, duration_ms());
     }
 
     return true;
@@ -174,24 +217,123 @@ void AudioEngine::set_volume(float volume) {
 
 std::vector<DeviceInfo> AudioEngine::enumerate_devices() {
     std::vector<DeviceInfo> devices;
+    std::unordered_set<std::wstring> seen_names;
 
-    // Enumerate DSound devices (always available)
-    DSoundBackend ds;
-    auto ds_devices = ds.enumerate_devices();
-    devices.insert(devices.end(), ds_devices.begin(), ds_devices.end());
+    auto add_unique = [&](std::vector<DeviceInfo>& list) {
+        for (auto& d : list) {
+            if (seen_names.find(d.name) == seen_names.end()) {
+                seen_names.insert(d.name);
+                devices.push_back(std::move(d));
+            }
+        }
+    };
 
-    // TODO: enumerate WASAPI, ASIO in later phases
+    // WASAPI devices first (preferred)
+    {
+        WasapiBackend wasapi_shared(false);
+        auto d = wasapi_shared.enumerate_devices();
+        add_unique(d);
+    }
+    {
+        WasapiBackend wasapi_exclusive(true);
+        auto d = wasapi_exclusive.enumerate_devices();
+        // Exclusive devices share names with shared — but the backend field
+        // differs. Skip name dedup and add them all (user can pick exclusive).
+        for (auto& di : d) {
+            devices.push_back(std::move(di));
+        }
+    }
+
+    // DSound devices last (fallback — on Win10+ these are WASAPI Shared under the hood)
+    {
+        DSoundBackend ds;
+        auto d = ds.enumerate_devices();
+        add_unique(d);
+    }
+
     return devices;
 }
 
 bool AudioEngine::set_device(const std::wstring& device_id) {
-    // Phase 0: DSound only — all devices use the same path
+    if (current_device_id_ == device_id) return true;
+
+    bool was_playing = (state_ == EngineState::Playing);
+
+    // Need to transition state so that play() will actually reconstruct
+    // the backend instead of short-circuiting on `state_ == Playing`.
+    if (was_playing) {
+        state_.store(EngineState::Paused, std::memory_order_release);
+    }
+
+    // Stop backend and threads, then restart with new device
+    if (backend_) {
+        backend_->stop();
+        backend_->close();
+        backend_.reset();
+    }
+
+    // Also stop decoder/timer so play() can recreate them cleanly
+    if (decoder_thread_ && decoder_thread_->joinable()) {
+        decoder_running_ = false;
+        decoder_thread_->join();
+        decoder_thread_.reset();
+    }
+    if (position_timer_ && position_timer_->joinable()) {
+        timer_running_ = false;
+        position_timer_->join();
+        position_timer_.reset();
+    }
+
+    current_device_id_ = device_id;
+
+    // If we were playing, recreate backend and resume
+    if (was_playing) {
+        return play();
+    }
     return true;
 }
 
 bool AudioEngine::set_backend(BackendType type) {
-    // Phase 0: only DIRECTSOUND is implemented
-    if (type != BackendType::DIRECTSOUND) return false;
+    if (current_backend_type_ == type) return true;
+    // Phase 0: only DIRECTSOUND, WASAPI_SHARED, WASAPI_EXCLUSIVE are implemented
+    if (type != BackendType::DIRECTSOUND &&
+        type != BackendType::WASAPI_SHARED &&
+        type != BackendType::WASAPI_EXCLUSIVE) {
+        return false;
+    }
+
+    bool was_playing = (state_ == EngineState::Playing);
+
+    // Need to transition state so that play() will actually reconstruct
+    // the backend instead of short-circuiting on `state_ == Playing`.
+    if (was_playing) {
+        state_.store(EngineState::Paused, std::memory_order_release);
+    }
+
+    // Stop backend and threads
+    if (backend_) {
+        backend_->stop();
+        backend_->close();
+        backend_.reset();
+    }
+    // If there are threads running (decoder/timer), reset them too
+    if (decoder_thread_ && decoder_thread_->joinable()) {
+        decoder_running_ = false;
+        decoder_thread_->join();
+        decoder_thread_.reset();
+    }
+    if (position_timer_ && position_timer_->joinable()) {
+        timer_running_ = false;
+        position_timer_->join();
+        position_timer_.reset();
+    }
+
+    current_backend_type_ = type;
+
+    // If we were playing, recreate backend and resume
+    if (was_playing) {
+        return play();
+    }
     return true;
 }
 

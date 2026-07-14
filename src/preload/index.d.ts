@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { DeviceInfo, PlaybackStatus } from '../renderer/src/types/audio'
 
 declare global {
   interface Window {
@@ -12,10 +13,10 @@ declare global {
         stop(): Promise<{ success: boolean }>
         seek(positionMs: number): Promise<{ success: boolean }>
         setVolume(volume: number): Promise<{ success: boolean }>
-        enumerateDevices(): Promise<{ success: boolean; data?: unknown[] }>
+        enumerateDevices(): Promise<{ success: boolean; data?: DeviceInfo[]; error?: string }>
         setDevice(deviceId: string): Promise<{ success: boolean }>
         setBackend(backend: string): Promise<{ success: boolean }>
-        getStatus(): Promise<{ success: boolean; data?: unknown }>
+        getStatus(): Promise<{ success: boolean; data?: PlaybackStatus; error?: string }>
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onEvent(type: string, callback: (data: any) => void): () => void

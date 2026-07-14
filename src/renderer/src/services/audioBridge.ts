@@ -49,8 +49,9 @@ export const audioBridge = {
     await window.api.audio.setDevice(deviceId)
   },
 
-  async setBackend(backend: string): Promise<void> {
-    await window.api.audio.setBackend(backend)
+  async setBackend(backend: string): Promise<boolean> {
+    const r = await window.api.audio.setBackend(backend)
+    return r.success
   },
 
   async getStatus(): Promise<PlaybackStatus | null> {

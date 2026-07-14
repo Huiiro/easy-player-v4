@@ -20,7 +20,7 @@ public:
     bool start() override;
     bool stop() override;
     void close() override;
-    void flush() override {}
+    void flush() override;
 
     BackendType type() const override {
         return exclusive_ ? BackendType::WASAPI_EXCLUSIVE : BackendType::WASAPI_SHARED;
@@ -37,6 +37,9 @@ private:
     bool active_ = false;
     int buffer_frames_ = 0;
     double latency_ms_ = 0.0;
+
+    // Allow the audio thread proc to access internal implementation
+    friend unsigned __stdcall wasapi_thread_proc(void* param);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

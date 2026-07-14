@@ -3,6 +3,8 @@
 #include <napi.h>
 #include <memory>
 #include <string>
+#define NOMINMAX
+#include <windows.h>
 
 // ──────────────────────────────────────────────────────────
 // N-API wrapper for AudioEngine
@@ -100,11 +102,32 @@ private:
 
         for (size_t i = 0; i < devices.size(); ++i) {
             auto obj = Napi::Object::New(info.Env());
+
+            // Convert wide strings to UTF-8 (fixes CJK encoding)
+            auto wide_to_utf8 = [](const std::wstring& ws) -> std::string {
+                if (ws.empty()) return {};
+                int len = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
+                                              nullptr, 0, nullptr, nullptr);
+                if (len <= 0) return {};
+                std::string result(len - 1, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
+                                    &result[0], len, nullptr, nullptr);
+                return result;
+            };
+
             obj.Set("id", Napi::String::New(info.Env(),
-                        std::string(devices[i].id.begin(), devices[i].id.end())));
+                        wide_to_utf8(devices[i].id)));
             obj.Set("name", Napi::String::New(info.Env(),
-                        std::string(devices[i].name.begin(), devices[i].name.end())));
-            obj.Set("backend", Napi::String::New(info.Env(), "directsound"));
+                        wide_to_utf8(devices[i].name)));
+            // Map BackendType enum to string
+            const char* backend_str = "directsound";
+            switch (devices[i].backend) {
+                case BackendType::WASAPI_SHARED:    backend_str = "wasapi_shared"; break;
+                case BackendType::WASAPI_EXCLUSIVE: backend_str = "wasapi_exclusive"; break;
+                case BackendType::ASIO:             backend_str = "asio"; break;
+                default:                            backend_str = "directsound"; break;
+            }
+            obj.Set("backend", Napi::String::New(info.Env(), backend_str));
             obj.Set("isDefault", Napi::Boolean::New(info.Env(), devices[i].is_default));
             obj.Set("maxChannels", Napi::Number::New(info.Env(), devices[i].max_channels));
             arr.Set(i, obj);
@@ -119,8 +142,14 @@ private:
     }
 
     Napi::Value SetBackend(const Napi::CallbackInfo& info) {
-        // Phase 0: only directsound available
-        return info.Env().Undefined();
+        std::string backend = info[0].As<Napi::String>().Utf8Value();
+        BackendType type;
+        if (backend == "wasapi_shared")      type = BackendType::WASAPI_SHARED;
+        else if (backend == "wasapi_exclusive") type = BackendType::WASAPI_EXCLUSIVE;
+        else if (backend == "asio")             type = BackendType::ASIO;
+        else                                    type = BackendType::DIRECTSOUND;
+        bool ok = engine_->set_backend(type);
+        return Napi::Boolean::New(info.Env(), ok);
     }
 
     Napi::Value GetStatus(const Napi::CallbackInfo& info) {

@@ -69,7 +69,8 @@ private:
 
     // ── Backend ──
     std::unique_ptr<AudioBackend> backend_;
-    BackendType current_backend_type_;
+    BackendType current_backend_type_{BackendType::DIRECTSOUND};
+    std::wstring current_device_id_{L"default"};
 
     // ── Decoder ──
     Decoder decoder_;

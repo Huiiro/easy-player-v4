@@ -48,7 +48,8 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       }
 
       case 'setBackend': {
-        return { success: true } // Phase 1
+        const ok = engine.setBackend(params.backend)
+        return { success: ok }
       }
 
       case 'getStatus': {

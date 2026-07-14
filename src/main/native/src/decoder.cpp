@@ -1,5 +1,8 @@
 #include "decoder.h"
 #include "logger.h"
+#include <algorithm>
+#include <cstring>
+#include <vector>
 
 #ifdef _WIN32
 #define NOMINMAX
@@ -50,6 +53,15 @@ bool file_exists(const std::string& path) {
 }
 #endif
 
+int64_t frame_start_sample(const AVFrame* frame, const AVStream* stream, int sample_rate, int64_t fallback) {
+    int64_t ts = frame->best_effort_timestamp;
+    if (ts == AV_NOPTS_VALUE) ts = frame->pts;
+    if (ts == AV_NOPTS_VALUE || !stream || sample_rate <= 0) return fallback;
+
+    AVRational sample_timebase = {1, sample_rate};
+    return av_rescale_q(ts, stream->time_base, sample_timebase);
+}
+
 } // namespace
 
 struct Decoder::Impl {
@@ -60,6 +72,10 @@ struct Decoder::Impl {
     AVPacket* packet = nullptr;
     int stream_index = -1;
     int64_t current_pts = 0;
+    int64_t pending_seek_sample = -1;
+    std::vector<float> pending_pcm;
+    int pending_pcm_offset_frames = 0;
+    int64_t pending_pcm_start_sample = 0;
     int64_t total_samples_ = 0;
     bool eof = false;
 };
@@ -147,7 +163,7 @@ bool Decoder::open(const std::string& file_path) {
         return false;
     }
 
-    // Setup resampler: native format → interleaved f32
+    // Setup resampler: native format to interleaved f32
     AVChannelLayout out_ch_layout;
     av_channel_layout_default(&out_ch_layout, impl_->codec_ctx->ch_layout.nb_channels);
 
@@ -156,7 +172,7 @@ bool Decoder::open(const std::string& file_path) {
                               &impl_->codec_ctx->ch_layout, impl_->codec_ctx->sample_fmt, impl_->codec_ctx->sample_rate,
                               0, nullptr);
     if (ret < 0 || !impl_->swr_ctx || swr_init(impl_->swr_ctx) < 0) {
-        LOG_ERROR("swr_init failed — falling back to native format");
+        LOG_ERROR("swr_init failed - falling back to native format");
         swr_free(&impl_->swr_ctx);
         impl_->swr_ctx = nullptr;
         // Will do native format passthrough
@@ -186,6 +202,10 @@ bool Decoder::open(const std::string& file_path) {
                                       track_info_.sample_rate);
     impl_->eof = false;
     impl_->current_pts = 0;
+    impl_->pending_seek_sample = -1;
+    impl_->pending_pcm.clear();
+    impl_->pending_pcm_offset_frames = 0;
+    impl_->pending_pcm_start_sample = 0;
 
     // Read metadata
     AVDictionaryEntry* tag = nullptr;
@@ -214,6 +234,10 @@ void Decoder::close() {
     avformat_close_input(&impl_->fmt_ctx);
     impl_->stream_index = -1;
     impl_->eof = false;
+    impl_->pending_seek_sample = -1;
+    impl_->pending_pcm.clear();
+    impl_->pending_pcm_offset_frames = 0;
+    impl_->pending_pcm_start_sample = 0;
     track_info_ = TrackInfo{};
 }
 
@@ -224,15 +248,35 @@ int Decoder::decode(float* output, int max_frames) {
     int channels = track_info_.channels;
 
     while (frames_decoded < max_frames) {
-        // Try to receive a decoded frame
+        if (!impl_->pending_pcm.empty()) {
+            int pending_frames = (int)impl_->pending_pcm.size() / channels;
+            int available = pending_frames - impl_->pending_pcm_offset_frames;
+            int to_copy = std::min(available, max_frames - frames_decoded);
+
+            std::memcpy(output + frames_decoded * channels,
+                        impl_->pending_pcm.data() + impl_->pending_pcm_offset_frames * channels,
+                        to_copy * channels * sizeof(float));
+
+            frames_decoded += to_copy;
+            impl_->pending_pcm_offset_frames += to_copy;
+            impl_->current_pts = impl_->pending_pcm_start_sample + impl_->pending_pcm_offset_frames;
+
+            if (impl_->pending_pcm_offset_frames >= pending_frames) {
+                impl_->pending_pcm.clear();
+                impl_->pending_pcm_offset_frames = 0;
+                impl_->pending_pcm_start_sample = 0;
+            }
+
+            continue;
+        }
+
         int ret = avcodec_receive_frame(impl_->codec_ctx, impl_->frame);
 
         if (ret == AVERROR(EAGAIN)) {
-            // Need more data — send a packet
             while (true) {
                 ret = av_read_frame(impl_->fmt_ctx, impl_->packet);
                 if (ret == AVERROR_EOF) {
-                    avcodec_send_packet(impl_->codec_ctx, nullptr); // flush
+                    avcodec_send_packet(impl_->codec_ctx, nullptr);
                     impl_->eof = true;
                     break;
                 }
@@ -244,7 +288,7 @@ int Decoder::decode(float* output, int max_frames) {
                 if (impl_->packet->stream_index == impl_->stream_index) {
                     ret = avcodec_send_packet(impl_->codec_ctx, impl_->packet);
                     av_packet_unref(impl_->packet);
-                    if (ret >= 0) break; // sent, now receive
+                    if (ret >= 0) break;
                 } else {
                     av_packet_unref(impl_->packet);
                 }
@@ -258,40 +302,73 @@ int Decoder::decode(float* output, int max_frames) {
             return frames_decoded > 0 ? frames_decoded : -1;
         }
 
-        // Convert to interleaved f32
+        AVStream* stream = impl_->fmt_ctx->streams[impl_->stream_index];
+        int64_t frame_start = frame_start_sample(
+            impl_->frame, stream, track_info_.sample_rate, impl_->current_pts);
+
         int frame_samples = impl_->frame->nb_samples;
         int remaining = max_frames - frames_decoded;
-        int to_copy = std::min(frame_samples, remaining);
+        std::vector<float> frame_output(frame_samples * channels);
+        int converted = 0;
 
         if (impl_->swr_ctx) {
-            // Use libswresample for conversion
-            uint8_t* out_ptr = reinterpret_cast<uint8_t*>(output + frames_decoded * channels);
-            int converted = swr_convert(impl_->swr_ctx, &out_ptr, to_copy,
-                                        (const uint8_t**)impl_->frame->data,
-                                        impl_->frame->nb_samples);
-            if (converted > 0) {
-                frames_decoded += converted;
-            }
+            uint8_t* out_ptr = reinterpret_cast<uint8_t*>(frame_output.data());
+            converted = swr_convert(impl_->swr_ctx, &out_ptr, frame_samples,
+                                    (const uint8_t**)impl_->frame->data,
+                                    impl_->frame->nb_samples);
         } else if (impl_->codec_ctx->sample_fmt == AV_SAMPLE_FMT_FLT) {
-            // Direct copy (planar → interleaved)
             for (int ch = 0; ch < channels; ++ch) {
                 float* src = reinterpret_cast<float*>(impl_->frame->data[ch]);
-                float* dst = output + frames_decoded * channels;
-                for (int i = 0; i < to_copy; ++i) {
+                float* dst = frame_output.data();
+                for (int i = 0; i < frame_samples; ++i) {
                     dst[i * channels + ch] = src[i];
                 }
             }
-            frames_decoded += to_copy;
+            converted = frame_samples;
         } else {
-            // FIXME: add more format conversions
             LOG_WARN("Unsupported sample format without swresample");
             break;
+        }
+
+        if (converted > 0) {
+            int skip = 0;
+            if (impl_->pending_seek_sample >= 0) {
+                int64_t frame_end = frame_start + converted;
+                if (frame_end <= impl_->pending_seek_sample) {
+                    impl_->current_pts = frame_end;
+                    av_frame_unref(impl_->frame);
+                    continue;
+                }
+
+                if (frame_start < impl_->pending_seek_sample) {
+                    skip = (int)std::min<int64_t>(
+                        converted, impl_->pending_seek_sample - frame_start);
+                }
+                impl_->pending_seek_sample = -1;
+            }
+
+            int available = converted - skip;
+            int to_copy = std::min(available, remaining);
+            if (to_copy > 0) {
+                std::memcpy(output + frames_decoded * channels,
+                            frame_output.data() + skip * channels,
+                            to_copy * channels * sizeof(float));
+                frames_decoded += to_copy;
+                impl_->current_pts = frame_start + skip + to_copy;
+            }
+
+            if (to_copy < available) {
+                int leftover = available - to_copy;
+                const float* leftover_start = frame_output.data() + (skip + to_copy) * channels;
+                impl_->pending_pcm.assign(leftover_start, leftover_start + leftover * channels);
+                impl_->pending_pcm_offset_frames = 0;
+                impl_->pending_pcm_start_sample = frame_start + skip + to_copy;
+            }
         }
 
         av_frame_unref(impl_->frame);
     }
 
-    impl_->current_pts += frames_decoded;
     return frames_decoded;
 }
 
@@ -320,7 +397,15 @@ bool Decoder::seek(int64_t sample_position) {
     }
 
     avcodec_flush_buffers(impl_->codec_ctx);
+    if (impl_->swr_ctx) {
+        swr_close(impl_->swr_ctx);
+        swr_init(impl_->swr_ctx);
+    }
     impl_->current_pts = sample_position;
+    impl_->pending_seek_sample = sample_position;
+    impl_->pending_pcm.clear();
+    impl_->pending_pcm_offset_frames = 0;
+    impl_->pending_pcm_start_sample = 0;
     impl_->eof = false;
 
     return true;

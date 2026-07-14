@@ -19,7 +19,7 @@ export interface TrackInfo {
 export interface DeviceInfo {
   id: string
   name: string
-  backend: string
+  backend: 'wasapi_shared' | 'wasapi_exclusive' | 'asio' | 'directsound'
   isDefault: boolean
   maxChannels: number
 }

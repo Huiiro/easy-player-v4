@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { usePlayerStore } from './stores/playerStore'
 import { useLogStore } from './stores/logStore'
-import { audioBridge } from './services/audioBridge'
 
 const player = usePlayerStore()
 const logs = useLogStore()
+const isSeeking = ref(false)
+const seekPreviewMs = ref<number | null>(null)
+
+const displayPositionMs = computed(() => seekPreviewMs.value ?? player.positionMs)
+const displayProgress = computed(() =>
+  player.durationMs > 0 ? displayPositionMs.value / player.durationMs : 0
+)
 
 // ── Startup ──
-onMounted(() => {
+onMounted(async () => {
   player.subscribeToEvents()
   logs.subscribe()
+  await player.refreshDevices()
 
   console.log('[App] Audio player UI mounted')
 })
@@ -34,6 +41,35 @@ async function handleFileDrop(event: DragEvent) {
 
 function handleDragOver(event: DragEvent) {
   event.preventDefault()
+}
+
+function getSeekPositionMs(event: PointerEvent): number {
+  const bar = event.currentTarget as HTMLElement
+  const rect = bar.getBoundingClientRect()
+  const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width))
+  return pct * player.durationMs
+}
+
+function handleProgressPointerDown(event: PointerEvent) {
+  if (player.durationMs <= 0) return
+  isSeeking.value = true
+  seekPreviewMs.value = getSeekPositionMs(event)
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function handleProgressPointerMove(event: PointerEvent) {
+  if (!isSeeking.value) return
+  seekPreviewMs.value = getSeekPositionMs(event)
+}
+
+async function handleProgressPointerUp(event: PointerEvent) {
+  if (!isSeeking.value) return
+  const targetMs = getSeekPositionMs(event)
+  seekPreviewMs.value = targetMs
+  isSeeking.value = false
+  ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
+  await player.seek(targetMs)
+  seekPreviewMs.value = null
 }
 
 // ── Format ──
@@ -73,7 +109,7 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
     <!-- Title Bar -->
     <header class="title-bar">
       <h1>Easy Player</h1>
-      <span class="version">Phase 0 — DirectSound</span>
+      <span class="version">Phase 1 — WASAPI + DSound</span>
     </header>
 
     <!-- Drop Zone -->
@@ -84,6 +120,43 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       <p v-else>
         {{ player.trackInfo?.metadata?.title || player.currentFile }}
       </p>
+    </div>
+
+    <!-- Backend / Device Selector -->
+    <div class="selector-row">
+      <div class="selector-group">
+        <label>Backend:</label>
+        <select
+          :value="player.currentBackend"
+          @change="async (e) => {
+            await player.setBackend((e.target as HTMLSelectElement).value)
+          }"
+        >
+          <option value="wasapi_shared">WASAPI Shared</option>
+          <option value="wasapi_exclusive">WASAPI Exclusive</option>
+          <option value="directsound">DirectSound</option>
+        </select>
+      </div>
+      <div class="selector-group">
+        <label>Device:</label>
+        <select
+          :value="player.currentDeviceId"
+          @change="async (e) => {
+            await player.setDevice((e.target as HTMLSelectElement).value)
+          }"
+        >
+          <option
+            v-for="dev in player.devices"
+            :key="dev.id"
+            :value="dev.id"
+          >
+            {{ dev.name }} {{ dev.isDefault ? '(default)' : '' }}
+          </option>
+        </select>
+      </div>
+      <button class="btn-refresh" @click="player.refreshDevices()" title="Refresh devices">
+        &#x21bb;
+      </button>
     </div>
 
     <!-- Player Controls -->
@@ -106,13 +179,15 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 
     <!-- Progress -->
     <div class="progress-section">
-      <span class="time">{{ formatTime(player.positionMs) }}</span>
-      <div class="progress-bar" @click="(e) => {
-        const rect = (e.target as HTMLElement).getBoundingClientRect()
-        const pct = (e.clientX - rect.left) / rect.width
-        player.seek(pct * player.durationMs)
-      }">
-        <div class="progress-fill" :style="{ width: (player.progress * 100) + '%' }"></div>
+      <span class="time">{{ formatTime(displayPositionMs) }}</span>
+      <div
+        class="progress-bar"
+        @pointerdown="handleProgressPointerDown"
+        @pointermove="handleProgressPointerMove"
+        @pointerup="handleProgressPointerUp"
+        @pointercancel="isSeeking = false; seekPreviewMs = null"
+      >
+        <div class="progress-fill" :style="{ width: (displayProgress * 100) + '%' }"></div>
       </div>
       <span class="time">{{ formatTime(player.durationMs) }}</span>
     </div>
@@ -208,6 +283,42 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
   align-items: center;
   justify-content: center;
 }
+
+.selector-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+.selector-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.selector-group label {
+  color: #999;
+  white-space: nowrap;
+}
+.selector-group select {
+  background: #222;
+  color: #ccc;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 0.8rem;
+  max-width: 200px;
+}
+.btn-refresh {
+  background: #222;
+  color: #ccc;
+  border: 1px solid #444;
+  border-radius: 3px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.btn-refresh:hover { background: #333; }
 
 .controls {
   display: flex;

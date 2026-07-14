@@ -74,10 +74,12 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${AVFORMAT_LIB}
     ${AVUTIL_LIB}
     ${SWRESAMPLE_LIB}
-    # Windows multimedia for DirectSound
+    # Windows multimedia for DirectSound & WASAPI
     winmm
     dsound
     dxguid
+    ole32
+    uuid
 )
 
 # ── Install ──

@@ -1,6 +1,6 @@
 import { join } from 'path'
 import { app } from 'electron'
-import { TrackInfo, DeviceInfo } from './types'
+import { DeviceInfo } from './types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let nativeAddon: any = null
@@ -93,6 +93,11 @@ export class AudioEngineManager {
 
   setDevice(deviceId: string): void {
     this.engine?.setDevice(deviceId)
+  }
+
+  setBackend(backend: string): boolean {
+    if (!this.engine) return false
+    return this.engine.setBackend(backend)
   }
 
   // ── Query ──

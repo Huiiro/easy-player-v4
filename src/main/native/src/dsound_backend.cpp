@@ -2,6 +2,7 @@
 #include "logger.h"
 
 #include <atomic>
+#include <mutex>
 #include <vector>
 #define NOMINMAX
 #include <windows.h>
@@ -24,7 +25,7 @@ struct DSoundBackend::Impl {
     HANDLE notify_events[2] = {nullptr, nullptr};
     HANDLE thread_handle = nullptr;
     std::atomic<bool> running{false};
-    std::atomic<bool> flush_requested{false};
+    std::mutex buffer_mutex;
     WAVEFORMATEX wave_format = {};
     int buffer_frames = 0;
     int buffer_bytes = 0;
@@ -53,21 +54,17 @@ unsigned __stdcall dsound_thread_proc(void* param) {
         int channels = impl->wave_format.nChannels;
         int half_bytes = impl->buffer_bytes / 2;
 
-        if (impl->flush_requested.exchange(false, std::memory_order_acquire)) {
-            // Flush: refill entire buffer from position 0, then reset cursor
-            offset = 0;
-            lock_size = impl->buffer_bytes;
-        } else {
-            // Normal: fill the half that was just played
-            int half = (result == WAIT_OBJECT_0) ? 1 : 0;
-            offset = half * half_bytes;
-            lock_size = half_bytes;
-        }
+        // Normal: fill the half that was just played
+        int half = (result == WAIT_OBJECT_0) ? 1 : 0;
+        offset = half * half_bytes;
+        lock_size = half_bytes;
 
         void* ptr1 = nullptr;
         DWORD bytes1 = 0;
         void* ptr2 = nullptr;
         DWORD bytes2 = 0;
+
+        std::lock_guard<std::mutex> guard(impl->buffer_mutex);
 
         HRESULT hr = impl->secondary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
         if (FAILED(hr)) continue;
@@ -98,11 +95,6 @@ unsigned __stdcall dsound_thread_proc(void* param) {
         }
 
         impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
-
-        // If we did a full flush, reset play cursor to 0
-        if (lock_size == impl->buffer_bytes) {
-            impl->secondary->SetCurrentPosition(0);
-        }
     }
 
     impl->secondary->Stop();
@@ -209,9 +201,9 @@ AudioFormat DSoundBackend::open(
     }
 
     // ── Step 2: Create secondary streaming buffer ──
-    // Double-buffered: each half = 200ms, total = 400ms
+    // Double-buffered: each half = 100ms, total = 200ms
     // Notification at 0% and 50% to fill the just-played half
-    int half_frames = (fmt.nSamplesPerSec * 2) / 10;             // 200ms worth of frames
+    int half_frames = fmt.nSamplesPerSec / 10;                  // 100ms worth of frames
     impl_->buffer_frames = half_frames;
     impl_->buffer_bytes = half_frames * fmt.nBlockAlign * 2;     // total buffer = 2 halves
     impl_->write_cursor = 0;
@@ -234,8 +226,8 @@ AudioFormat DSoundBackend::open(
     current_format_.bit_depth = fmt.wBitsPerSample;
     current_format_.channels = fmt.nChannels;
 
-    buffer_frames_ = half_frames; // half buffer = 200ms
-    latency_ms_ = (double)(half_frames * 2) / fmt.nSamplesPerSec * 1000.0; // total 400ms
+    buffer_frames_ = half_frames; // half buffer = 100ms
+    latency_ms_ = (double)(half_frames * 2) / fmt.nSamplesPerSec * 1000.0; // total 200ms
 
     LOG_INFO("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
              std::to_string(fmt.nChannels) + "ch, " +
@@ -321,12 +313,58 @@ bool DSoundBackend::stop() {
 void DSoundBackend::flush() {
     if (!impl_->secondary || !impl_->running.load(std::memory_order_acquire)) return;
 
-    // Signal the audio thread to refill the entire buffer on its next cycle
-    impl_->flush_requested.store(true, std::memory_order_release);
+    std::lock_guard<std::mutex> guard(impl_->buffer_mutex);
 
-    // Wake up the audio thread
+    impl_->secondary->Stop();
+    impl_->secondary->SetCurrentPosition(0);
+
+    void* ptr1 = nullptr;
+    DWORD bytes1 = 0;
+    void* ptr2 = nullptr;
+    DWORD bytes2 = 0;
+
+    HRESULT hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+    if (SUCCEEDED(hr)) {
+        int channels = impl_->wave_format.nChannels;
+        int frames = impl_->buffer_bytes / (channels * sizeof(short));
+        std::vector<float> f32_output(frames * channels);
+        int rendered = impl_->callback(f32_output.data(), frames, channels);
+        int total_samples = rendered * channels;
+
+        short* s16_ptr1 = static_cast<short*>(ptr1);
+        int samples1 = bytes1 / sizeof(short);
+        for (int i = 0; i < samples1; ++i) {
+            if (i < total_samples) {
+                float sample = f32_output[i];
+                s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+            } else {
+                s16_ptr1[i] = 0;
+            }
+        }
+
+        if (ptr2) {
+            short* s16_ptr2 = static_cast<short*>(ptr2);
+            int samples2 = bytes2 / sizeof(short);
+            int offset_samples = samples1;
+            for (int i = 0; i < samples2; ++i) {
+                int sample_index = offset_samples + i;
+                if (sample_index < total_samples) {
+                    float sample = f32_output[sample_index];
+                    s16_ptr2[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+                } else {
+                    s16_ptr2[i] = 0;
+                }
+            }
+        }
+
+        impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+    }
+
+    impl_->secondary->Play(0, 0, DSBPLAY_LOOPING);
+
+    // Wake the audio thread so normal half-buffer refills resume promptly.
     if (impl_->notify_events[0]) SetEvent(impl_->notify_events[0]);
-    LOG_INFO("DSoundBackend flush requested");
+    LOG_INFO("DSoundBackend flushed");
 }
 
 void DSoundBackend::close() {

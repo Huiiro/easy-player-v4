@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { PlaybackState, TrackInfo } from '../types/audio'
+import type { PlaybackState, TrackInfo, DeviceInfo } from '../types/audio'
 import { audioBridge } from '../services/audioBridge'
 import { useLogStore } from './logStore'
 
@@ -13,6 +13,9 @@ export const usePlayerStore = defineStore('player', () => {
   const glitchCount = ref(0)
   const trackInfo = ref<TrackInfo | null>(null)
   const currentFile = ref<string | null>(null)
+  const currentBackend = ref<string>('directsound')
+  const devices = ref<DeviceInfo[]>([])
+  const currentDeviceId = ref('default')
 
   // ── Computed ──
   const isPlaying = computed(() => state.value === 'playing')
@@ -51,12 +54,34 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function seek(ms: number) {
-    return audioBridge.seek(ms)
+    const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
+    positionMs.value = targetMs
+    return audioBridge.seek(targetMs)
   }
 
   async function setVolume(vol: number) {
     volume.value = Math.max(0, Math.min(1, vol))
     await audioBridge.setVolume(volume.value)
+  }
+
+  async function setBackend(backend: string) {
+    if (currentBackend.value === backend) return
+    currentBackend.value = backend
+    const ok = await audioBridge.setBackend(backend)
+    if (ok) {
+      // Refresh device list after backend change
+      await refreshDevices()
+    }
+  }
+
+  async function setDevice(deviceId: string) {
+    if (currentDeviceId.value === deviceId) return
+    currentDeviceId.value = deviceId
+    await audioBridge.setDevice(deviceId)
+  }
+
+  async function refreshDevices() {
+    devices.value = await audioBridge.enumerateDevices()
   }
 
   // ── Event subscriptions ──
@@ -106,6 +131,9 @@ export const usePlayerStore = defineStore('player', () => {
     glitchCount,
     trackInfo,
     currentFile,
+    currentBackend,
+    devices,
+    currentDeviceId,
     // Computed
     isPlaying,
     isPaused,
@@ -119,6 +147,9 @@ export const usePlayerStore = defineStore('player', () => {
     stop,
     seek,
     setVolume,
+    setBackend,
+    setDevice,
+    refreshDevices,
     // Events
     subscribeToEvents,
     unsubscribe
