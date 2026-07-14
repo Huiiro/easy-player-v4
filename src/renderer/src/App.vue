@@ -25,7 +25,7 @@ async function handleFileDrop(event: DragEvent) {
   event.preventDefault()
   const files = event.dataTransfer?.files
   if (files && files.length > 0) {
-    const filePath = (files[0] as { path?: string }).path ?? files[0].name
+    const filePath = window.api.audio.getFilePath(files[0])
     console.log('[App] Opening file:', filePath)
     await player.openFile(filePath)
     await player.play()

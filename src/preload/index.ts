@@ -1,8 +1,18 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // ── Audio API exposed to renderer ──
 const audioAPI = {
+  // Get the full filesystem path from a File object (drag-and-drop)
+  getFilePath: (file: File): string => {
+    try {
+      // Electron 29+: use webUtils for reliable path resolution
+      return webUtils.getPathForFile(file)
+    } catch {
+      // Fallback for older Electron or non-file drops
+      return (file as { path?: string }).path ?? file.name
+    }
+  },
   // Commands
   open: (filePath: string) =>
     ipcRenderer.invoke('audio:command', { action: 'open', params: { filePath } }),

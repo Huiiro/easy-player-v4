@@ -5,6 +5,7 @@ declare global {
     electron: ElectronAPI
     api: {
       audio: {
+        getFilePath(file: File): string
         open(filePath: string): Promise<{ success: boolean; data?: unknown; error?: string }>
         play(startPosition?: number): Promise<{ success: boolean }>
         pause(): Promise<{ success: boolean }>
