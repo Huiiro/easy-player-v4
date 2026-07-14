@@ -1,0 +1,275 @@
+#include "dsound_backend.h"
+#include "logger.h"
+
+#include <atomic>
+#define NOMINMAX
+#include <windows.h>
+#include <dsound.h>
+#include <mmreg.h>
+#include <process.h>
+
+#pragma comment(lib, "dsound.lib")
+#pragma comment(lib, "winmm.lib")
+
+// ──────────────────────────────────────────────────────────
+// Internal implementation (pimpl to avoid COM header leakage)
+// ──────────────────────────────────────────────────────────
+
+struct DSoundBackend::Impl {
+    IDirectSound8* ds8 = nullptr;
+    IDirectSoundBuffer* primary = nullptr;
+    IDirectSoundNotify8* notify = nullptr;
+    HANDLE notify_events[2] = {nullptr, nullptr};
+    HANDLE thread_handle = nullptr;
+    std::atomic<bool> running{false};
+    WAVEFORMATEX wave_format = {};
+    int buffer_frames = 0;
+    int buffer_bytes = 0;
+    int write_cursor = 0;
+    AudioCallback callback;
+};
+
+// ──────────────────────────────────────────────────────────
+// Audio thread function
+// ──────────────────────────────────────────────────────────
+
+unsigned __stdcall dsound_thread_proc(void* param) {
+    auto* impl = static_cast<DSoundBackend::Impl*>(param);
+
+    // Set thread priority to highest (Pro Audio equivalent)
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
+
+    impl->primary->Play(0, 0, DSBPLAY_LOOPING);
+
+    while (impl->running.load(std::memory_order_acquire)) {
+        DWORD result = WaitForMultipleObjects(2, impl->notify_events, FALSE, INFINITE);
+
+        if (!impl->running.load(std::memory_order_acquire)) break;
+
+        // Determine which half of the buffer to fill
+        int half = (result == WAIT_OBJECT_0) ? 0 : 1;
+        int offset = half * impl->buffer_bytes / 2;
+        int lock_size = impl->buffer_bytes / 2;
+
+        void* ptr1 = nullptr;
+        DWORD bytes1 = 0;
+        void* ptr2 = nullptr;
+        DWORD bytes2 = 0;
+
+        HRESULT hr = impl->primary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+        if (FAILED(hr)) continue;
+
+        // Fill with interleaved float from our pipeline
+        int frames_per_half = lock_size / (impl->wave_format.nChannels * sizeof(short));
+        float* f32_output = static_cast<float*>(_alloca(frames_per_half * impl->wave_format.nChannels * sizeof(float)));
+        int rendered = impl->callback(f32_output, frames_per_half, impl->wave_format.nChannels);
+
+        // Convert f32 → s16
+        short* s16_ptr1 = static_cast<short*>(ptr1);
+        int samples1 = bytes1 / sizeof(short);
+        for (int i = 0; i < samples1 && i < rendered * impl->wave_format.nChannels; ++i) {
+            float sample = f32_output[i];
+            s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+        }
+
+        if (ptr2) {
+            short* s16_ptr2 = static_cast<short*>(ptr2);
+            int samples2 = bytes2 / sizeof(short);
+            int offset_samples = samples1;
+            for (int i = 0; i < samples2 && (offset_samples + i) < rendered * impl->wave_format.nChannels; ++i) {
+                float sample = f32_output[offset_samples + i];
+                s16_ptr2[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
+            }
+        }
+
+        impl->primary->Unlock(ptr1, bytes1, ptr2, bytes2);
+    }
+
+    impl->primary->Stop();
+    return 0;
+}
+
+// ──────────────────────────────────────────────────────────
+// DSoundBackend implementation
+// ──────────────────────────────────────────────────────────
+
+DSoundBackend::DSoundBackend() : impl_(std::make_unique<Impl>()) {}
+
+DSoundBackend::~DSoundBackend() {
+    close();
+}
+
+std::vector<DeviceInfo> DSoundBackend::enumerate_devices() {
+    std::vector<DeviceInfo> devices;
+
+    // Enumerate DirectSound devices via DirectSoundEnumerate
+    auto enum_callback = [](LPGUID guid, LPCWSTR desc, LPCWSTR /*module*/,
+                            LPVOID context) -> BOOL {
+        auto* list = static_cast<std::vector<DeviceInfo>*>(context);
+        DeviceInfo info;
+        info.name = desc ? desc : L"Primary Sound Driver";
+        info.backend = BackendType::DIRECTSOUND;
+        info.sample_rates = {44100, 48000};
+        info.bit_depths = {16};
+        info.max_channels = 2;
+        info.supports_exclusive = false;
+        info.supports_dsd = false;
+        info.is_default = (guid == nullptr);
+
+        if (guid) {
+            wchar_t guid_str[64];
+            StringFromGUID2(*guid, guid_str, 64);
+            info.id = guid_str;
+        } else {
+            info.id = L"default";
+        }
+
+        list->push_back(info);
+        return TRUE;
+    };
+
+    DirectSoundEnumerateW(enum_callback, &devices);
+    return devices;
+}
+
+AudioFormat DSoundBackend::open(
+    const std::wstring& device_id,
+    const AudioFormat& requested_format,
+    AudioCallback callback)
+{
+    close();
+    impl_->callback = std::move(callback);
+    HRESULT hr;
+
+    // Create DirectSound8
+    IDirectSound8* ds8 = nullptr;
+    hr = DirectSoundCreate8(nullptr, &ds8, nullptr);
+    if (FAILED(hr)) {
+        LOG_ERROR("DirectSoundCreate8 failed: hr=0x" + std::to_string(hr));
+        return {};
+    }
+    impl_->ds8 = ds8;
+
+    // Set cooperative level
+    HWND hwnd = GetForegroundWindow();
+    hr = ds8->SetCooperativeLevel(hwnd, DSSCL_PRIORITY);
+    if (FAILED(hr)) {
+        LOG_WARN("SetCooperativeLevel failed, trying NORMAL");
+        hr = ds8->SetCooperativeLevel(hwnd, DSSCL_NORMAL);
+    }
+
+    // Setup WAVEFORMATEX
+    auto& fmt = impl_->wave_format;
+    ZeroMemory(&fmt, sizeof(fmt));
+    fmt.wFormatTag = WAVE_FORMAT_PCM;
+    fmt.nChannels = static_cast<WORD>(std::min(requested_format.channels, 2));
+    fmt.nSamplesPerSec = requested_format.sample_rate > 0 ? requested_format.sample_rate : 44100;
+    fmt.wBitsPerSample = 16;
+    fmt.nBlockAlign = fmt.nChannels * fmt.wBitsPerSample / 8;
+    fmt.nAvgBytesPerSec = fmt.nSamplesPerSec * fmt.nBlockAlign;
+
+    // Create primary buffer
+    DSBUFFERDESC desc = {};
+    desc.dwSize = sizeof(DSBUFFERDESC);
+    desc.dwFlags = DSBCAPS_PRIMARYBUFFER;
+    desc.dwBufferBytes = fmt.nAvgBytesPerSec; // 1 second
+
+    IDirectSoundBuffer* primary = nullptr;
+    hr = ds8->CreateSoundBuffer(&desc, &primary, nullptr);
+    if (FAILED(hr)) {
+        LOG_ERROR("CreateSoundBuffer (primary) failed: hr=0x" + std::to_string(hr));
+        return {};
+    }
+    impl_->primary = primary;
+
+    // Set primary buffer format — this determines the output format
+    primary->SetFormat(&fmt);
+
+    impl_->buffer_frames = 1024;
+    impl_->buffer_bytes = impl_->buffer_frames * fmt.nBlockAlign * 2; // double-buffered
+    impl_->write_cursor = 0;
+
+    current_format_.sample_rate = fmt.nSamplesPerSec;
+    current_format_.bit_depth = fmt.wBitsPerSample;
+    current_format_.channels = fmt.nChannels;
+
+    buffer_frames_ = impl_->buffer_frames / 2; // half buffer per notify
+    latency_ms_ = (double)impl_->buffer_frames / fmt.nSamplesPerSec * 1000.0;
+
+    LOG_INFO("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
+             std::to_string(fmt.nChannels) + "ch, buffer=" +
+             std::to_string(impl_->buffer_frames) + " frames");
+
+    return current_format_;
+}
+
+bool DSoundBackend::start() {
+    if (!impl_->primary || active_) return false;
+
+    // Create notify events
+    impl_->notify_events[0] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    impl_->notify_events[1] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+
+    // Set up notifications at 0% and 50% of the buffer
+    IDirectSoundNotify8* notify = nullptr;
+    HRESULT hr = impl_->primary->QueryInterface(IID_IDirectSoundNotify8,
+                                                 (void**)&notify);
+    if (SUCCEEDED(hr) && notify) {
+        impl_->notify = notify;
+        DSBPOSITIONNOTIFY positions[2];
+        positions[0].dwOffset = 0;
+        positions[0].hEventNotify = impl_->notify_events[0];
+        positions[1].dwOffset = impl_->buffer_bytes / 2;
+        positions[1].hEventNotify = impl_->notify_events[1];
+        notify->SetNotificationPositions(2, positions);
+    }
+
+    impl_->running.store(true, std::memory_order_release);
+    impl_->thread_handle = (HANDLE)_beginthreadex(
+        nullptr, 0, dsound_thread_proc, impl_.get(), 0, nullptr);
+
+    active_ = true;
+    LOG_INFO("DSoundBackend started");
+    return true;
+}
+
+bool DSoundBackend::stop() {
+    if (!active_) return false;
+
+    impl_->running.store(false, std::memory_order_release);
+
+    // Wake up the thread
+    if (impl_->notify_events[0]) SetEvent(impl_->notify_events[0]);
+
+    if (impl_->thread_handle) {
+        WaitForSingleObject(impl_->thread_handle, 5000);
+        CloseHandle(impl_->thread_handle);
+        impl_->thread_handle = nullptr;
+    }
+
+    active_ = false;
+    LOG_INFO("DSoundBackend stopped");
+    return true;
+}
+
+void DSoundBackend::close() {
+    if (active_) stop();
+
+    if (impl_->notify) {
+        impl_->notify->Release();
+        impl_->notify = nullptr;
+    }
+    for (auto& ev : impl_->notify_events) {
+        if (ev) { CloseHandle(ev); ev = nullptr; }
+    }
+    if (impl_->primary) {
+        impl_->primary->Stop();
+        impl_->primary->Release();
+        impl_->primary = nullptr;
+    }
+    if (impl_->ds8) {
+        impl_->ds8->Release();
+        impl_->ds8 = nullptr;
+    }
+    LOG_INFO("DSoundBackend closed");
+}

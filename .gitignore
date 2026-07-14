@@ -1,0 +1,15 @@
+node_modules
+dist
+out
+.DS_Store
+.eslintcache
+*.log*
+
+# Native addon build
+build/
+*.node
+*.dll
+*.dylib
+*.so
+src/main/native/deps/ffmpeg/
+src/main/native/deps/libsamplerate/
