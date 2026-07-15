@@ -322,7 +322,9 @@ IDLE → open(path) → LOADING → READY → play() → PLAYING ⇄ pause() ⇄
 2. 分析线程负责 FFT、频谱通量、瞬态/onset、自适应阈值、BPM 与 beat/downbeat 预测；换曲、Seek、暂停和速度切换时重置或重新锁定。
 3. 所有分析帧都携带最终输出 PCM 的样本时间戳。Renderer 以播放时钟和已知输出延迟进行补偿，避免视觉落后声音。
 4. 频谱帧推送限制为 20–30 FPS；beat/downbeat 作为独立轻量事件。Renderer 只维护最新分析状态，不反向影响音频链或 bit-perfect 判定。
-5. 提供节奏视觉开关、强度和减少动态效果选项；无数据、暂停或切歌时动画必须平滑衰减。
+5. 提供节奏视觉开关、强度和减少动态效果选项；无数据、暂停或切歌时动画必须平滑衰减。已实现为 renderer 偏好设置（`easy-player.rhythm-visual-config`），不参与音频链或 bit-perfect 状态。
+
+当前基础实现：最终 PCM 已通过非阻塞 Analysis Tap 交给后台分析线程，界面以 64 段对数频谱、约 3 秒瀑布历史、RMS、低频能量、onset、节拍序号及 K-weighted LUFS（M/S/I）显示最新快照。每个快照同时携带输出流时钟、分析帧时钟与 tap 延迟；响度计采用 BS.1770 K-weighting 和绝对/相对门限，integrated 值在当前播放会话内累计。首版 BPM 为基于 onset 间隔的平滑估计，适合作为页面律动输入。节拍预测与 downbeat 仍作为后续工作，不能将 BPM 估计值当作音乐标签中的精确 BPM。
 - **Phase 5**: DSD 深入与跨平台 — Native DSD、DoP、SACD ISO 解析、Mac CoreAudio、Linux ALSA、插件 API
 - **Phase 6**: 打磨发布 — 性能优化、错误恢复、crash 报告、CI/CD、文档
 

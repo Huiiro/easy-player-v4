@@ -74,6 +74,7 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'getStatus', params: {} }),
   getAudioChain: () =>
     ipcRenderer.invoke('audio:command', { action: 'getAudioChain', params: {} }),
+  getAudioAnalysis: () => ipcRenderer.invoke('audio:command', { action: 'getAudioAnalysis', params: {} }),
 
   // Events (returns unsubscribe function)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -248,6 +248,7 @@ export class AudioEngineManager {
     if (!this.engine) return null
     return this.engine.getAudioChain()
   }
+  getAudioAnalysis() { return this.engine?.getAudioAnalysis() ?? null }
 
   // ── Callbacks ──
 

@@ -19,6 +19,23 @@ enum class EngineState {
     Stopped
 };
 
+struct AudioAnalysisSnapshot {
+    double output_time_ms = 0.0;
+    double analysis_time_ms = 0.0;
+    double analysis_latency_ms = 0.0;
+    float rms = 0.0f;
+    float low_energy = 0.0f;
+    float onset_strength = 0.0f;
+    uint64_t dropped_frames = 0;
+    // Monotonically increasing event counter; not a sticky beat flag.
+    uint64_t beat_sequence = 0;
+    float bpm = 0.0f;
+    float momentary_lufs = -70.0f;
+    float short_term_lufs = -70.0f;
+    float integrated_lufs = -70.0f;
+    std::array<float, 64> spectrum{};
+};
+
 class AudioEngine {
 public:
     AudioEngine();
@@ -86,6 +103,7 @@ public:
     bool is_playing() const { return state_ == EngineState::Playing; }
     int glitch_count() const { return glitch_count_.load(); }
     AudioChainStatus audio_chain_status() const { return dsp_pipeline_.status(); }
+    AudioAnalysisSnapshot audio_analysis_snapshot() const;
 
     // ── Callbacks (called from native) ──
     using StateChangedCallback = std::function<void(EngineState)>;
@@ -103,6 +121,7 @@ private:
     void position_timer_func();
     int audio_callback(float* output, int frames, int channels);
     void update_replay_gain_for_track();
+    void analysis_thread_func();
 
     // ── State ──
     std::atomic<EngineState> state_{EngineState::Idle};
@@ -121,6 +140,24 @@ private:
     Decoder decoder_;
     TrackInfo track_info_;
     std::unique_ptr<RingBuffer> ring_buffer_;
+    // Final PCM analysis tap: audio callback is sole producer and never waits.
+    std::unique_ptr<RingBuffer> analysis_ring_buffer_;
+    std::atomic<uint64_t> analysis_dropped_frames_{0};
+    std::vector<float> analysis_work_buffer_;
+    std::unique_ptr<std::thread> analysis_thread_;
+    std::atomic<bool> analysis_running_{false};
+    std::atomic<uint64_t> analysis_output_frames_{0};
+    std::atomic<uint64_t> analysis_processed_frames_{0};
+    std::atomic<float> analysis_rms_{0.0f};
+    std::atomic<float> analysis_low_energy_{0.0f};
+    std::atomic<float> analysis_onset_strength_{0.0f};
+    std::atomic<uint64_t> analysis_beat_sequence_{0};
+    std::atomic<float> analysis_bpm_{0.0f};
+    std::atomic<float> analysis_momentary_lufs_{-70.0f};
+    std::atomic<float> analysis_short_term_lufs_{-70.0f};
+    std::atomic<float> analysis_integrated_lufs_{-70.0f};
+    std::atomic<uint64_t> analysis_reset_generation_{0};
+    std::array<std::atomic<float>, 64> analysis_spectrum_{};
     // Preallocated source-format buffer. The audio callback never allocates;
     // it reads here before channel conversion/DSP writes backend-format PCM.
     std::vector<float> source_work_buffer_;

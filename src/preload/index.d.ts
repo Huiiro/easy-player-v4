@@ -46,6 +46,7 @@ declare global {
         selectOutputDevice(backend: string, deviceId: string): Promise<{ success: boolean }>
         getStatus(): Promise<{ success: boolean; data?: PlaybackStatus; error?: string }>
         getAudioChain(): Promise<{ success: boolean; data?: AudioChainStatus; error?: string }>
+        getAudioAnalysis(): Promise<{ success: boolean; data?: { outputTimeMs: number; analysisTimeMs: number; analysisLatencyMs: number; rms: number; lowEnergy: number; onsetStrength: number; droppedFrames: number; beatSequence: number; bpm: number; momentaryLufs: number; shortTermLufs: number; integratedLufs: number; spectrum: number[] }; error?: string }>
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onEvent(type: string, callback: (data: any) => void): () => void

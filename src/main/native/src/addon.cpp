@@ -53,6 +53,7 @@ public:
             InstanceMethod("selectOutputDevice", &AudioEngineWrapper::SelectOutputDevice),
             InstanceMethod("getStatus", &AudioEngineWrapper::GetStatus),
             InstanceMethod("getAudioChain", &AudioEngineWrapper::GetAudioChain),
+            InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
             InstanceMethod("getGlitchCount", &AudioEngineWrapper::GetGlitchCount),
             InstanceMethod("onStateChanged", &AudioEngineWrapper::OnStateChanged),
             InstanceMethod("onPositionChanged", &AudioEngineWrapper::OnPositionChanged),
@@ -483,6 +484,18 @@ private:
         obj.Set("bitPerfectBlockers", make_strings(chain.bit_perfect_blockers));
         obj.Set("isBitPerfect", Napi::Boolean::New(info.Env(), chain.is_bit_perfect));
         return obj;
+    }
+    Napi::Value GetAudioAnalysis(const Napi::CallbackInfo& info) {
+        const auto value = engine_->audio_analysis_snapshot(); auto obj = Napi::Object::New(info.Env());
+        obj.Set("outputTimeMs", Napi::Number::New(info.Env(), value.output_time_ms)); obj.Set("analysisTimeMs", Napi::Number::New(info.Env(), value.analysis_time_ms)); obj.Set("analysisLatencyMs", Napi::Number::New(info.Env(), value.analysis_latency_ms)); obj.Set("rms", Napi::Number::New(info.Env(), value.rms));
+        obj.Set("lowEnergy", Napi::Number::New(info.Env(), value.low_energy)); obj.Set("onsetStrength", Napi::Number::New(info.Env(), value.onset_strength));
+        obj.Set("droppedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.dropped_frames)));
+        obj.Set("beatSequence", Napi::Number::New(info.Env(), static_cast<double>(value.beat_sequence)));
+        obj.Set("bpm", Napi::Number::New(info.Env(), value.bpm));
+        obj.Set("momentaryLufs", Napi::Number::New(info.Env(), value.momentary_lufs));
+        obj.Set("shortTermLufs", Napi::Number::New(info.Env(), value.short_term_lufs));
+        obj.Set("integratedLufs", Napi::Number::New(info.Env(), value.integrated_lufs));
+        auto spectrum = Napi::Array::New(info.Env(), value.spectrum.size()); for (size_t i = 0; i < value.spectrum.size(); ++i) spectrum.Set(i, Napi::Number::New(info.Env(), value.spectrum[i])); obj.Set("spectrum", spectrum); return obj;
     }
 
     // ── Callback registration ──

@@ -151,6 +151,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'getAudioChain': {
         return { success: true, data: engine.getAudioChain() }
       }
+      case 'getAudioAnalysis': return { success: true, data: engine.getAudioAnalysis() }
 
       case 'getTrackInfo': {
         return { success: false, error: 'Not implemented — use open() instead' }

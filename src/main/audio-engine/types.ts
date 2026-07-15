@@ -121,6 +121,7 @@ export type AudioCommandAction =
   | 'selectOutputDevice'
   | 'getStatus'
   | 'getAudioChain'
+  | 'getAudioAnalysis'
   | 'getTrackInfo'
 
 export type AudioEventType =

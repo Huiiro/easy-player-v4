@@ -127,6 +127,7 @@ export const audioBridge = {
     const r = await window.api.audio.getAudioChain()
     return cmd<AudioChainStatus>(r)
   },
+  async getAudioAnalysis(): Promise<{ outputTimeMs: number; analysisTimeMs: number; analysisLatencyMs: number; rms: number; lowEnergy: number; onsetStrength: number; droppedFrames: number; beatSequence: number; bpm: number; momentaryLufs: number; shortTermLufs: number; integratedLufs: number; spectrum: number[] } | null> { return cmd(await window.api.audio.getAudioAnalysis()) },
 
   // Events
   onStateChanged(callback: (data: { state: string; trackInfo: unknown }) => void): () => void {

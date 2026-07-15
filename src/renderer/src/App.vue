@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { usePlayerStore } from './stores/playerStore'
 import { useLogStore } from './stores/logStore'
 
@@ -8,6 +8,14 @@ const logs = useLogStore()
 const isSeeking = ref(false)
 const seekPreviewMs = ref<number | null>(null)
 let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
+let beatPulseTimer: ReturnType<typeof setTimeout> | undefined
+let visualDecayTimer: ReturnType<typeof setInterval> | undefined
+const beatPulse = ref(false)
+let lastBeatSequence = 0
+const waterfallFrames = ref<{ timeMs: number; levels: number[] }[]>([])
+let lastWaterfallTimeMs = 0
+const visualActivity = ref(0)
+let lastAnalysisUpdateAt = 0
 
 const displayPositionMs = computed(() => seekPreviewMs.value ?? player.positionMs)
 const displayProgress = computed(() =>
@@ -24,13 +32,74 @@ const backendLabel: Record<string, string> = {
 const currentBackendLabel = computed(() => backendLabel[player.currentBackend] ?? player.currentBackend)
 const deviceKey = (backend: string, id: string) => `${backend}\u0000${id}`
 const selectedOutputDeviceKey = computed(() => deviceKey(player.currentBackend, player.currentDeviceId))
+const rhythmPulse = computed(() => Math.max(
+  beatPulse.value ? 1 : 0,
+  Math.min(1, player.audioAnalysis.lowEnergy * 8 + player.audioAnalysis.onsetStrength * 20)
+))
+const visualTarget = computed(() => {
+  if (!player.rhythmVisualConfig.enabled || player.state !== 'playing') return 0
+  return rhythmPulse.value * player.rhythmVisualConfig.intensity
+})
+const visualStyle = computed(() => {
+  const activity = player.rhythmVisualConfig.reducedMotion ? visualActivity.value * 0.25 : visualActivity.value
+  return {
+    transform: `scale(${1 + (player.rhythmVisualConfig.reducedMotion ? 0 : activity * 0.018)})`,
+    boxShadow: `0 0 ${8 + activity * 26}px rgba(106, 160, 220, ${0.12 + activity * 0.4})`
+  }
+})
+const latestLoudnessLog = computed(() => {
+  for (let index = logs.entries.length - 1; index >= 0; --index) {
+    const entry = logs.entries[index]
+    if (entry.message.startsWith('Loudness analysis:')) return entry.message
+  }
+  return 'Waiting for native loudness analysis log…'
+})
+
+watch(() => player.audioAnalysis.beatSequence, (sequence) => {
+  if (sequence === 0) {
+    lastBeatSequence = 0
+    return
+  }
+  if (sequence === lastBeatSequence) return
+  lastBeatSequence = sequence
+  beatPulse.value = true
+  if (beatPulseTimer) clearTimeout(beatPulseTimer)
+  beatPulseTimer = setTimeout(() => { beatPulse.value = false }, 100)
+})
+
+watch(() => player.audioAnalysis, (snapshot) => {
+  lastAnalysisUpdateAt = performance.now()
+  const timeMs = snapshot.analysisTimeMs
+  if (timeMs < lastWaterfallTimeMs) {
+    waterfallFrames.value = []
+    lastWaterfallTimeMs = 0
+  }
+  if (timeMs <= 0 || timeMs - lastWaterfallTimeMs < 50) return
+  lastWaterfallTimeMs = timeMs
+  waterfallFrames.value = [...waterfallFrames.value.slice(-59), { timeMs, levels: [...snapshot.spectrum] }]
+})
+
+function waterfallColor(level: number): string {
+  const normalized = Math.max(0, Math.min(1, level))
+  return `hsl(${218 - normalized * 178} 78% ${18 + normalized * 48}%)`
+}
 
 // ── Startup ──
 onMounted(async () => {
+  player.loadRhythmVisualConfig()
+  lastAnalysisUpdateAt = performance.now()
+  visualDecayTimer = setInterval(() => {
+    const hasFreshAnalysis = performance.now() - lastAnalysisUpdateAt < 350
+    const target = hasFreshAnalysis ? visualTarget.value : 0
+    const easing = target > visualActivity.value ? 0.38 : 0.12
+    visualActivity.value += (target - visualActivity.value) * easing
+    if (Math.abs(visualActivity.value) < 0.001 && target === 0) visualActivity.value = 0
+  }, 33)
   player.subscribeToEvents()
   logs.subscribe()
   await player.refreshDevices()
   await player.refreshAudioChain()
+  await player.refreshAudioAnalysis()
   await player.loadEqBands()
   await player.loadReplayGain()
   await player.loadPlaybackSpeed()
@@ -50,6 +119,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (eqCommitTimer) clearTimeout(eqCommitTimer)
+  if (beatPulseTimer) clearTimeout(beatPulseTimer)
+  if (visualDecayTimer) clearInterval(visualDecayTimer)
   player.unsubscribe()
   logs.unsubscribeEvents()
 })
@@ -199,7 +270,7 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
     </header>
 
     <!-- Drop Zone -->
-    <div class="drop-zone">
+    <div class="drop-zone" :style="visualStyle">
       <p v-if="!player.currentFile">
         Drop an audio file here (WAV, FLAC, MP3...)
       </p>
@@ -207,6 +278,27 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
         {{ player.trackInfo?.metadata?.title || player.currentFile }}
       </p>
     </div>
+
+    <section class="analysis-section">
+      <div class="analysis-heading"><span>Audio analysis</span><small>out {{ player.audioAnalysis.outputTimeMs.toFixed(0) }} ms · analysis {{ player.audioAnalysis.analysisTimeMs.toFixed(0) }} ms · lag {{ player.audioAnalysis.analysisLatencyMs.toFixed(0) }} ms · dropped {{ player.audioAnalysis.droppedFrames }}</small></div>
+      <div class="analysis-meter"><span class="rms" :style="{ width: `${Math.min(100, player.audioAnalysis.rms * 260)}%` }"></span><span class="low" :style="{ width: `${Math.min(100, player.audioAnalysis.lowEnergy * 360)}%` }"></span></div>
+      <div class="spectrum"><i v-for="(level, index) in player.audioAnalysis.spectrum" :key="index" :style="{ height: `${Math.max(2, level * 100)}%` }"></i></div>
+      <div class="spectrum-range"><span>45 Hz</span><span>Log frequency · 64 bands</span><span>20 kHz</span></div>
+      <div class="waterfall" aria-label="64 band spectrum waterfall">
+        <div v-for="frame in waterfallFrames" :key="frame.timeMs" class="waterfall-row">
+          <i v-for="(level, index) in frame.levels" :key="index" :style="{ backgroundColor: waterfallColor(level) }"></i>
+        </div>
+      </div>
+      <div class="waterfall-label"><span>old</span><span>spectrogram · ~3 s history</span><span>now</span></div>
+      <small>RMS {{ player.audioAnalysis.rms.toFixed(3) }} · Low {{ player.audioAnalysis.lowEnergy.toFixed(3) }} · Onset {{ player.audioAnalysis.onsetStrength.toFixed(3) }} · <b :class="{ 'beat-active': beatPulse }">Beat {{ player.audioAnalysis.beatSequence }}</b> · Est. BPM {{ player.audioAnalysis.bpm > 0 ? player.audioAnalysis.bpm.toFixed(1) : '—' }}</small>
+      <div class="loudness-row"><span>LUFS M <b>{{ player.audioAnalysis.momentaryLufs.toFixed(1) }}</b></span><span>S <b>{{ player.audioAnalysis.shortTermLufs.toFixed(1) }}</b></span><span>I <b>{{ player.audioAnalysis.integratedLufs.toFixed(1) }}</b></span><small>K-weighted output meter</small></div>
+      <div class="analysis-debug">{{ latestLoudnessLog }}</div>
+      <div class="visual-controls">
+        <label><input v-model="player.rhythmVisualConfig.enabled" type="checkbox" @change="player.saveRhythmVisualConfig()"> Rhythm visuals</label>
+        <label>Intensity <input v-model.number="player.rhythmVisualConfig.intensity" type="range" min="0" max="1" step="0.05" @change="player.saveRhythmVisualConfig()"> {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%</label>
+        <label><input v-model="player.rhythmVisualConfig.reducedMotion" type="checkbox" @change="player.saveRhythmVisualConfig()"> Reduce motion</label>
+      </div>
+    </section>
 
     <!-- Output Device Selector -->
     <div class="selector-row">
@@ -507,11 +599,13 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
   display: flex;
   flex-direction: column;
   height: 100vh;
+  box-sizing: border-box;
   padding: 16px;
   font-family: 'Segoe UI', system-ui, sans-serif;
   background: #1a1a2e;
   color: #e0e0e0;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .title-bar {
@@ -534,7 +628,10 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 120ms ease-out, box-shadow 120ms ease-out;
 }
+
+.beat-active { color: #7ec8e3; text-shadow: 0 0 10px #7ec8e3; }
 
 .selector-row {
   display: flex;
@@ -651,6 +748,16 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 .resampler-section small { color: #777; }
 .dsp-nodes-section { margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
 .channel-matrix-section { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
+.analysis-section { margin: 10px 0; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: .75rem; color: #aab; }
+.analysis-heading { display: flex; justify-content: space-between; color: #cdd8df; margin-bottom: 5px; }.analysis-heading small { color: #777; }
+.analysis-meter { height: 7px; position: relative; overflow: hidden; border-radius: 4px; background: #262638; margin-bottom: 4px; }.analysis-meter span { position: absolute; inset: 0 auto 0 0; transition: width 45ms linear; }.analysis-meter .rms { background: #5b9bd5; }.analysis-meter .low { background: rgba(123, 208, 139, .75); }
+.spectrum { height: 72px; display: flex; align-items: end; gap: 2px; margin: 7px 0; }.spectrum i { flex: 1; min-width: 1px; background: linear-gradient(#9ec8df, #4e75a7); transition: height 45ms linear; }
+.waterfall { height: 128px; display: flex; flex-direction: column; gap: 1px; margin-top: 8px; padding: 3px; overflow: hidden; background: #0d1020; border: 1px solid #282c46; border-radius: 3px; }.waterfall-row { height: 1.6px; min-height: 1.6px; display: flex; gap: 1px; }.waterfall-row i { flex: 1; min-width: 1px; }
+.waterfall-label { display: flex; justify-content: space-between; color: #687282; font-size: .65rem; }
+.loudness-row { display: flex; align-items: baseline; gap: 10px; margin-top: 5px; color: #8da0b4; }.loudness-row b { color: #d4e3ef; font-variant-numeric: tabular-nums; }.loudness-row small { margin-left: auto; color: #687282; }
+.analysis-debug { margin-top: 4px; padding: 3px 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #7b8795; background: #10101e; border-radius: 3px; font-family: 'Cascadia Code', Consolas, monospace; font-size: .68rem; }
+.visual-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 7px; color: #99a9b8; }.visual-controls label { display: inline-flex; align-items: center; gap: 4px; }.visual-controls input[type='range'] { width: 82px; accent-color: #6aa0dc; }
+.spectrum-range { display: flex; justify-content: space-between; color: #777; font-size: .68rem; }
 .channel-matrix-section label { display: flex; align-items: center; gap: 4px; }
 .channel-gains { display: grid; grid-template-columns: repeat(4, minmax(88px, 1fr)); gap: 4px; width: 100%; }
 .dsp-nodes-heading { color: #cdd8df; margin-bottom: 5px; }
@@ -683,7 +790,8 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 .bit-perfect-off { color: #d6a970; }
 
 .log-viewer {
-  flex: 1;
+  flex: 0 0 220px;
+  min-height: 180px;
   display: flex;
   flex-direction: column;
   background: #111;

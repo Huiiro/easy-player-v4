@@ -17,6 +17,8 @@ export const usePlayerStore = defineStore('player', () => {
   const devices = ref<DeviceInfo[]>([])
   const currentDeviceId = ref('default')
   const audioChain = ref<AudioChainStatus | null>(null)
+  const audioAnalysis = ref({ outputTimeMs: 0, analysisTimeMs: 0, analysisLatencyMs: 0, rms: 0, lowEnergy: 0, onsetStrength: 0, droppedFrames: 0, beatSequence: 0, bpm: 0, momentaryLufs: -70, shortTermLufs: -70, integratedLufs: -70, spectrum: Array.from({ length: 64 }, () => 0) })
+  const rhythmVisualConfig = ref({ enabled: true, intensity: 0.65, reducedMotion: false })
   const preampEnabled = ref(false)
   const preampDb = ref(0)
   const replayGainConfig = ref<{ mode: 'off' | 'track' | 'album'; preventClipping: boolean; active: boolean; appliedGainDb: number }>({ mode: 'off', preventClipping: true, active: false, appliedGainDb: 0 })
@@ -258,11 +260,36 @@ export const usePlayerStore = defineStore('player', () => {
   async function refreshAudioChain(): Promise<void> {
     audioChain.value = await audioBridge.getAudioChain()
   }
+  async function refreshAudioAnalysis(): Promise<void> {
+    const snapshot = await audioBridge.getAudioAnalysis()
+    if (snapshot) audioAnalysis.value = snapshot
+  }
+
+  function loadRhythmVisualConfig(): void {
+    try {
+      const stored = localStorage.getItem('easy-player.rhythm-visual-config')
+      if (!stored) return
+      const parsed = JSON.parse(stored) as Partial<typeof rhythmVisualConfig.value>
+      rhythmVisualConfig.value = {
+        enabled: parsed.enabled !== false,
+        intensity: Math.max(0, Math.min(1, typeof parsed.intensity === 'number' ? parsed.intensity : 0.65)),
+        reducedMotion: parsed.reducedMotion === true
+      }
+    } catch {
+      // Corrupt renderer preferences must never stop playback controls loading.
+    }
+  }
+
+  function saveRhythmVisualConfig(): void {
+    localStorage.setItem('easy-player.rhythm-visual-config', JSON.stringify(rhythmVisualConfig.value))
+  }
 
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
+  let analysisTimer: ReturnType<typeof setInterval> | undefined
 
   function subscribeToEvents() {
+    if (!analysisTimer) analysisTimer = setInterval(() => { void refreshAudioAnalysis() }, 20)
     unsubs.push(
       audioBridge.onStateChanged((data) => {
         state.value = data.state as PlaybackState
@@ -301,6 +328,8 @@ export const usePlayerStore = defineStore('player', () => {
   function unsubscribe() {
     unsubs.forEach((fn) => fn())
     unsubs = []
+    if (analysisTimer) clearInterval(analysisTimer)
+    analysisTimer = undefined
   }
 
   return {
@@ -316,6 +345,8 @@ export const usePlayerStore = defineStore('player', () => {
     devices,
     currentDeviceId,
     audioChain,
+    audioAnalysis,
+    rhythmVisualConfig,
     preampEnabled,
     preampDb,
     replayGainConfig,
@@ -377,6 +408,9 @@ export const usePlayerStore = defineStore('player', () => {
     selectOutputDevice,
     refreshDevices,
     refreshAudioChain,
+    refreshAudioAnalysis,
+    loadRhythmVisualConfig,
+    saveRhythmVisualConfig,
     // Events
     subscribeToEvents,
     unsubscribe

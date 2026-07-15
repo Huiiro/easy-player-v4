@@ -5,11 +5,33 @@
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
+#include <deque>
 #include <sstream>
 #include <unordered_set>
 #include <vector>
 
 AudioEngine::AudioEngine() {}
+
+AudioAnalysisSnapshot AudioEngine::audio_analysis_snapshot() const {
+    const int rate = backend_ ? backend_->current_format().sample_rate : 0;
+    AudioAnalysisSnapshot snapshot{};
+    snapshot.output_time_ms = rate > 0 ? analysis_output_frames_.load(std::memory_order_acquire) * 1000.0 / rate : 0.0;
+    snapshot.rms = analysis_rms_.load(std::memory_order_acquire);
+    snapshot.low_energy = analysis_low_energy_.load(std::memory_order_acquire);
+    snapshot.onset_strength = analysis_onset_strength_.load(std::memory_order_acquire);
+    snapshot.dropped_frames = analysis_dropped_frames_.load(std::memory_order_acquire);
+    if (rate > 0) {
+        snapshot.analysis_time_ms = analysis_processed_frames_.load(std::memory_order_acquire) * 1000.0 / rate;
+        snapshot.analysis_latency_ms = std::max(0.0, snapshot.output_time_ms - snapshot.analysis_time_ms);
+    }
+    snapshot.beat_sequence = analysis_beat_sequence_.load(std::memory_order_acquire);
+    snapshot.bpm = analysis_bpm_.load(std::memory_order_acquire);
+    snapshot.momentary_lufs = analysis_momentary_lufs_.load(std::memory_order_acquire);
+    snapshot.short_term_lufs = analysis_short_term_lufs_.load(std::memory_order_acquire);
+    snapshot.integrated_lufs = analysis_integrated_lufs_.load(std::memory_order_acquire);
+    for (size_t i = 0; i < snapshot.spectrum.size(); ++i) snapshot.spectrum[i] = analysis_spectrum_[i].load(std::memory_order_acquire);
+    return snapshot;
+}
 
 void AudioEngine::set_replay_gain_mode(int mode, bool prevent_clipping) {
     replay_gain_mode_ = std::max(0, std::min(2, mode));
@@ -116,6 +138,23 @@ bool AudioEngine::play() {
             actual,
             backend_->type(),
             backend_->buffer_size_frames());
+        // Two seconds of final output PCM. The future analysis thread is the
+        // sole consumer; callback writes use timeout 0 and may drop frames.
+        analysis_ring_buffer_ = std::make_unique<RingBuffer>(actual.channels, actual.sample_rate * 2);
+        analysis_dropped_frames_.store(0, std::memory_order_release);
+        analysis_output_frames_.store(0, std::memory_order_release);
+        analysis_processed_frames_.store(0, std::memory_order_release);
+        analysis_rms_.store(0.0f, std::memory_order_release);
+        analysis_low_energy_.store(0.0f, std::memory_order_release);
+        analysis_onset_strength_.store(0.0f, std::memory_order_release);
+        analysis_beat_sequence_.store(0, std::memory_order_release);
+        analysis_bpm_.store(0.0f, std::memory_order_release);
+        analysis_momentary_lufs_.store(-70.0f, std::memory_order_release);
+        analysis_short_term_lufs_.store(-70.0f, std::memory_order_release);
+        analysis_integrated_lufs_.store(-70.0f, std::memory_order_release);
+        analysis_reset_generation_.fetch_add(1, std::memory_order_release);
+        for (auto& level : analysis_spectrum_) level.store(0.0f, std::memory_order_release);
+        analysis_work_buffer_.assign(static_cast<size_t>(1024) * actual.channels, 0.0f);
         LOG_INFO("Audio pipeline configured: " + std::to_string(track_info_.sample_rate) +
                  "Hz/" + std::to_string(track_info_.channels) + "ch -> " +
                  std::to_string(actual.sample_rate) + "Hz/" + std::to_string(actual.channels) +
@@ -147,6 +186,10 @@ bool AudioEngine::play() {
         timer_running_ = true;
         position_timer_ = std::make_unique<std::thread>(&AudioEngine::position_timer_func, this);
     }
+    if (!analysis_running_) {
+        analysis_running_ = true;
+        analysis_thread_ = std::make_unique<std::thread>(&AudioEngine::analysis_thread_func, this);
+    }
 
     set_state(EngineState::Playing);
     LOG_INFO(resuming ? "Playback resumed" : "Playback started: " + track_info_.file_path);
@@ -165,6 +208,7 @@ bool AudioEngine::stop() {
     // Stop threads
     decoder_running_ = false;
     timer_running_ = false;
+    analysis_running_ = false;
 
     if (decoder_thread_ && decoder_thread_->joinable()) {
         decoder_thread_->join();
@@ -175,6 +219,8 @@ bool AudioEngine::stop() {
         position_timer_->join();
     }
     position_timer_.reset();
+    if (analysis_thread_ && analysis_thread_->joinable()) analysis_thread_->join();
+    analysis_thread_.reset();
 
     // Stop backend
     if (backend_) {
@@ -184,6 +230,8 @@ bool AudioEngine::stop() {
     }
 
     ring_buffer_.reset();
+    analysis_ring_buffer_.reset();
+    analysis_work_buffer_.clear();
     source_work_buffer_.clear();
     source_work_frames_ = 0;
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
@@ -250,6 +298,17 @@ bool AudioEngine::seek(double position_ms) {
     }
 
     int buf_after = ring_buffer_ ? ring_buffer_->frames_available() : -1;
+    // Drop the detector's short-term history after a discontinuity. The tap is
+    // intentionally not reset here because its producer is the audio callback.
+    analysis_rms_.store(0.0f, std::memory_order_release);
+    analysis_low_energy_.store(0.0f, std::memory_order_release);
+    analysis_onset_strength_.store(0.0f, std::memory_order_release);
+    analysis_beat_sequence_.store(0, std::memory_order_release);
+    analysis_bpm_.store(0.0f, std::memory_order_release);
+    analysis_momentary_lufs_.store(-70.0f, std::memory_order_release);
+    analysis_short_term_lufs_.store(-70.0f, std::memory_order_release);
+    analysis_integrated_lufs_.store(-70.0f, std::memory_order_release);
+    analysis_reset_generation_.fetch_add(1, std::memory_order_release);
     LOG_INFO("Seek: ring buffer after reset: " + std::to_string(buf_after) + "f, decoder at " +
              std::to_string(decoder_.position()) + " samples, prefetched " +
              std::to_string(prefetched) + "f");
@@ -578,5 +637,166 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
         track_end_pending_.store(true, std::memory_order_release);
     }
 
+    if (analysis_ring_buffer_) {
+        const int written = analysis_ring_buffer_->write(output, frames, 0);
+        if (written < frames) analysis_dropped_frames_.fetch_add(frames - written, std::memory_order_relaxed);
+    }
+    analysis_output_frames_.fetch_add(frames, std::memory_order_relaxed);
+
     return frames;
+}
+
+void AudioEngine::analysis_thread_func() {
+    struct Biquad {
+        float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f, z1 = 0.0f, z2 = 0.0f;
+        float process(float input) { const float output = b0 * input + z1; z1 = b1 * input - a1 * output + z2; z2 = b2 * input - a2 * output; return output; }
+    };
+    float previous_rms = 0.0f;
+    float lowpass = 0.0f;
+    float onset_average = 0.002f;
+    uint64_t consumed_frames = 0, last_beat_frame = 0;
+    uint64_t reset_generation = analysis_reset_generation_.load(std::memory_order_acquire);
+    int loudness_channels = 0;
+    float loudness_rate = 0.0f;
+    std::vector<Biquad> shelf_filters, highpass_filters;
+    std::deque<std::pair<int, double>> momentary_window, short_term_window;
+    std::vector<double> integrated_blocks;
+    double momentary_energy = 0.0, short_term_energy = 0.0, integrated_energy = 0.0;
+    int momentary_frames = 0, short_term_frames = 0, integrated_frames = 0;
+    uint64_t loudness_log_frames = 0;
+    auto configure_loudness = [&](int channels, float rate) {
+        loudness_channels = channels; loudness_rate = rate;
+        shelf_filters.assign(channels, {}); highpass_filters.assign(channels, {});
+        const float shelf_a = std::pow(10.0f, 4.0f / 40.0f), shelf_w = 6.28318530718f * 1681.97445f / rate;
+        const float shelf_alpha = std::sin(shelf_w) / (2.0f * 0.707175f), shelf_beta = 2.0f * std::sqrt(shelf_a) * shelf_alpha;
+        const float shelf_cos = std::cos(shelf_w), shelf_a0 = (shelf_a + 1.0f) - (shelf_a - 1.0f) * shelf_cos + shelf_beta;
+        const float hp_w = 6.28318530718f * 38.13547f / rate, hp_cos = std::cos(hp_w), hp_alpha = std::sin(hp_w) / (2.0f * 0.500327f);
+        const float hp_a0 = 1.0f + hp_alpha;
+        for (int channel = 0; channel < channels; ++channel) {
+            auto& shelf = shelf_filters[channel];
+            shelf.b0 = shelf_a * ((shelf_a + 1.0f) + (shelf_a - 1.0f) * shelf_cos + shelf_beta) / shelf_a0;
+            shelf.b1 = -2.0f * shelf_a * ((shelf_a - 1.0f) + (shelf_a + 1.0f) * shelf_cos) / shelf_a0;
+            shelf.b2 = shelf_a * ((shelf_a + 1.0f) + (shelf_a - 1.0f) * shelf_cos - shelf_beta) / shelf_a0;
+            // RBJ high-shelf denominator: the sign between these terms is
+            // essential. A '+' makes one pole leave the unit circle and the
+            // energy accumulator reaches infinity within milliseconds.
+            shelf.a1 = 2.0f * ((shelf_a - 1.0f) - (shelf_a + 1.0f) * shelf_cos) / shelf_a0;
+            shelf.a2 = ((shelf_a + 1.0f) - (shelf_a - 1.0f) * shelf_cos - shelf_beta) / shelf_a0;
+            auto& highpass = highpass_filters[channel];
+            highpass.b0 = (1.0f + hp_cos) * 0.5f / hp_a0; highpass.b1 = -(1.0f + hp_cos) / hp_a0; highpass.b2 = highpass.b0;
+            highpass.a1 = -2.0f * hp_cos / hp_a0; highpass.a2 = (1.0f - hp_alpha) / hp_a0;
+        }
+    };
+    auto reset_loudness = [&] {
+        momentary_window.clear(); short_term_window.clear(); integrated_blocks.clear();
+        momentary_energy = short_term_energy = integrated_energy = 0.0;
+        momentary_frames = short_term_frames = integrated_frames = 0;
+        loudness_channels = 0; loudness_rate = 0.0f;
+    };
+    auto lufs_from_energy = [](double energy) { return static_cast<float>(std::max(-70.0, -0.691 + 10.0 * std::log10(std::max(energy, 1.0e-12)))); };
+    while (analysis_running_.load(std::memory_order_acquire)) {
+        if (!analysis_ring_buffer_ || analysis_work_buffer_.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
+        const int frames = analysis_ring_buffer_->read(analysis_work_buffer_.data(), 1024);
+        if (frames == 0) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
+        // The tap carries final output PCM in FIFO order. Remaining queued
+        // frames let us tag the processed analysis frame on the output clock.
+        const uint64_t produced = analysis_output_frames_.load(std::memory_order_acquire);
+        const uint64_t queued = static_cast<uint64_t>(std::max(0, analysis_ring_buffer_->frames_available()));
+        analysis_processed_frames_.store(produced > queued ? produced - queued : 0, std::memory_order_release);
+        const uint64_t requested_reset = analysis_reset_generation_.load(std::memory_order_acquire);
+        if (requested_reset != reset_generation) {
+            previous_rms = 0.0f;
+            lowpass = 0.0f;
+            onset_average = 0.002f;
+            consumed_frames = 0;
+            last_beat_frame = 0;
+            reset_loudness();
+            reset_generation = requested_reset;
+            continue;
+        }
+        const int channels = std::max(1, static_cast<int>(analysis_work_buffer_.size() / 1024));
+        const float sample_rate = backend_ ? static_cast<float>(backend_->current_format().sample_rate) : 48000.0f;
+        if (channels != loudness_channels || std::abs(sample_rate - loudness_rate) > 0.5f) configure_loudness(channels, sample_rate);
+        double square_sum = 0.0, low_square_sum = 0.0, weighted_square_sum = 0.0;
+        for (int frame = 0; frame < frames; ++frame) {
+            float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
+            mono /= channels; lowpass = 0.94f * lowpass + 0.06f * mono;
+            square_sum += mono * mono; low_square_sum += lowpass * lowpass;
+            for (int channel = 0; channel < channels; ++channel) {
+                const float input = analysis_work_buffer_[frame * channels + channel];
+                float filtered = highpass_filters[channel].process(shelf_filters[channel].process(input));
+                // A malformed source sample must not poison a persistent IIR
+                // state and make the public loudness meter permanently NaN.
+                if (!std::isfinite(filtered)) {
+                    shelf_filters[channel].z1 = shelf_filters[channel].z2 = 0.0f;
+                    highpass_filters[channel].z1 = highpass_filters[channel].z2 = 0.0f;
+                    filtered = std::isfinite(input) ? input : 0.0f;
+                }
+                const float channel_weight = channels > 3 && channel == 3 ? 0.0f : (channels > 3 && channel >= 4 ? 1.41421356f : 1.0f);
+                weighted_square_sum += channel_weight * filtered * filtered;
+            }
+        }
+        // Preserve a usable output meter if a non-standard multichannel layout
+        // exposes only an LFE lane. Normal stereo/multichannel input uses the
+        // K-weighted value above.
+        if (!(weighted_square_sum > 0.0) && square_sum > 0.0) weighted_square_sum = square_sum;
+        const float rms = std::sqrt(static_cast<float>(square_sum / frames));
+        analysis_rms_.store(rms, std::memory_order_release);
+        analysis_low_energy_.store(std::sqrt(static_cast<float>(low_square_sum / frames)), std::memory_order_release);
+        const float onset = std::max(0.0f, rms - previous_rms);
+        analysis_onset_strength_.store(onset, std::memory_order_release);
+        momentary_window.emplace_back(frames, weighted_square_sum); momentary_energy += weighted_square_sum; momentary_frames += frames;
+        short_term_window.emplace_back(frames, weighted_square_sum); short_term_energy += weighted_square_sum; short_term_frames += frames;
+        const int momentary_limit = std::max(1, static_cast<int>(sample_rate * 0.4f)), short_term_limit = std::max(1, static_cast<int>(sample_rate * 3.0f));
+        while (momentary_frames > momentary_limit && !momentary_window.empty()) { momentary_frames -= momentary_window.front().first; momentary_energy -= momentary_window.front().second; momentary_window.pop_front(); }
+        while (short_term_frames > short_term_limit && !short_term_window.empty()) { short_term_frames -= short_term_window.front().first; short_term_energy -= short_term_window.front().second; short_term_window.pop_front(); }
+        analysis_momentary_lufs_.store(lufs_from_energy(momentary_energy / std::max(1, momentary_frames)), std::memory_order_release);
+        analysis_short_term_lufs_.store(lufs_from_energy(short_term_energy / std::max(1, short_term_frames)), std::memory_order_release);
+        loudness_log_frames += frames;
+        if (loudness_log_frames >= static_cast<uint64_t>(sample_rate * 2.0f)) {
+            loudness_log_frames = 0;
+            LOG_INFO("Loudness analysis: energy=" + std::to_string(weighted_square_sum / std::max(1, frames)) +
+                     ", M=" + std::to_string(analysis_momentary_lufs_.load(std::memory_order_relaxed)) +
+                     ", S=" + std::to_string(analysis_short_term_lufs_.load(std::memory_order_relaxed)));
+        }
+        integrated_energy += weighted_square_sum; integrated_frames += frames;
+        if (integrated_frames >= momentary_limit) {
+            const double block_energy = integrated_energy / integrated_frames;
+            if (lufs_from_energy(block_energy) > -70.0f) integrated_blocks.push_back(block_energy);
+            if (!integrated_blocks.empty()) {
+                double absolute_sum = 0.0; for (double energy : integrated_blocks) absolute_sum += energy;
+                const float ungated = lufs_from_energy(absolute_sum / integrated_blocks.size());
+                double gated_sum = 0.0; int gated_count = 0;
+                for (double energy : integrated_blocks) if (lufs_from_energy(energy) > ungated - 10.0f) { gated_sum += energy; ++gated_count; }
+                analysis_integrated_lufs_.store(lufs_from_energy(gated_sum / std::max(1, gated_count)), std::memory_order_release);
+            }
+            integrated_energy = 0.0; integrated_frames = 0;
+        }
+        const uint64_t minimum_interval = static_cast<uint64_t>(sample_rate * 0.18f);
+        if (onset > std::max(0.003f, onset_average * 1.8f) && (last_beat_frame == 0 || consumed_frames - last_beat_frame >= minimum_interval)) {
+            if (last_beat_frame != 0) {
+                const float instant_bpm = 60.0f * sample_rate / static_cast<float>(consumed_frames - last_beat_frame);
+                if (instant_bpm >= 55.0f && instant_bpm <= 220.0f) {
+                    const float prior = analysis_bpm_.load(std::memory_order_relaxed);
+                    analysis_bpm_.store(prior > 0.0f ? prior * 0.8f + instant_bpm * 0.2f : instant_bpm, std::memory_order_release);
+                }
+            }
+            last_beat_frame = consumed_frames;
+            analysis_beat_sequence_.fetch_add(1, std::memory_order_release);
+        }
+        onset_average = onset_average * 0.94f + onset * 0.06f;
+        for (int band = 0; band < 64; ++band) {
+            const float frequency = std::min(sample_rate * 0.45f, 45.0f * std::pow(2.0f, band / 10.0f));
+            float real = 0.0f, imaginary = 0.0f;
+            for (int frame = 0; frame < frames; ++frame) {
+                float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
+                const float window = 0.5f - 0.5f * std::cos(6.28318530718f * frame / std::max(1, frames - 1));
+                const float phase = 6.28318530718f * frequency * frame / sample_rate;
+                real += mono * window * std::cos(phase); imaginary -= mono * window * std::sin(phase);
+            }
+            analysis_spectrum_[band].store(std::min(1.0f, 4.0f * std::sqrt(real * real + imaginary * imaginary) / frames), std::memory_order_release);
+        }
+        previous_rms = 0.85f * previous_rms + 0.15f * rms;
+        consumed_frames += frames;
+    }
 }
