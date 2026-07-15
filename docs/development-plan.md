@@ -314,7 +314,15 @@ IDLE → open(path) → LOADING → READY → play() → PLAYING ⇄ pause() ⇄
 ### Phase 3-6（概览）
 
 - **Phase 3**: DSP 管线 — EQ (20段参量+图示)、DSP 节点链 (Comp/Reverb/Delay)、ReplayGain、重采样、声道平衡、变速、配置持久化
-- **Phase 4**: 分析可视化 — FFT 频谱/瀑布图、EBU R128 响度表、播放链路状态面板、日志查看器
+- **Phase 4**: 分析可视化 — FFT 频谱/瀑布图、EBU R128 响度表、播放链路状态面板、日志查看器；新增节奏驱动 UI：在最终 PCM 后建立非阻塞 Analysis Tap，以输出样本时间戳驱动频谱、低频能量、onset、BPM、beat/downbeat 事件，供封面、背景和进度条节奏动画使用。
+
+#### Phase 4 节奏驱动 UI 约束
+
+1. Audio callback 仅向 SPSC Analysis Tap `try_write`；缓冲满时丢弃分析帧，不能等待、分配、加锁或调用 JS。
+2. 分析线程负责 FFT、频谱通量、瞬态/onset、自适应阈值、BPM 与 beat/downbeat 预测；换曲、Seek、暂停和速度切换时重置或重新锁定。
+3. 所有分析帧都携带最终输出 PCM 的样本时间戳。Renderer 以播放时钟和已知输出延迟进行补偿，避免视觉落后声音。
+4. 频谱帧推送限制为 20–30 FPS；beat/downbeat 作为独立轻量事件。Renderer 只维护最新分析状态，不反向影响音频链或 bit-perfect 判定。
+5. 提供节奏视觉开关、强度和减少动态效果选项；无数据、暂停或切歌时动画必须平滑衰减。
 - **Phase 5**: DSD 深入与跨平台 — Native DSD、DoP、SACD ISO 解析、Mac CoreAudio、Linux ALSA、插件 API
 - **Phase 6**: 打磨发布 — 性能优化、错误恢复、crash 报告、CI/CD、文档
 

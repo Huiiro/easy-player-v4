@@ -1,13 +1,29 @@
 #include "audio_engine.h"
+#include "asio_backend.h"
 #include "dsound_backend.h"
 #include "wasapi_backend.h"
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
+#include <sstream>
 #include <unordered_set>
 #include <vector>
 
 AudioEngine::AudioEngine() {}
+
+void AudioEngine::set_replay_gain_mode(int mode, bool prevent_clipping) {
+    replay_gain_mode_ = std::max(0, std::min(2, mode));
+    replay_gain_prevent_clipping_ = prevent_clipping;
+    update_replay_gain_for_track();
+}
+
+void AudioEngine::update_replay_gain_for_track() {
+    const bool use_track = replay_gain_mode_ == 1 && track_info_.metadata.has_replaygain_track;
+    const bool use_album = replay_gain_mode_ == 2 && track_info_.metadata.has_replaygain_album;
+    const float gain = use_track ? track_info_.metadata.replaygain_track_db : use_album ? track_info_.metadata.replaygain_album_db : 0.0f;
+    const float peak = use_track ? track_info_.metadata.replaygain_track_peak : use_album ? track_info_.metadata.replaygain_album_peak : 0.0f;
+    dsp_pipeline_.set_replay_gain_config({use_track || use_album, gain, peak, replay_gain_prevent_clipping_});
+}
 
 AudioEngine::~AudioEngine() {
     stop();
@@ -19,6 +35,17 @@ AudioEngine::~AudioEngine() {
 // ──────────────────────────────────────────────────────────
 
 bool AudioEngine::open(const std::string& file_path) {
+    // A decoder, ring buffer and backend are format-specific. Reusing a live
+    // backend after switching tracks can feed (for example) 44.1 kHz PCM to a
+    // 48 kHz device without SRC, which changes pitch. Fully stop the previous
+    // stream before opening the next one so play() recreates the backend and
+    // configures the DSP pipeline from the new source format.
+    const EngineState previous_state = state_.load(std::memory_order_acquire);
+    if (previous_state != EngineState::Idle && previous_state != EngineState::Loading) {
+        LOG_INFO("Opening next track: tearing down previous format-specific output path");
+        stop();
+    }
+
     set_state(EngineState::Loading);
 
     if (!decoder_.open(file_path)) {
@@ -28,13 +55,19 @@ bool AudioEngine::open(const std::string& file_path) {
     }
 
     track_info_ = decoder_.track_info();
-    track_ended_fired_ = false;
+    update_replay_gain_for_track();
+    dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
+    played_frames_.store(0, std::memory_order_release);
+    track_ended_fired_.store(false, std::memory_order_release);
+    track_end_pending_.store(false, std::memory_order_release);
 
     // Create ring buffer: ~750ms capacity
     int buffer_frames = (int)(track_info_.sample_rate * 0.75);
     ring_buffer_ = std::make_unique<RingBuffer>(track_info_.channels, buffer_frames);
 
     set_state(EngineState::Ready);
+    LOG_INFO("Track opened: " + std::to_string(track_info_.sample_rate) + "Hz/" +
+             std::to_string(track_info_.channels) + "ch; output will be reopened on play");
     return true;
 }
 
@@ -54,6 +87,9 @@ bool AudioEngine::play() {
             case BackendType::WASAPI_EXCLUSIVE:
                 backend_ = std::make_unique<WasapiBackend>(true);
                 break;
+            case BackendType::ASIO:
+                backend_ = std::make_unique<AsioBackend>();
+                break;
             case BackendType::DIRECTSOUND:
             default:
                 backend_ = std::make_unique<DSoundBackend>();
@@ -61,7 +97,7 @@ bool AudioEngine::play() {
         }
 
         AudioFormat requested;
-        requested.sample_rate = track_info_.sample_rate;
+        requested.sample_rate = force_output_rate_ ? target_sample_rate_ : track_info_.sample_rate;
         requested.bit_depth = 16;
         requested.channels = track_info_.channels;
 
@@ -74,6 +110,25 @@ bool AudioEngine::play() {
             if (error_cb_) error_cb_(-2, "Failed to open audio device");
             return false;
         }
+
+        dsp_pipeline_.configure(
+            {track_info_.sample_rate, track_info_.bit_depth, track_info_.channels},
+            actual,
+            backend_->type(),
+            backend_->buffer_size_frames());
+        LOG_INFO("Audio pipeline configured: " + std::to_string(track_info_.sample_rate) +
+                 "Hz/" + std::to_string(track_info_.channels) + "ch -> " +
+                 std::to_string(actual.sample_rate) + "Hz/" + std::to_string(actual.channels) +
+                 "ch" + (track_info_.sample_rate != actual.sample_rate
+                     ? " (libsamplerate SRC active)" : " (SRC bypassed)"));
+
+        // Ring Buffer capacity is larger than a backend callback. Allocate
+        // once on the control thread for source-format reads.
+        source_work_buffer_.assign(
+            static_cast<size_t>(ring_buffer_->frames_available() + ring_buffer_->write_available() / track_info_.channels) *
+                track_info_.channels,
+            0.0f);
+        source_work_frames_ = 0;
 
         if (!backend_->start()) {
             if (error_cb_) error_cb_(-3, "Failed to start audio device");
@@ -129,6 +184,12 @@ bool AudioEngine::stop() {
     }
 
     ring_buffer_.reset();
+    source_work_buffer_.clear();
+    source_work_frames_ = 0;
+    dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
+    played_frames_.store(0, std::memory_order_release);
+    track_ended_fired_.store(false, std::memory_order_release);
+    track_end_pending_.store(false, std::memory_order_release);
     set_state(EngineState::Stopped);
     LOG_INFO("Playback stopped");
 
@@ -160,8 +221,11 @@ bool AudioEngine::seek(double position_ms) {
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
         seek_generation_.fetch_add(1, std::memory_order_release);
-        track_ended_fired_ = false;
         if (!decoder_.seek(sample_pos)) return false;
+
+        played_frames_.store(sample_pos, std::memory_order_release);
+        track_ended_fired_.store(false, std::memory_order_release);
+        track_end_pending_.store(false, std::memory_order_release);
 
         if (ring_buffer_) {
             ring_buffer_->reset();
@@ -208,7 +272,62 @@ bool AudioEngine::seek(double position_ms) {
 // ──────────────────────────────────────────────────────────
 
 void AudioEngine::set_volume(float volume) {
-    volume_.store(std::max(0.0f, std::min(1.0f, volume)), std::memory_order_relaxed);
+    dsp_pipeline_.set_master_volume(volume);
+}
+
+bool AudioEngine::set_eq_bands(const std::array<EqBand, kEqBandCount>& bands) {
+    const bool ok = dsp_pipeline_.set_eq_bands(bands);
+    if (ok) {
+        std::ostringstream message;
+        message << "EQ configuration published: "
+                << dsp_pipeline_.active_eq_band_count() << " active band(s)";
+        for (const auto& band : bands) {
+            if (band.enabled && std::abs(band.gain_db) >= 0.0001f) {
+                message << " [" << band.frequency_hz << "Hz "
+                        << (band.gain_db >= 0.0f ? "+" : "") << band.gain_db
+                        << "dB Q=" << band.q << "]";
+            }
+        }
+        LOG_INFO(message.str());
+    }
+    return ok;
+}
+
+bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample_rate, int quality) {
+    if (target_sample_rate < 8000 || target_sample_rate > 384000 || quality < 0 || quality > 2) return false;
+    if (force_output_rate_ == force_output_rate && target_sample_rate_ == target_sample_rate &&
+        resampler_quality_ == quality) return true;
+
+    force_output_rate_ = force_output_rate;
+    target_sample_rate_ = target_sample_rate;
+    resampler_quality_ = quality;
+    dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
+    LOG_INFO("Resampler configuration: " + std::string(force_output_rate ? "force " : "automatic ") +
+             std::to_string(target_sample_rate) + "Hz, quality=" +
+             (quality == 0 ? "best" : quality == 1 ? "medium" : "fast"));
+
+    // An opened backend owns its output clock. Recreate it before playback
+    // resumes so a target-rate change never reaches the audio callback half-applied.
+    const bool resume = state_ == EngineState::Playing;
+    if (backend_) {
+        if (resume) state_.store(EngineState::Paused, std::memory_order_release);
+        backend_->stop();
+        backend_->close();
+        backend_.reset();
+        if (decoder_thread_ && decoder_thread_->joinable()) {
+            decoder_running_ = false;
+            decoder_thread_->join();
+            decoder_thread_.reset();
+        }
+        if (position_timer_ && position_timer_->joinable()) {
+            timer_running_ = false;
+            position_timer_->join();
+            position_timer_.reset();
+        }
+        source_work_buffer_.clear();
+        source_work_frames_ = 0;
+    }
+    return !resume || play();
 }
 
 // ──────────────────────────────────────────────────────────
@@ -228,7 +347,16 @@ std::vector<DeviceInfo> AudioEngine::enumerate_devices() {
         }
     };
 
-    // WASAPI devices first (preferred)
+    // ASIO devices first (lowest latency)
+    {
+        AsioBackend asio;
+        auto d = asio.enumerate_devices();
+        for (auto& di : d) {
+            devices.push_back(std::move(di));
+        }
+    }
+
+    // WASAPI devices (preferred over DSound)
     {
         WasapiBackend wasapi_shared(false);
         auto d = wasapi_shared.enumerate_devices();
@@ -255,7 +383,21 @@ std::vector<DeviceInfo> AudioEngine::enumerate_devices() {
 }
 
 bool AudioEngine::set_device(const std::wstring& device_id) {
-    if (current_device_id_ == device_id) return true;
+    return select_output_device(current_backend_type_, device_id);
+}
+
+bool AudioEngine::set_backend(BackendType type) {
+    return select_output_device(type, L"default");
+}
+
+bool AudioEngine::select_output_device(BackendType type, const std::wstring& device_id) {
+    if (type != BackendType::DIRECTSOUND &&
+        type != BackendType::WASAPI_SHARED &&
+        type != BackendType::WASAPI_EXCLUSIVE &&
+        type != BackendType::ASIO) {
+        return false;
+    }
+    if (current_backend_type_ == type && current_device_id_ == device_id) return true;
 
     bool was_playing = (state_ == EngineState::Playing);
 
@@ -284,51 +426,8 @@ bool AudioEngine::set_device(const std::wstring& device_id) {
         position_timer_.reset();
     }
 
-    current_device_id_ = device_id;
-
-    // If we were playing, recreate backend and resume
-    if (was_playing) {
-        return play();
-    }
-    return true;
-}
-
-bool AudioEngine::set_backend(BackendType type) {
-    if (current_backend_type_ == type) return true;
-    // Phase 0: only DIRECTSOUND, WASAPI_SHARED, WASAPI_EXCLUSIVE are implemented
-    if (type != BackendType::DIRECTSOUND &&
-        type != BackendType::WASAPI_SHARED &&
-        type != BackendType::WASAPI_EXCLUSIVE) {
-        return false;
-    }
-
-    bool was_playing = (state_ == EngineState::Playing);
-
-    // Need to transition state so that play() will actually reconstruct
-    // the backend instead of short-circuiting on `state_ == Playing`.
-    if (was_playing) {
-        state_.store(EngineState::Paused, std::memory_order_release);
-    }
-
-    // Stop backend and threads
-    if (backend_) {
-        backend_->stop();
-        backend_->close();
-        backend_.reset();
-    }
-    // If there are threads running (decoder/timer), reset them too
-    if (decoder_thread_ && decoder_thread_->joinable()) {
-        decoder_running_ = false;
-        decoder_thread_->join();
-        decoder_thread_.reset();
-    }
-    if (position_timer_ && position_timer_->joinable()) {
-        timer_running_ = false;
-        position_timer_->join();
-        position_timer_.reset();
-    }
-
     current_backend_type_ = type;
+    current_device_id_ = device_id;
 
     // If we were playing, recreate backend and resume
     if (was_playing) {
@@ -342,7 +441,9 @@ bool AudioEngine::set_backend(BackendType type) {
 // ──────────────────────────────────────────────────────────
 
 double AudioEngine::position_ms() const {
-    return (double)decoder_.position() / track_info_.sample_rate * 1000.0;
+    if (track_info_.sample_rate <= 0) return 0.0;
+    return static_cast<double>(played_frames_.load(std::memory_order_acquire)) /
+           track_info_.sample_rate * 1000.0;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -404,6 +505,21 @@ void AudioEngine::position_timer_func() {
     while (timer_running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
+        if (track_end_pending_.exchange(false, std::memory_order_acq_rel)) {
+            // ThreadSafeFunction and logging may lock or allocate, so this
+            // transition is deliberately deferred out of audio_callback().
+            set_state(EngineState::Stopped);
+            LOG_INFO("Track ended (EOF reached)");
+        }
+
+        const uint64_t processed_eq = dsp_pipeline_.processed_eq_generation();
+        if (processed_eq != 0 && processed_eq != last_logged_eq_generation_) {
+            last_logged_eq_generation_ = processed_eq;
+            LOG_INFO("EQ configuration reached audio callback: generation=" +
+                     std::to_string(processed_eq) + ", active bands=" +
+                     std::to_string(dsp_pipeline_.active_eq_band_count()));
+        }
+
         if (pos_cb_ && state_ == EngineState::Playing) {
             pos_cb_(position_ms(), duration_ms());
         }
@@ -415,35 +531,51 @@ void AudioEngine::position_timer_func() {
 // ──────────────────────────────────────────────────────────
 
 int AudioEngine::audio_callback(float* output, int frames, int channels) {
-    if (state_ != EngineState::Playing) {
+    if (state_ != EngineState::Playing || !ring_buffer_ ||
+        source_work_buffer_.empty()) {
         // Paused or stopped: output silence
         std::memset(output, 0, frames * channels * sizeof(float));
         return frames;
     }
 
-    // Read from ring buffer
-    int read = ring_buffer_->read(output, frames);
+    const int source_channels = track_info_.channels;
+    const int capacity_frames = static_cast<int>(source_work_buffer_.size() / source_channels);
+    // Keep a small SRC look-ahead. libsamplerate may consume fewer input
+    // frames than it receives, so tail frames remain in this FIFO.
+    const int desired_frames = std::min(capacity_frames,
+                                        dsp_pipeline_.required_input_frames(frames));
+    const int to_read = std::max(0, desired_frames - source_work_frames_);
+    int read = 0;
+    if (to_read > 0) {
+        read = ring_buffer_->read(source_work_buffer_.data() +
+                                  static_cast<size_t>(source_work_frames_) * source_channels,
+                                  to_read);
+        source_work_frames_ += read;
+    }
 
-    if (read < frames) {
+    if (read < to_read) {
         glitch_count_.fetch_add(1, std::memory_order_relaxed);
     }
 
     // Check for end-of-stream: decoder stopped AND ring buffer is (nearly) empty
-    if (!track_ended_fired_ && !decoder_running_ && ring_buffer_->frames_available() == 0) {
-        track_ended_fired_ = true;
-        LOG_INFO("Track ended (EOF reached)");
-        // Notify via state callback
-        if (state_cb_) {
-            state_cb_(EngineState::Stopped);
-        }
+    const bool input_ended = !decoder_running_ && ring_buffer_->frames_available() == 0;
+    const auto result = dsp_pipeline_.process(source_work_buffer_.data(), source_work_frames_,
+                                              source_channels, input_ended, output, frames, channels);
+    played_frames_.fetch_add(result.input_frames_used, std::memory_order_relaxed);
+    const int consumed = std::min(result.input_frames_used, source_work_frames_);
+    const int remaining = source_work_frames_ - consumed;
+    if (remaining > 0 && consumed > 0) {
+        std::memmove(source_work_buffer_.data(),
+                     source_work_buffer_.data() + static_cast<size_t>(consumed) * source_channels,
+                     static_cast<size_t>(remaining) * source_channels * sizeof(float));
     }
+    source_work_frames_ = remaining;
 
-    // Apply volume (atomic load)
-    float vol = volume_.load(std::memory_order_relaxed);
-    if (vol != 1.0f) {
-        for (int i = 0; i < frames * channels; ++i) {
-            output[i] *= vol;
-        }
+    // Wait until the SRC FIFO has been consumed as well; otherwise the last
+    // resampler tail would be cut off when the decoder reaches EOF.
+    if (input_ended && source_work_frames_ == 0 && result.stream_drained &&
+        !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
+        track_end_pending_.store(true, std::memory_order_release);
     }
 
     return frames;

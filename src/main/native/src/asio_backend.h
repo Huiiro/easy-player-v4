@@ -20,7 +20,7 @@ public:
     bool start() override;
     bool stop() override;
     void close() override;
-    void flush() override {}
+    void flush() override;  // no-op for ASIO (double-buffered)
 
     BackendType type() const override { return BackendType::ASIO; }
     AudioFormat current_format() const override { return current_format_; }
@@ -34,6 +34,16 @@ private:
     bool active_ = false;
     int buffer_frames_ = 0;
     double latency_ms_ = 0.0;
+
+    // Allow the ASIO callbacks to access internal implementation
+    friend void asio_buffer_switch(long dbIndex, long directProcess);
+    friend void asio_sample_rate_did_change(double sRate);
+    friend long asio_message(long selector, long value, void* message, double* opt);
+
+    // Allow file-scope callbacks to access Impl
+    friend void buf_switch(long idx, long dp);
+    friend void sr_change(double);
+    friend long asio_msg(long,long,void*,double*);
 
     struct Impl;
     std::unique_ptr<Impl> impl_;

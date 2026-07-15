@@ -33,6 +33,38 @@ export interface PlaybackState {
   trackInfo: TrackInfo | null
 }
 
+export interface AudioFormat {
+  sampleRate: number
+  bitDepth: number
+  channels: number
+}
+
+export interface AudioChainStatus {
+  sourceFormat: AudioFormat
+  backendFormat: AudioFormat
+  activeNodes: string[]
+  bypassedNodes: string[]
+  bitPerfectBlockers: string[]
+  isBitPerfect: boolean
+}
+
+export interface EqBand {
+  enabled: boolean
+  frequencyHz: number
+  gainDb: number
+  q: number
+}
+
+export interface ResamplerConfig {
+  forceOutputRate: boolean
+  targetSampleRate: number
+  quality: 'best' | 'medium' | 'fast'
+}
+
+export interface DspNodeConfig { id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'; enabled: boolean }
+export interface CompressorConfig { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number; makeupDb: number }
+export interface DelayConfig { delayMs: number; feedback: number; mix: number }
+
 // Engine state enum matching C++ EngineState
 export enum EngineState {
   Idle = 0,
@@ -56,10 +88,39 @@ export type AudioCommandAction =
   | 'stop'
   | 'seek'
   | 'setVolume'
+  | 'setPreamp'
+  | 'setReplayGain'
+  | 'getReplayGain'
+  | 'setPlaybackSpeed'
+  | 'getPlaybackSpeed'
+  | 'setEqBands'
+  | 'getEqBands'
+  | 'setResamplerConfig'
+  | 'getResamplerConfig'
+  | 'setDspNodes'
+  | 'getDspNodes'
+  | 'setCompressorConfig'
+  | 'getCompressorConfig'
+  | 'setDelayConfig'
+  | 'getDelayConfig'
+  | 'setReverbConfig'
+  | 'getReverbConfig'
+  | 'setChorusConfig'
+  | 'getChorusConfig'
+  | 'setNoiseGateConfig'
+  | 'getNoiseGateConfig'
+  | 'setPhaserConfig'
+  | 'getPhaserConfig'
+  | 'setChannelMatrixConfig'
+  | 'getChannelMatrixConfig'
+  | 'setLimiter'
+  | 'getLimiter'
   | 'enumerateDevices'
   | 'setDevice'
   | 'setBackend'
+  | 'selectOutputDevice'
   | 'getStatus'
+  | 'getAudioChain'
   | 'getTrackInfo'
 
 export type AudioEventType =

@@ -63,4 +63,13 @@ for (const dll of ffmpegDlls) {
   }
 }
 
+// Copy libsamplerate runtime from the local vcpkg installation.
+const samplerateDll = path.join('D:', 'program', 'vcpkg', 'installed', 'x64-windows', 'bin', 'samplerate.dll')
+if (fs.existsSync(samplerateDll)) {
+  fs.copyFileSync(samplerateDll, path.join(srcDir, 'samplerate.dll'))
+  console.log('[copy-native-assets] Copied: samplerate.dll')
+} else {
+  console.warn('[copy-native-assets] libsamplerate DLL not found, skipping:', samplerateDll)
+}
+
 console.log('[copy-native-assets] Done. Output directory:', srcDir)

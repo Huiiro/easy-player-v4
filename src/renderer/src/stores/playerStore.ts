@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { PlaybackState, TrackInfo, DeviceInfo } from '../types/audio'
+import type { AudioChainStatus, PlaybackState, TrackInfo, DeviceInfo, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, ResamplerConfig } from '../types/audio'
 import { audioBridge } from '../services/audioBridge'
 import { useLogStore } from './logStore'
 
@@ -16,6 +16,24 @@ export const usePlayerStore = defineStore('player', () => {
   const currentBackend = ref<string>('directsound')
   const devices = ref<DeviceInfo[]>([])
   const currentDeviceId = ref('default')
+  const audioChain = ref<AudioChainStatus | null>(null)
+  const preampEnabled = ref(false)
+  const preampDb = ref(0)
+  const replayGainConfig = ref<{ mode: 'off' | 'track' | 'album'; preventClipping: boolean; active: boolean; appliedGainDb: number }>({ mode: 'off', preventClipping: true, active: false, appliedGainDb: 0 })
+  const playbackSpeedConfig = ref({ enabled: false, speed: 1 })
+  const eqBands = ref<EqBand[]>(createDefaultEqBands())
+  const resamplerConfig = ref<ResamplerConfig>({ forceOutputRate: false, targetSampleRate: 48000, quality: 'best' })
+  const dspNodes = ref<DspNodeConfig[]>([
+    { id: 'compressor', enabled: false }, { id: 'delay', enabled: false }, { id: 'reverb', enabled: false }, { id: 'chorus', enabled: false }, { id: 'noise_gate', enabled: false }, { id: 'phaser', enabled: false }
+  ])
+  const compressorConfig = ref<CompressorConfig>({ thresholdDb: -18, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0 })
+  const delayConfig = ref<DelayConfig>({ delayMs: 250, feedback: 0.25, mix: 0.2 })
+  const reverbConfig = ref({ roomSize: 0.5, decay: 0.4, mix: 0.15 })
+  const limiterConfig = ref({ enabled: false, ceilingDb: -1, releaseMs: 80 })
+  const chorusConfig = ref<ChorusConfig>({ rateHz: 0.8, depthMs: 8, mix: 0.35 })
+  const noiseGateConfig = ref<NoiseGateConfig>({ thresholdDb: -50, attackMs: 5, holdMs: 50, releaseMs: 150, rangeDb: -80 })
+  const phaserConfig = ref<PhaserConfig>({ rateHz: 0.4, depth: 0.6, centerHz: 800, feedback: 0.2, mix: 0.5 })
+  const channelMatrixConfig = ref<ChannelMatrixConfig>({ enabled: false, balance: 0, swapStereo: false, monoDownmix: false, outputGains: [1, 1, 1, 1, 1, 1, 1, 1] })
 
   // ── Computed ──
   const isPlaying = computed(() => state.value === 'playing')
@@ -36,6 +54,10 @@ export const usePlayerStore = defineStore('player', () => {
         trackInfo.value = status.trackInfo
         durationMs.value = status.durationMs
       }
+      // ReplayGain is resolved from the newly opened track's metadata by the
+      // native decoder, so the startup snapshot is no longer authoritative.
+      await loadReplayGain()
+      await refreshAudioChain()
     }
     return ok
   }
@@ -64,11 +86,149 @@ export const usePlayerStore = defineStore('player', () => {
     await audioBridge.setVolume(volume.value)
   }
 
+  async function setPreamp(db: number, enabled: boolean): Promise<void> {
+    preampDb.value = Math.max(-24, Math.min(24, db))
+    preampEnabled.value = enabled
+    await audioBridge.setPreamp(preampDb.value, preampEnabled.value)
+  }
+  async function loadReplayGain(): Promise<void> { const c = await audioBridge.getReplayGain(); if (c) replayGainConfig.value = c }
+  async function setReplayGain(): Promise<boolean> {
+    const ok = await audioBridge.setReplayGain({ mode: replayGainConfig.value.mode, preventClipping: replayGainConfig.value.preventClipping })
+    if (ok) { await loadReplayGain(); await refreshAudioChain() }
+    return ok
+  }
+  async function loadPlaybackSpeed(): Promise<void> { const c = await audioBridge.getPlaybackSpeed(); if (c) playbackSpeedConfig.value = c }
+  async function setPlaybackSpeed(): Promise<boolean> {
+    const ok = await audioBridge.setPlaybackSpeed({ ...playbackSpeedConfig.value })
+    if (ok) await refreshAudioChain()
+    return ok
+  }
+
+  async function loadEqBands(): Promise<void> {
+    const bands = await audioBridge.getEqBands()
+    if (bands.length === 20) eqBands.value = bands
+  }
+
+  async function commitEqBands(): Promise<void> {
+    const logStore = useLogStore()
+    const activeBands = eqBands.value.filter((band) => band.enabled && Math.abs(band.gainDb) >= 0.0001).length
+    logStore.addEntry({
+      level: 'info',
+      message: `Renderer EQ submit: ${activeBands} active band(s)`,
+      timestamp: Date.now()
+    })
+    try {
+      // Pinia exposes a reactive Proxy. Electron IPC uses structured clone,
+      // which rejects Proxies, so send a fresh plain-object snapshot.
+      const bands = eqBands.value.map((band) => ({
+        enabled: band.enabled,
+        frequencyHz: band.frequencyHz,
+        gainDb: band.gainDb,
+        q: band.q
+      }))
+      const ok = await audioBridge.setEqBands(bands)
+      logStore.addEntry({
+        level: ok ? 'info' : 'error',
+        message: `Renderer EQ submit ${ok ? 'accepted by IPC' : 'rejected by IPC'}`,
+        timestamp: Date.now()
+      })
+    } catch (error) {
+      logStore.addEntry({
+        level: 'error',
+        message: `Renderer EQ submit exception: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: Date.now()
+      })
+    }
+  }
+
+  async function loadResamplerConfig(): Promise<void> {
+    const config = await audioBridge.getResamplerConfig()
+    if (config) resamplerConfig.value = config
+  }
+
+  async function setResamplerConfig(config: ResamplerConfig): Promise<boolean> {
+    const next = {
+      forceOutputRate: config.forceOutputRate,
+      targetSampleRate: config.targetSampleRate,
+      quality: config.quality
+    } satisfies ResamplerConfig
+    const ok = await audioBridge.setResamplerConfig(next)
+    if (ok) {
+      resamplerConfig.value = next
+      await refreshAudioChain()
+    }
+    return ok
+  }
+
+  async function loadDspNodes(): Promise<void> {
+    const nodes = await audioBridge.getDspNodes()
+    if (nodes.length === 6) dspNodes.value = nodes
+  }
+  async function loadCompressorConfig(): Promise<void> {
+    const config = await audioBridge.getCompressorConfig()
+    if (config) compressorConfig.value = config
+  }
+  async function setCompressorConfig(): Promise<boolean> {
+    const ok = await audioBridge.setCompressorConfig({ ...compressorConfig.value })
+    if (ok) await refreshAudioChain()
+    return ok
+  }
+  async function loadDelayConfig(): Promise<void> { const config = await audioBridge.getDelayConfig(); if (config) delayConfig.value = config }
+  async function setDelayConfig(): Promise<boolean> { return audioBridge.setDelayConfig({ ...delayConfig.value }) }
+  async function loadReverbConfig(): Promise<void> { const c = await audioBridge.getReverbConfig(); if (c) reverbConfig.value = c }
+  async function setReverbConfig(): Promise<boolean> { return audioBridge.setReverbConfig({ ...reverbConfig.value }) }
+  async function loadChorusConfig(): Promise<void> { const c = await audioBridge.getChorusConfig(); if (c) chorusConfig.value = c }
+  async function setChorusConfig(): Promise<boolean> { return audioBridge.setChorusConfig({ ...chorusConfig.value }) }
+  async function loadNoiseGateConfig(): Promise<void> { const c = await audioBridge.getNoiseGateConfig(); if (c) noiseGateConfig.value = c }
+  async function setNoiseGateConfig(): Promise<boolean> { return audioBridge.setNoiseGateConfig({ ...noiseGateConfig.value }) }
+  async function loadPhaserConfig(): Promise<void> { const c = await audioBridge.getPhaserConfig(); if (c) phaserConfig.value = c }
+  async function setPhaserConfig(): Promise<boolean> { return audioBridge.setPhaserConfig({ ...phaserConfig.value }) }
+  async function loadChannelMatrixConfig(): Promise<void> { const c = await audioBridge.getChannelMatrixConfig(); if (c) channelMatrixConfig.value = c }
+  async function setChannelMatrixConfig(): Promise<boolean> {
+    const config = {
+      enabled: channelMatrixConfig.value.enabled,
+      balance: channelMatrixConfig.value.balance,
+      swapStereo: channelMatrixConfig.value.swapStereo,
+      monoDownmix: channelMatrixConfig.value.monoDownmix,
+      // Pinia makes nested arrays reactive Proxies. IPC structured clone
+      // requires a plain array, otherwise the entire matrix update is lost.
+      outputGains: [...channelMatrixConfig.value.outputGains]
+    }
+    try {
+      const ok = await audioBridge.setChannelMatrixConfig(config)
+      if (ok) await refreshAudioChain()
+      return ok
+    } catch (error) {
+      useLogStore().addEntry({ level: 'error', message: `Channel Matrix submit exception: ${error instanceof Error ? error.message : String(error)}`, timestamp: Date.now() })
+      return false
+    }
+  }
+  async function loadLimiter(): Promise<void> { const c = await audioBridge.getLimiter(); if (c) limiterConfig.value = c }
+  async function setLimiter(): Promise<boolean> { const ok = await audioBridge.setLimiter({ ...limiterConfig.value }); if (ok) await refreshAudioChain(); return ok }
+
+  async function commitDspNodes(): Promise<boolean> {
+    const nodes = dspNodes.value.map((node) => ({ id: node.id, enabled: node.enabled }))
+    const ok = await audioBridge.setDspNodes(nodes)
+    if (ok) await refreshAudioChain()
+    return ok
+  }
+
+  function moveDspNode(index: number, direction: -1 | 1): void {
+    const destination = index + direction
+    if (destination < 0 || destination >= dspNodes.value.length) return
+    const [node] = dspNodes.value.splice(index, 1)
+    dspNodes.value.splice(destination, 0, node)
+    void commitDspNodes()
+  }
+
   async function setBackend(backend: string) {
     if (currentBackend.value === backend) return
     currentBackend.value = backend
     const ok = await audioBridge.setBackend(backend)
     if (ok) {
+      // Device identifiers belong to the previous backend and cannot be
+      // reused by ASIO, WASAPI, or DirectSound.
+      currentDeviceId.value = 'default'
       // Refresh device list after backend change
       await refreshDevices()
     }
@@ -80,8 +240,23 @@ export const usePlayerStore = defineStore('player', () => {
     await audioBridge.setDevice(deviceId)
   }
 
+  async function selectOutputDevice(device: DeviceInfo) {
+    if (currentBackend.value === device.backend && currentDeviceId.value === device.id) return true
+
+    const ok = await audioBridge.selectOutputDevice(device.backend, device.id)
+    if (!ok) return false
+
+    currentBackend.value = device.backend
+    currentDeviceId.value = device.id
+    return true
+  }
+
   async function refreshDevices() {
     devices.value = await audioBridge.enumerateDevices()
+  }
+
+  async function refreshAudioChain(): Promise<void> {
+    audioChain.value = await audioBridge.getAudioChain()
   }
 
   // ── Event subscriptions ──
@@ -94,6 +269,12 @@ export const usePlayerStore = defineStore('player', () => {
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
+      })
+    )
+
+    unsubs.push(
+      audioBridge.onAudioChainChanged((data) => {
+        audioChain.value = data
       })
     )
 
@@ -134,6 +315,22 @@ export const usePlayerStore = defineStore('player', () => {
     currentBackend,
     devices,
     currentDeviceId,
+    audioChain,
+    preampEnabled,
+    preampDb,
+    replayGainConfig,
+    playbackSpeedConfig,
+    eqBands,
+    resamplerConfig,
+    dspNodes,
+    compressorConfig,
+    delayConfig,
+    reverbConfig,
+    limiterConfig,
+    chorusConfig,
+    noiseGateConfig,
+    phaserConfig,
+    channelMatrixConfig,
     // Computed
     isPlaying,
     isPaused,
@@ -147,14 +344,50 @@ export const usePlayerStore = defineStore('player', () => {
     stop,
     seek,
     setVolume,
+    setPreamp,
+    loadReplayGain,
+    setReplayGain,
+    loadPlaybackSpeed,
+    setPlaybackSpeed,
+    loadEqBands,
+    commitEqBands,
+    loadResamplerConfig,
+    setResamplerConfig,
+    loadDspNodes,
+    commitDspNodes,
+    moveDspNode,
+    loadCompressorConfig,
+    setCompressorConfig,
+    loadDelayConfig,
+    setDelayConfig,
+    loadReverbConfig,
+    setReverbConfig,
+    loadChorusConfig,
+    setChorusConfig,
+    loadNoiseGateConfig,
+    setNoiseGateConfig,
+    loadPhaserConfig,
+    setPhaserConfig,
+    loadChannelMatrixConfig,
+    setChannelMatrixConfig,
+    loadLimiter,
+    setLimiter,
     setBackend,
     setDevice,
+    selectOutputDevice,
     refreshDevices,
+    refreshAudioChain,
     // Events
     subscribeToEvents,
     unsubscribe
   }
 })
+
+function createDefaultEqBands(): EqBand[] {
+  const frequencies = [20, 31.5, 50, 80, 125, 200, 315, 500, 800, 1250,
+    2000, 3150, 5000, 8000, 10000, 12000, 14000, 16000, 18000, 20000]
+  return frequencies.map((frequencyHz) => ({ enabled: false, frequencyHz, gainDb: 0, q: 1 }))
+}
 
 function formatTime(ms: number): string {
   const totalSec = Math.floor(ms / 1000)

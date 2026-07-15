@@ -18,6 +18,12 @@ struct TrackInfo {
         std::string album;
         int track_number = 0;
         std::string genre;
+        float replaygain_track_db = 0.0f;
+        float replaygain_album_db = 0.0f;
+        float replaygain_track_peak = 0.0f;
+        float replaygain_album_peak = 0.0f;
+        bool has_replaygain_track = false;
+        bool has_replaygain_album = false;
     } metadata;
 };
 

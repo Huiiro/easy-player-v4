@@ -26,14 +26,54 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'seek', params: { positionMs } }),
   setVolume: (volume: number) =>
     ipcRenderer.invoke('audio:command', { action: 'setVolume', params: { volume } }),
+  setPreamp: (db: number, enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', { action: 'setPreamp', params: { db, enabled } }),
+  setReplayGain: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setReplayGain', params: { config } }),
+  getReplayGain: () => ipcRenderer.invoke('audio:command', { action: 'getReplayGain', params: {} }),
+  setPlaybackSpeed: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setPlaybackSpeed', params: { config } }),
+  getPlaybackSpeed: () => ipcRenderer.invoke('audio:command', { action: 'getPlaybackSpeed', params: {} }),
+  setEqBands: (bands: unknown[]) =>
+    ipcRenderer.invoke('audio:command', { action: 'setEqBands', params: { bands } }),
+  getEqBands: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getEqBands', params: {} }),
+  setResamplerConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setResamplerConfig', params: { config } }),
+  getResamplerConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getResamplerConfig', params: {} }),
+  setDspNodes: (nodes: unknown[]) =>
+    ipcRenderer.invoke('audio:command', { action: 'setDspNodes', params: { nodes } }),
+  getDspNodes: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getDspNodes', params: {} }),
+  setCompressorConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setCompressorConfig', params: { config } }),
+  getCompressorConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getCompressorConfig', params: {} }),
+  setDelayConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setDelayConfig', params: { config } }),
+  getDelayConfig: () => ipcRenderer.invoke('audio:command', { action: 'getDelayConfig', params: {} }),
+  setReverbConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setReverbConfig', params: { config } }),
+  getReverbConfig: () => ipcRenderer.invoke('audio:command', { action: 'getReverbConfig', params: {} }),
+  setChorusConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setChorusConfig', params: { config } }),
+  getChorusConfig: () => ipcRenderer.invoke('audio:command', { action: 'getChorusConfig', params: {} }),
+  setNoiseGateConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setNoiseGateConfig', params: { config } }),
+  getNoiseGateConfig: () => ipcRenderer.invoke('audio:command', { action: 'getNoiseGateConfig', params: {} }),
+  setPhaserConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setPhaserConfig', params: { config } }),
+  getPhaserConfig: () => ipcRenderer.invoke('audio:command', { action: 'getPhaserConfig', params: {} }),
+  setChannelMatrixConfig: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setChannelMatrixConfig', params: { config } }),
+  getChannelMatrixConfig: () => ipcRenderer.invoke('audio:command', { action: 'getChannelMatrixConfig', params: {} }),
+  setLimiter: (config: unknown) => ipcRenderer.invoke('audio:command', { action: 'setLimiter', params: { config } }),
+  getLimiter: () => ipcRenderer.invoke('audio:command', { action: 'getLimiter', params: {} }),
   enumerateDevices: () =>
     ipcRenderer.invoke('audio:command', { action: 'enumerateDevices', params: {} }),
   setDevice: (deviceId: string) =>
     ipcRenderer.invoke('audio:command', { action: 'setDevice', params: { deviceId } }),
   setBackend: (backend: string) =>
     ipcRenderer.invoke('audio:command', { action: 'setBackend', params: { backend } }),
+  selectOutputDevice: (backend: string, deviceId: string) =>
+    ipcRenderer.invoke('audio:command', { action: 'selectOutputDevice', params: { backend, deviceId } }),
   getStatus: () =>
     ipcRenderer.invoke('audio:command', { action: 'getStatus', params: {} }),
+  getAudioChain: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getAudioChain', params: {} }),
 
   // Events (returns unsubscribe function)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,6 +98,10 @@ const audioAPI = {
   onTrackEnded: function (callback: (data: { reason: string }) => void): () => void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this as any).onEvent('trackEnded', callback)
+  },
+  onAudioChainChanged: function (callback: (data: unknown) => void): () => void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (this as any).onEvent('audioChainChanged', callback)
   },
   onError: function (callback: (data: { code: number; message: string; recoverable: boolean }) => void): () => void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

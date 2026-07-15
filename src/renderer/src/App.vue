@@ -7,22 +7,49 @@ const player = usePlayerStore()
 const logs = useLogStore()
 const isSeeking = ref(false)
 const seekPreviewMs = ref<number | null>(null)
+let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
 
 const displayPositionMs = computed(() => seekPreviewMs.value ?? player.positionMs)
 const displayProgress = computed(() =>
   player.durationMs > 0 ? displayPositionMs.value / player.durationMs : 0
 )
 
+const backendLabel: Record<string, string> = {
+  asio: 'ASIO',
+  wasapi_shared: 'WASAPI Shared',
+  wasapi_exclusive: 'WASAPI Exclusive',
+  directsound: 'DirectSound'
+}
+
+const currentBackendLabel = computed(() => backendLabel[player.currentBackend] ?? player.currentBackend)
+const deviceKey = (backend: string, id: string) => `${backend}\u0000${id}`
+const selectedOutputDeviceKey = computed(() => deviceKey(player.currentBackend, player.currentDeviceId))
+
 // ── Startup ──
 onMounted(async () => {
   player.subscribeToEvents()
   logs.subscribe()
   await player.refreshDevices()
+  await player.refreshAudioChain()
+  await player.loadEqBands()
+  await player.loadReplayGain()
+  await player.loadPlaybackSpeed()
+  await player.loadResamplerConfig()
+  await player.loadDspNodes()
+  await player.loadCompressorConfig()
+  await player.loadDelayConfig()
+  await player.loadReverbConfig()
+  await player.loadChorusConfig()
+  await player.loadNoiseGateConfig()
+  await player.loadPhaserConfig()
+  await player.loadChannelMatrixConfig()
+  await player.loadLimiter()
 
   console.log('[App] Audio player UI mounted')
 })
 
 onUnmounted(() => {
+  if (eqCommitTimer) clearTimeout(eqCommitTimer)
   player.unsubscribe()
   logs.unsubscribeEvents()
 })
@@ -60,6 +87,65 @@ function handleProgressPointerDown(event: PointerEvent) {
 function handleProgressPointerMove(event: PointerEvent) {
   if (!isSeeking.value) return
   seekPreviewMs.value = getSeekPositionMs(event)
+}
+
+function setPreampEnabled(event: Event) {
+  void player.setPreamp(player.preampDb, (event.target as HTMLInputElement).checked)
+}
+
+function setPreampDb(event: Event) {
+  void player.setPreamp(Number((event.target as HTMLInputElement).value), player.preampEnabled)
+}
+function updateReplayGain(): void { void player.setReplayGain() }
+function updatePlaybackSpeed(): void { void player.setPlaybackSpeed() }
+
+function previewEqGain(index: number, event: Event) {
+  const band = player.eqBands[index]
+  band.gainDb = Number((event.target as HTMLInputElement).value)
+  // A non-zero gain is an intentional EQ edit, so make it audible without
+  // requiring the user to find and tick the small per-band checkbox.
+  band.enabled = Math.abs(band.gainDb) >= 0.0001
+  scheduleEqCommit()
+}
+
+function commitEqBands() {
+  if (eqCommitTimer) clearTimeout(eqCommitTimer)
+  eqCommitTimer = undefined
+  void player.commitEqBands()
+}
+
+function scheduleEqCommit() {
+  if (eqCommitTimer) clearTimeout(eqCommitTimer)
+  eqCommitTimer = setTimeout(commitEqBands, 80)
+}
+
+function setEqBandEnabled(index: number, event: Event) {
+  player.eqBands[index].enabled = (event.target as HTMLInputElement).checked
+  commitEqBands()
+}
+
+function updateResampler(): void {
+  void player.setResamplerConfig(player.resamplerConfig)
+}
+
+function nodeLabel(id: string): string {
+  return id === 'compressor' ? 'Compressor' : id === 'delay' ? 'Delay' : id === 'reverb' ? 'Reverb' : id === 'chorus' ? 'Chorus' : id === 'noise_gate' ? 'Noise Gate' : 'Phaser'
+}
+
+function updateDspNodes(): void {
+  void player.commitDspNodes()
+}
+function updateCompressor(): void { void player.setCompressorConfig() }
+function updateDelay(): void { void player.setDelayConfig() }
+function updateReverb(): void { void player.setReverbConfig() }
+function updateChorus(): void { void player.setChorusConfig() }
+function updateNoiseGate(): void { void player.setNoiseGateConfig() }
+function updatePhaser(): void { void player.setPhaserConfig() }
+function updateChannelMatrix(): void { void player.setChannelMatrixConfig() }
+function updateLimiter(): void { void player.setLimiter() }
+
+function formatFrequency(hz: number): string {
+  return hz >= 1000 ? `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 : 1)}k` : `${hz}`
 }
 
 async function handleProgressPointerUp(event: PointerEvent) {
@@ -122,35 +208,24 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       </p>
     </div>
 
-    <!-- Backend / Device Selector -->
+    <!-- Output Device Selector -->
     <div class="selector-row">
       <div class="selector-group">
-        <label>Backend:</label>
+        <label>Output device:</label>
         <select
-          :value="player.currentBackend"
+          :value="selectedOutputDeviceKey"
           @change="async (e) => {
-            await player.setBackend((e.target as HTMLSelectElement).value)
-          }"
-        >
-          <option value="wasapi_shared">WASAPI Shared</option>
-          <option value="wasapi_exclusive">WASAPI Exclusive</option>
-          <option value="directsound">DirectSound</option>
-        </select>
-      </div>
-      <div class="selector-group">
-        <label>Device:</label>
-        <select
-          :value="player.currentDeviceId"
-          @change="async (e) => {
-            await player.setDevice((e.target as HTMLSelectElement).value)
+            const value = (e.target as HTMLSelectElement).value
+            const device = player.devices.find((d) => deviceKey(d.backend, d.id) === value)
+            if (device) await player.selectOutputDevice(device)
           }"
         >
           <option
             v-for="dev in player.devices"
-            :key="dev.id"
-            :value="dev.id"
+            :key="`${dev.backend}:${dev.id}`"
+            :value="deviceKey(dev.backend, dev.id)"
           >
-            {{ dev.name }} {{ dev.isDefault ? '(default)' : '' }}
+            {{ backendLabel[dev.backend] }} + {{ dev.name }}{{ dev.isDefault ? ' (default)' : '' }}
           </option>
         </select>
       </div>
@@ -204,9 +279,179 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       />
     </div>
 
+    <!-- Preamp: manual gain; metadata-driven ReplayGain is a later node. -->
+    <div class="preamp-section">
+      <label>
+        <input
+          type="checkbox"
+          :checked="player.preampEnabled"
+          @change="setPreampEnabled"
+        />
+        Preamp
+      </label>
+      <input
+        type="range"
+        min="-24"
+        max="24"
+        step="0.1"
+        :value="player.preampDb"
+        :disabled="!player.preampEnabled"
+        @input="setPreampDb"
+      />
+      <span>{{ player.preampDb.toFixed(1) }} dB</span>
+    </div>
+    <div class="preamp-section">
+      <label>ReplayGain <select v-model="player.replayGainConfig.mode" @change="updateReplayGain"><option value="off">Off</option><option value="track">Track</option><option value="album">Album</option></select></label>
+      <label><input v-model="player.replayGainConfig.preventClipping" :disabled="player.replayGainConfig.mode === 'off'" type="checkbox" @change="updateReplayGain" /> Prevent clipping</label>
+      <span>{{ player.replayGainConfig.active ? `${player.replayGainConfig.appliedGainDb.toFixed(2)} dB applied` : 'No matching tag' }}</span>
+    </div>
+    <div class="preamp-section">
+      <label><input v-model="player.playbackSpeedConfig.enabled" type="checkbox" @change="updatePlaybackSpeed" /> Preserve-pitch speed</label>
+      <input v-model.number="player.playbackSpeedConfig.speed" :disabled="!player.playbackSpeedConfig.enabled" type="range" min="0.5" max="2" step="0.05" @change="updatePlaybackSpeed" />
+      <span>{{ player.playbackSpeedConfig.speed.toFixed(2) }}×</span>
+    </div>
+
+    <section class="channel-matrix-section">
+      <label><input v-model="player.channelMatrixConfig.enabled" type="checkbox" @change="updateChannelMatrix" /> Channel matrix</label>
+      <label>Balance <input v-model.number="player.channelMatrixConfig.balance" :disabled="!player.channelMatrixConfig.enabled" type="range" min="-1" max="1" step="0.01" @change="updateChannelMatrix" /> {{ player.channelMatrixConfig.balance.toFixed(2) }}</label>
+      <label><input v-model="player.channelMatrixConfig.swapStereo" :disabled="!player.channelMatrixConfig.enabled" type="checkbox" @change="updateChannelMatrix" /> Swap L/R</label>
+      <label><input v-model="player.channelMatrixConfig.monoDownmix" :disabled="!player.channelMatrixConfig.enabled" type="checkbox" @change="updateChannelMatrix" /> Stereo to mono</label>
+      <div class="channel-gains">
+        <label v-for="(_gain, index) in player.channelMatrixConfig.outputGains" :key="index">Ch {{ index + 1 }} <input v-model.number="player.channelMatrixConfig.outputGains[index]" :disabled="!player.channelMatrixConfig.enabled" type="number" min="0" max="2" step="0.01" @change="updateChannelMatrix" /></label>
+      </div>
+    </section>
+
+    <!-- 20-band parametric EQ: Q is fixed at 1.0 in this initial panel. -->
+    <section class="eq-section">
+      <div class="eq-heading">
+        <span>Parametric EQ</span>
+        <span class="eq-heading-actions">
+          <small>{{ player.eqBands.filter((band) => band.enabled && Math.abs(band.gainDb) >= 0.0001).length }} active · ±12 dB · Q 1.0</small>
+          <button class="eq-apply" @click="commitEqBands">Apply EQ</button>
+        </span>
+      </div>
+      <div class="eq-bands">
+        <div v-for="(band, index) in player.eqBands" :key="band.frequencyHz" class="eq-band">
+          <span class="eq-gain">{{ band.gainDb.toFixed(1) }}</span>
+          <input
+            class="eq-slider"
+            type="range"
+            min="-12"
+            max="12"
+            step="0.1"
+            :value="band.gainDb"
+            @input="previewEqGain(index, $event)"
+          />
+          <label class="eq-frequency">
+            <input type="checkbox" :checked="band.enabled" @change="setEqBandEnabled(index, $event)" />
+            {{ formatFrequency(band.frequencyHz) }}
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <section class="dsp-nodes-section">
+      <div class="dsp-nodes-heading">DSP node order <small>Enabled nodes process audio in the listed order.</small></div>
+      <div v-for="(node, index) in player.dspNodes" :key="node.id" class="dsp-node-row">
+        <label><input v-model="node.enabled" type="checkbox" @change="updateDspNodes" /> {{ nodeLabel(node.id) }}</label>
+        <span>{{ node.id === 'compressor' ? 'real-time dynamics processor' : node.id === 'delay' ? 'real-time echo processor' : node.id === 'reverb' ? 'real-time multi-tap reverb' : node.id === 'chorus' ? 'modulated-delay processor' : node.id === 'noise_gate' ? 'stereo-linked noise gate' : 'four-stage all-pass modulation' }}</span>
+        <button :disabled="index === 0" @click="player.moveDspNode(index, -1)">↑</button>
+        <button :disabled="index === player.dspNodes.length - 1" @click="player.moveDspNode(index, 1)">↓</button>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'compressor' && node.enabled)" class="compressor-controls">
+        <label>Threshold <input v-model.number="player.compressorConfig.thresholdDb" type="number" min="-60" max="0" step="1" @change="updateCompressor" /> dB</label>
+        <label>Ratio <input v-model.number="player.compressorConfig.ratio" type="number" min="1" max="20" step="0.1" @change="updateCompressor" />:1</label>
+        <label>Attack <input v-model.number="player.compressorConfig.attackMs" type="number" min="0.1" max="500" step="0.1" @change="updateCompressor" /> ms</label>
+        <label>Release <input v-model.number="player.compressorConfig.releaseMs" type="number" min="5" max="2000" step="1" @change="updateCompressor" /> ms</label>
+        <label>Makeup <input v-model.number="player.compressorConfig.makeupDb" type="number" min="-12" max="24" step="0.5" @change="updateCompressor" /> dB</label>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'delay' && node.enabled)" class="compressor-controls">
+        <label>Time <input v-model.number="player.delayConfig.delayMs" type="number" min="1" max="2000" step="1" @change="updateDelay" /> ms</label>
+        <label>Feedback <input v-model.number="player.delayConfig.feedback" type="number" min="0" max="0.95" step="0.01" @change="updateDelay" /></label>
+        <label>Wet mix <input v-model.number="player.delayConfig.mix" type="number" min="0" max="1" step="0.01" @change="updateDelay" /></label>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'reverb' && node.enabled)" class="compressor-controls">
+        <label>Room <input v-model.number="player.reverbConfig.roomSize" type="number" min="0" max="1" step="0.05" @change="updateReverb" /></label>
+        <label>Decay <input v-model.number="player.reverbConfig.decay" type="number" min="0" max="1" step="0.05" @change="updateReverb" /></label>
+        <label>Wet mix <input v-model.number="player.reverbConfig.mix" type="number" min="0" max="1" step="0.05" @change="updateReverb" /></label>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'chorus' && node.enabled)" class="compressor-controls">
+        <label>Rate <input v-model.number="player.chorusConfig.rateHz" type="number" min="0.05" max="10" step="0.05" @change="updateChorus" /> Hz</label>
+        <label>Depth <input v-model.number="player.chorusConfig.depthMs" type="number" min="0.1" max="15" step="0.1" @change="updateChorus" /> ms</label>
+        <label>Wet mix <input v-model.number="player.chorusConfig.mix" type="number" min="0" max="1" step="0.01" @change="updateChorus" /></label>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'noise_gate' && node.enabled)" class="compressor-controls">
+        <label>Threshold <input v-model.number="player.noiseGateConfig.thresholdDb" type="number" min="-80" max="0" step="1" @change="updateNoiseGate" /> dB</label>
+        <label>Attack <input v-model.number="player.noiseGateConfig.attackMs" type="number" min="0.1" max="200" step="0.1" @change="updateNoiseGate" /> ms</label>
+        <label>Hold <input v-model.number="player.noiseGateConfig.holdMs" type="number" min="0" max="2000" step="1" @change="updateNoiseGate" /> ms</label>
+        <label>Release <input v-model.number="player.noiseGateConfig.releaseMs" type="number" min="5" max="2000" step="1" @change="updateNoiseGate" /> ms</label>
+        <label>Range <input v-model.number="player.noiseGateConfig.rangeDb" type="number" min="-100" max="0" step="1" @change="updateNoiseGate" /> dB</label>
+      </div>
+      <div v-if="player.dspNodes.some((node) => node.id === 'phaser' && node.enabled)" class="compressor-controls">
+        <label>Rate <input v-model.number="player.phaserConfig.rateHz" type="number" min="0.05" max="10" step="0.05" @change="updatePhaser" /> Hz</label>
+        <label>Depth <input v-model.number="player.phaserConfig.depth" type="number" min="0" max="1" step="0.05" @change="updatePhaser" /></label>
+        <label>Center <input v-model.number="player.phaserConfig.centerHz" type="number" min="100" max="5000" step="10" @change="updatePhaser" /> Hz</label>
+        <label>Feedback <input v-model.number="player.phaserConfig.feedback" type="number" min="-0.95" max="0.95" step="0.05" @change="updatePhaser" /></label>
+        <label>Wet mix <input v-model.number="player.phaserConfig.mix" type="number" min="0" max="1" step="0.05" @change="updatePhaser" /></label>
+      </div>
+      <div class="compressor-controls">
+        <label><input v-model="player.limiterConfig.enabled" type="checkbox" @change="updateLimiter" /> Limiter</label>
+        <label>Ceiling <input v-model.number="player.limiterConfig.ceilingDb" :disabled="!player.limiterConfig.enabled" type="number" min="-12" max="0" step="0.1" @change="updateLimiter" /> dB</label>
+        <label>Release <input v-model.number="player.limiterConfig.releaseMs" :disabled="!player.limiterConfig.enabled" type="number" min="5" max="2000" step="1" @change="updateLimiter" /> ms</label>
+      </div>
+    </section>
+
+    <section class="resampler-section">
+      <div class="resampler-heading">Sample-rate conversion</div>
+      <label>
+        <input v-model="player.resamplerConfig.forceOutputRate" type="checkbox" @change="updateResampler" />
+        Force output rate
+      </label>
+      <select
+        v-model.number="player.resamplerConfig.targetSampleRate"
+        :disabled="!player.resamplerConfig.forceOutputRate"
+        @change="updateResampler"
+      >
+        <option :value="44100">44.1 kHz</option>
+        <option :value="48000">48 kHz</option>
+        <option :value="88200">88.2 kHz</option>
+        <option :value="96000">96 kHz</option>
+        <option :value="176400">176.4 kHz</option>
+        <option :value="192000">192 kHz</option>
+      </select>
+      <select v-model="player.resamplerConfig.quality" @change="updateResampler">
+        <option value="best">Best quality</option>
+        <option value="medium">Medium quality</option>
+        <option value="fast">Fastest</option>
+      </select>
+      <small>Changing this setting safely reopens the output path.</small>
+    </section>
+
+    <section v-if="player.audioChain" class="chain-section">
+      <div class="chain-heading">
+        <span>Audio pipeline</span>
+        <span :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : 'bit-perfect-off'">
+          {{ player.audioChain.isBitPerfect ? 'Bit-perfect verified' : 'Bit-perfect unavailable' }}
+        </span>
+      </div>
+      <div class="chain-format">
+        {{ player.audioChain.sourceFormat.sampleRate || '—' }} Hz / {{ player.audioChain.sourceFormat.channels || '—' }} ch
+        <span>→</span>
+        {{ player.audioChain.backendFormat.sampleRate || '—' }} Hz / {{ player.audioChain.backendFormat.channels || '—' }} ch
+      </div>
+      <div class="chain-nodes">
+        <span v-for="node in player.audioChain.activeNodes" :key="`active-${node}`" class="chain-node active">{{ node }}</span>
+        <span v-for="node in player.audioChain.bypassedNodes" :key="`bypassed-${node}`" class="chain-node">{{ node }} (bypass)</span>
+      </div>
+      <small v-if="player.audioChain.bitPerfectBlockers.length" class="chain-blockers">
+        {{ player.audioChain.bitPerfectBlockers.join(' · ') }}
+      </small>
+    </section>
+
     <!-- Status -->
     <div class="status-bar">
       <span>State: <strong>{{ player.state }}</strong></span>
+      <span>| Backend: <strong>{{ currentBackendLabel }}</strong></span>
       <span v-if="player.trackInfo">
         | {{ player.trackInfo.format }}
         {{ player.trackInfo.sampleRate }}Hz
@@ -215,6 +460,13 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       </span>
       <span v-if="player.glitchCount > 0" class="glitch-warn">
         | Glitches: {{ player.glitchCount }}
+      </span>
+      <span
+        v-if="player.audioChain"
+        :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : 'bit-perfect-off'"
+        :title="player.audioChain.bitPerfectBlockers.join('\n')"
+      >
+        | {{ player.audioChain.isBitPerfect ? 'Bit-perfect verified' : 'Bit-perfect unavailable' }}
       </span>
     </div>
 
@@ -367,6 +619,57 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
   margin-bottom: 8px;
 }
 .volume-section input { width: 120px; }
+.preamp-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+.preamp-section input[type='range'] { width: 120px; }
+.preamp-section span { min-width: 54px; color: #aaa; }
+.eq-section {
+  margin-bottom: 10px;
+  padding: 8px;
+  background: #151525;
+  border: 1px solid #343448;
+  border-radius: 4px;
+}
+.eq-heading { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 0.8rem; }
+.eq-heading small { color: #888; }
+.eq-heading-actions { display: flex; align-items: center; gap: 7px; }
+.eq-apply { background: #274a5e; color: #d7edf8; border: 1px solid #47758e; border-radius: 3px; padding: 2px 6px; font-size: 0.7rem; cursor: pointer; }
+.eq-bands { display: flex; gap: 5px; overflow-x: auto; padding-bottom: 2px; }
+.eq-band { display: flex; flex: 0 0 28px; flex-direction: column; align-items: center; gap: 3px; font-size: 0.64rem; }
+.eq-gain { color: #9ec8df; font-variant-numeric: tabular-nums; }
+.eq-slider { width: 92px; height: 14px; margin: 38px -39px; transform: rotate(-90deg); }
+.eq-frequency { display: flex; align-items: center; gap: 1px; color: #aaa; white-space: nowrap; }
+.eq-frequency input { width: 11px; height: 11px; margin: 0; }
+.resampler-section { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
+.resampler-heading { color: #cdd8df; margin-right: 3px; }
+.resampler-section select { background: #222; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 3px 5px; font-size: 0.75rem; }
+.resampler-section small { color: #777; }
+.dsp-nodes-section { margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
+.channel-matrix-section { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
+.channel-matrix-section label { display: flex; align-items: center; gap: 4px; }
+.channel-gains { display: grid; grid-template-columns: repeat(4, minmax(88px, 1fr)); gap: 4px; width: 100%; }
+.dsp-nodes-heading { color: #cdd8df; margin-bottom: 5px; }
+.dsp-nodes-heading small { color: #777; margin-left: 6px; }
+.dsp-node-row { display: flex; align-items: center; gap: 7px; padding: 2px 0; }
+.dsp-node-row label { min-width: 106px; }
+.dsp-node-row span { flex: 1; color: #888; }
+.dsp-node-row button { background: #222; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 0 5px; cursor: pointer; }
+.dsp-node-row button:disabled { opacity: .35; cursor: default; }
+.compressor-controls { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; color: #aaa; }
+.compressor-controls input { width: 52px; background: #222; color: #ddd; border: 1px solid #444; border-radius: 3px; padding: 2px 3px; }
+.chain-section { margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
+.chain-heading { display: flex; justify-content: space-between; margin-bottom: 5px; color: #cdd8df; }
+.chain-format { color: #9ec8df; font-variant-numeric: tabular-nums; }
+.chain-format span { padding: 0 7px; color: #777; }
+.chain-nodes { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.chain-node { padding: 2px 5px; border-radius: 3px; background: #272735; color: #858595; }
+.chain-node.active { background: #225340; color: #bde8ca; }
+.chain-blockers { display: block; color: #d6a970; margin-top: 6px; line-height: 1.35; }
 
 .status-bar {
   font-size: 0.75rem;
@@ -376,6 +679,8 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
   gap: 8px;
 }
 .glitch-warn { color: #e74c3c; }
+.bit-perfect-ok { color: #70d6a0; }
+.bit-perfect-off { color: #d6a970; }
 
 .log-viewer {
   flex: 1;

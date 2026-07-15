@@ -38,6 +38,36 @@ if(NOT AVCODEC_LIB OR NOT AVFORMAT_LIB OR NOT AVUTIL_LIB OR NOT SWRESAMPLE_LIB)
         "  vcpkg install ffmpeg[core,avcodec,avformat,swresample]:x64-windows")
 endif()
 
+# ── libsamplerate ──
+# Default to the local vcpkg installation; SAMPLERATE_ROOT may be overridden
+# for CI or a manually installed package.
+if(NOT DEFINED SAMPLERATE_ROOT)
+    set(SAMPLERATE_ROOT "D:/program/vcpkg/installed/x64-windows" CACHE PATH
+        "libsamplerate install prefix")
+endif()
+find_path(SAMPLERATE_INCLUDE_DIR samplerate.h
+          PATHS "${SAMPLERATE_ROOT}/include" NO_DEFAULT_PATH)
+find_library(SAMPLERATE_LIB samplerate
+             PATHS "${SAMPLERATE_ROOT}/lib" NO_DEFAULT_PATH)
+find_file(SAMPLERATE_DLL samplerate.dll
+          PATHS "${SAMPLERATE_ROOT}/bin" NO_DEFAULT_PATH)
+
+if(NOT SAMPLERATE_INCLUDE_DIR OR NOT SAMPLERATE_LIB OR NOT SAMPLERATE_DLL)
+    message(FATAL_ERROR
+        "libsamplerate not found under ${SAMPLERATE_ROOT}.\n"
+        "Install libsamplerate:x64-windows or set SAMPLERATE_ROOT.")
+endif()
+
+if(NOT DEFINED SOUNDTOUCH_ROOT)
+    set(SOUNDTOUCH_ROOT "D:/program/vcpkg/installed/x64-windows" CACHE PATH "SoundTouch install prefix")
+endif()
+find_path(SOUNDTOUCH_INCLUDE_DIR soundtouch/SoundTouch.h PATHS "${SOUNDTOUCH_ROOT}/include" NO_DEFAULT_PATH)
+find_library(SOUNDTOUCH_LIB SoundTouch PATHS "${SOUNDTOUCH_ROOT}/lib" NO_DEFAULT_PATH)
+find_file(SOUNDTOUCH_DLL SoundTouch.dll PATHS "${SOUNDTOUCH_ROOT}/bin" NO_DEFAULT_PATH)
+if(NOT SOUNDTOUCH_INCLUDE_DIR OR NOT SOUNDTOUCH_LIB OR NOT SOUNDTOUCH_DLL)
+    message(FATAL_ERROR "SoundTouch not found under ${SOUNDTOUCH_ROOT}. Install soundtouch:x64-windows or set SOUNDTOUCH_ROOT.")
+endif()
+
 # ── Sources ──
 set(SOURCES
     src/addon.cpp
@@ -63,6 +93,8 @@ get_filename_component(NODE_ADDON_API_DIR
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${FFMPEG_ROOT}/include"
+    "${SAMPLERATE_INCLUDE_DIR}"
+    "${SOUNDTOUCH_INCLUDE_DIR}"
     src/
     ${CMAKE_JS_INC}
     "${NODE_ADDON_API_DIR}"
@@ -74,6 +106,8 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${AVFORMAT_LIB}
     ${AVUTIL_LIB}
     ${SWRESAMPLE_LIB}
+    ${SAMPLERATE_LIB}
+    ${SOUNDTOUCH_LIB}
     # Windows multimedia for DirectSound & WASAPI
     winmm
     dsound
@@ -82,8 +116,22 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     uuid
 )
 
+# Development loads the addon directly from build/native-addon. cmake-js
+# normally invokes scripts/copy-native-assets.js, but a direct CMake build
+# does not. Copy the module and libsamplerate runtime for both workflows.
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<TARGET_FILE:${PROJECT_NAME}>" "${CMAKE_BINARY_DIR}/easy_player_native.node"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SAMPLERATE_DLL}" "${CMAKE_BINARY_DIR}/samplerate.dll"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${SOUNDTOUCH_DLL}" "${CMAKE_BINARY_DIR}/SoundTouch.dll"
+)
+
 # ── Install ──
 # Copy FFmpeg DLLs alongside the .node binary
 install(TARGETS ${PROJECT_NAME} DESTINATION lib)
 install(DIRECTORY "${FFMPEG_ROOT}/bin/" DESTINATION bin
         FILES_MATCHING PATTERN "*.dll")
+install(FILES "${SAMPLERATE_DLL}" DESTINATION bin)
+install(FILES "${SOUNDTOUCH_DLL}" DESTINATION bin)

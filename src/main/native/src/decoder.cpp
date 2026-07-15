@@ -1,6 +1,8 @@
 #include "decoder.h"
 #include "logger.h"
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <vector>
 
@@ -60,6 +62,19 @@ int64_t frame_start_sample(const AVFrame* frame, const AVStream* stream, int sam
 
     AVRational sample_timebase = {1, sample_rate};
     return av_rescale_q(ts, stream->time_base, sample_timebase);
+}
+
+void read_replaygain_metadata(const AVDictionary* dictionary, TrackInfo::Metadata& metadata) {
+    AVDictionaryEntry* tag = nullptr;
+    while ((tag = av_dict_get(dictionary, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+        std::string key = tag->key;
+        std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const float value = std::strtof(tag->value, nullptr);
+        if (key == "replaygain_track_gain") { metadata.replaygain_track_db = value; metadata.has_replaygain_track = true; }
+        else if (key == "replaygain_album_gain") { metadata.replaygain_album_db = value; metadata.has_replaygain_album = true; }
+        else if (key == "replaygain_track_peak") metadata.replaygain_track_peak = value;
+        else if (key == "replaygain_album_peak") metadata.replaygain_album_peak = value;
+    }
 }
 
 } // namespace
@@ -220,6 +235,9 @@ bool Decoder::open(const std::string& file_path) {
     tag = av_dict_get(impl_->fmt_ctx->metadata, "genre", nullptr, 0);
     if (tag) track_info_.metadata.genre = tag->value;
 
+    read_replaygain_metadata(impl_->fmt_ctx->metadata, track_info_.metadata);
+    read_replaygain_metadata(stream->metadata, track_info_.metadata);
+
     LOG_INFO("Decoder opened: " + file_path + " [" + track_info_.format + ", " +
              std::to_string(track_info_.sample_rate) + "Hz, " +
              std::to_string(track_info_.channels) + "ch, " +
@@ -370,6 +388,19 @@ int Decoder::decode(float* output, int max_frames) {
     }
 
     return frames_decoded;
+}
+
+void read_replaygain_metadata(const AVDictionary* dictionary, TrackInfo::Metadata& metadata) {
+    AVDictionaryEntry* tag = nullptr;
+    while ((tag = av_dict_get(dictionary, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+        std::string key = tag->key;
+        std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        const float value = std::strtof(tag->value, nullptr);
+        if (key == "replaygain_track_gain") { metadata.replaygain_track_db = value; metadata.has_replaygain_track = true; }
+        else if (key == "replaygain_album_gain") { metadata.replaygain_album_db = value; metadata.has_replaygain_album = true; }
+        else if (key == "replaygain_track_peak") metadata.replaygain_track_peak = value;
+        else if (key == "replaygain_album_peak") metadata.replaygain_album_peak = value;
+    }
 }
 
 bool Decoder::seek(int64_t sample_position) {

@@ -83,7 +83,9 @@ public:
         }
 
         cv_.notify_one(); // wake producer
-        return (to_read + underflow) / channels_;
+        // Report source frames, not the requested frame count.  Callers use
+        // this value to distinguish a real underrun from zero-filled output.
+        return to_read / channels_;
     }
 
     // Discard all buffered data (called on seek from JS thread).

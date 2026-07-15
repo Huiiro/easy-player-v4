@@ -35,6 +35,45 @@ export interface PlaybackStatus {
   trackInfo: TrackInfo | null
 }
 
+export interface AudioFormat {
+  sampleRate: number
+  bitDepth: number
+  channels: number
+}
+
+export interface AudioChainStatus {
+  sourceFormat: AudioFormat
+  backendFormat: AudioFormat
+  activeNodes: string[]
+  bypassedNodes: string[]
+  bitPerfectBlockers: string[]
+  isBitPerfect: boolean
+}
+
+export interface EqBand {
+  enabled: boolean
+  frequencyHz: number
+  gainDb: number
+  q: number
+}
+
+export interface ResamplerConfig {
+  forceOutputRate: boolean
+  targetSampleRate: number
+  quality: 'best' | 'medium' | 'fast'
+}
+
+export interface DspNodeConfig {
+  id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+  enabled: boolean
+}
+export interface CompressorConfig { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number; makeupDb: number }
+export interface DelayConfig { delayMs: number; feedback: number; mix: number }
+export interface ChorusConfig { rateHz: number; depthMs: number; mix: number }
+export interface NoiseGateConfig { thresholdDb: number; attackMs: number; holdMs: number; releaseMs: number; rangeDb: number }
+export interface PhaserConfig { rateHz: number; depth: number; centerHz: number; feedback: number; mix: number }
+export interface ChannelMatrixConfig { enabled: boolean; balance: number; swapStereo: boolean; monoDownmix: boolean; outputGains: number[] }
+
 export interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error'
   message: string
