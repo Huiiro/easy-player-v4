@@ -8,6 +8,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # cmake-js sets CMAKE_JS_SRC, CMAKE_JS_INC, CMAKE_JS_LIB automatically
 # when invoked via cmake-js.
 
+# ── Dependency roots ──
+# A local vcpkg checkout is optional. CI and other machines may provide
+# VCPKG_ROOT or VCPKG_INSTALLED_DIR instead; never depend on one developer's
+# absolute installation path.
+if(NOT DEFINED VCPKG_INSTALLED_ROOT)
+    if(DEFINED ENV{VCPKG_INSTALLED_DIR})
+        set(VCPKG_INSTALLED_ROOT "$ENV{VCPKG_INSTALLED_DIR}/x64-windows")
+    elseif(DEFINED ENV{VCPKG_ROOT})
+        set(VCPKG_INSTALLED_ROOT "$ENV{VCPKG_ROOT}/installed/x64-windows")
+    endif()
+endif()
+
 # ── FFmpeg ──
 # Expected layout (vcpkg or manual):
 #   FFMPEG_ROOT/
@@ -18,7 +30,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if(NOT DEFINED FFMPEG_ROOT)
     # Default to BtbN extracted layout: deps/ffmpeg/ffmpeg-master-latest-win64-gpl-shared/
     file(GLOB FFMPEG_DIRS "${CMAKE_SOURCE_DIR}/deps/ffmpeg/ffmpeg-*")
-    if(FFMPEG_DIRS)
+    if(DEFINED VCPKG_INSTALLED_ROOT AND EXISTS "${VCPKG_INSTALLED_ROOT}/include/libavcodec")
+        set(FFMPEG_DEFAULT "${VCPKG_INSTALLED_ROOT}")
+    elseif(FFMPEG_DIRS)
         list(GET FFMPEG_DIRS 0 FFMPEG_DEFAULT)
     else()
         set(FFMPEG_DEFAULT "${CMAKE_SOURCE_DIR}/deps/ffmpeg")
@@ -42,8 +56,11 @@ endif()
 # Default to the local vcpkg installation; SAMPLERATE_ROOT may be overridden
 # for CI or a manually installed package.
 if(NOT DEFINED SAMPLERATE_ROOT)
-    set(SAMPLERATE_ROOT "D:/program/vcpkg/installed/x64-windows" CACHE PATH
-        "libsamplerate install prefix")
+    if(DEFINED VCPKG_INSTALLED_ROOT)
+        set(SAMPLERATE_ROOT "${VCPKG_INSTALLED_ROOT}" CACHE PATH "libsamplerate install prefix")
+    else()
+        set(SAMPLERATE_ROOT "" CACHE PATH "libsamplerate install prefix")
+    endif()
 endif()
 find_path(SAMPLERATE_INCLUDE_DIR samplerate.h
           PATHS "${SAMPLERATE_ROOT}/include" NO_DEFAULT_PATH)
@@ -59,7 +76,11 @@ if(NOT SAMPLERATE_INCLUDE_DIR OR NOT SAMPLERATE_LIB OR NOT SAMPLERATE_DLL)
 endif()
 
 if(NOT DEFINED SOUNDTOUCH_ROOT)
-    set(SOUNDTOUCH_ROOT "D:/program/vcpkg/installed/x64-windows" CACHE PATH "SoundTouch install prefix")
+    if(DEFINED VCPKG_INSTALLED_ROOT)
+        set(SOUNDTOUCH_ROOT "${VCPKG_INSTALLED_ROOT}" CACHE PATH "SoundTouch install prefix")
+    else()
+        set(SOUNDTOUCH_ROOT "" CACHE PATH "SoundTouch install prefix")
+    endif()
 endif()
 find_path(SOUNDTOUCH_INCLUDE_DIR soundtouch/SoundTouch.h PATHS "${SOUNDTOUCH_ROOT}/include" NO_DEFAULT_PATH)
 find_library(SOUNDTOUCH_LIB SoundTouch PATHS "${SOUNDTOUCH_ROOT}/lib" NO_DEFAULT_PATH)

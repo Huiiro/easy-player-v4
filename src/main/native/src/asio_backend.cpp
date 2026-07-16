@@ -14,7 +14,7 @@
 static FILE* g_trace = nullptr;
 static void tr(const char* msg) {
     if (!g_trace) g_trace = fopen("D:\\asio_trace.log", "w");
-    if (g_trace) { fputs(msg, g_trace); fflush(g_trace); }
+    if (g_trace) { fputs(msg, g_trace); fputc('\n', g_trace); fflush(g_trace); }
 }
 
 // ── ASIO types (self-declared, no Steinberg SDK) ──────────
@@ -107,7 +107,9 @@ struct AsioBackend::Impl {
     std::vector<ASIOBufferInfo>  buffer_infos;
     std::vector<ASIOChannelInfo> channel_infos;
     std::vector<int> channel_types; std::vector<float> interleaved_buf;
-    AudioCallback callback; std::atomic<bool> running{false};
+    std::vector<uint8_t> raw_interleaved_buf;
+    AudioCallback callback; RawAudioCallback raw_callback; bool raw_transport = false;
+    std::atomic<bool> running{false};
     bool buffers_created = false;
 };
 static std::atomic<void*> g_impl{nullptr};
@@ -156,17 +158,59 @@ static void buf_switch(long idx, ASIOBool /*direct_process*/) {
     auto* im = (AsioBackend::Impl*)g_impl.load(std::memory_order_acquire);
     if(!im||!im->running.load(std::memory_order_acquire))return;
     int ch=im->output_channels, n=(int)im->buffer_size;
-    im->callback(im->interleaved_buf.data(),n,ch);
-    for(int ci=0;ci<ch;++ci){void*d=im->buffer_infos[ci].buffers[idx];
-    DF f=get_df(im->channel_types[ci]);if(f)f(im->interleaved_buf.data(),d,n,ch,ci);
-    else memset(d,0,n*4);}
+    if (im->raw_transport) {
+        const int rendered = im->raw_callback ? im->raw_callback(im->raw_interleaved_buf.data(), n, ch) : 0;
+        for(int ci=0;ci<ch;++ci) {
+            auto* d = static_cast<uint8_t*>(im->buffer_infos[ci].buffers[idx]);
+            for(int frame=0;frame<n;++frame) {
+                const size_t offset = static_cast<size_t>(frame * ch + ci) * 3;
+                const uint8_t* source = frame < rendered ? im->raw_interleaved_buf.data() + offset : nullptr;
+                if (im->channel_types[ci] == ASIOSTInt24LSB) {
+                    if (source) std::memcpy(d + frame * 3, source, 3);
+                    else std::memset(d + frame * 3, 0, 3);
+                } else {
+                    // ASIOSTInt32LSB24 is a 24-valid-bit PCM word in a
+                    // 32-bit little-endian slot. Keep DoP right-aligned and
+                    // clear only the unused most-significant padding byte.
+                    uint8_t* sample = d + frame * 4;
+                    sample[0] = source ? source[0] : 0;
+                    sample[1] = source ? source[1] : 0;
+                    sample[2] = source ? source[2] : 0;
+                    sample[3] = 0;
+                }
+            }
+        }
+    } else {
+        im->callback(im->interleaved_buf.data(),n,ch);
+        for(int ci=0;ci<ch;++ci){void*d=im->buffer_infos[ci].buffers[idx];
+        DF f=get_df(im->channel_types[ci]);if(f)f(im->interleaved_buf.data(),d,n,ch,ci);
+        else memset(d,0,n*4);}
+    }
     // outputReady() is only an optional latency optimisation.  Several
     // third-party/virtual ASIO drivers misbehave when it is called without
     // their host-specific capability negotiation.  bufferSwitch alone is the
     // portable ASIO 2.x output path, so do not call it unconditionally.
 }
+// ASIO4ALL commonly prefers the ASIO 2 TimeInfo callback path. The player
+// does not consume transport timestamps yet, but must advertise and service
+// the callback so the driver continues issuing output buffers.
+static void* buf_switch_time(void* params, long idx, ASIOBool direct_process) {
+    buf_switch(idx, direct_process);
+    return params;
+}
 static void sr_change(ASIOSampleRate){}
-static long asio_msg(long,long,void*,double*){return 0;}
+static long asio_msg(long selector, long value, void*, double*) {
+    // kAsioSelectorSupported asks whether the selector in `value` is handled.
+    // kAsioSupportsTimeInfo is 7 in the ASIO 2.x SDK.
+    constexpr long kAsioSelectorSupported = 1;
+    constexpr long kAsioEngineVersion = 2;
+    constexpr long kAsioSupportsTimeInfo = 7;
+    if (selector == kAsioSelectorSupported &&
+        (value == kAsioEngineVersion || value == kAsioSupportsTimeInfo)) return 1;
+    if (selector == kAsioEngineVersion) return 2;
+    if (selector == kAsioSupportsTimeInfo) return 1;
+    return 0;
+}
 
 // ── Registry ──────────────────────────────────────────────
 static std::wstring rstr(HKEY k, const wchar_t* v) {
@@ -205,7 +249,9 @@ std::vector<DeviceInfo> AsioBackend::enumerate_devices() {
 
 AudioFormat AsioBackend::open(const std::wstring& dev_id,
                                const AudioFormat& req, AudioCallback cb) {
-    tr("open start");close();impl_->callback=std::move(cb);
+    tr("open start");close();
+    if (!preparing_dop_open_) { impl_->raw_callback = {}; impl_->raw_transport = false; }
+    impl_->callback=std::move(cb);
     tr("ComGuard");ComGuard com;
 
     // ASIO drivers are COM in-proc servers, but IASIO has no shared IID.
@@ -242,7 +288,7 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     tr("getCh");impl_->vt.getChannels(impl_->obj,&ni,&no);tr("getCh ok");
     impl_->input_channels=(int)ni;impl_->output_channels=(int)no;
     if(no<1){LOG_ERROR("ASIO: no output");close();return{};}
-    int uc=std::min((int)no,2);
+    int uc=std::min((int)no, std::max(1, req.channels));
 
     // buffer size
     long mn=0,mx=0,pr=0,gr=0;tr("getBufferSize");
@@ -252,22 +298,49 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     // sample rate
     int trate=req.sample_rate>0?req.sample_rate:44100;
     ASIOSampleRate sr=(ASIOSampleRate)trate;tr("canSampleRate");
-    if(impl_->vt.canSampleRate(impl_->obj,sr)!=ASE_OK){tr("getSampleRate fallback");
-    impl_->vt.getSampleRate(impl_->obj,&sr);if(sr<=0){sr=44100;
-    if(impl_->vt.canSampleRate(impl_->obj,sr)!=ASE_OK)sr=48000;}}
-    tr("setSampleRate");impl_->vt.setSampleRate(impl_->obj,sr);impl_->sample_rate=sr;
+    if(impl_->vt.canSampleRate(impl_->obj,sr)!=ASE_OK){
+        if (impl_->raw_transport) {
+            LOG_WARN("ASIO DoP: carrier rate rejected: " + std::to_string(trate) + "Hz");
+            close(); return {};
+        }
+        tr("getSampleRate fallback");
+        if (impl_->vt.getSampleRate(impl_->obj,&sr)!=ASE_OK || sr<=0) {
+            LOG_ERROR("ASIO: no usable sample rate"); close(); return {};
+        }
+    }
+    tr("setSampleRate");
+    if (impl_->vt.setSampleRate(impl_->obj,sr)!=ASE_OK) {
+        LOG_WARN("ASIO: setSampleRate rejected " + std::to_string(static_cast<int>(sr)) + "Hz");
+        close(); return {};
+    }
+    ASIOSampleRate confirmed_rate = 0;
+    if (impl_->vt.getSampleRate(impl_->obj,&confirmed_rate)!=ASE_OK || confirmed_rate<=0 ||
+        (impl_->raw_transport && confirmed_rate != static_cast<ASIOSampleRate>(trate))) {
+        LOG_WARN("ASIO" + std::string(impl_->raw_transport ? " DoP" : "") +
+                 ": device did not confirm requested rate " + std::to_string(trate) + "Hz");
+        close(); return {};
+    }
+    sr=confirmed_rate;impl_->sample_rate=sr;
     LOG_INFO("ASIO rate: "+std::to_string((int)sr));
 
     // channel info
     tr("channel info");impl_->channel_infos.resize(uc);impl_->channel_types.resize(uc);
     for(long ci=0;ci<uc;++ci){ASIOChannelInfo info={};info.channel=ci;info.isInput=ASIOFalse;
-    impl_->vt.getChannelInfo(impl_->obj,&info);impl_->channel_infos[ci]=info;
+    if (impl_->vt.getChannelInfo(impl_->obj,&info)!=ASE_OK) {
+        LOG_ERROR("ASIO: getChannelInfo failed for output " + std::to_string(ci)); close(); return {};
+    }
+    impl_->channel_infos[ci]=info;
     impl_->channel_types[ci]=info.type;
-    if(!get_df(info.type)){
-        LOG_ERROR("ASIO ch"+std::to_string(ci)+": unsupported type="+
+    const bool dop_type = info.type == ASIOSTInt24LSB || info.type == ASIOSTInt32LSB24;
+    if((impl_->raw_transport && !dop_type) || (!impl_->raw_transport && !get_df(info.type))){
+        LOG_WARN("ASIO DoP ch"+std::to_string(ci)+": requires Int24LSB or Int32LSB24; driver reports type="+
                   std::to_string(info.type)+" ("+tp_name(info.type)+")");
         close();
         return {};
+    }
+    if (impl_->raw_transport) {
+        LOG_INFO("ASIO DoP output " + std::to_string(ci) + ": " + tp_name(info.type) +
+                 (info.type == ASIOSTInt24LSB ? " packed PCM24" : " right-aligned PCM24-in-32"));
     }}
 
     // create buffers
@@ -277,6 +350,7 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     impl_->buffer_infos[ci].buffers[1]=nullptr;}
     ASIOCallbacks cbs={};cbs.bufferSwitch=buf_switch;
     cbs.sampleRateDidChange=sr_change;cbs.asioMessage=asio_msg;
+    cbs.bufferSwitchTimeInfo=buf_switch_time;
     ASIOError ce=impl_->vt.createBuffers(impl_->obj,impl_->buffer_infos.data(),uc,impl_->buffer_size,&cbs);
     if(ce!=ASE_OK){tr("createBuffers FAILED");LOG_ERROR("ASIO: createBuffers "+std::to_string(ce));close();return{};}
     impl_->buffers_created=true;tr("createBuffers OK");
@@ -286,14 +360,38 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     latency_ms_=(double)ol/sr*1000.0;
 
     // scratch
-    impl_->interleaved_buf.resize(impl_->buffer_size*uc);impl_->output_channels=uc;
+    impl_->interleaved_buf.resize(impl_->buffer_size*uc);
+    if (impl_->raw_transport) impl_->raw_interleaved_buf.resize(static_cast<size_t>(impl_->buffer_size) * uc * 3);
+    impl_->output_channels=uc;
     g_impl.store(impl_.get(),std::memory_order_release);
-    current_format_.sample_rate=(int)sr;current_format_.bit_depth=32;
+    current_format_.sample_rate=(int)sr;current_format_.bit_depth=impl_->raw_transport ? 24 : 32;
     current_format_.channels=uc;buffer_frames_=(int)impl_->buffer_size;
 
     LOG_INFO("AsioBackend opened: "+impl_->driver_name+" "+std::to_string(current_format_.sample_rate)+"Hz "+
              std::to_string(uc)+"ch "+std::to_string(impl_->buffer_size)+"samp");
     tr("open done OK");return current_format_;}
+
+AudioFormat AsioBackend::open_dop(const std::wstring& device_id,
+                                  const AudioFormat& requested_format,
+                                  RawAudioCallback callback) {
+    if (requested_format.bit_depth != 24 || requested_format.channels < 1 || !callback) {
+        LOG_WARN("ASIO DoP requires a PCM24 raw callback");
+        return {};
+    }
+    impl_->raw_callback = std::move(callback);
+    impl_->raw_transport = true;
+    preparing_dop_open_ = true;
+    const AudioFormat actual = open(device_id, requested_format, [](float*, int, int) { return 0; });
+    preparing_dop_open_ = false;
+    if (actual.sample_rate == 0) {
+        impl_->raw_callback = {};
+        impl_->raw_transport = false;
+        return {};
+    }
+    LOG_INFO("ASIO DoP transport opened: " + std::to_string(actual.sample_rate) + "Hz, " +
+             std::to_string(actual.channels) + "ch, PCM24 carrier (packed or explicit 24-in-32)");
+    return actual;
+}
 
 bool AsioBackend::start() {tr("start");
     if(!impl_->obj||active_)return false;impl_->running.store(true,std::memory_order_release);
@@ -312,4 +410,4 @@ void AsioBackend::close() {tr("close");
     impl_->vt.Release(impl_->obj);impl_->obj=nullptr;}
     impl_->vt={};impl_->buffers_created=false;
     impl_->buffer_infos.clear();impl_->channel_infos.clear();impl_->channel_types.clear();
-    impl_->interleaved_buf.clear();LOG_INFO("AsioBackend closed");}
+    impl_->interleaved_buf.clear();impl_->raw_interleaved_buf.clear();LOG_INFO("AsioBackend closed");}

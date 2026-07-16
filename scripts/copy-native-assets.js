@@ -34,8 +34,16 @@ try {
   // ignore
 }
 
+const vcpkgInstalled = process.env.VCPKG_INSTALLED_DIR
+  ? path.join(process.env.VCPKG_INSTALLED_DIR, 'x64-windows')
+  : process.env.VCPKG_ROOT
+    ? path.join(process.env.VCPKG_ROOT, 'installed', 'x64-windows')
+    : ''
+if ((!ffmpegBinDir || !fs.existsSync(ffmpegBinDir)) && vcpkgInstalled) {
+  ffmpegBinDir = path.join(vcpkgInstalled, 'bin')
+}
 if (!ffmpegBinDir || !fs.existsSync(ffmpegBinDir)) {
-  console.error('[copy-native-assets] FFmpeg bin directory not found at:', ffmpegBinDir)
+  console.error('[copy-native-assets] FFmpeg bin directory not found')
   process.exit(1)
 }
 
@@ -51,25 +59,32 @@ if (fs.existsSync(dllPath)) {
 }
 
 // Copy FFmpeg DLLs
-const ffmpegDlls = ['avcodec-63.dll', 'avformat-63.dll', 'avutil-61.dll', 'swresample-7.dll']
-for (const dll of ffmpegDlls) {
-  const src = path.join(ffmpegBinDir, dll)
-  const dst = path.join(srcDir, dll)
-  if (fs.existsSync(src)) {
-    fs.copyFileSync(src, dst)
-    console.log('[copy-native-assets] Copied:', dll)
-  } else {
-    console.warn('[copy-native-assets] DLL not found, skipping:', src)
+const ffmpegPrefixes = ['avcodec-', 'avformat-', 'avutil-', 'swresample-']
+const ffmpegEntries = fs.readdirSync(ffmpegBinDir)
+for (const prefix of ffmpegPrefixes) {
+  const dll = ffmpegEntries.find((entry) => entry.toLowerCase().startsWith(prefix) && entry.toLowerCase().endsWith('.dll'))
+  if (!dll) {
+    console.error('[copy-native-assets] Required FFmpeg DLL not found for prefix:', prefix)
+    process.exit(1)
   }
+  fs.copyFileSync(path.join(ffmpegBinDir, dll), path.join(srcDir, dll))
+  console.log('[copy-native-assets] Copied:', dll)
 }
 
-// Copy libsamplerate runtime from the local vcpkg installation.
-const samplerateDll = path.join('D:', 'program', 'vcpkg', 'installed', 'x64-windows', 'bin', 'samplerate.dll')
+// Copy runtimes from an explicitly configured vcpkg installation when CMake
+// did not already put them beside the addon.
+const samplerateDll = vcpkgInstalled ? path.join(vcpkgInstalled, 'bin', 'samplerate.dll') : ''
 if (fs.existsSync(samplerateDll)) {
   fs.copyFileSync(samplerateDll, path.join(srcDir, 'samplerate.dll'))
   console.log('[copy-native-assets] Copied: samplerate.dll')
 } else {
   console.warn('[copy-native-assets] libsamplerate DLL not found, skipping:', samplerateDll)
+}
+
+const soundTouchDll = vcpkgInstalled ? path.join(vcpkgInstalled, 'bin', 'SoundTouch.dll') : ''
+if (soundTouchDll && fs.existsSync(soundTouchDll)) {
+  fs.copyFileSync(soundTouchDll, path.join(srcDir, 'SoundTouch.dll'))
+  console.log('[copy-native-assets] Copied: SoundTouch.dll')
 }
 
 console.log('[copy-native-assets] Done. Output directory:', srcDir)

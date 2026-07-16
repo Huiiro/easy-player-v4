@@ -33,6 +33,16 @@ AudioAnalysisSnapshot AudioEngine::audio_analysis_snapshot() const {
     return snapshot;
 }
 
+AudioChainStatus AudioEngine::audio_chain_status() const {
+    if (!dop_transport_active_.load(std::memory_order_acquire)) return dsp_pipeline_.status();
+    AudioChainStatus status{};
+    status.source_format = {track_info_.dsd_sample_rate, 1, track_info_.channels};
+    status.backend_format = backend_ ? backend_->current_format() : AudioFormat{};
+    status.active_nodes = {"DoP encoded transport"};
+    status.bit_perfect_blockers = {"DoP is an encoded DSD transport, not PCM bit-perfect"};
+    return status;
+}
+
 void AudioEngine::set_replay_gain_mode(int mode, bool prevent_clipping) {
     replay_gain_mode_ = std::max(0, std::min(2, mode));
     replay_gain_prevent_clipping_ = prevent_clipping;
@@ -80,8 +90,12 @@ bool AudioEngine::open(const std::string& file_path) {
     update_replay_gain_for_track();
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
+    dop_carrier_frames_.store(0, std::memory_order_release);
     track_ended_fired_.store(false, std::memory_order_release);
     track_end_pending_.store(false, std::memory_order_release);
+    dop_transport_active_.store(false, std::memory_order_release);
+    dop_ring_buffer_.reset();
+    dop_output_marker_ = 0x05;
 
     // Create ring buffer: ~750ms capacity
     int buffer_frames = (int)(track_info_.sample_rate * 0.75);
@@ -127,12 +141,100 @@ bool AudioEngine::play() {
             return this->audio_callback(output, frames, channels);
         };
 
-        AudioFormat actual = backend_->open(current_device_id_, requested, cb);
+        std::vector<int> candidate_rates = {requested.sample_rate};
+        if (track_info_.is_dsd && !force_output_rate_) {
+            // DSD has already been converted to high-rate PCM by FFmpeg. A
+            // PCM device may not accept that intermediate rate in exclusive
+            // mode, so retain the DSD 44.1 kHz family while stepping down.
+            for (int rate = requested.sample_rate / 2; rate >= 88200; rate /= 2) {
+                if (std::find(candidate_rates.begin(), candidate_rates.end(), rate) == candidate_rates.end()) candidate_rates.push_back(rate);
+            }
+            for (int rate : {44100, 48000}) {
+                if (std::find(candidate_rates.begin(), candidate_rates.end(), rate) == candidate_rates.end()) candidate_rates.push_back(rate);
+            }
+            LOG_INFO("DSD transport decision: Native DSD unavailable; PCM conversion remains the fallback path");
+        }
+
+        AudioFormat actual{};
+        const bool dop_backend = current_backend_type_ == BackendType::WASAPI_EXCLUSIVE ||
+            current_backend_type_ == BackendType::ASIO;
+        const bool request_dop = track_info_.is_dsd && dop_enabled_ &&
+            !force_output_rate_ && dop_backend &&
+            track_info_.dsd_sample_rate > 0 && track_info_.channels >= 1 && track_info_.channels <= 8;
+        if (request_dop) {
+            const int carrier_rate = track_info_.dsd_sample_rate / 16;
+            AudioFormat dop_requested{carrier_rate, 24, track_info_.channels};
+            if (decoder_.begin_dop()) {
+                dop_ring_buffer_ = std::make_unique<ByteRingBuffer>(track_info_.channels * 3,
+                    std::max(4096, static_cast<int>(carrier_rate * 0.75)));
+                dop_work_buffer_.assign(static_cast<size_t>(4096) * track_info_.channels * 3, 0);
+                dop_output_marker_ = 0x05;
+                dop_transport_active_.store(true, std::memory_order_release);
+                actual = backend_->open_dop(current_device_id_, dop_requested,
+                    [this](uint8_t* output, int frames, int channels) -> int {
+                        return this->dop_audio_callback(output, frames, channels);
+                    });
+                if (actual.sample_rate == carrier_rate && actual.bit_depth == 24 &&
+                    actual.channels == track_info_.channels) {
+                    const int prime_frames = std::min(4096, dop_ring_buffer_->writable_frames());
+                    const int primed = decoder_.read_dop(dop_work_buffer_.data(), prime_frames);
+                    if (primed <= 0 || dop_ring_buffer_->write(dop_work_buffer_.data(), primed) != primed) {
+                        LOG_WARN("DSD DoP could not prime encoded transport; falling back to PCM conversion");
+                        backend_->close();
+                        if (current_backend_type_ == BackendType::ASIO) backend_ = std::make_unique<AsioBackend>();
+                        dop_transport_active_.store(false, std::memory_order_release);
+                        dop_ring_buffer_.reset();
+                        dop_work_buffer_.clear();
+                        decoder_.seek(0);
+                        actual = {};
+                    } else {
+                        track_info_.dsd_transport = "dop";
+                        LOG_INFO("DSD DoP active: " + std::to_string(track_info_.dsd_sample_rate) +
+                                 "Hz -> PCM24 carrier " + std::to_string(carrier_rate) + "Hz; DSP, volume and analysis bypassed");
+                    }
+                } else {
+                    LOG_WARN("DSD DoP unavailable on this device; falling back to PCM conversion");
+                    backend_->close();
+                    if (current_backend_type_ == BackendType::ASIO) backend_ = std::make_unique<AsioBackend>();
+                    dop_transport_active_.store(false, std::memory_order_release);
+                    dop_ring_buffer_.reset();
+                    dop_work_buffer_.clear();
+                    decoder_.seek(0);
+                    actual = {};
+                }
+            } else {
+                LOG_WARN("DSD DoP preparation failed; falling back to PCM conversion");
+            }
+        } else if (track_info_.is_dsd && dop_enabled_) {
+            LOG_WARN("DSD DoP requires WASAPI Exclusive or ASIO, source-rate output, and 1-8 channels; using PCM conversion");
+        }
+        if (actual.sample_rate == 0) {
+            LOG_INFO(track_info_.is_dsd
+                ? "DSD transport decision: Native DSD unavailable; using FFmpeg PCM conversion"
+                : "PCM transport selected");
+        for (int rate : candidate_rates) {
+            const std::vector<int> candidate_bits = current_backend_type_ == BackendType::WASAPI_EXCLUSIVE
+                ? std::vector<int>{32, 24, 25, 16} : std::vector<int>{16};
+            for (int bits : candidate_bits) {
+                requested.sample_rate = rate;
+                requested.bit_depth = bits;
+                actual = backend_->open(current_device_id_, requested, cb);
+                if (actual.sample_rate != 0) break;
+            }
+            if (actual.sample_rate != 0) break;
+            if (track_info_.is_dsd) LOG_WARN("DSD PCM fallback rate rejected: " + std::to_string(rate) + "Hz");
+        }
+        }
         if (actual.sample_rate == 0) {
             if (error_cb_) error_cb_(-2, "Failed to open audio device");
             return false;
         }
+        if (track_info_.is_dsd && actual.sample_rate != track_info_.sample_rate) {
+            LOG_INFO("DSD PCM fallback selected: " + std::to_string(track_info_.sample_rate) + "Hz -> " +
+                     std::to_string(actual.sample_rate) + "Hz (libsamplerate SRC)");
+        }
 
+        if (!dop_transport_active_.load(std::memory_order_acquire)) {
         dsp_pipeline_.configure(
             {track_info_.sample_rate, track_info_.bit_depth, track_info_.channels},
             actual,
@@ -168,9 +270,42 @@ bool AudioEngine::play() {
                 track_info_.channels,
             0.0f);
         source_work_frames_ = 0;
+        // ASIO drivers may request their first buffer synchronously from
+        // start(). Prepare PCM before that call so the callback never starts
+        // with an empty source queue (ASIO4ALL is particularly sensitive to
+        // this startup ordering).
+        const int prime_frames = std::min(
+            std::max(1, backend_->buffer_size_frames() * 2),
+            ring_buffer_->write_available() / track_info_.channels);
+        if (prime_frames > 0) {
+            std::vector<float> prime_buffer(static_cast<size_t>(prime_frames) * track_info_.channels);
+            std::lock_guard<std::mutex> lock(decoder_mutex_);
+            const int primed = decoder_.decode(prime_buffer.data(), prime_frames);
+            if (primed > 0) {
+                ring_buffer_->write(prime_buffer.data(), primed, 0);
+                LOG_INFO("PCM transport primed: " + std::to_string(primed) + " frame(s)");
+            } else {
+                LOG_WARN("PCM transport could not be primed before device start");
+            }
+        }
+        } else {
+            // Encoded DoP is not PCM: never route it through DSP, volume,
+            // SRC, meters, or the PCM analysis ring.
+            ring_buffer_.reset();
+            analysis_ring_buffer_.reset();
+            source_work_buffer_.clear();
+            source_work_frames_ = 0;
+        }
 
         if (!backend_->start()) {
             if (error_cb_) error_cb_(-3, "Failed to start audio device");
+            return false;
+        }
+    } else if (resuming && dop_transport_active_.load(std::memory_order_acquire)) {
+        // DoP cannot be paused by feeding zero-valued PCM frames: that would
+        // invalidate the marker sequence. pause() stops the device instead.
+        if (!backend_->start()) {
+            if (error_cb_) error_cb_(-3, "Failed to resume DoP audio device");
             return false;
         }
     }
@@ -186,7 +321,7 @@ bool AudioEngine::play() {
         timer_running_ = true;
         position_timer_ = std::make_unique<std::thread>(&AudioEngine::position_timer_func, this);
     }
-    if (!analysis_running_) {
+    if (!dop_transport_active_.load(std::memory_order_acquire) && !analysis_running_) {
         analysis_running_ = true;
         analysis_thread_ = std::make_unique<std::thread>(&AudioEngine::analysis_thread_func, this);
     }
@@ -198,6 +333,7 @@ bool AudioEngine::play() {
 
 bool AudioEngine::pause() {
     if (state_ != EngineState::Playing) return false;
+    if (dop_transport_active_.load(std::memory_order_acquire) && backend_) backend_->stop();
     set_state(EngineState::Paused);
     return true;
 }
@@ -230,12 +366,17 @@ bool AudioEngine::stop() {
     }
 
     ring_buffer_.reset();
+    dop_transport_active_.store(false, std::memory_order_release);
+    dop_ring_buffer_.reset();
+    dop_work_buffer_.clear();
+    dop_output_marker_ = 0x05;
     analysis_ring_buffer_.reset();
     analysis_work_buffer_.clear();
     source_work_buffer_.clear();
     source_work_frames_ = 0;
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
+    dop_carrier_frames_.store(0, std::memory_order_release);
     track_ended_fired_.store(false, std::memory_order_release);
     track_end_pending_.store(false, std::memory_order_release);
     set_state(EngineState::Stopped);
@@ -255,6 +396,10 @@ bool AudioEngine::seek(double position_ms) {
         return false;
     }
 
+    if (dop_transport_active_.load(std::memory_order_acquire)) {
+        LOG_WARN("DSD DoP seek is not available yet; stop and restart playback instead");
+        return false;
+    }
     int64_t sample_pos = (int64_t)(position_ms / 1000.0 * track_info_.sample_rate);
 
     double pos_before = this->position_ms();
@@ -500,6 +645,11 @@ bool AudioEngine::select_output_device(BackendType type, const std::wstring& dev
 // ──────────────────────────────────────────────────────────
 
 double AudioEngine::position_ms() const {
+    if (dop_transport_active_.load(std::memory_order_acquire) && backend_ &&
+        backend_->current_format().sample_rate > 0) {
+        return static_cast<double>(dop_carrier_frames_.load(std::memory_order_acquire)) /
+               backend_->current_format().sample_rate * 1000.0;
+    }
     if (track_info_.sample_rate <= 0) return 0.0;
     return static_cast<double>(played_frames_.load(std::memory_order_acquire)) /
            track_info_.sample_rate * 1000.0;
@@ -525,6 +675,27 @@ void AudioEngine::decoder_thread_func() {
     int channels = track_info_.channels;
 
     while (decoder_running_) {
+        if (dop_transport_active_.load(std::memory_order_acquire)) {
+            if (!dop_ring_buffer_) break;
+            const int target = dop_ring_buffer_->writable_frames();
+            if (target < 1024) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                continue;
+            }
+            const int decode_chunk = std::min(target, 4096);
+            int decoded = 0;
+            {
+                std::lock_guard<std::mutex> lock(decoder_mutex_);
+                decoded = decoder_.read_dop(dop_work_buffer_.data(), decode_chunk);
+                if (decoded > 0) dop_ring_buffer_->write(dop_work_buffer_.data(), decoded);
+            }
+            if (decoded <= 0) {
+                LOG_INFO("DSD DoP reader reached EOF");
+                decoder_running_ = false;
+                break;
+            }
+            continue;
+        }
         // Keep ring buffer around 75% full
         int target = ring_buffer_->write_available() / channels;
         if (target < 1024) {
@@ -589,8 +760,36 @@ void AudioEngine::position_timer_func() {
 // Audio callback (runs in real-time audio thread)
 // ──────────────────────────────────────────────────────────
 
+int AudioEngine::dop_audio_callback(uint8_t* output, int frames, int channels) {
+    if ((state_ != EngineState::Playing && state_ != EngineState::Ready) ||
+        !dop_transport_active_.load(std::memory_order_acquire) || !dop_ring_buffer_ ||
+        channels != track_info_.channels) {
+        return 0;
+    }
+    const int read = dop_ring_buffer_->read(output, frames);
+    if (read < frames) glitch_count_.fetch_add(1, std::memory_order_relaxed);
+    // The producer may run ahead of the audio clock, so the consumer owns
+    // marker phase. This keeps 0x05/0xFA continuous across an underrun. A
+    // DSD byte value of 0x69 is the conventional sigma-delta silence pattern.
+    for (int frame = 0; frame < frames; ++frame) {
+        const uint8_t marker = dop_output_marker_;
+        for (int channel = 0; channel < channels; ++channel) {
+            uint8_t* sample = output + (static_cast<size_t>(frame) * channels + channel) * 3;
+            if (frame >= read) { sample[0] = 0x69; sample[1] = 0x69; }
+            sample[2] = marker;
+        }
+        dop_output_marker_ = marker == 0x05 ? 0xFA : 0x05;
+    }
+    dop_carrier_frames_.fetch_add(read, std::memory_order_relaxed);
+    if (!decoder_running_ && dop_ring_buffer_->readable_frames() == 0 &&
+        !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
+        track_end_pending_.store(true, std::memory_order_release);
+    }
+    return frames;
+}
+
 int AudioEngine::audio_callback(float* output, int frames, int channels) {
-    if (state_ != EngineState::Playing || !ring_buffer_ ||
+    if ((state_ != EngineState::Playing && state_ != EngineState::Ready) || !ring_buffer_ ||
         source_work_buffer_.empty()) {
         // Paused or stopped: output silence
         std::memset(output, 0, frames * channels * sizeof(float));
@@ -617,7 +816,11 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
     }
 
     // Check for end-of-stream: decoder stopped AND ring buffer is (nearly) empty
-    const bool input_ended = !decoder_running_ && ring_buffer_->frames_available() == 0;
+    // During device startup the backend can call us while state is Ready,
+    // before decoder_thread_ has been created. That temporary empty queue is
+    // not EOF (notably for synchronous ASIO start callbacks).
+    const bool input_ended = state_ != EngineState::Ready && !decoder_running_ &&
+                             ring_buffer_->frames_available() == 0;
     const auto result = dsp_pipeline_.process(source_work_buffer_.data(), source_work_frames_,
                                               source_channels, input_ended, output, frames, channels);
     played_frames_.fetch_add(result.input_frames_used, std::memory_order_relaxed);

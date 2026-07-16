@@ -2,6 +2,7 @@
 #include "logger.h"
 
 #include <atomic>
+#include <cstdint>
 #include <vector>
 #define NOMINMAX
 #include <windows.h>
@@ -94,10 +95,14 @@ struct WasapiBackend::Impl {
     int     bytes_per_frame = 0;   // nBlockAlign
     double  latency_ms = 0.0;
     bool    is_f32 = true;         // whether the buffer expects float32 samples
+    int     pcm_bits = 0;          // 16/24/32 when the exclusive buffer is PCM
+    int     pcm_valid_bits = 0;    // permits 24 valid bits in a 32-bit container
     bool    exclusive = false;     // exclusive vs shared mode
 
     // Callback
     AudioCallback callback;
+    RawAudioCallback raw_callback;
+    bool raw_transport = false;
 
     // f32→s16 scratch buffer (only used in exclusive s16 fallback)
     std::vector<float> scratch;
@@ -146,7 +151,14 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         HRESULT hr = impl->render_client->GetBuffer(available, &data);
         if (FAILED(hr)) continue;
 
-        if (impl->is_f32) {
+        if (impl->raw_transport) {
+            const int rendered = impl->raw_callback
+                ? impl->raw_callback(data, static_cast<int>(available), channels) : 0;
+            if (rendered < static_cast<int>(available)) {
+                std::memset(data + rendered * frame_size, 0,
+                            (static_cast<int>(available) - rendered) * frame_size);
+            }
+        } else if (impl->is_f32) {
             // Direct f32 write — WASAPI Shared mix format, or Exclusive f32
             float* f32_data = reinterpret_cast<float*>(data);
             int rendered = impl->callback(f32_data, (int)available, channels);
@@ -155,7 +167,7 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
                             ((int)available - rendered) * channels * sizeof(float));
             }
         } else {
-            // Exclusive s16 fallback — convert from f32
+            // Exclusive integer PCM fallback — convert from f32.
             int total_samples = (int)available * channels;
             impl->scratch.resize(total_samples);
             int rendered = impl->callback(impl->scratch.data(), (int)available, channels);
@@ -163,11 +175,20 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
                 std::memset(impl->scratch.data() + rendered * channels, 0,
                             ((int)available - rendered) * channels * sizeof(float));
             }
-            short* s16_data = reinterpret_cast<short*>(data);
             for (int i = 0; i < total_samples; ++i) {
-                float s = impl->scratch[i];
-                if (s > 1.0f) s = 1.0f; else if (s < -1.0f) s = -1.0f;
-                s16_data[i] = static_cast<short>(s * 32767.0f);
+                const float s = std::max(-1.0f, std::min(1.0f, impl->scratch[i]));
+                if (impl->pcm_valid_bits == 24 && impl->pcm_bits == 24) {
+                    const int value = static_cast<int>(s * 8388607.0f);
+                    data[i * 3] = static_cast<BYTE>(value & 0xFF);
+                    data[i * 3 + 1] = static_cast<BYTE>((value >> 8) & 0xFF);
+                    data[i * 3 + 2] = static_cast<BYTE>((value >> 16) & 0xFF);
+                } else if (impl->pcm_valid_bits == 24 && impl->pcm_bits == 32) {
+                    reinterpret_cast<int32_t*>(data)[i] = static_cast<int32_t>(static_cast<int>(s * 8388607.0f) << 8);
+                } else if (impl->pcm_bits == 32) {
+                    reinterpret_cast<int32_t*>(data)[i] = static_cast<int32_t>(s * 2147483647.0f);
+                } else {
+                    reinterpret_cast<int16_t*>(data)[i] = static_cast<int16_t>(s * 32767.0f);
+                }
             }
         }
 
@@ -289,6 +310,10 @@ AudioFormat WasapiBackend::open(
     AudioCallback callback)
 {
     close();
+    if (!preparing_dop_open_) {
+        impl_->raw_callback = {};
+        impl_->raw_transport = false;
+    }
     impl_->callback = std::move(callback);
     ComGuard com;
 
@@ -331,55 +356,40 @@ AudioFormat WasapiBackend::open(
 
     if (exclusive_) {
         // ── Exclusive mode ────────────────────────────────
-        // Build WAVEFORMATEXTENSIBLE for f32
+        // One exact encoding per open attempt. AudioEngine retries f32,
+        // packed PCM24 and PCM16 at a rate before it lowers that rate.
+        const bool request_f32 = requested_format.bit_depth == 32;
+        const bool request_pcm24_in_32 = requested_format.bit_depth == 25;
+        const int requested_pcm_bits = request_f32 ? 32 : (request_pcm24_in_32 ? 32 : (requested_format.bit_depth == 24 ? 24 : 16));
+        const int requested_valid_bits = request_pcm24_in_32 ? 24 : requested_pcm_bits;
+        impl_->is_f32 = request_f32;
+        impl_->pcm_bits = request_f32 ? 0 : requested_pcm_bits;
+        impl_->pcm_valid_bits = request_f32 ? 0 : requested_valid_bits;
         WAVEFORMATEXTENSIBLE wfext = {};
         wfext.Format.wFormatTag      = WAVE_FORMAT_EXTENSIBLE;
         wfext.Format.nChannels       = (WORD)channels;
         wfext.Format.nSamplesPerSec  = (DWORD)sample_rate;
-        wfext.Format.wBitsPerSample  = 32;
-        wfext.Format.nBlockAlign     = (WORD)(channels * 4);
-        wfext.Format.nAvgBytesPerSec = (DWORD)(sample_rate * channels * 4);
+        wfext.Format.wBitsPerSample  = (WORD)requested_pcm_bits;
+        wfext.Format.nBlockAlign     = (WORD)(channels * (requested_pcm_bits / 8));
+        wfext.Format.nAvgBytesPerSec = (DWORD)(sample_rate * wfext.Format.nBlockAlign);
         wfext.Format.cbSize          = sizeof(WAVEFORMATEXTENSIBLE) -
                                        sizeof(WAVEFORMATEX);
-        wfext.Samples.wValidBitsPerSample = 32;
+        wfext.Samples.wValidBitsPerSample = (WORD)requested_valid_bits;
         wfext.dwChannelMask = channels == 1 ? KSAUDIO_SPEAKER_MONO
                                               : KSAUDIO_SPEAKER_STEREO;
-        wfext.SubFormat = KSDATAFORMAT_SUBTYPE_IEEE_FLOAT;
+        wfext.SubFormat = request_f32 ? KSDATAFORMAT_SUBTYPE_IEEE_FLOAT : KSDATAFORMAT_SUBTYPE_PCM;
 
         // Ask whether this format (f32) is supported
         WAVEFORMATEX* closest = nullptr;
         hr = client->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE,
                                         &wfext.Format, &closest);
-        if (hr == AUDCLNT_E_UNSUPPORTED_FORMAT) {
-            LOG_WARN("WASAPI Exclusive: f32 not supported, trying s16");
-            // Build a s16 format
-            ZeroMemory(&wfext, sizeof(wfext));
-            wfext.Format.wFormatTag      = WAVE_FORMAT_EXTENSIBLE;
-            wfext.Format.nChannels       = (WORD)channels;
-            wfext.Format.nSamplesPerSec  = (DWORD)sample_rate;
-            wfext.Format.wBitsPerSample  = 16;
-            wfext.Format.nBlockAlign     = (WORD)(channels * 2);
-            wfext.Format.nAvgBytesPerSec = (DWORD)(sample_rate * channels * 2);
-            wfext.Format.cbSize          = sizeof(WAVEFORMATEXTENSIBLE) -
-                                           sizeof(WAVEFORMATEX);
-            wfext.Samples.wValidBitsPerSample = 16;
-            wfext.dwChannelMask = channels == 1 ? KSAUDIO_SPEAKER_MONO
-                                                : KSAUDIO_SPEAKER_STEREO;
-            wfext.SubFormat = KSDATAFORMAT_SUBTYPE_PCM;
-
-            hr = client->IsFormatSupported(AUDCLNT_SHAREMODE_EXCLUSIVE,
-                                            &wfext.Format, &closest);
-            if (FAILED(hr)) {
-                LOG_ERROR("WASAPI Exclusive: s16 also unsupported");
-                return {};
-            }
-            impl_->is_f32 = false;
-        } else if (hr == S_FALSE && closest) {
-            // Engine offered a closest match — use it
-            fmt = closest;
-            impl_->is_f32 = (closest->wBitsPerSample == 32 &&
-                             (closest->wFormatTag == WAVE_FORMAT_EXTENSIBLE ||
-                              closest->wFormatTag == WAVE_FORMAT_IEEE_FLOAT));
+        if (hr != S_OK) {
+            if (closest) CoTaskMemFree(closest);
+            LOG_WARN("WASAPI Exclusive: requested encoding unsupported at " +
+                     std::to_string(sample_rate) + "Hz (" +
+                     std::to_string(requested_valid_bits) + " valid / " +
+                     std::to_string(requested_pcm_bits) + " container bits)");
+            return {};
         }
 
         if (!fmt) {
@@ -400,8 +410,36 @@ AudioFormat WasapiBackend::open(
                                  hnsPeriod,
                                  fmt,
                                  nullptr);
+        if (hr == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED) {
+            // A device period can fall between two frame boundaries at this
+            // exact sample rate. WASAPI reports the aligned size after the
+            // failed call; use it for one fresh-client retry.
+            UINT32 aligned_frames = 0;
+            const HRESULT size_hr = client->GetBufferSize(&aligned_frames);
+            client->Release();
+            client = nullptr;
+            impl_->audio_client = nullptr;
+
+            if (SUCCEEDED(size_hr) && aligned_frames > 0 &&
+                SUCCEEDED(dev->Activate(IID_IAudioClient, CLSCTX_ALL, nullptr,
+                                        reinterpret_cast<void**>(&client)))) {
+                impl_->audio_client = client;
+                hnsPeriod = static_cast<REFERENCE_TIME>(
+                    (10000000.0 * static_cast<double>(aligned_frames)) /
+                    static_cast<double>(sample_rate));
+                LOG_INFO("WASAPI Exclusive: retrying aligned buffer " +
+                         std::to_string(aligned_frames) + "f (" +
+                         std::to_string(hnsPeriod / 10000.0) + "ms)");
+                hr = client->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
+                                         AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+                                         hnsPeriod, hnsPeriod, fmt, nullptr);
+            }
+        }
         if (FAILED(hr)) {
-            LOG_ERROR("WASAPI Exclusive: Initialize failed: 0x" +
+            // The caller can retry a different PCM rate. Treat this as a
+            // candidate rejection; it becomes a terminal error only after
+            // every candidate fails in AudioEngine.
+            LOG_WARN("WASAPI Exclusive: Initialize rejected requested format: 0x" +
                       std::to_string(hr) + " (period=" +
                       std::to_string(hnsPeriod / 10000.0) + "ms)");
             CoTaskMemFree(fmt);
@@ -500,6 +538,32 @@ AudioFormat WasapiBackend::open(
              std::to_string(impl_->latency_ms) + "ms latency");
 
     return current_format_;
+}
+
+AudioFormat WasapiBackend::open_dop(
+    const std::wstring& device_id,
+    const AudioFormat& requested_format,
+    RawAudioCallback callback)
+{
+    if (!exclusive_ || requested_format.bit_depth != 24 || !callback) {
+        LOG_WARN("WASAPI DoP requires Exclusive PCM24 and a raw callback");
+        return {};
+    }
+    impl_->raw_callback = std::move(callback);
+    impl_->raw_transport = true;
+    preparing_dop_open_ = true;
+    const AudioFormat actual = open(device_id, requested_format,
+        [](float*, int, int) { return 0; });
+    preparing_dop_open_ = false;
+    if (actual.sample_rate == 0) {
+        impl_->raw_callback = {};
+        impl_->raw_transport = false;
+        return {};
+    }
+    LOG_INFO("WASAPI Exclusive DoP transport opened: " +
+             std::to_string(actual.sample_rate) + "Hz, " +
+             std::to_string(actual.channels) + "ch, PCM24 carrier");
+    return actual;
 }
 
 // ── start ─────────────────────────────────────────────────

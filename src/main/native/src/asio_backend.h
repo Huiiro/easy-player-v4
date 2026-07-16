@@ -16,6 +16,10 @@ public:
         const std::wstring& device_id,
         const AudioFormat& requested_format,
         AudioCallback callback) override;
+    AudioFormat open_dop(
+        const std::wstring& device_id,
+        const AudioFormat& requested_format,
+        RawAudioCallback callback) override;
 
     bool start() override;
     bool stop() override;
@@ -31,6 +35,7 @@ public:
 private:
     AudioFormat current_format_;
     AudioCallback callback_;
+    bool preparing_dop_open_ = false;
     bool active_ = false;
     int buffer_frames_ = 0;
     double latency_ms_ = 0.0;

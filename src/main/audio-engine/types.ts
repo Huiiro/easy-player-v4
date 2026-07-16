@@ -7,6 +7,9 @@ export interface TrackInfo {
   durationMs: number
   bitrateKbps?: number
   codecName: string
+  isDsd?: boolean
+  dsdSampleRate?: number
+  dsdTransport?: 'pcm_conversion' | 'dop' | 'native_dsd' | ''
   metadata: {
     title?: string
     artist?: string
@@ -97,6 +100,8 @@ export type AudioCommandAction =
   | 'getEqBands'
   | 'setResamplerConfig'
   | 'getResamplerConfig'
+  | 'setDopEnabled'
+  | 'getDopEnabled'
   | 'setDspNodes'
   | 'getDspNodes'
   | 'setCompressorConfig'

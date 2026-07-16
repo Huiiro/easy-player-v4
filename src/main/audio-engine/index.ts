@@ -138,6 +138,12 @@ export class AudioEngineManager {
   getResamplerConfig(): { forceOutputRate: boolean; targetSampleRate: number; quality: 'best' | 'medium' | 'fast' } | null {
     return this.engine?.getResamplerConfig() ?? null
   }
+  setDopEnabled(enabled: boolean): boolean {
+    const ok = this.engine?.setDopEnabled(enabled) ?? false
+    if (ok) { this.dspSettings.dopEnabled = enabled; this.persistDspSettings() }
+    return ok
+  }
+  getDopEnabled(): boolean { return this.engine?.getDopEnabled() === true }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setDspNodes(nodes: any[]): boolean {
@@ -288,6 +294,7 @@ export class AudioEngineManager {
     this.engine.setChannelMatrixConfig(this.dspSettings.channelMatrix)
     this.engine.setLimiter(this.dspSettings.limiter)
     this.engine.setResamplerConfig(this.dspSettings.resampler)
+    this.engine.setDopEnabled(this.dspSettings.dopEnabled)
   }
 
   private persistDspSettings(): void {

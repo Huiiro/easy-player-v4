@@ -1,0 +1,31 @@
+name: Windows build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Install native dependencies
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+          & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          & "$env:VCPKG_ROOT/vcpkg.exe" install ffmpeg libsamplerate soundtouch --triplet x64-windows
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build native addon
+        run: npm run build:native
+      - name: Build unpacked Windows application
+        run: npm run build:unpack

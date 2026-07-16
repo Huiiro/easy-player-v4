@@ -40,6 +40,10 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setResamplerConfig', params: { config } }),
   getResamplerConfig: () =>
     ipcRenderer.invoke('audio:command', { action: 'getResamplerConfig', params: {} }),
+  setDopEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', { action: 'setDopEnabled', params: { enabled } }),
+  getDopEnabled: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getDopEnabled', params: {} }),
   setDspNodes: (nodes: unknown[]) =>
     ipcRenderer.invoke('audio:command', { action: 'setDspNodes', params: { nodes } }),
   getDspNodes: () =>

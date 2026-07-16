@@ -25,6 +25,7 @@ export const usePlayerStore = defineStore('player', () => {
   const playbackSpeedConfig = ref({ enabled: false, speed: 1 })
   const eqBands = ref<EqBand[]>(createDefaultEqBands())
   const resamplerConfig = ref<ResamplerConfig>({ forceOutputRate: false, targetSampleRate: 48000, quality: 'best' })
+  const dopEnabled = ref(false)
   const dspNodes = ref<DspNodeConfig[]>([
     { id: 'compressor', enabled: false }, { id: 'delay', enabled: false }, { id: 'reverb', enabled: false }, { id: 'chorus', enabled: false }, { id: 'noise_gate', enabled: false }, { id: 'phaser', enabled: false }
   ])
@@ -146,6 +147,12 @@ export const usePlayerStore = defineStore('player', () => {
   async function loadResamplerConfig(): Promise<void> {
     const config = await audioBridge.getResamplerConfig()
     if (config) resamplerConfig.value = config
+  }
+  async function loadDopEnabled(): Promise<void> { dopEnabled.value = await audioBridge.getDopEnabled() }
+  async function setDopEnabled(enabled: boolean): Promise<boolean> {
+    const ok = await audioBridge.setDopEnabled(enabled)
+    if (ok) dopEnabled.value = enabled
+    return ok
   }
 
   async function setResamplerConfig(config: ResamplerConfig): Promise<boolean> {
@@ -353,6 +360,7 @@ export const usePlayerStore = defineStore('player', () => {
     playbackSpeedConfig,
     eqBands,
     resamplerConfig,
+    dopEnabled,
     dspNodes,
     compressorConfig,
     delayConfig,
@@ -384,6 +392,8 @@ export const usePlayerStore = defineStore('player', () => {
     commitEqBands,
     loadResamplerConfig,
     setResamplerConfig,
+    loadDopEnabled,
+    setDopEnabled,
     loadDspNodes,
     commitDspNodes,
     moveDspNode,

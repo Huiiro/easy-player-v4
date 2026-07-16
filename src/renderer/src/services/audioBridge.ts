@@ -148,5 +148,10 @@ export const audioBridge = {
 
   onAudioChainChanged(callback: (data: AudioChainStatus) => void): () => void {
     return window.api.audio.onAudioChainChanged(callback)
+  },
+  async setDopEnabled(enabled: boolean): Promise<boolean> { return (await window.api.audio.setDopEnabled(enabled)).success },
+  async getDopEnabled(): Promise<boolean> {
+    const result = await window.api.audio.getDopEnabled()
+    return result.success && result.data === true
   }
 }

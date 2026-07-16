@@ -326,6 +326,14 @@ IDLE → open(path) → LOADING → READY → play() → PLAYING ⇄ pause() ⇄
 
 当前基础实现：最终 PCM 已通过非阻塞 Analysis Tap 交给后台分析线程，界面以 64 段对数频谱、约 3 秒瀑布历史、RMS、低频能量、onset、节拍序号及 K-weighted LUFS（M/S/I）显示最新快照。每个快照同时携带输出流时钟、分析帧时钟与 tap 延迟；响度计采用 BS.1770 K-weighting 和绝对/相对门限，integrated 值在当前播放会话内累计。首版 BPM 为基于 onset 间隔的平滑估计，适合作为页面律动输入。节拍预测与 downbeat 仍作为后续工作，不能将 BPM 估计值当作音乐标签中的精确 BPM。
 - **Phase 5**: DSD 深入与跨平台 — Native DSD、DoP、SACD ISO 解析、Mac CoreAudio、Linux ALSA、插件 API
+
+#### Phase 5 DSD 基线
+
+DSD 传输选择固定遵循 **Native DSD → DoP → PCM conversion**：仅当解复用器能提供原始一位流且 ASIO/DAC 能力协商成功时使用 Native；否则若后端支持 24-bit DoP 封包则使用 DoP；两者都不可用时才使用 PCM conversion。当前首项实现为 DSD 源识别和 PCM 安全降级：识别到 FFmpeg DSD codec 时，TrackInfo 显示 DSD 倍率及原始一位流采样率，并明确标记 `pcm_conversion`。FFmpeg 的 DSD decoder 先执行一位流到浮点 PCM 转换；引擎再在 decoder 线程中把 DSD64 的 352.8 kHz 中间 PCM 抽取至 88.2 kHz（更高倍率上限 176.4 kHz），以先滤除 DSD 噪声整形，再由现有 libsamplerate 按设备实际格式继续转换。DSD 专用抽取显式采用 64-tap、0.97 cutoff、无 dither 的浮点重采样配置；该步骤仍是 PCM conversion，不能报告为 DSD bit-perfect。若独占设备拒绝该中间 PCM 率，引擎会依次尝试同族较低采样率，最后尝试 44.1/48 kHz。Native DSD 与 DoP 仍不可用时不得将设备或输出状态标成支持，也不得把 DSD 路径报告为 PCM bit-perfect。
+
+DoP 已接入显式启用的播放链路：封包器把每声道连续两个原始 DSD 字节写入 24-bit PCM 的低 16 位，并交替写入 `0x05` / `0xFA` 标记；对 DSF 常用的 LSB-first 比特序先作逐字节位反转。WASAPI Exclusive 仅在精确 PCM24 载波协商成功时启用；ASIO 仅接受明确的 `Int24LSB` 或 `Int32LSB24` 容器，并在打开后回读确认精确载波采样率。原始传输使用独立 SPSC byte queue，绕过 PCM DSP、音量、SRC 与分析；发生协商或初始化失败时会回退 PCM conversion。DoP 仍默认关闭，且必须经过实际 DAC/驱动硬件验证后才能报告为可用；ASIO Native DSD 尚未实现。
+
+原始传输使用独立的 SPSC ByteRingBuffer，只交换完整的字节帧；它与 float PCM RingBuffer、DSP Pipeline 和 Analysis Tap 严格隔离。DoP 实际启用前仍需用户确认 DAC/驱动兼容性及 WASAPI Exclusive 的 PCM24 协商成功。
 - **Phase 6**: 打磨发布 — 性能优化、错误恢复、crash 报告、CI/CD、文档
 
 ---

@@ -1,5 +1,6 @@
 #pragma once
 #include "audio_backend.h"
+#include "byte_ring_buffer.h"
 #include "decoder.h"
 #include "dsp_pipeline.h"
 #include "ring_buffer.h"
@@ -68,6 +69,8 @@ public:
     bool force_output_rate() const { return force_output_rate_; }
     int target_sample_rate() const { return target_sample_rate_; }
     int resampler_quality() const { return resampler_quality_; }
+    void set_dop_enabled(bool enabled) { dop_enabled_ = enabled; }
+    bool dop_enabled() const { return dop_enabled_; }
     bool set_dsp_nodes(const std::vector<DspNodeConfig>& nodes) { return dsp_pipeline_.set_dsp_nodes(nodes); }
     std::vector<DspNodeConfig> dsp_nodes() const { return dsp_pipeline_.dsp_nodes(); }
     bool set_compressor_config(const CompressorConfig& config) { return dsp_pipeline_.set_compressor_config(config); }
@@ -102,7 +105,7 @@ public:
     const TrackInfo& track_info() const { return track_info_; }
     bool is_playing() const { return state_ == EngineState::Playing; }
     int glitch_count() const { return glitch_count_.load(); }
-    AudioChainStatus audio_chain_status() const { return dsp_pipeline_.status(); }
+    AudioChainStatus audio_chain_status() const;
     AudioAnalysisSnapshot audio_analysis_snapshot() const;
 
     // ── Callbacks (called from native) ──
@@ -120,6 +123,7 @@ private:
     void decoder_thread_func();
     void position_timer_func();
     int audio_callback(float* output, int frames, int channels);
+    int dop_audio_callback(uint8_t* output, int frames, int channels);
     void update_replay_gain_for_track();
     void analysis_thread_func();
 
@@ -133,6 +137,9 @@ private:
     bool force_output_rate_ = false;
     int target_sample_rate_ = 48000;
     int resampler_quality_ = 0; // 0 Best, 1 Medium, 2 Fast
+    // DoP must be explicitly enabled because a PCM device cannot report
+    // whether the downstream DAC will interpret its PCM24 carrier as DoP.
+    bool dop_enabled_ = false;
     int replay_gain_mode_ = 0; // 0 Off, 1 Track, 2 Album
     bool replay_gain_prevent_clipping_ = true;
 
@@ -140,6 +147,13 @@ private:
     Decoder decoder_;
     TrackInfo track_info_;
     std::unique_ptr<RingBuffer> ring_buffer_;
+    // Encoded transport path. Never share this queue with PCM/DSP buffers.
+    std::unique_ptr<ByteRingBuffer> dop_ring_buffer_;
+    std::vector<uint8_t> dop_work_buffer_;
+    std::atomic<bool> dop_transport_active_{false};
+    std::atomic<int64_t> dop_carrier_frames_{0};
+    // Accessed only by the real-time DoP callback after control-thread reset.
+    uint8_t dop_output_marker_ = 0x05;
     // Final PCM analysis tap: audio callback is sole producer and never waits.
     std::unique_ptr<RingBuffer> analysis_ring_buffer_;
     std::atomic<uint64_t> analysis_dropped_frames_{0};

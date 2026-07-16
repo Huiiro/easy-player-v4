@@ -29,6 +29,8 @@ public:
             InstanceMethod("getEqBands", &AudioEngineWrapper::GetEqBands),
             InstanceMethod("setResamplerConfig", &AudioEngineWrapper::SetResamplerConfig),
             InstanceMethod("getResamplerConfig", &AudioEngineWrapper::GetResamplerConfig),
+            InstanceMethod("setDopEnabled", &AudioEngineWrapper::SetDopEnabled),
+            InstanceMethod("getDopEnabled", &AudioEngineWrapper::GetDopEnabled),
             InstanceMethod("setDspNodes", &AudioEngineWrapper::SetDspNodes),
             InstanceMethod("getDspNodes", &AudioEngineWrapper::GetDspNodes),
             InstanceMethod("setCompressorConfig", &AudioEngineWrapper::SetCompressorConfig),
@@ -220,6 +222,16 @@ private:
         config.Set("quality", Napi::String::New(info.Env(),
             quality == 1 ? "medium" : quality == 2 ? "fast" : "best"));
         return config;
+    }
+
+    Napi::Value SetDopEnabled(const Napi::CallbackInfo& info) {
+        if (!info[0].IsBoolean()) return Napi::Boolean::New(info.Env(), false);
+        engine_->set_dop_enabled(info[0].As<Napi::Boolean>().Value());
+        return Napi::Boolean::New(info.Env(), true);
+    }
+
+    Napi::Value GetDopEnabled(const Napi::CallbackInfo& info) {
+        return Napi::Boolean::New(info.Env(), engine_->dop_enabled());
     }
 
     Napi::Value SetDspNodes(const Napi::CallbackInfo& info) {
@@ -450,6 +462,9 @@ private:
         tiObj.Set("channels", Napi::Number::New(info.Env(), ti.channels));
         tiObj.Set("durationMs", Napi::Number::New(info.Env(), ti.duration_ms));
         tiObj.Set("codecName", Napi::String::New(info.Env(), ti.codec_name));
+        tiObj.Set("isDsd", Napi::Boolean::New(info.Env(), ti.is_dsd));
+        tiObj.Set("dsdSampleRate", Napi::Number::New(info.Env(), ti.dsd_sample_rate));
+        tiObj.Set("dsdTransport", Napi::String::New(info.Env(), ti.dsd_transport));
         obj.Set("trackInfo", tiObj);
 
         return obj;

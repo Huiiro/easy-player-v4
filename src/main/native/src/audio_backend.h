@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
@@ -34,6 +35,9 @@ struct AudioFormat {
 // Must never allocate, lock, or do I/O.
 // Returns the number of frames actually filled (normally equals `frames`).
 using AudioCallback = std::function<int(float* output, int frames, int channels)>;
+// Raw callback for encoded transports such as DoP. Output points at the
+// backend's byte buffer and returns complete frames written.
+using RawAudioCallback = std::function<int(uint8_t* output, int frames, int channels)>;
 
 class AudioBackend {
 public:
@@ -45,6 +49,11 @@ public:
         const std::wstring& device_id,
         const AudioFormat& requested_format,
         AudioCallback callback) = 0;
+
+    virtual AudioFormat open_dop(
+        const std::wstring& device_id,
+        const AudioFormat& requested_format,
+        RawAudioCallback callback) { return {}; }
 
     virtual bool start() = 0;
     virtual bool stop() = 0;

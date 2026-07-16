@@ -88,6 +88,8 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'getResamplerConfig': {
         return { success: true, data: engine.getResamplerConfig() }
       }
+      case 'setDopEnabled': return { success: engine.setDopEnabled(params.enabled === true) }
+      case 'getDopEnabled': return { success: true, data: engine.getDopEnabled() }
 
       case 'setDspNodes': {
         const ok = engine.setDspNodes(params.nodes)

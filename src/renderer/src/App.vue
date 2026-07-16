@@ -104,6 +104,7 @@ onMounted(async () => {
   await player.loadReplayGain()
   await player.loadPlaybackSpeed()
   await player.loadResamplerConfig()
+  await player.loadDopEnabled()
   await player.loadDspNodes()
   await player.loadCompressorConfig()
   await player.loadDelayConfig()
@@ -198,6 +199,7 @@ function setEqBandEnabled(index: number, event: Event) {
 function updateResampler(): void {
   void player.setResamplerConfig(player.resamplerConfig)
 }
+function updateDopEnabled(event: Event): void { void player.setDopEnabled((event.target as HTMLInputElement).checked) }
 
 function nodeLabel(id: string): string {
   return id === 'compressor' ? 'Compressor' : id === 'delay' ? 'Delay' : id === 'reverb' ? 'Reverb' : id === 'chorus' ? 'Chorus' : id === 'noise_gate' ? 'Noise Gate' : 'Phaser'
@@ -518,6 +520,14 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       </select>
       <small>Changing this setting safely reopens the output path.</small>
     </section>
+    <section class="resampler-section dop-section">
+      <div class="resampler-heading">DSD transport</div>
+      <label>
+        <input :checked="player.dopEnabled" type="checkbox" @change="updateDopEnabled" />
+        Enable DoP (PCM24 carrier)
+      </label>
+      <small>Only for a confirmed DoP-capable DAC with WASAPI Exclusive or ASIO. Takes effect on the next DSD playback; DSP, volume and analysis are bypassed.</small>
+    </section>
 
     <section v-if="player.audioChain" class="chain-section">
       <div class="chain-heading">
@@ -549,6 +559,9 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
         {{ player.trackInfo.sampleRate }}Hz
         {{ player.trackInfo.bitDepth }}bit
         {{ player.trackInfo.channels }}ch
+      </span>
+      <span v-if="player.trackInfo?.isDsd" class="dsd-status">
+        | DSD {{ player.trackInfo.format }} ({{ player.trackInfo.dsdSampleRate }}Hz) → {{ player.trackInfo.dsdTransport === 'pcm_conversion' ? `PCM ${player.trackInfo.sampleRate}Hz → output ${player.audioChain?.backendFormat.sampleRate || '—'}Hz` : player.trackInfo.dsdTransport }}
       </span>
       <span v-if="player.glitchCount > 0" class="glitch-warn">
         | Glitches: {{ player.glitchCount }}
@@ -746,6 +759,8 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 .resampler-heading { color: #cdd8df; margin-right: 3px; }
 .resampler-section select { background: #222; color: #ccc; border: 1px solid #444; border-radius: 3px; padding: 3px 5px; font-size: 0.75rem; }
 .resampler-section small { color: #777; }
+.dop-section { align-items: flex-start; }
+.dop-section small { max-width: 520px; line-height: 1.35; }
 .dsp-nodes-section { margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
 .channel-matrix-section { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: 0.75rem; }
 .analysis-section { margin: 10px 0; padding: 8px; background: #151525; border: 1px solid #343448; border-radius: 4px; font-size: .75rem; color: #aab; }
@@ -788,6 +803,7 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 .glitch-warn { color: #e74c3c; }
 .bit-perfect-ok { color: #70d6a0; }
 .bit-perfect-off { color: #d6a970; }
+.dsd-status { color: #a88de1; }
 
 .log-viewer {
   flex: 0 0 220px;

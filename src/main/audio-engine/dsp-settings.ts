@@ -35,6 +35,7 @@ export interface DspSettings {
   phaser: PersistedPhaser
   channelMatrix: PersistedChannelMatrix
   resampler: { forceOutputRate: boolean; targetSampleRate: number; quality: 'best' | 'medium' | 'fast' }
+  dopEnabled: boolean
 }
 
 export const defaultDspSettings = (): DspSettings => ({
@@ -56,6 +57,7 @@ export const defaultDspSettings = (): DspSettings => ({
   phaser: { rateHz: 0.4, depth: 0.6, centerHz: 800, feedback: 0.2, mix: 0.5 },
   channelMatrix: { enabled: false, balance: 0, swapStereo: false, monoDownmix: false, outputGains: [1,1,1,1,1,1,1,1] },
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' }
+  , dopEnabled: false
 })
 
 function filePath(): string {
@@ -152,7 +154,8 @@ export function loadDspSettings(): DspSettings {
           ? settings.resampler.targetSampleRate : defaults.resampler.targetSampleRate,
         quality: settings.resampler?.quality === 'medium' || settings.resampler?.quality === 'fast'
           ? settings.resampler.quality : 'best'
-      }
+      },
+      dopEnabled: settings.dopEnabled === true
     }
   } catch {
     return defaultDspSettings()

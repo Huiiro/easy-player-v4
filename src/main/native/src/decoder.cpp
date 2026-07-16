@@ -1,7 +1,9 @@
 #include "decoder.h"
+#include "dop_packer.h"
 #include "logger.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <vector>
@@ -64,6 +66,24 @@ int64_t frame_start_sample(const AVFrame* frame, const AVStream* stream, int sam
     return av_rescale_q(ts, stream->time_base, sample_timebase);
 }
 
+bool is_dsd_codec(const AVCodecParameters* parameters) {
+    const char* name = parameters ? avcodec_get_name(parameters->codec_id) : nullptr;
+    return name && std::strncmp(name, "dsd", 3) == 0;
+}
+
+std::string dsd_format_label(int sample_rate) {
+    if (sample_rate <= 0) return "DSD";
+    const int multiple = static_cast<int>(std::lround(static_cast<double>(sample_rate) / 2822400.0));
+    return multiple > 0 ? "DSD" + std::to_string(64 * multiple) : "DSD";
+}
+
+int dsd_pcm_output_rate(int decoder_rate) {
+    // FFmpeg's DSD decoder exposes one converted PCM sample per DSD byte.
+    // Decimate that intermediate stream before it reaches the real-time
+    // pipeline, preserving the 44.1 kHz family and filtering shaped noise.
+    return decoder_rate >= 705600 ? 176400 : 88200;
+}
+
 void read_replaygain_metadata(const AVDictionary* dictionary, TrackInfo::Metadata& metadata) {
     AVDictionaryEntry* tag = nullptr;
     while ((tag = av_dict_get(dictionary, "", tag, AV_DICT_IGNORE_SUFFIX))) {
@@ -92,6 +112,15 @@ struct Decoder::Impl {
     int pending_pcm_offset_frames = 0;
     int64_t pending_pcm_start_sample = 0;
     int64_t total_samples_ = 0;
+    int input_sample_rate = 0;
+    int output_sample_rate = 0;
+    bool source_is_dsd = false;
+    bool dsd_lsb_first = false;
+    bool dsd_planar = false;
+    std::vector<uint8_t> dop_bytes;
+    size_t dop_byte_offset = 0;
+    uint8_t dop_marker = 0x05;
+    bool dop_mode = false;
     bool eof = false;
 };
 
@@ -178,25 +207,64 @@ bool Decoder::open(const std::string& file_path) {
         return false;
     }
 
+    const bool source_is_dsd = is_dsd_codec(stream->codecpar);
+    if (source_is_dsd && !dop::self_test()) {
+        LOG_ERROR("DSD DoP packer self-test failed");
+        close();
+        return false;
+    }
+    impl_->input_sample_rate = impl_->codec_ctx->sample_rate;
+    impl_->source_is_dsd = source_is_dsd;
+    impl_->dsd_lsb_first = stream->codecpar->codec_id == AV_CODEC_ID_DSD_LSBF ||
+                           stream->codecpar->codec_id == AV_CODEC_ID_DSD_LSBF_PLANAR;
+    impl_->dsd_planar = stream->codecpar->codec_id == AV_CODEC_ID_DSD_LSBF_PLANAR ||
+                        stream->codecpar->codec_id == AV_CODEC_ID_DSD_MSBF_PLANAR;
+    impl_->output_sample_rate = source_is_dsd
+        ? dsd_pcm_output_rate(impl_->input_sample_rate)
+        : impl_->input_sample_rate;
+
     // Setup resampler: native format to interleaved f32
     AVChannelLayout out_ch_layout;
     av_channel_layout_default(&out_ch_layout, impl_->codec_ctx->ch_layout.nb_channels);
 
     ret = swr_alloc_set_opts2(&impl_->swr_ctx,
-                              &out_ch_layout, AV_SAMPLE_FMT_FLT, impl_->codec_ctx->sample_rate,
+                              &out_ch_layout, AV_SAMPLE_FMT_FLT, impl_->output_sample_rate,
                               &impl_->codec_ctx->ch_layout, impl_->codec_ctx->sample_fmt, impl_->codec_ctx->sample_rate,
                               0, nullptr);
+    if (source_is_dsd && impl_->swr_ctx) {
+        // DSD decoder output is intentionally decimated before entering the
+        // PCM/DSP path.  Keep this conversion deterministic and use a longer
+        // low-pass filter than the swresample default; float output must not
+        // be dithered at this stage.
+        av_opt_set_int(impl_->swr_ctx, "filter_size", 64, 0);
+        av_opt_set_int(impl_->swr_ctx, "phase_shift", 10, 0);
+        av_opt_set_double(impl_->swr_ctx, "cutoff", 0.97, 0);
+        av_opt_set_int(impl_->swr_ctx, "dither_method", SWR_DITHER_NONE, 0);
+        LOG_INFO("DSD PCM conversion: high-quality decimation " +
+                 std::to_string(impl_->input_sample_rate) + "Hz -> " +
+                 std::to_string(impl_->output_sample_rate) + "Hz (64-tap, no dither)");
+    }
     if (ret < 0 || !impl_->swr_ctx || swr_init(impl_->swr_ctx) < 0) {
-        LOG_ERROR("swr_init failed - falling back to native format");
+        LOG_ERROR("swr_init failed" + std::string(source_is_dsd ? " for required DSD PCM decimation" : " - falling back to native format"));
         swr_free(&impl_->swr_ctx);
+        if (source_is_dsd) {
+            close();
+            return false;
+        }
         impl_->swr_ctx = nullptr;
         // Will do native format passthrough
     }
 
     // Fill TrackInfo
     track_info_.file_path = file_path;
-    track_info_.format = avcodec_get_name(stream->codecpar->codec_id);
-    track_info_.sample_rate = impl_->codec_ctx->sample_rate;
+    track_info_.is_dsd = source_is_dsd;
+    // FFmpeg's DSD decoder emits one PCM sample per input byte (see
+    // dsddec.c), so input_sample_rate is the byte-rate and the original
+    // one-bit stream clock is eight times that value.
+    track_info_.dsd_sample_rate = track_info_.is_dsd ? impl_->input_sample_rate * 8 : 0;
+    track_info_.dsd_transport = track_info_.is_dsd ? "pcm_conversion" : "";
+    track_info_.format = track_info_.is_dsd ? dsd_format_label(track_info_.dsd_sample_rate) : avcodec_get_name(stream->codecpar->codec_id);
+    track_info_.sample_rate = impl_->output_sample_rate;
     track_info_.bit_depth = impl_->codec_ctx->bits_per_raw_sample ?
                             impl_->codec_ctx->bits_per_raw_sample : 16;
     track_info_.channels = impl_->codec_ctx->ch_layout.nb_channels;
@@ -242,6 +310,12 @@ bool Decoder::open(const std::string& file_path) {
              std::to_string(track_info_.sample_rate) + "Hz, " +
              std::to_string(track_info_.channels) + "ch, " +
              std::to_string(track_info_.duration_ms) + "ms]");
+    if (track_info_.is_dsd) {
+        LOG_INFO("DSD source recognized: " + track_info_.format + " at " +
+                 std::to_string(track_info_.dsd_sample_rate) +
+                 "Hz; decoder PCM=" + std::to_string(track_info_.sample_rate) +
+                 "Hz; default transport=PCM conversion (Native DSD unavailable; DoP requires explicit compatibility opt-in)");
+    }
 
     return true;
 }
@@ -256,7 +330,80 @@ void Decoder::close() {
     impl_->pending_pcm.clear();
     impl_->pending_pcm_offset_frames = 0;
     impl_->pending_pcm_start_sample = 0;
+    impl_->source_is_dsd = false;
+    impl_->dop_mode = false;
+    impl_->dop_bytes.clear();
+    impl_->dop_byte_offset = 0;
     track_info_ = TrackInfo{};
+}
+
+bool Decoder::begin_dop() {
+    if (!impl_->fmt_ctx || !impl_->codec_ctx || !impl_->source_is_dsd) return false;
+    if (av_seek_frame(impl_->fmt_ctx, impl_->stream_index, 0, AVSEEK_FLAG_BACKWARD) < 0) {
+        LOG_WARN("DSD DoP: failed to rewind demuxer");
+        return false;
+    }
+    avcodec_flush_buffers(impl_->codec_ctx);
+    impl_->dop_bytes.clear();
+    impl_->dop_byte_offset = 0;
+    impl_->dop_marker = 0x05;
+    impl_->dop_mode = true;
+    impl_->eof = false;
+    LOG_INFO("DSD DoP: raw packet reader prepared (" +
+             std::string(impl_->dsd_planar ? "planar" : "interleaved") + ", " +
+             std::string(impl_->dsd_lsb_first ? "LSB-first" : "MSB-first") + ")");
+    return true;
+}
+
+int Decoder::read_dop(uint8_t* output, int max_frames) {
+    if (!output || max_frames <= 0 || !impl_->dop_mode || !impl_->source_is_dsd) return -1;
+    const int channels = track_info_.channels;
+    if (channels < 1 || channels > 8) return -1;
+    int frames = 0;
+    while (frames < max_frames) {
+        const size_t bytes_available = (impl_->dop_bytes.size() - impl_->dop_byte_offset) /
+                                       static_cast<size_t>(channels);
+        if (bytes_available >= 2) {
+            uint8_t payload[16] = {};
+            for (int channel = 0; channel < channels; ++channel) {
+                payload[channel * 2] = impl_->dop_bytes[impl_->dop_byte_offset * channels + channel];
+                payload[channel * 2 + 1] = impl_->dop_bytes[(impl_->dop_byte_offset + 1) * channels + channel];
+            }
+            dop::pack_frame(payload, channels, impl_->dsd_lsb_first, impl_->dop_marker,
+                            output + static_cast<size_t>(frames) * channels * 3);
+            impl_->dop_marker = impl_->dop_marker == 0x05 ? 0xFA : 0x05;
+            impl_->dop_byte_offset += 2;
+            ++frames;
+            continue;
+        }
+        if (impl_->dop_byte_offset > 0) {
+            impl_->dop_bytes.erase(impl_->dop_bytes.begin(),
+                impl_->dop_bytes.begin() + static_cast<std::ptrdiff_t>(impl_->dop_byte_offset * channels));
+            impl_->dop_byte_offset = 0;
+        }
+        const int ret = av_read_frame(impl_->fmt_ctx, impl_->packet);
+        if (ret == AVERROR_EOF) { impl_->eof = true; break; }
+        if (ret < 0) return frames > 0 ? frames : -1;
+        if (impl_->packet->stream_index != impl_->stream_index) { av_packet_unref(impl_->packet); continue; }
+        const int bytes_per_channel = impl_->packet->size / channels;
+        if (bytes_per_channel <= 0 || bytes_per_channel * channels != impl_->packet->size) {
+            LOG_WARN("DSD DoP: malformed raw packet");
+            av_packet_unref(impl_->packet);
+            continue;
+        }
+        const size_t old_size = impl_->dop_bytes.size();
+        impl_->dop_bytes.resize(old_size + static_cast<size_t>(impl_->packet->size));
+        for (int byte_index = 0; byte_index < bytes_per_channel; ++byte_index) {
+            for (int channel = 0; channel < channels; ++channel) {
+                const size_t source = impl_->dsd_planar
+                    ? static_cast<size_t>(channel) * bytes_per_channel + byte_index
+                    : static_cast<size_t>(byte_index) * channels + channel;
+                impl_->dop_bytes[old_size + static_cast<size_t>(byte_index) * channels + channel] = impl_->packet->data[source];
+            }
+        }
+        av_packet_unref(impl_->packet);
+    }
+    return frames;
 }
 
 int Decoder::decode(float* output, int max_frames) {
@@ -321,17 +468,26 @@ int Decoder::decode(float* output, int max_frames) {
         }
 
         AVStream* stream = impl_->fmt_ctx->streams[impl_->stream_index];
-        int64_t frame_start = frame_start_sample(
-            impl_->frame, stream, track_info_.sample_rate, impl_->current_pts);
+        const int64_t input_fallback = av_rescale_q(impl_->current_pts,
+            AVRational{1, std::max(1, track_info_.sample_rate)},
+            AVRational{1, std::max(1, impl_->input_sample_rate)});
+        const int64_t input_frame_start = frame_start_sample(
+            impl_->frame, stream, impl_->input_sample_rate, input_fallback);
+        const int64_t frame_start = av_rescale_q(input_frame_start,
+            AVRational{1, std::max(1, impl_->input_sample_rate)},
+            AVRational{1, std::max(1, track_info_.sample_rate)});
 
         int frame_samples = impl_->frame->nb_samples;
         int remaining = max_frames - frames_decoded;
-        std::vector<float> frame_output(frame_samples * channels);
+        const int output_capacity = impl_->swr_ctx
+            ? std::max(frame_samples, swr_get_out_samples(impl_->swr_ctx, frame_samples))
+            : frame_samples;
+        std::vector<float> frame_output(static_cast<size_t>(output_capacity) * channels);
         int converted = 0;
 
         if (impl_->swr_ctx) {
             uint8_t* out_ptr = reinterpret_cast<uint8_t*>(frame_output.data());
-            converted = swr_convert(impl_->swr_ctx, &out_ptr, frame_samples,
+            converted = swr_convert(impl_->swr_ctx, &out_ptr, output_capacity,
                                     (const uint8_t**)impl_->frame->data,
                                     impl_->frame->nb_samples);
         } else if (impl_->codec_ctx->sample_fmt == AV_SAMPLE_FMT_FLT) {
@@ -415,8 +571,11 @@ bool Decoder::seek(int64_t sample_position) {
         LOG_WARN("Invalid sample rate, seek skipped");
         return false;
     }
-    AVRational sample_timebase = {1, track_info_.sample_rate};
-    int64_t seek_target = av_rescale_q(sample_position,
+    const int64_t input_position = av_rescale_q(sample_position,
+                                        AVRational{1, track_info_.sample_rate},
+                                        AVRational{1, std::max(1, impl_->input_sample_rate)});
+    AVRational sample_timebase = {1, std::max(1, impl_->input_sample_rate)};
+    int64_t seek_target = av_rescale_q(input_position,
                                         sample_timebase,
                                         stream->time_base);
 
@@ -437,6 +596,10 @@ bool Decoder::seek(int64_t sample_position) {
     impl_->pending_pcm.clear();
     impl_->pending_pcm_offset_frames = 0;
     impl_->pending_pcm_start_sample = 0;
+    impl_->dop_mode = false;
+    impl_->dop_bytes.clear();
+    impl_->dop_byte_offset = 0;
+    impl_->dop_marker = 0x05;
     impl_->eof = false;
 
     return true;

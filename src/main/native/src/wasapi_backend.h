@@ -17,6 +17,11 @@ public:
         const AudioFormat& requested_format,
         AudioCallback callback) override;
 
+    AudioFormat open_dop(
+        const std::wstring& device_id,
+        const AudioFormat& requested_format,
+        RawAudioCallback callback) override;
+
     bool start() override;
     bool stop() override;
     void close() override;
@@ -37,6 +42,7 @@ private:
     bool active_ = false;
     int buffer_frames_ = 0;
     double latency_ms_ = 0.0;
+    bool preparing_dop_open_ = false;
 
     // Allow the audio thread proc to access internal implementation
     friend unsigned __stdcall wasapi_thread_proc(void* param);

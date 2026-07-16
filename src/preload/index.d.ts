@@ -22,6 +22,8 @@ declare global {
         getEqBands(): Promise<{ success: boolean; data?: EqBand[]; error?: string }>
         setResamplerConfig(config: ResamplerConfig): Promise<{ success: boolean }>
         getResamplerConfig(): Promise<{ success: boolean; data?: ResamplerConfig; error?: string }>
+        setDopEnabled(enabled: boolean): Promise<{ success: boolean }>
+        getDopEnabled(): Promise<{ success: boolean; data?: boolean; error?: string }>
         setDspNodes(nodes: DspNodeConfig[]): Promise<{ success: boolean }>
         getDspNodes(): Promise<{ success: boolean; data?: DspNodeConfig[]; error?: string }>
         setCompressorConfig(config: CompressorConfig): Promise<{ success: boolean }>
