@@ -116,19 +116,33 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'getCompressorConfig': {
         return { success: true, data: engine.getCompressorConfig() }
       }
-      case 'setDelayConfig': return { success: engine.setDelayConfig(params.config) }
+      case 'setDelayConfig': {
+        const ok = engine.setDelayConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getDelayConfig': return { success: true, data: engine.getDelayConfig() }
-      case 'setReverbConfig': return { success: engine.setReverbConfig(params.config) }
+      case 'setReverbConfig': {
+        const ok = engine.setReverbConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getReverbConfig': return { success: true, data: engine.getReverbConfig() }
-      case 'setChorusConfig': return { success: engine.setChorusConfig(params.config) }
+      case 'setChorusConfig': {
+        const ok = engine.setChorusConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getChorusConfig': return { success: true, data: engine.getChorusConfig() }
-      case 'setNoiseGateConfig': return { success: engine.setNoiseGateConfig(params.config) }
+      case 'setNoiseGateConfig': {
+        const ok = engine.setNoiseGateConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getNoiseGateConfig': return { success: true, data: engine.getNoiseGateConfig() }
-      case 'setPhaserConfig': return { success: engine.setPhaserConfig(params.config) }
+      case 'setPhaserConfig': {
+        const ok = engine.setPhaserConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getPhaserConfig': return { success: true, data: engine.getPhaserConfig() }
-      case 'setChannelMatrixConfig': return { success: engine.setChannelMatrixConfig(params.config) }
+      case 'setChannelMatrixConfig': {
+        const ok = engine.setChannelMatrixConfig(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getChannelMatrixConfig': return { success: true, data: engine.getChannelMatrixConfig() }
-      case 'setLimiter': return { success: engine.setLimiter(params.config) }
+      case 'setLimiter': {
+        const ok = engine.setLimiter(params.config); if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain()); return { success: ok }
+      }
       case 'getLimiter': return { success: true, data: engine.getLimiter() }
 
       case 'enumerateDevices': {
@@ -137,18 +151,47 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       }
 
       case 'setDevice': {
-        engine.setDevice(params.deviceId)
-        return { success: true }
+        try {
+          const ok = engine.setDevice(params.deviceId)
+          if (!ok) sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Failed to select audio device: ${params.deviceId}`, timestamp: Date.now() })
+          return { success: ok, error: ok ? undefined : 'Device selection failed' }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Device selection exception: ${message}`, timestamp: Date.now() })
+          return { success: false, error: message }
+        }
       }
 
       case 'setBackend': {
-        const ok = engine.setBackend(params.backend)
-        return { success: ok }
+        try {
+          const ok = engine.setBackend(params.backend)
+          if (!ok) sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Failed to switch audio backend: ${params.backend}`, timestamp: Date.now() })
+          return { success: ok, error: ok ? undefined : 'Backend switch failed' }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Backend switch exception: ${message}`, timestamp: Date.now() })
+          return { success: false, error: message }
+        }
       }
 
       case 'selectOutputDevice': {
-        const ok = engine.selectOutputDevice(params.backend, params.deviceId)
-        return { success: ok }
+        try {
+          const ok = engine.selectOutputDevice(params.backend, params.deviceId)
+          if (!ok) sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Failed to select ${params.backend} device: ${params.deviceId}`, timestamp: Date.now() })
+          return { success: ok, error: ok ? undefined : 'Output device selection failed' }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          sendEvent(mainWindow, 'logEntry', { level: 'error', message: `Output device selection exception: ${message}`, timestamp: Date.now() })
+          return { success: false, error: message }
+        }
+      }
+
+      case 'getOutputDeviceSettings': {
+        return { success: true, data: engine.getOutputDeviceSettings() }
+      }
+
+      case 'getEngineInfo': {
+        return { success: engine.loaded, data: engine.getEngineInfo() }
       }
 
       case 'getStatus': {
@@ -194,6 +237,10 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       positionMs: posMs,
       durationMs: durMs
     })
+  })
+  engine.onTrackEnded((reason: string) => {
+    sendEvent(mainWindow, 'trackEnded', { reason })
+    sendEvent(mainWindow, 'logEntry', { level: 'info', message: `Playback reached end of track (${reason})`, timestamp: Date.now() })
   })
 
   // ── Error events ──

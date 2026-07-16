@@ -2,7 +2,6 @@
 #include "logger.h"
 
 #include <atomic>
-#include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
@@ -10,12 +9,9 @@
 #include <windows.h>
 #include <objbase.h>
 
-// ── Crash-diagnostic trace (D:\asio_trace.log) ────────────
-static FILE* g_trace = nullptr;
-static void tr(const char* msg) {
-    if (!g_trace) g_trace = fopen("D:\\asio_trace.log", "w");
-    if (g_trace) { fputs(msg, g_trace); fputc('\n', g_trace); fflush(g_trace); }
-}
+// Trace calls are used only from the control path.  Keeping them in the
+// application's logger avoids silently writing a hard-coded file on D:.
+static void tr(const char* msg) { LOG_DEBUG("ASIO: " + std::string(msg)); }
 
 // ── ASIO types (self-declared, no Steinberg SDK) ──────────
 typedef long ASIOBool;
@@ -374,7 +370,12 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     impl_->interleaved_buf.resize(impl_->buffer_size*uc);
     if (impl_->raw_transport) impl_->raw_interleaved_buf.resize(static_cast<size_t>(impl_->buffer_size) * uc * 3);
     impl_->output_channels=uc;
-    g_impl.store(impl_.get(),std::memory_order_release);
+    void* expected = nullptr;
+    if (!g_impl.compare_exchange_strong(expected, impl_.get(), std::memory_order_acq_rel)) {
+        LOG_ERROR("ASIO: only one active output instance is supported");
+        close();
+        return {};
+    }
     int valid_bits = impl_->raw_transport ? 24 : tp_valid_bits(impl_->channel_types.front());
     for (const int type : impl_->channel_types) {
         if (tp_valid_bits(type) != valid_bits) { valid_bits = 0; break; }
@@ -417,10 +418,18 @@ bool AsioBackend::stop() {tr("stop");
     if(!active_)return false;impl_->running.store(false);impl_->vt.stop(impl_->obj);
     active_=false;LOG_INFO("AsioBackend stopped");return true;}
 
-void AsioBackend::flush() {}
+void AsioBackend::flush() {
+    // IASIO has no portable buffer-reset primitive.  Restarting the driver is
+    // the only safe way to discard old queued frames after a seek.
+    if (!active_) return;
+    stop();
+    start();
+}
 
 void AsioBackend::close() {tr("close");
-    if(active_)stop();g_impl.store(nullptr);
+    if(active_)stop();
+    void* expected = impl_.get();
+    g_impl.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel);
     if(impl_->obj){if(impl_->buffers_created)impl_->vt.disposeBuffers(impl_->obj);
     impl_->vt.Release(impl_->obj);impl_->obj=nullptr;}
     impl_->vt={};impl_->buffers_created=false;

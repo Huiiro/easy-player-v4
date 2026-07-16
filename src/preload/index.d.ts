@@ -48,6 +48,8 @@ declare global {
         setDevice(deviceId: string): Promise<{ success: boolean }>
         setBackend(backend: string): Promise<{ success: boolean }>
         selectOutputDevice(backend: string, deviceId: string): Promise<{ success: boolean }>
+        getOutputDeviceSettings(): Promise<{ success: boolean; data?: { backend: string; deviceId: string }; error?: string }>
+        getEngineInfo(): Promise<{ success: boolean; data?: { version: string; outputDevice: { backend: string; deviceId: string } }; error?: string }>
         getStatus(): Promise<{ success: boolean; data?: PlaybackStatus; error?: string }>
         getAudioChain(): Promise<{ success: boolean; data?: AudioChainStatus; error?: string }>
         getAudioAnalysis(): Promise<{ success: boolean; data?: { outputTimeMs: number; analysisTimeMs: number; analysisLatencyMs: number; rms: number; lowEnergy: number; onsetStrength: number; droppedFrames: number; beatSequence: number; bpm: number; momentaryLufs: number; shortTermLufs: number; integratedLufs: number; spectrum: number[] }; error?: string }>

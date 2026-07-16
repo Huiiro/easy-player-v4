@@ -122,6 +122,7 @@ struct Decoder::Impl {
     uint8_t dop_marker = 0x05;
     bool dop_mode = false;
     bool eof = false;
+    bool swr_flushed = false;
 };
 
 Decoder::Decoder() : impl_(std::make_unique<Impl>()) {
@@ -299,7 +300,12 @@ bool Decoder::open(const std::string& file_path) {
     tag = av_dict_get(impl_->fmt_ctx->metadata, "album", nullptr, 0);
     if (tag) track_info_.metadata.album = tag->value;
     tag = av_dict_get(impl_->fmt_ctx->metadata, "track", nullptr, 0);
-    if (tag) track_info_.metadata.track_number = std::stoi(tag->value);
+    if (tag) {
+        // Common tags are "1/12" or even non-numeric.  Metadata must never
+        // take down the playback process.
+        try { track_info_.metadata.track_number = std::stoi(tag->value); }
+        catch (...) { LOG_WARN("Ignoring non-numeric track metadata: " + std::string(tag->value)); }
+    }
     tag = av_dict_get(impl_->fmt_ctx->metadata, "genre", nullptr, 0);
     if (tag) track_info_.metadata.genre = tag->value;
 
@@ -326,6 +332,7 @@ void Decoder::close() {
     avformat_close_input(&impl_->fmt_ctx);
     impl_->stream_index = -1;
     impl_->eof = false;
+    impl_->swr_flushed = false;
     impl_->pending_seek_sample = -1;
     impl_->pending_pcm.clear();
     impl_->pending_pcm_offset_frames = 0;
@@ -407,7 +414,7 @@ int Decoder::read_dop(uint8_t* output, int max_frames) {
 }
 
 int Decoder::decode(float* output, int max_frames) {
-    if (!impl_->codec_ctx || impl_->eof) return 0;
+    if (!impl_->codec_ctx || !output || max_frames <= 0 || (impl_->eof && impl_->swr_flushed)) return 0;
 
     int frames_decoded = 0;
     int channels = track_info_.channels;
@@ -458,10 +465,37 @@ int Decoder::decode(float* output, int max_frames) {
                     av_packet_unref(impl_->packet);
                 }
             }
-            if (impl_->eof && ret == AVERROR_EOF) break;
             continue;
         }
 
+        if (ret == AVERROR_EOF) {
+            // avcodec may retain delayed frames after the demuxer reaches
+            // EOF.  Drain them first, then flush any remaining swresample
+            // delay so the tail is not truncated.
+            if (impl_->swr_ctx && !impl_->swr_flushed) {
+                const int capacity = std::max(1, swr_get_out_samples(impl_->swr_ctx, 0));
+                std::vector<float> tail(static_cast<size_t>(capacity) * channels);
+                uint8_t* out_ptr = reinterpret_cast<uint8_t*>(tail.data());
+                const int converted = swr_convert(impl_->swr_ctx, &out_ptr, capacity, nullptr, 0);
+                if (converted > 0) {
+                    const int to_copy = std::min(converted, max_frames - frames_decoded);
+                    std::memcpy(output + static_cast<size_t>(frames_decoded) * channels, tail.data(),
+                                static_cast<size_t>(to_copy) * channels * sizeof(float));
+                    frames_decoded += to_copy;
+                    impl_->current_pts += to_copy;
+                    if (to_copy < converted) {
+                        impl_->pending_pcm.assign(tail.data() + static_cast<size_t>(to_copy) * channels,
+                                                  tail.data() + static_cast<size_t>(converted) * channels);
+                        impl_->pending_pcm_offset_frames = 0;
+                        impl_->pending_pcm_start_sample = impl_->current_pts;
+                    }
+                    return frames_decoded;
+                }
+                impl_->swr_flushed = true;
+            }
+            impl_->eof = true;
+            break;
+        }
         if (ret < 0) {
             LOG_ERROR("avcodec_receive_frame error: " + std::to_string(ret));
             return frames_decoded > 0 ? frames_decoded : -1;
@@ -601,6 +635,7 @@ bool Decoder::seek(int64_t sample_position) {
     impl_->dop_byte_offset = 0;
     impl_->dop_marker = 0x05;
     impl_->eof = false;
+    impl_->swr_flushed = false;
 
     return true;
 }

@@ -106,8 +106,8 @@ export const audioBridge = {
     return cmd<DeviceInfo[]>(r) ?? []
   },
 
-  async setDevice(deviceId: string): Promise<void> {
-    await window.api.audio.setDevice(deviceId)
+  async setDevice(deviceId: string): Promise<boolean> {
+    return (await window.api.audio.setDevice(deviceId)).success
   },
 
   async setBackend(backend: string): Promise<boolean> {
@@ -118,6 +118,14 @@ export const audioBridge = {
   async selectOutputDevice(backend: string, deviceId: string): Promise<boolean> {
     const r = await window.api.audio.selectOutputDevice(backend, deviceId)
     return r.success
+  },
+
+  async getOutputDeviceSettings(): Promise<{ backend: string; deviceId: string } | null> {
+    return cmd(await window.api.audio.getOutputDeviceSettings())
+  },
+
+  async getEngineInfo(): Promise<{ version: string; outputDevice: { backend: string; deviceId: string } } | null> {
+    return cmd(await window.api.audio.getEngineInfo())
   },
 
   async getStatus(): Promise<PlaybackStatus | null> {
@@ -138,6 +146,10 @@ export const audioBridge = {
 
   onPositionChanged(callback: (data: { positionMs: number; durationMs: number }) => void): () => void {
     return window.api.audio.onPositionChanged(callback)
+  },
+
+  onTrackEnded(callback: (data: { reason: string }) => void): () => void {
+    return window.api.audio.onTrackEnded(callback)
   },
 
   onError(callback: (data: { code: number; message: string; recoverable: boolean }) => void): () => void {

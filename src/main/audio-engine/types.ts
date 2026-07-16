@@ -128,6 +128,8 @@ export type AudioCommandAction =
   | 'setDevice'
   | 'setBackend'
   | 'selectOutputDevice'
+  | 'getOutputDeviceSettings'
+  | 'getEngineInfo'
   | 'getStatus'
   | 'getAudioChain'
   | 'getAudioAnalysis'

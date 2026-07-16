@@ -78,6 +78,10 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setBackend', params: { backend } }),
   selectOutputDevice: (backend: string, deviceId: string) =>
     ipcRenderer.invoke('audio:command', { action: 'selectOutputDevice', params: { backend, deviceId } }),
+  getOutputDeviceSettings: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getOutputDeviceSettings', params: {} }),
+  getEngineInfo: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getEngineInfo', params: {} }),
   getStatus: () =>
     ipcRenderer.invoke('audio:command', { action: 'getStatus', params: {} }),
   getAudioChain: () =>

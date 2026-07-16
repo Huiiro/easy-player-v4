@@ -48,8 +48,10 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
+    static constexpr const char* kVersion = "1.0.0";
     AudioEngine();
     ~AudioEngine();
+    const char* version() const { return kVersion; }
 
     // ── Lifecycle ──
     bool open(const std::string& file_path);
@@ -101,7 +103,11 @@ public:
     bool set_limiter_config(const LimiterConfig& config) { return dsp_pipeline_.set_limiter_config(config); }
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
     bool set_transition_config(const TransitionConfig& config);
-    TransitionConfig transition_config() const { return transition_config_; }
+    TransitionConfig transition_config() const {
+        return {gapless_enabled_.load(std::memory_order_acquire),
+                crossfade_enabled_.load(std::memory_order_acquire),
+                crossfade_ms_.load(std::memory_order_acquire)};
+    }
 
     // ── Device / Backend ──
     std::vector<DeviceInfo> enumerate_devices();
@@ -124,10 +130,12 @@ public:
     using PositionCallback = std::function<void(double ms, double duration_ms)>;
     using ErrorCallback = std::function<void(int code, const std::string& msg)>;
     using LogCallback = std::function<void(int level, const std::string& msg)>;
+    using TrackEndedCallback = std::function<void(const std::string& reason)>;
 
     void set_state_callback(StateChangedCallback cb) { state_cb_ = std::move(cb); }
     void set_position_callback(PositionCallback cb) { pos_cb_ = std::move(cb); }
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
+    void set_track_ended_callback(TrackEndedCallback cb) { track_ended_cb_ = std::move(cb); }
 
 private:
     void set_state(EngineState new_state);
@@ -137,6 +145,7 @@ private:
     int dop_audio_callback(uint8_t* output, int frames, int channels);
     void update_replay_gain_for_track();
     void analysis_thread_func();
+    void stop_analysis_thread();
     bool prepare_next_decoder_locked();
     bool switch_to_next_decoder_locked();
 
@@ -161,7 +170,9 @@ private:
     Decoder next_decoder_;
     TrackInfo track_info_;
     std::string next_track_path_;
-    TransitionConfig transition_config_{};
+    std::atomic<bool> gapless_enabled_{true};
+    std::atomic<bool> crossfade_enabled_{false};
+    std::atomic<int> crossfade_ms_{5000};
     std::atomic<bool> transition_active_{false};
     std::vector<float> transition_work_buffer_;
     std::unique_ptr<RingBuffer> ring_buffer_;
@@ -196,6 +207,10 @@ private:
     // Number of valid source frames currently retained for stateful SRC.
     // Accessed exclusively by audio_callback after its control-thread setup.
     int source_work_frames_ = 0;
+    // seek() is the only third-party writer of RingBuffer cursors.  Quiesce
+    // the PCM callback first so reset() remains SPSC in practice.
+    std::atomic<bool> pcm_io_resetting_{false};
+    std::atomic<int> pcm_callbacks_in_flight_{0};
     std::unique_ptr<std::thread> decoder_thread_;
     std::atomic<bool> decoder_running_{false};
     std::atomic<int> seek_generation_{0};  // incremented on each seek to invalidate stale decoder output
@@ -218,6 +233,7 @@ private:
     StateChangedCallback state_cb_;
     PositionCallback pos_cb_;
     ErrorCallback error_cb_;
+    TrackEndedCallback track_ended_cb_;
 
     // The audio callback only sets these atomics.  State changes and logging
     // are dispatched by the position timer, never from the real-time thread.

@@ -1,6 +1,7 @@
 #include "dsound_backend.h"
 #include "logger.h"
 
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 #include <vector>
@@ -25,11 +26,13 @@ struct DSoundBackend::Impl {
     HANDLE notify_events[2] = {nullptr, nullptr};
     HANDLE thread_handle = nullptr;
     std::atomic<bool> running{false};
+    std::atomic<HRESULT> thread_error{S_OK};
     std::mutex buffer_mutex;
     WAVEFORMATEX wave_format = {};
     int buffer_frames = 0;
     int buffer_bytes = 0;
     int write_cursor = 0;
+    std::vector<float> scratch;
     AudioCallback callback;
 };
 
@@ -43,12 +46,24 @@ unsigned __stdcall dsound_thread_proc(void* param) {
     // Set thread priority to highest (Pro Audio equivalent)
     SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 
-    impl->secondary->Play(0, 0, DSBPLAY_LOOPING);
+    HRESULT hr = impl->secondary->Play(0, 0, DSBPLAY_LOOPING);
+    if (FAILED(hr)) {
+        impl->thread_error.store(hr, std::memory_order_release);
+        impl->running.store(false, std::memory_order_release);
+        return 0;
+    }
 
     while (impl->running.load(std::memory_order_acquire)) {
         DWORD result = WaitForMultipleObjects(2, impl->notify_events, FALSE, INFINITE);
 
         if (!impl->running.load(std::memory_order_acquire)) break;
+        if (result != WAIT_OBJECT_0 && result != WAIT_OBJECT_0 + 1) {
+            const HRESULT wait_hr = result == WAIT_FAILED
+                ? HRESULT_FROM_WIN32(GetLastError()) : E_FAIL;
+            impl->thread_error.store(wait_hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
 
         int offset, lock_size;
         int channels = impl->wave_format.nChannels;
@@ -66,14 +81,18 @@ unsigned __stdcall dsound_thread_proc(void* param) {
 
         std::lock_guard<std::mutex> guard(impl->buffer_mutex);
 
-        HRESULT hr = impl->secondary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
-        if (FAILED(hr)) continue;
+        hr = impl->secondary->Lock(offset, lock_size, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+        if (FAILED(hr)) {
+            impl->thread_error.store(hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
 
         int frames = lock_size / (channels * sizeof(short));
         if (frames <= 0) { impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2); continue; }
 
-        std::vector<float> f32_output(frames * channels);
-        int rendered = impl->callback(f32_output.data(), frames, channels);
+        float* f32_output = impl->scratch.data();
+        const int rendered = std::clamp(impl->callback(f32_output, frames, channels), 0, frames);
 
         // Convert f32 → s16
         short* s16_ptr1 = static_cast<short*>(ptr1);
@@ -94,10 +113,18 @@ unsigned __stdcall dsound_thread_proc(void* param) {
             }
         }
 
-        impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        hr = impl->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        if (FAILED(hr)) {
+            impl->thread_error.store(hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
     }
 
-    impl->secondary->Stop();
+    hr = impl->secondary->Stop();
+    if (FAILED(hr) && SUCCEEDED(impl->thread_error.load(std::memory_order_acquire))) {
+        impl->thread_error.store(hr, std::memory_order_release);
+    }
     return 0;
 }
 
@@ -206,6 +233,8 @@ AudioFormat DSoundBackend::open(
     int half_frames = fmt.nSamplesPerSec / 10;                  // 100ms worth of frames
     impl_->buffer_frames = half_frames;
     impl_->buffer_bytes = half_frames * fmt.nBlockAlign * 2;     // total buffer = 2 halves
+    // The streaming callback fills one half, while flush() may fill both.
+    impl_->scratch.assign(static_cast<size_t>(half_frames) * 2 * fmt.nChannels, 0.0f);
     impl_->write_cursor = 0;
 
     DSBUFFERDESC desc2 = {};
@@ -251,8 +280,8 @@ bool DSoundBackend::start() {
         HRESULT hr = impl_->secondary->Lock(0, half_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
         if (SUCCEEDED(hr)) {
             int frames = half_bytes / (impl_->wave_format.nChannels * sizeof(short));
-            std::vector<float> f32_buf(frames * impl_->wave_format.nChannels);
-            impl_->callback(f32_buf.data(), frames, impl_->wave_format.nChannels);
+            float* f32_buf = impl_->scratch.data();
+            impl_->callback(f32_buf, frames, impl_->wave_format.nChannels);
             short* s16_ptr1 = static_cast<short*>(ptr1);
             int samples1 = bytes1 / sizeof(short);
             for (int i = 0; i < samples1 && i < frames * impl_->wave_format.nChannels; ++i) {
@@ -260,31 +289,55 @@ bool DSoundBackend::start() {
                 s16_ptr1[i] = static_cast<short>(std::max(-1.0f, std::min(1.0f, sample)) * 32767.0f);
             }
             if (ptr2) std::memset(ptr2, 0, bytes2);
-            impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+            hr = impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+            if (FAILED(hr)) {
+                LOG_ERROR("DSoundBackend prefill Unlock failed: hr=0x" + std::to_string(hr));
+                return false;
+            }
+        } else {
+            LOG_ERROR("DSoundBackend prefill Lock failed: hr=0x" + std::to_string(hr));
+            return false;
         }
     }
 
     // Create notify events
     impl_->notify_events[0] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     impl_->notify_events[1] = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    if (!impl_->notify_events[0] || !impl_->notify_events[1]) {
+        LOG_ERROR("DSoundBackend could not create notification events: error=" + std::to_string(GetLastError()));
+        return false;
+    }
 
     // Set up notifications at 0% and 50% of the secondary buffer
     IDirectSoundNotify8* notify = nullptr;
     HRESULT hr = impl_->secondary->QueryInterface(IID_IDirectSoundNotify8,
                                                    (void**)&notify);
-    if (SUCCEEDED(hr) && notify) {
-        impl_->notify = notify;
-        DSBPOSITIONNOTIFY positions[2];
-        positions[0].dwOffset = 0;
-        positions[0].hEventNotify = impl_->notify_events[0];
-        positions[1].dwOffset = impl_->buffer_bytes / 2;
-        positions[1].hEventNotify = impl_->notify_events[1];
-        notify->SetNotificationPositions(2, positions);
+    if (FAILED(hr) || !notify) {
+        LOG_ERROR("DSoundBackend QueryInterface(IDirectSoundNotify8) failed: hr=0x" + std::to_string(hr));
+        return false;
+    }
+    impl_->notify = notify;
+    DSBPOSITIONNOTIFY positions[2];
+    positions[0].dwOffset = 0;
+    positions[0].hEventNotify = impl_->notify_events[0];
+    positions[1].dwOffset = impl_->buffer_bytes / 2;
+    positions[1].hEventNotify = impl_->notify_events[1];
+    hr = notify->SetNotificationPositions(2, positions);
+    if (FAILED(hr)) {
+        LOG_ERROR("DSoundBackend SetNotificationPositions failed: hr=0x" + std::to_string(hr));
+        return false;
     }
 
+    impl_->thread_error.store(S_OK, std::memory_order_release);
     impl_->running.store(true, std::memory_order_release);
     impl_->thread_handle = (HANDLE)_beginthreadex(
         nullptr, 0, dsound_thread_proc, impl_.get(), 0, nullptr);
+
+    if (!impl_->thread_handle) {
+        impl_->running.store(false, std::memory_order_release);
+        LOG_ERROR("DSoundBackend could not create render thread");
+        return false;
+    }
 
     active_ = true;
     LOG_INFO("DSoundBackend started (" + std::to_string(impl_->buffer_bytes) + " bytes buffer)");
@@ -300,9 +353,14 @@ bool DSoundBackend::stop() {
     if (impl_->notify_events[0]) SetEvent(impl_->notify_events[0]);
 
     if (impl_->thread_handle) {
-        WaitForSingleObject(impl_->thread_handle, 5000);
+        WaitForSingleObject(impl_->thread_handle, INFINITE);
         CloseHandle(impl_->thread_handle);
         impl_->thread_handle = nullptr;
+    }
+
+    const HRESULT thread_error = impl_->thread_error.load(std::memory_order_acquire);
+    if (FAILED(thread_error)) {
+        LOG_ERROR("DSoundBackend render thread stopped: hr=0x" + std::to_string(thread_error));
     }
 
     active_ = false;
@@ -327,8 +385,8 @@ void DSoundBackend::flush() {
     if (SUCCEEDED(hr)) {
         int channels = impl_->wave_format.nChannels;
         int frames = impl_->buffer_bytes / (channels * sizeof(short));
-        std::vector<float> f32_output(frames * channels);
-        int rendered = impl_->callback(f32_output.data(), frames, channels);
+        float* f32_output = impl_->scratch.data();
+        int rendered = impl_->callback(f32_output, frames, channels);
         int total_samples = rendered * channels;
 
         short* s16_ptr1 = static_cast<short*>(ptr1);

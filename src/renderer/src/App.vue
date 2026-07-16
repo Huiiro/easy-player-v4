@@ -104,6 +104,8 @@ onMounted(async () => {
   }, 33)
   player.subscribeToEvents()
   logs.subscribe()
+  await player.logEngineInfo()
+  await player.loadOutputDeviceSettings()
   await player.refreshDevices()
   await player.refreshAudioChain()
   await player.refreshAudioAnalysis()

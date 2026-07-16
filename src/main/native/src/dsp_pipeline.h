@@ -441,10 +441,20 @@ public:
                 backend_type_ != BackendType::ASIO) {
                 result.bit_perfect_blockers.push_back("Backend is not WASAPI Exclusive or ASIO");
             }
-            if (source_format_.sample_rate != backend_format_.sample_rate ||
-                source_format_.channels != backend_format_.channels ||
-                source_format_.bit_depth != backend_format_.bit_depth) {
-                result.bit_perfect_blockers.push_back("Backend format differs from the source format");
+            if (source_format_.sample_rate != backend_format_.sample_rate) {
+                result.bit_perfect_blockers.push_back("Backend sample rate differs from the source");
+            }
+            if (source_format_.channels != backend_format_.channels) {
+                result.bit_perfect_blockers.push_back("Backend channel count differs from the source");
+            }
+            // ASIO devices commonly expose a 24/32-bit endpoint for every
+            // source. Widening 16→24 or 24→32 keeps every original integer
+            // sample exactly representable; only a precision reduction can
+            // discard source information. The f32 transport is separately
+            // kept in the unverified state below.
+            if (source_format_.bit_depth > 0 &&
+                (backend_format_.bit_depth <= 0 || backend_format_.bit_depth < source_format_.bit_depth)) {
+                result.bit_perfect_blockers.push_back("Backend precision is lower than the source");
             }
 
         }

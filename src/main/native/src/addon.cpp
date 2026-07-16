@@ -55,12 +55,14 @@ public:
             InstanceMethod("setDevice", &AudioEngineWrapper::SetDevice),
             InstanceMethod("setBackend", &AudioEngineWrapper::SetBackend),
             InstanceMethod("selectOutputDevice", &AudioEngineWrapper::SelectOutputDevice),
+            InstanceMethod("getVersion", &AudioEngineWrapper::GetVersion),
             InstanceMethod("getStatus", &AudioEngineWrapper::GetStatus),
             InstanceMethod("getAudioChain", &AudioEngineWrapper::GetAudioChain),
             InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
             InstanceMethod("getGlitchCount", &AudioEngineWrapper::GetGlitchCount),
             InstanceMethod("onStateChanged", &AudioEngineWrapper::OnStateChanged),
             InstanceMethod("onPositionChanged", &AudioEngineWrapper::OnPositionChanged),
+            InstanceMethod("onTrackEnded", &AudioEngineWrapper::OnTrackEnded),
             InstanceMethod("onError", &AudioEngineWrapper::OnError),
             InstanceMethod("onLog", &AudioEngineWrapper::OnLog),
         });
@@ -86,6 +88,9 @@ public:
         });
         engine_->set_error_callback([this](int code, const std::string& msg) {
             NotifyError(code, msg);
+        });
+        engine_->set_track_ended_callback([this](const std::string& reason) {
+            NotifyTrackEnded(reason);
         });
 
         // Wire logger to JS console
@@ -436,8 +441,7 @@ private:
 
     Napi::Value SetDevice(const Napi::CallbackInfo& info) {
         std::string id = info[0].As<Napi::String>().Utf8Value();
-        engine_->set_device(std::wstring(id.begin(), id.end()));
-        return info.Env().Undefined();
+        return Napi::Boolean::New(info.Env(), engine_->set_device(std::wstring(id.begin(), id.end())));
     }
 
     Napi::Value SetBackend(const Napi::CallbackInfo& info) {
@@ -461,6 +465,10 @@ private:
         else                                      type = BackendType::DIRECTSOUND;
         return Napi::Boolean::New(info.Env(), engine_->select_output_device(
             type, std::wstring(id.begin(), id.end())));
+    }
+
+    Napi::Value GetVersion(const Napi::CallbackInfo& info) {
+        return Napi::String::New(info.Env(), engine_->version());
     }
 
     Napi::Value GetStatus(const Napi::CallbackInfo& info) {
@@ -550,6 +558,14 @@ private:
         return info.Env().Undefined();
     }
 
+    Napi::Value OnTrackEnded(const Napi::CallbackInfo& info) {
+        auto tsfn = Napi::ThreadSafeFunction::New(
+            info.Env(), info[0].As<Napi::Function>(),
+            "TrackEnded", 0, 1);
+        track_ended_tsfn_ = std::make_unique<Napi::ThreadSafeFunction>(std::move(tsfn));
+        return info.Env().Undefined();
+    }
+
     Napi::Value OnError(const Napi::CallbackInfo& info) {
         auto tsfn = Napi::ThreadSafeFunction::New(
             info.Env(), info[0].As<Napi::Function>(),
@@ -587,6 +603,13 @@ private:
         });
     }
 
+    void NotifyTrackEnded(const std::string& reason) {
+        if (!track_ended_tsfn_) return;
+        track_ended_tsfn_->NonBlockingCall([reason](Napi::Env env, Napi::Function jsCallback) {
+            jsCallback.Call({Napi::String::New(env, reason)});
+        });
+    }
+
     void NotifyError(int code, const std::string& msg) {
         if (!error_tsfn_) return;
         int c = code;
@@ -616,6 +639,7 @@ private:
 
     std::unique_ptr<Napi::ThreadSafeFunction> state_tsfn_;
     std::unique_ptr<Napi::ThreadSafeFunction> pos_tsfn_;
+    std::unique_ptr<Napi::ThreadSafeFunction> track_ended_tsfn_;
     std::unique_ptr<Napi::ThreadSafeFunction> error_tsfn_;
     std::unique_ptr<Napi::ThreadSafeFunction> log_tsfn_;
 };

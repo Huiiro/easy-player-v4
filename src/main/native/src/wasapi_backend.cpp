@@ -1,6 +1,7 @@
 #include "wasapi_backend.h"
 #include "logger.h"
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <vector>
@@ -88,6 +89,9 @@ struct WasapiBackend::Impl {
     HANDLE event_handle  = nullptr;
     HANDLE thread_handle = nullptr;
     std::atomic<bool> running{false};
+    // The render thread must not emit IPC-backed logs.  It records the first
+    // fatal HRESULT here and the control thread reports it after joining.
+    std::atomic<HRESULT> thread_error{S_OK};
 
     // Format
     WAVEFORMATEX* wave_format = nullptr;
@@ -123,17 +127,36 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         mmcssHandle = pAvSetMmThread(L"Pro Audio", &mmcssTask);
     }
 
-    // COM for this thread
-    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    // COM for this thread.  Do not call CoUninitialize unless this invocation
+    // actually acquired a COM initialisation reference.
+    const HRESULT com_hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    const bool com_initialized = SUCCEEDED(com_hr);
+    if (FAILED(com_hr) && com_hr != RPC_E_CHANGED_MODE) {
+        impl->thread_error.store(com_hr, std::memory_order_release);
+        impl->running.store(false, std::memory_order_release);
+        if (mmcssHandle && pAvRevertMmThread) pAvRevertMmThread(mmcssHandle);
+        return 0;
+    }
 
     int channels   = impl->wave_format->nChannels;
     int frame_size = impl->bytes_per_frame;
 
-    impl->audio_client->Start();
+    HRESULT hr = impl->audio_client->Start();
+    if (FAILED(hr)) {
+        impl->thread_error.store(hr, std::memory_order_release);
+        impl->running.store(false, std::memory_order_release);
+    }
 
     while (impl->running.load(std::memory_order_acquire)) {
         DWORD result = WaitForSingleObject(impl->event_handle, INFINITE);
         if (!impl->running.load(std::memory_order_acquire)) break;
+        if (result != WAIT_OBJECT_0) {
+            const HRESULT wait_hr = result == WAIT_FAILED
+                ? HRESULT_FROM_WIN32(GetLastError()) : E_FAIL;
+            impl->thread_error.store(wait_hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
 
         UINT32 available;
         if (impl->exclusive) {
@@ -142,18 +165,28 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         } else {
             // Shared mode: fill only the space not yet consumed by the engine.
             UINT32 padding = 0;
-            impl->audio_client->GetCurrentPadding(&padding);
+            hr = impl->audio_client->GetCurrentPadding(&padding);
+            if (FAILED(hr)) {
+                impl->thread_error.store(hr, std::memory_order_release);
+                impl->running.store(false, std::memory_order_release);
+                break;
+            }
             available = impl->buffer_frames - padding;
         }
         if (available == 0) continue;
 
         BYTE* data = nullptr;
-        HRESULT hr = impl->render_client->GetBuffer(available, &data);
-        if (FAILED(hr)) continue;
+        hr = impl->render_client->GetBuffer(available, &data);
+        if (FAILED(hr)) {
+            impl->thread_error.store(hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
 
         if (impl->raw_transport) {
-            const int rendered = impl->raw_callback
-                ? impl->raw_callback(data, static_cast<int>(available), channels) : 0;
+            const int rendered = std::clamp(
+                impl->raw_callback ? impl->raw_callback(data, static_cast<int>(available), channels) : 0,
+                0, static_cast<int>(available));
             if (rendered < static_cast<int>(available)) {
                 std::memset(data + rendered * frame_size, 0,
                             (static_cast<int>(available) - rendered) * frame_size);
@@ -161,7 +194,8 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         } else if (impl->is_f32) {
             // Direct f32 write — WASAPI Shared mix format, or Exclusive f32
             float* f32_data = reinterpret_cast<float*>(data);
-            int rendered = impl->callback(f32_data, (int)available, channels);
+            const int rendered = std::clamp(impl->callback(f32_data, (int)available, channels),
+                                            0, static_cast<int>(available));
             if (rendered < (int)available) {
                 std::memset(f32_data + rendered * channels, 0,
                             ((int)available - rendered) * channels * sizeof(float));
@@ -169,8 +203,8 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         } else {
             // Exclusive integer PCM fallback — convert from f32.
             int total_samples = (int)available * channels;
-            impl->scratch.resize(total_samples);
-            int rendered = impl->callback(impl->scratch.data(), (int)available, channels);
+            const int rendered = std::clamp(impl->callback(impl->scratch.data(), (int)available, channels),
+                                            0, static_cast<int>(available));
             if (rendered < (int)available) {
                 std::memset(impl->scratch.data() + rendered * channels, 0,
                             ((int)available - rendered) * channels * sizeof(float));
@@ -192,11 +226,19 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
             }
         }
 
-        impl->render_client->ReleaseBuffer(available, 0);
+        hr = impl->render_client->ReleaseBuffer(available, 0);
+        if (FAILED(hr)) {
+            impl->thread_error.store(hr, std::memory_order_release);
+            impl->running.store(false, std::memory_order_release);
+            break;
+        }
     }
 
-    impl->audio_client->Stop();
-    CoUninitialize();
+    hr = impl->audio_client->Stop();
+    if (FAILED(hr) && SUCCEEDED(impl->thread_error.load(std::memory_order_acquire))) {
+        impl->thread_error.store(hr, std::memory_order_release);
+    }
+    if (com_initialized) CoUninitialize();
 
     if (mmcssHandle && pAvRevertMmThread) {
         pAvRevertMmThread(mmcssHandle);
@@ -490,6 +532,8 @@ AudioFormat WasapiBackend::open(
     }
 
     impl_->bytes_per_frame = fmt->nBlockAlign;
+    // Integer PCM callbacks must never allocate on the MMCSS render thread.
+    impl_->scratch.assign(static_cast<size_t>(impl_->buffer_frames) * fmt->nChannels, 0.0f);
 
     // Calculate latency
     REFERENCE_TIME period = 0;
@@ -576,9 +620,16 @@ AudioFormat WasapiBackend::open_dop(
 bool WasapiBackend::start() {
     if (!impl_->audio_client || active_) return false;
 
+    impl_->thread_error.store(S_OK, std::memory_order_release);
     impl_->running.store(true, std::memory_order_release);
     impl_->thread_handle = (HANDLE)_beginthreadex(
         nullptr, 0, wasapi_thread_proc, impl_.get(), 0, nullptr);
+
+    if (!impl_->thread_handle) {
+        impl_->running.store(false, std::memory_order_release);
+        LOG_ERROR("WasapiBackend could not create render thread");
+        return false;
+    }
 
     active_ = true;
     LOG_INFO("WasapiBackend started");
@@ -596,9 +647,14 @@ bool WasapiBackend::stop() {
     if (impl_->event_handle) SetEvent(impl_->event_handle);
 
     if (impl_->thread_handle) {
-        WaitForSingleObject(impl_->thread_handle, 5000);
+        WaitForSingleObject(impl_->thread_handle, INFINITE);
         CloseHandle(impl_->thread_handle);
         impl_->thread_handle = nullptr;
+    }
+
+    const HRESULT thread_error = impl_->thread_error.load(std::memory_order_acquire);
+    if (FAILED(thread_error)) {
+        LOG_ERROR("WasapiBackend render thread stopped: hr=0x" + std::to_string(thread_error));
     }
 
     active_ = false;
@@ -609,14 +665,21 @@ bool WasapiBackend::stop() {
 // ── flush ─────────────────────────────────────────────────
 
 void WasapiBackend::flush() {
-    if (!impl_->audio_client || !impl_->running.load(std::memory_order_acquire))
+    if (!impl_->audio_client)
         return;
 
-    impl_->audio_client->Stop();
-    impl_->audio_client->Reset();
-    // Clear the scratch buffer to avoid leaking stale converted samples
-    impl_->scratch.clear();
-    impl_->audio_client->Start();
+    // Resetting IAudioClient while its event thread owns a render buffer is
+    // racy. Stop/join first, then reset and start a fresh render thread.
+    const bool restart = active_;
+    if (restart) stop();
+    HRESULT hr = impl_->audio_client->Stop();
+    if (FAILED(hr)) LOG_WARN("WasapiBackend flush Stop failed: hr=0x" + std::to_string(hr));
+    hr = impl_->audio_client->Reset();
+    if (FAILED(hr)) {
+        LOG_ERROR("WasapiBackend flush Reset failed: hr=0x" + std::to_string(hr));
+        return;
+    }
+    if (restart) start();
     LOG_INFO("WasapiBackend flushed");
 }
 

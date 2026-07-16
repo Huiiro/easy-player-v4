@@ -238,34 +238,64 @@ export const usePlayerStore = defineStore('player', () => {
     void commitDspNodes()
   }
 
-  async function setBackend(backend: string) {
-    if (currentBackend.value === backend) return
-    currentBackend.value = backend
+  async function setBackend(backend: string): Promise<boolean> {
+    if (currentBackend.value === backend) return true
     const ok = await audioBridge.setBackend(backend)
-    if (ok) {
+    if (!ok) {
+      useLogStore().addEntry({ level: 'error', message: `Failed to switch audio backend to ${backend}`, timestamp: Date.now() })
+      return false
+    }
+    currentBackend.value = backend
+    {
       // Device identifiers belong to the previous backend and cannot be
       // reused by ASIO, WASAPI, or DirectSound.
       currentDeviceId.value = 'default'
       // Refresh device list after backend change
       await refreshDevices()
     }
+    return true
   }
 
-  async function setDevice(deviceId: string) {
-    if (currentDeviceId.value === deviceId) return
+  async function setDevice(deviceId: string): Promise<boolean> {
+    if (currentDeviceId.value === deviceId) return true
+    const ok = await audioBridge.setDevice(deviceId)
+    if (!ok) {
+      useLogStore().addEntry({ level: 'error', message: `Failed to select audio device ${deviceId}`, timestamp: Date.now() })
+      return false
+    }
     currentDeviceId.value = deviceId
-    await audioBridge.setDevice(deviceId)
+    return true
   }
 
   async function selectOutputDevice(device: DeviceInfo) {
     if (currentBackend.value === device.backend && currentDeviceId.value === device.id) return true
 
     const ok = await audioBridge.selectOutputDevice(device.backend, device.id)
-    if (!ok) return false
+    if (!ok) {
+      useLogStore().addEntry({ level: 'error', message: `Failed to select ${device.backend} device ${device.name}`, timestamp: Date.now() })
+      return false
+    }
 
     currentBackend.value = device.backend
     currentDeviceId.value = device.id
     return true
+  }
+
+  async function loadOutputDeviceSettings(): Promise<void> {
+    const output = await audioBridge.getOutputDeviceSettings()
+    if (!output) return
+    currentBackend.value = output.backend
+    currentDeviceId.value = output.deviceId
+  }
+
+  async function logEngineInfo(): Promise<void> {
+    const info = await audioBridge.getEngineInfo()
+    if (!info) return
+    useLogStore().addEntry({
+      level: 'info',
+      message: `Easy Player Audio Engine v${info.version} | ${info.outputDevice.backend} / ${info.outputDevice.deviceId}`,
+      timestamp: Date.now()
+    })
   }
 
   async function refreshDevices() {
@@ -324,6 +354,13 @@ export const usePlayerStore = defineStore('player', () => {
       audioBridge.onPositionChanged((data) => {
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
+      })
+    )
+
+    unsubs.push(
+      audioBridge.onTrackEnded((data) => {
+        state.value = 'stopped'
+        useLogStore().addEntry({ level: 'info', message: `Playback reached end of track (${data.reason})`, timestamp: Date.now() })
       })
     )
 
@@ -427,6 +464,8 @@ export const usePlayerStore = defineStore('player', () => {
     setBackend,
     setDevice,
     selectOutputDevice,
+    loadOutputDeviceSettings,
+    logEngineInfo,
     refreshDevices,
     refreshAudioChain,
     refreshAudioAnalysis,

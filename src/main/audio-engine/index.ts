@@ -1,7 +1,7 @@
 import { join } from 'path'
 import { app } from 'electron'
 import { AudioChainStatus, DeviceInfo } from './types'
-import { DspSettings, loadDspSettings, saveDspSettings } from './dsp-settings'
+import { DspSettings, PersistedOutputBackend, loadDspSettings, saveDspSettings } from './dsp-settings'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let nativeAddon: any = null
@@ -48,6 +48,7 @@ export class AudioEngineManager {
     if (this.isLoaded) {
       this.engine = new nativeAddon.AudioEngine()
       this.restoreDspSettings()
+      console.info(`[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`)
     }
   }
 
@@ -230,18 +231,41 @@ export class AudioEngineManager {
     return this.engine.enumerateDevices()
   }
 
-  setDevice(deviceId: string): void {
-    this.engine?.setDevice(deviceId)
+  setDevice(deviceId: string): boolean {
+    const ok = this.engine?.setDevice(deviceId) ?? false
+    if (ok) {
+      this.dspSettings.outputDevice.deviceId = deviceId
+      this.persistDspSettings()
+    }
+    return ok
   }
 
   setBackend(backend: string): boolean {
     if (!this.engine) return false
-    return this.engine.setBackend(backend)
+    const ok = this.engine.setBackend(backend)
+    if (ok) {
+      this.dspSettings.outputDevice = { backend: backend as PersistedOutputBackend, deviceId: 'default' }
+      this.persistDspSettings()
+    }
+    return ok
   }
 
   selectOutputDevice(backend: string, deviceId: string): boolean {
     if (!this.engine) return false
-    return this.engine.selectOutputDevice(backend, deviceId)
+    const ok = this.engine.selectOutputDevice(backend, deviceId)
+    if (ok) {
+      this.dspSettings.outputDevice = { backend: backend as PersistedOutputBackend, deviceId }
+      this.persistDspSettings()
+    }
+    return ok
+  }
+
+  getOutputDeviceSettings() { return this.dspSettings.outputDevice }
+  getEngineInfo() {
+    return {
+      version: this.engine?.getVersion?.() ?? 'unavailable',
+      outputDevice: this.dspSettings.outputDevice
+    }
   }
 
   // ── Query ──
@@ -274,6 +298,10 @@ export class AudioEngineManager {
     this.engine?.onPositionChanged(callback)
   }
 
+  onTrackEnded(callback: (reason: string) => void): void {
+    this.engine?.onTrackEnded(callback)
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError(callback: (code: number, msg: string) => void): void {
     this.engine?.onError(callback)
@@ -302,6 +330,12 @@ export class AudioEngineManager {
     this.engine.setResamplerConfig(this.dspSettings.resampler)
     this.engine.setDopEnabled(this.dspSettings.dopEnabled)
     this.engine.setTransitionConfig(this.dspSettings.transition)
+    const output = this.dspSettings.outputDevice
+    if (!this.engine.selectOutputDevice(output.backend, output.deviceId)) {
+      console.warn(`[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`)
+      this.dspSettings.outputDevice = { backend: 'directsound', deviceId: 'default' }
+      this.persistDspSettings()
+    }
   }
 
   private persistDspSettings(): void {

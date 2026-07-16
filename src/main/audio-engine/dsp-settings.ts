@@ -17,6 +17,8 @@ export interface PersistedChorus { rateHz: number; depthMs: number; mix: number 
 export interface PersistedNoiseGate { thresholdDb: number; attackMs: number; holdMs: number; releaseMs: number; rangeDb: number }
 export interface PersistedPhaser { rateHz: number; depth: number; centerHz: number; feedback: number; mix: number }
 export interface PersistedChannelMatrix { enabled: boolean; balance: number; swapStereo: boolean; monoDownmix: boolean; outputGains: number[] }
+export type PersistedOutputBackend = 'directsound' | 'wasapi_shared' | 'wasapi_exclusive' | 'asio'
+export interface PersistedOutputDevice { backend: PersistedOutputBackend; deviceId: string }
 
 export interface DspSettings {
   version: 1
@@ -37,6 +39,7 @@ export interface DspSettings {
   resampler: { forceOutputRate: boolean; targetSampleRate: number; quality: 'best' | 'medium' | 'fast' }
   dopEnabled: boolean
   transition: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }
+  outputDevice: PersistedOutputDevice
 }
 
 export const defaultDspSettings = (): DspSettings => ({
@@ -60,6 +63,7 @@ export const defaultDspSettings = (): DspSettings => ({
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' }
   , dopEnabled: false
   , transition: { gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000 }
+  , outputDevice: { backend: 'directsound', deviceId: 'default' }
 })
 
 function filePath(): string {
@@ -163,6 +167,12 @@ export function loadDspSettings(): DspSettings {
         crossfadeEnabled: settings.transition?.crossfadeEnabled === true,
         crossfadeMs: typeof settings.transition?.crossfadeMs === 'number'
           ? Math.max(0, Math.min(30000, settings.transition.crossfadeMs)) : defaults.transition.crossfadeMs
+      },
+      outputDevice: {
+        backend: settings.outputDevice?.backend === 'wasapi_shared' || settings.outputDevice?.backend === 'wasapi_exclusive' || settings.outputDevice?.backend === 'asio'
+          ? settings.outputDevice.backend : 'directsound',
+        deviceId: typeof settings.outputDevice?.deviceId === 'string' && settings.outputDevice.deviceId.length > 0
+          ? settings.outputDevice.deviceId : 'default'
       }
     }
   } catch {
