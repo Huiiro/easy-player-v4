@@ -3,6 +3,9 @@ import { join } from 'path'
 import icon from '../../resources/icon.png?asset'
 import { AudioEngineManager } from './audio-engine/index'
 import { registerIpcHandlers } from './audio-engine/ipc-handlers'
+import { closeDatabase, initDatabase } from './database'
+import { registerDatabaseIpcHandlers } from './database/ipc-handlers'
+import { registerScanIpcHandlers } from './service/scan-ipc-handlers'
 
 let mainWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
@@ -30,6 +33,17 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.key !== 'F12') return
+
+    event.preventDefault()
+    if (mainWindow?.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools()
+    } else {
+      mainWindow?.webContents.openDevTools({ mode: 'detach' })
+    }
+  })
+
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
@@ -45,6 +59,10 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   app.setAppUserModelId('com.electron')
+
+  initDatabase()
+  registerDatabaseIpcHandlers()
+  registerScanIpcHandlers()
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
@@ -82,4 +100,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  closeDatabase()
 })

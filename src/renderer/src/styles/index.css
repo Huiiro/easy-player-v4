@@ -1,0 +1,263 @@
+@import "tailwindcss";
+@import "theme.css";
+
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#app {
+  height: 100%;
+}
+
+/* 自定义背景 hover 样式 */
+.hover-overlay {
+  @apply hover:bg-white/10;
+}
+
+.hover-overlay-light {
+  @apply hover:bg-black/10;
+}
+
+.hover-overlay-combine {
+  @apply hover:bg-[var(--color-hover)] transition-colors;
+}
+
+/* 禁止所有颜色过渡 */
+.no-bg-transition {
+  transition-property: transform, box-shadow, opacity !important;
+}
+
+
+/*electron drag webkit*/
+.header-drag {
+  -webkit-app-region: drag;
+}
+
+/*electron drag webkit*/
+.header-no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* 自定义滚动条样式 */
+.custom-scrollbar,
+.vue-recycle-scroller{
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+  }
+}
+
+.no-scrollbar {
+  &::-webkit-scrollbar {
+    width: 0;
+  }
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-dialog-footer-close-btn {
+  padding: 0.25rem 1rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  background-color: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-dialog-footer-close-btn:hover {
+  background-color: var(--color-primary);
+}
+
+.lrc {
+  color: var(--lrc-default)
+}
+
+.lrc-hl {
+  color: var(--lrc-highlight);
+}
+
+.lrc-trans {
+  color: var(--lrc-translate)
+}
+
+.input-base {
+  @apply px-2 py-1
+  rounded
+  border border-border
+  text-text text-sm
+  w-full
+  bg-transparent
+  outline-none
+  transition-all duration-200 ease-in-out;
+}
+
+.input-base:focus {
+  @apply border-primary;
+  box-shadow: 0 0 0 2px rgba(var(--color-primary), 0.25);
+}
+
+
+.input-label {
+  @apply my-0.5;
+}
+
+.btn-gray {
+  @apply px-4 py-1
+  rounded
+  border border-border
+  text-sm text-text
+  hover:bg-gray-200
+  dark:hover:bg-gray-700;
+}
+
+.btn-small {
+  @apply px-2 py-1
+  rounded
+  border border-border
+  text-sm text-text
+  hover:bg-gray-200
+  dark:hover:bg-gray-700;
+}
+
+.btn-base {
+  @apply mt-1
+  border-border border-dashed
+  bg-hover-bg
+  transition-all
+  duration-200
+  ease-out
+  hover:scale-102
+  active:scale-100
+  hover:bg-primary
+  text-text text-sm
+  rounded
+  flex
+  items-center
+  justify-center
+  gap-1;
+}
+
+.btn-hl-base {
+  @apply mt-1
+  border-border border-dashed
+  bg-hover-bg
+  hover:bg-primary/20
+  text-sm text-primary
+  rounded
+  flex
+  items-center
+  justify-center
+  gap-1;
+}
+
+
+.more-item {
+  @apply px-3 py-2
+  rounded-lg
+  hover:bg-primary
+  cursor-pointer
+  text-sm
+  flex
+  items-center
+  transition
+  gap-2;
+}
+
+.shortcut-input {
+  @apply w-120 flex
+  items-center justify-center gap-12
+  text-text text-nowrap text-sm;
+}
+
+@keyframes ripple-wave {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255,255,255,0.08),
+    transparent
+  );
+  animation: shimmer 1.2s infinite;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.sidebar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transform: translateZ(0);
+  transition:
+    background-color 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  border: 1px solid transparent;
+}
+
+/* hover */
+.sidebar-item-hover:hover {
+  transform: translateY(-1px);
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
+  border-color: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+/* active */
+.sidebar-item-active {
+  background: var(--color-primary);
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.btn-hover {
+  @apply transition-all duration-200 ease-out hover:scale-102 active:scale-100 hover:text-primary;
+}

@@ -1,0 +1,24 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+  <rect x="40" y="40" width="1520" height="820" rx="100" ry="100"
+        fill="#f0f8ff" fill-opacity="0.5"
+        stroke="#c8c8c8" stroke-opacity="0.5" stroke-width="2"/>
+
+  <g fill="url(#blueGreen)" stroke="none">
+    <rect x="585" y="400" width="30" height="200" rx="15"/>
+    <rect x="635" y="350" width="30" height="250" rx="15"/>
+    <rect x="685" y="300" width="30" height="300" rx="15"/>
+    <rect x="735" y="250" width="30" height="350" rx="15"/>
+    <rect x="785" y="200" width="30" height="400" rx="15"/>
+    <rect x="835" y="250" width="30" height="350" rx="15"/>
+    <rect x="885" y="300" width="30" height="300" rx="15"/>
+    <rect x="935" y="350" width="30" height="250" rx="15"/>
+    <rect x="985" y="400" width="30" height="200" rx="15"/>
+  </g>
+
+  <defs>
+    <linearGradient id="blueGreen" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0000ff"/> <!-- 蓝色底 -->
+      <stop offset="100%" stop-color="#00ff00"/> <!-- 绿色顶 -->
+    </linearGradient>
+  </defs>
+</svg>

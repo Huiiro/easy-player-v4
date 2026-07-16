@@ -1,8 +1,8 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { AudioChainStatus, PlaybackState, TrackInfo, DeviceInfo, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, ResamplerConfig, TransitionConfig } from '../types/audio'
-import { audioBridge } from '../services/audioBridge'
-import { useLogStore } from './logStore'
+import { audioBridge } from '@/services/audioBridge'
+import { useLogStore } from '@/stores/log/logStore'
 
 export const usePlayerStore = defineStore('player', () => {
   // ── State ──

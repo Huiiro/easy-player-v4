@@ -1,0 +1,69 @@
+<!-- music-wave.svg -->
+<svg width="100" height="50" viewBox="0 0 100 50" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="musicGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#84cc16"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 多层波浪 -->
+  <path class="music-wave wave-1" d="M0,25 C15,15 35,35 50,25 S85,15 100,25 L100,50 L0,50 Z" fill="url(#musicGradient)" opacity="0.9"/>
+  <path class="music-wave wave-2" d="M0,30 C20,20 40,40 60,30 S80,20 100,30 L100,50 L0,50 Z" fill="#f43f5e" opacity="0.6"/>
+  <path class="music-wave wave-3" d="M0,35 C25,25 45,45 65,35 S75,25 100,35 L100,50 L0,50 Z" fill="#f59e0b" opacity="0.4"/>
+
+  <style>
+    .music-wave {
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    animation-iteration-count: infinite;
+    }
+
+    .wave-1 {
+    animation: musicWave1 2.5s infinite;
+    }
+
+    .wave-2 {
+    animation: musicWave2 2s infinite;
+    animation-delay: 0.2s;
+    }
+
+    .wave-3 {
+    animation: musicWave3 1.8s infinite;
+    animation-delay: 0.4s;
+    }
+
+    @keyframes musicWave1 {
+    0%, 100% {
+    d: path("M0,25 C15,15 35,35 50,25 S85,15 100,25 L100,50 L0,50 Z");
+    transform: translateY(0px);
+    }
+    50% {
+    d: path("M0,25 C15,35 35,15 50,25 S85,35 100,25 L100,50 L0,50 Z");
+    transform: translateY(-3px);
+    }
+    }
+
+    @keyframes musicWave2 {
+    0%, 100% {
+    d: path("M0,30 C20,20 40,40 60,30 S80,20 100,30 L100,50 L0,50 Z");
+    transform: translateY(0px);
+    }
+    50% {
+    d: path("M0,30 C20,40 40,20 60,30 S80,40 100,30 L100,50 L0,50 Z");
+    transform: translateY(-2px);
+    }
+    }
+
+    @keyframes musicWave3 {
+    0%, 100% {
+    d: path("M0,35 C25,25 45,45 65,35 S75,25 100,35 L100,50 L0,50 Z");
+    transform: translateY(0px);
+    }
+    50% {
+    d: path("M0,35 C25,45 45,25 65,35 S75,45 100,35 L100,50 L0,50 Z");
+    transform: translateY(-1px);
+    }
+    }
+  </style>
+</svg>

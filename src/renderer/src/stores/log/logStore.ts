@@ -1,7 +1,7 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { LogEntry } from '../types/audio'
-import { audioBridge } from '../services/audioBridge'
+import type { LogEntry } from '@/types/audio'
+import { audioBridge } from '@/services/audioBridge'
 
 const MAX_ENTRIES = 1000
 
@@ -14,26 +14,26 @@ export const useLogStore = defineStore('log', () => {
     return entries.value.filter((e) => e.level === filter.value)
   })
 
-  function addEntry(entry: LogEntry) {
+  function addEntry(entry: LogEntry): void {
     entries.value.push(entry)
     if (entries.value.length > MAX_ENTRIES) {
       entries.value.shift()
     }
   }
 
-  function clear() {
+  function clear(): void {
     entries.value = []
   }
 
   let unsubscribe: (() => void) | null = null
 
-  function subscribe() {
+  function subscribe(): void {
     unsubscribe = audioBridge.onLogEntry((data) => {
       addEntry(data as LogEntry)
     })
   }
 
-  function unsubscribeEvents() {
+  function unsubscribeEvents(): void {
     unsubscribe?.()
     unsubscribe = null
   }

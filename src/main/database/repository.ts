@@ -1,0 +1,584 @@
+import { existsSync } from 'node:fs'
+import { getDatabase } from './index'
+import type {
+  Album,
+  Artist,
+  DownloadTask,
+  DownloadTaskInput,
+  Genre,
+  MusicSource,
+  MusicSourceInput,
+  OverviewStats,
+  PagedResult,
+  PlayHistoryDay,
+  PlayHistoryInput,
+  Playlist,
+  PlaylistInput,
+  PlaylistMembership,
+  RankedSong,
+  Song,
+  SongQuery,
+  Tag,
+  TagInput
+} from './types'
+
+const songColumns = `id, title, artist, album, duration, cover, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
+const songColumnsFor = (alias: string): string =>
+  songColumns
+    .split(', ')
+    .map((column) => `${alias}${column}`)
+    .join(', ')
+type SongRow = Omit<Song, 'isNewest'> & { isNewest: number }
+
+const mapSong = (row: SongRow): Song => ({
+  ...row,
+  isNewest: row.isNewest === 1
+})
+
+export function querySongs(query: SongQuery = {}): PagedResult<Song> {
+  const db = getDatabase()
+  const where: string[] = []
+  const params: Record<string, string | number> = {}
+  if (query.search?.trim()) {
+    where.push(
+      '(title LIKE @search OR artist LIKE @search OR album LIKE @search OR file_name LIKE @search)'
+    )
+    params.search = `%${query.search.trim()}%`
+  }
+  if (query.source === 'local') where.push('source_id IS NULL')
+  if (query.source === 'remote') {
+    where.push(query.sourceId ? 'source_id = @sourceId' : 'source_id IS NOT NULL')
+    if (query.sourceId) params.sourceId = query.sourceId
+  }
+  if (query.tags?.length) {
+    const keys = query.tags.map((id, index) => {
+      const key = `tag${index}`
+      params[key] = id
+      return `@${key}`
+    })
+    params.tagCount = query.tags.length
+    where.push(
+      `id IN (SELECT song_id FROM song_tag WHERE tag_id IN (${keys.join(',')}) GROUP BY song_id HAVING COUNT(DISTINCT tag_id) = @tagCount)`
+    )
+  }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
+  const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
+  const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
+  const size = Math.max(1, Math.min(query.size ?? 50, 500))
+  params.size = size
+  params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const data = db
+    .prepare(
+      `SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} LIMIT @size OFFSET @offset`
+    )
+    .all(params)
+    .map((row) => mapSong(row as SongRow))
+  const total = (
+    db.prepare(`SELECT COUNT(*) AS count FROM song ${clause}`).get(params) as { count: number }
+  ).count
+  return { data, total }
+}
+export function getSong(id: number): Song | null {
+  const row = getDatabase().prepare(`SELECT ${songColumns} FROM song WHERE id = ?`).get(id) as
+    SongRow | undefined
+  return row ? mapSong(row) : null
+}
+export function queryAllSongs(): Song[] {
+  return getDatabase()
+    .prepare(`SELECT ${songColumns} FROM song ORDER BY id`)
+    .all()
+    .map((row) => mapSong(row as SongRow))
+}
+export function getSongsByAlbum(album: string, artist?: string): Song[] {
+  const db = getDatabase()
+  const rows = artist
+    ? db
+        .prepare(
+          `SELECT ${songColumns} FROM song WHERE album = ? AND artist = ? ORDER BY title COLLATE NOCASE`
+        )
+        .all(album, artist)
+    : db
+        .prepare(`SELECT ${songColumns} FROM song WHERE album = ? ORDER BY title COLLATE NOCASE`)
+        .all(album)
+  return rows.map((row) => mapSong(row as SongRow))
+}
+export function getSongsByGenre(genre: string): Song[] {
+  return getDatabase()
+    .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY title COLLATE NOCASE`)
+    .all(genre)
+    .map((row) => mapSong(row as SongRow))
+}
+export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
+  const direction = sort === 'desc' ? 'DESC' : 'ASC'
+  const keyword = search.trim()
+  return getDatabase()
+    .prepare(
+      `SELECT album AS albumName, artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS albumCover FROM song ${keyword ? 'WHERE album LIKE @search' : ''} GROUP BY album, artist ORDER BY album COLLATE NOCASE ${direction}`
+    )
+    .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
+}
+export function queryArtists(sort: 'asc' | 'desc' = 'asc', search = ''): Artist[] {
+  const direction = sort === 'desc' ? 'DESC' : 'ASC'
+  const keyword = search.trim()
+  return getDatabase()
+    .prepare(
+      `SELECT artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS artistCover FROM song ${keyword ? 'WHERE artist LIKE @search' : ''} GROUP BY artist ORDER BY artist COLLATE NOCASE ${direction}`
+    )
+    .all(keyword ? { search: `%${keyword}%` } : {}) as Artist[]
+}
+export function queryGenres(sort: 'asc' | 'desc' = 'asc', search = ''): Genre[] {
+  const direction = sort === 'desc' ? 'DESC' : 'ASC'
+  const keyword = search.trim()
+  return getDatabase()
+    .prepare(
+      `SELECT CASE WHEN genre IS NULL OR TRIM(genre) = '' THEN 'unknown_genre' ELSE genre END AS name, COUNT(*) AS count FROM song ${keyword ? 'WHERE genre LIKE @search' : ''} GROUP BY genre ORDER BY name COLLATE NOCASE ${direction}`
+    )
+    .all(keyword ? { search: `%${keyword}%` } : {}) as Genre[]
+}
+export function countSongsByAlbum(album: string, artist: string | null): number {
+  const row = (
+    artist === null
+      ? getDatabase().prepare('SELECT COUNT(*) AS count FROM song WHERE album = ?').get(album)
+      : getDatabase()
+          .prepare('SELECT COUNT(*) AS count FROM song WHERE album = ? AND artist = ?')
+          .get(album, artist)
+  ) as { count: number }
+  return row.count
+}
+export function countSongsByArtist(artist: string | null): number {
+  const row = (
+    artist === null
+      ? getDatabase().prepare('SELECT COUNT(*) AS count FROM song WHERE artist IS NULL').get()
+      : getDatabase().prepare('SELECT COUNT(*) AS count FROM song WHERE artist = ?').get(artist)
+  ) as { count: number }
+  return row.count
+}
+export function updateSongLyrics(id: number, lrc: string, translation?: string): boolean {
+  const result =
+    translation === undefined
+      ? getDatabase().prepare('UPDATE song SET lrc = ? WHERE id = ?').run(lrc, id)
+      : getDatabase()
+          .prepare('UPDATE song SET lrc = ?, translation = ? WHERE id = ?')
+          .run(lrc, translation, id)
+  return result.changes > 0
+}
+export function setSongStatus(id: number, status: number): boolean {
+  return (
+    getDatabase().prepare('UPDATE song SET song_status = ? WHERE id = ?').run(status, id).changes >
+    0
+  )
+}
+export function refreshMissingSongStatus(): void {
+  const db = getDatabase()
+  const update = db.prepare('UPDATE song SET song_status = 1 WHERE id = ?')
+  for (const row of db.prepare('SELECT id, audio FROM song WHERE song_status = 0').all() as Array<{
+    id: number
+    audio: string
+  }>)
+    if (existsSync(row.audio)) update.run(row.id)
+}
+export function savePlayHistory(songId: number): void {
+  const db = getDatabase()
+  db.transaction(() => {
+    db.prepare(
+      `INSERT INTO history (song_id, play_time) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(song_id) DO UPDATE SET play_time = CURRENT_TIMESTAMP`
+    ).run(songId)
+    db.prepare('UPDATE song SET play_times = play_times + 1 WHERE id = ?').run(songId)
+  })()
+}
+export function queryRecentPlayedSongs(
+  query: SongQuery = {}
+): PagedResult<Song & { playTime: string }> {
+  const db = getDatabase()
+  const size = Math.max(1, Math.min(query.size ?? 50, 500))
+  const offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const search = query.search?.trim()
+  const where = ['1 = 1']
+  const params: Record<string, string | number> = { size, offset }
+  if (search) {
+    where.push(
+      '(s.title LIKE @search OR s.artist LIKE @search OR s.album LIKE @search OR s.file_name LIKE @search)'
+    )
+    params.search = `%${search}%`
+  }
+  if (query.source === 'local') where.push('s.source_id IS NULL')
+  if (query.source === 'remote') {
+    where.push(query.sourceId ? 's.source_id = @sourceId' : 's.source_id IS NOT NULL')
+    if (query.sourceId) params.sourceId = query.sourceId
+  }
+  const clause = `WHERE ${where.join(' AND ')}`
+  const allowed = new Set(['play_time', 'title', 'artist', 'album', 'duration', 'created_at'])
+  const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'play_time'
+  const column = sort === 'play_time' ? 'h.play_time' : `s.${sort}`
+  const order = query.sortOrder === 'asc' ? 'ASC' : 'DESC'
+  const rows = db
+    .prepare(
+      `SELECT ${songColumnsFor('s.')}, h.play_time AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
+    )
+    .all(params)
+  const data = rows.map((row) => mapSong(row as SongRow) as Song & { playTime: string })
+  const total = (
+    db
+      .prepare(`SELECT COUNT(*) AS count FROM history h JOIN song s ON s.id = h.song_id ${clause}`)
+      .get(params) as { count: number }
+  ).count
+  return { data, total }
+}
+export function savePlayHistoryDetail(input: PlayHistoryInput): void {
+  getDatabase()
+    .prepare(
+      'INSERT INTO play_history (song_id, playlist_id, playlist_name, played_seconds, started_at) VALUES (?, ?, ?, ?, ?)'
+    )
+    .run(
+      input.songId,
+      input.playlistId ?? null,
+      input.playlistName ?? null,
+      input.playedSeconds ?? 0,
+      input.startedAt
+    )
+}
+export function getPlayHistoryDays(days = 365): PlayHistoryDay[] {
+  return getDatabase()
+    .prepare(
+      "SELECT DATE(started_at / 1000, 'unixepoch', 'localtime') AS date, SUM(played_seconds) AS seconds FROM play_history WHERE started_at >= (strftime('%s', DATE('now', 'localtime', '-' || ? || ' days')) * 1000) GROUP BY DATE(started_at / 1000, 'unixepoch', 'localtime') ORDER BY date"
+    )
+    .all(Math.max(1, days)) as PlayHistoryDay[]
+}
+export function getTopPlayedSongs(limit = 10): RankedSong[] {
+  return getDatabase()
+    .prepare(
+      `SELECT ${songColumnsFor('song.')}, COUNT(ph.id) AS value FROM play_history ph JOIN song ON song.id = ph.song_id GROUP BY song.id ORDER BY value DESC LIMIT ?`
+    )
+    .all(Math.max(1, limit))
+    .map((row) => ({
+      ...mapSong(row as SongRow),
+      value: (row as { value: number }).value
+    }))
+}
+export function getTopDurationSongs(limit = 10): RankedSong[] {
+  return getDatabase()
+    .prepare(
+      `SELECT ${songColumnsFor('song.')}, COALESCE(SUM(ph.played_seconds), 0) AS value FROM play_history ph JOIN song ON song.id = ph.song_id GROUP BY song.id ORDER BY value DESC LIMIT ?`
+    )
+    .all(Math.max(1, limit))
+    .map((row) => ({
+      ...mapSong(row as SongRow),
+      value: (row as { value: number }).value
+    }))
+}
+
+export function listPlaylists(): Playlist[] {
+  return getDatabase()
+    .prepare(
+      'SELECT id, name, cover, description, position, created_at AS createdAt FROM song_list ORDER BY position, id'
+    )
+    .all() as Playlist[]
+}
+export function getPlaylist(id: number): Playlist | null {
+  return (
+    (getDatabase()
+      .prepare(
+        'SELECT id, name, cover, description, position, created_at AS createdAt FROM song_list WHERE id = ?'
+      )
+      .get(id) as Playlist | undefined) ?? null
+  )
+}
+export function createPlaylist(input: PlaylistInput): Playlist {
+  const db = getDatabase()
+  const name = input.name.trim()
+  if (!name) throw new Error('Playlist name is required')
+  const result = db
+    .prepare(
+      `INSERT INTO song_list (name, cover, description, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM song_list))`
+    )
+    .run(name, input.cover ?? null, input.description ?? null)
+  return getPlaylist(Number(result.lastInsertRowid))!
+}
+export function updatePlaylist(id: number, input: PlaylistInput): boolean {
+  const result = getDatabase()
+    .prepare('UPDATE song_list SET name = ?, cover = ?, description = ? WHERE id = ?')
+    .run(input.name.trim(), input.cover ?? null, input.description ?? null, id)
+  return result.changes > 0
+}
+export function deletePlaylists(ids: number[]): number {
+  if (!ids.length) return 0
+  return getDatabase()
+    .prepare(`DELETE FROM song_list WHERE id IN (${ids.map(() => '?').join(',')})`)
+    .run(...ids).changes
+}
+export function reorderPlaylists(items: Array<{ id: number; position: number }>): void {
+  const stmt = getDatabase().prepare('UPDATE song_list SET position = @position WHERE id = @id')
+  getDatabase().transaction(() => items.forEach((item) => stmt.run(item)))()
+}
+export function addSongsToPlaylist(playlistId: number, songIds: number[]): number {
+  const db = getDatabase()
+  const stmt = db.prepare(
+    'INSERT OR IGNORE INTO song_list_item (song_list_id, song_id, position) VALUES (@playlistId, @songId, @position)'
+  )
+  let added = 0
+  db.transaction(() =>
+    songIds.forEach((songId, index) => {
+      added += stmt.run({ playlistId, songId, position: index }).changes
+    })
+  )()
+  return added
+}
+export function removeSongsFromPlaylist(playlistId: number, songIds: number[]): number {
+  if (!songIds.length) return 0
+  return getDatabase()
+    .prepare(
+      `DELETE FROM song_list_item WHERE song_list_id = ? AND song_id IN (${songIds.map(() => '?').join(',')})`
+    )
+    .run(playlistId, ...songIds).changes
+}
+export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): PagedResult<Song> {
+  const db = getDatabase()
+  const where = ['sli.song_list_id = @playlistId']
+  const params: Record<string, string | number> = { playlistId }
+  if (query.search?.trim()) {
+    where.push(
+      '(s.title LIKE @search OR s.artist LIKE @search OR s.album LIKE @search OR s.file_name LIKE @search)'
+    )
+    params.search = `%${query.search.trim()}%`
+  }
+  if (query.source === 'local') where.push('s.source_id IS NULL')
+  if (query.source === 'remote') {
+    where.push(query.sourceId ? 's.source_id = @sourceId' : 's.source_id IS NOT NULL')
+    if (query.sourceId) params.sourceId = query.sourceId
+  }
+  if (query.tags?.length) {
+    const keys = query.tags.map((id, index) => {
+      const key = `tag${index}`
+      params[key] = id
+      return `@${key}`
+    })
+    params.tagCount = query.tags.length
+    where.push(
+      `s.id IN (SELECT song_id FROM song_tag WHERE tag_id IN (${keys.join(',')}) GROUP BY song_id HAVING COUNT(DISTINCT tag_id) = @tagCount)`
+    )
+  }
+  const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
+  const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
+  const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
+  const column = sort === 'id' ? 'sli.id' : `s.${sort}`
+  const size = Math.max(1, Math.min(query.size ?? 50, 500))
+  params.size = size
+  params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const clause = `WHERE ${where.join(' AND ')}`
+  const data = db
+    .prepare(
+      `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
+    )
+    .all(params)
+    .map((row) => mapSong(row as SongRow))
+  const total = (
+    db
+      .prepare(
+        `SELECT COUNT(*) AS count FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause}`
+      )
+      .get(params) as { count: number }
+  ).count
+  return { data, total }
+}
+export function listPlaylistMemberships(songId: number): PlaylistMembership[] {
+  return getDatabase()
+    .prepare(
+      `SELECT sl.id, sl.name, sl.cover, sl.description, sl.position, sl.created_at AS createdAt, EXISTS(SELECT 1 FROM song_list_item sli WHERE sli.song_list_id = sl.id AND sli.song_id = ?) AS isIncluded FROM song_list sl ORDER BY sl.position, sl.id`
+    )
+    .all(songId)
+    .map((row) => ({
+      ...(row as PlaylistMembership),
+      isIncluded: Boolean((row as { isIncluded: number }).isIncluded)
+    }))
+}
+
+export function listTags(songId?: number): Tag[] {
+  const db = getDatabase()
+  if (songId === undefined)
+    return db
+      .prepare(
+        'SELECT id, name, color, description, tag_order AS tagOrder FROM tag ORDER BY tag_order, id'
+      )
+      .all() as Tag[]
+  return db
+    .prepare(
+      `SELECT t.id, t.name, t.color, t.description, t.tag_order AS tagOrder, st.song_id IS NOT NULL AS isIncluded FROM tag t LEFT JOIN song_tag st ON st.tag_id = t.id AND st.song_id = ? ORDER BY t.tag_order, t.id`
+    )
+    .all(songId)
+    .map((row) => ({
+      ...(row as Tag),
+      isIncluded: Boolean((row as { isIncluded: number }).isIncluded)
+    }))
+}
+export function createTag(input: TagInput): Tag {
+  const db = getDatabase()
+  const result = db
+    .prepare(
+      `INSERT INTO tag (name, color, description, tag_order) VALUES (?, ?, ?, (SELECT COALESCE(MAX(tag_order), 0) + 1 FROM tag))`
+    )
+    .run(input.name.trim(), input.color ?? '#888888', input.description ?? null)
+  return db
+    .prepare('SELECT id, name, color, description, tag_order AS tagOrder FROM tag WHERE id = ?')
+    .get(Number(result.lastInsertRowid)) as Tag
+}
+export function updateTag(id: number, input: TagInput): boolean {
+  return (
+    getDatabase()
+      .prepare('UPDATE tag SET name = ?, color = ?, description = ? WHERE id = ?')
+      .run(input.name.trim(), input.color ?? '#888888', input.description ?? null, id).changes > 0
+  )
+}
+export function deleteTag(id: number): boolean {
+  return getDatabase().prepare('DELETE FROM tag WHERE id = ?').run(id).changes > 0
+}
+export function setSongTag(tagId: number, songIds: number[], included: boolean): void {
+  const stmt = getDatabase().prepare(
+    included
+      ? 'INSERT OR IGNORE INTO song_tag (song_id, tag_id) VALUES (?, ?)'
+      : 'DELETE FROM song_tag WHERE song_id = ? AND tag_id = ?'
+  )
+  getDatabase().transaction(() => songIds.forEach((songId) => stmt.run(songId, tagId)))()
+}
+export function reorderTags(ids: number[]): void {
+  const stmt = getDatabase().prepare('UPDATE tag SET tag_order = ? WHERE id = ?')
+  getDatabase().transaction(() => ids.forEach((id, index) => stmt.run(index + 1, id)))()
+}
+export function toggleSongTag(tagId: number, songId: number): boolean {
+  const db = getDatabase()
+  const exists = db
+    .prepare('SELECT 1 FROM song_tag WHERE tag_id = ? AND song_id = ?')
+    .get(tagId, songId)
+  if (exists) {
+    db.prepare('DELETE FROM song_tag WHERE tag_id = ? AND song_id = ?').run(tagId, songId)
+    return false
+  }
+  db.prepare('INSERT INTO song_tag (tag_id, song_id) VALUES (?, ?)').run(tagId, songId)
+  return true
+}
+
+export function listSources(): MusicSource[] {
+  return getDatabase()
+    .prepare(
+      'SELECT id, name, type, server, base_url AS baseUrl, user, secret, auth_type AS authType, status, source_order AS sourceOrder, imported_count AS importedCount, song_count AS songCount, last_connect AS lastConnect FROM music_source ORDER BY source_order, id'
+    )
+    .all() as MusicSource[]
+}
+export function createSource(input: MusicSourceInput): MusicSource {
+  const db = getDatabase()
+  const result = db
+    .prepare(
+      `INSERT INTO music_source (name, type, server, base_url, user, secret, auth_type, status, source_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(source_order), 0) + 1 FROM music_source))`
+    )
+    .run(
+      input.name,
+      input.type ?? null,
+      input.server ?? null,
+      input.baseUrl ?? null,
+      input.user ?? null,
+      input.secret ?? null,
+      input.authType ?? null,
+      input.status ?? null
+    )
+  return listSources().find((source) => source.id === Number(result.lastInsertRowid))!
+}
+export function updateSource(source: MusicSource): boolean {
+  return (
+    getDatabase()
+      .prepare(
+        'UPDATE music_source SET name = ?, type = ?, server = ?, base_url = ?, user = ?, secret = ?, auth_type = ?, status = ?, source_order = ?, imported_count = ?, song_count = ?, last_connect = ? WHERE id = ?'
+      )
+      .run(
+        source.name,
+        source.type,
+        source.server,
+        source.baseUrl,
+        source.user,
+        source.secret,
+        source.authType,
+        source.status,
+        source.sourceOrder,
+        source.importedCount,
+        source.songCount,
+        source.lastConnect,
+        source.id
+      ).changes > 0
+  )
+}
+export function deleteSource(id: number): boolean {
+  return getDatabase().prepare('DELETE FROM music_source WHERE id = ?').run(id).changes > 0
+}
+export function getSource(id: number): MusicSource | null {
+  return listSources().find((source) => source.id === id) ?? null
+}
+export function reorderSources(items: Array<{ id: number; sourceOrder: number }>): void {
+  const stmt = getDatabase().prepare('UPDATE music_source SET source_order = ? WHERE id = ?')
+  getDatabase().transaction(() => items.forEach((item) => stmt.run(item.sourceOrder, item.id)))()
+}
+export function touchSource(id: number): boolean {
+  return (
+    getDatabase()
+      .prepare("UPDATE music_source SET last_connect = datetime('now', 'localtime') WHERE id = ?")
+      .run(id).changes > 0
+  )
+}
+export function updateSourceStats(id: number, importedCount: number, songCount: number): boolean {
+  return (
+    getDatabase()
+      .prepare('UPDATE music_source SET imported_count = ?, song_count = ? WHERE id = ?')
+      .run(importedCount, songCount, id).changes > 0
+  )
+}
+
+export function listDownloadTasks(): DownloadTask[] {
+  return getDatabase()
+    .prepare(
+      'SELECT id, platform, resource_id AS resourceId, sub_id AS subId, title, file_path AS filePath, quality, extra_json, status, progress, created_at AS createdAt FROM download_task ORDER BY id DESC'
+    )
+    .all()
+    .map((row) => ({
+      ...(row as Omit<DownloadTask, 'extra'> & { extra_json: string | null }),
+      extra: (row as { extra_json: string | null }).extra_json
+        ? JSON.parse((row as { extra_json: string }).extra_json)
+        : null
+    }))
+}
+export function saveDownloadTask(input: DownloadTaskInput): boolean {
+  const result = getDatabase()
+    .prepare(
+      `INSERT INTO download_task (platform, resource_id, sub_id, title, file_path, quality, extra_json, status, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(platform, resource_id, sub_id, quality) DO UPDATE SET title = excluded.title, file_path = excluded.file_path, extra_json = excluded.extra_json, status = excluded.status, progress = excluded.progress`
+    )
+    .run(
+      input.platform,
+      input.resourceId,
+      input.subId ?? '',
+      input.title ?? null,
+      input.filePath ?? null,
+      input.quality ?? '',
+      input.extra ? JSON.stringify(input.extra) : null,
+      input.status ?? 'pending',
+      input.progress ?? 0
+    )
+  return result.changes > 0
+}
+export function deleteDownloadTask(id?: number): number {
+  return id === undefined
+    ? getDatabase().prepare('DELETE FROM download_task').run().changes
+    : getDatabase().prepare('DELETE FROM download_task WHERE id = ?').run(id).changes
+}
+export function hasCompletedDownload(platform: string, resourceId: string, subId = ''): boolean {
+  return Boolean(
+    getDatabase()
+      .prepare(
+        "SELECT 1 FROM download_task WHERE platform = ? AND resource_id = ? AND sub_id = ? AND status = 'done'"
+      )
+      .get(platform, resourceId, subId)
+  )
+}
+export function getOverviewStats(): OverviewStats {
+  return getDatabase()
+    .prepare(
+      `SELECT COUNT(*) AS songCount, COUNT(DISTINCT NULLIF(album, '')) AS albumCount, COUNT(DISTINCT NULLIF(artist, '')) AS artistCount, COALESCE(SUM(file_size), 0) AS librarySize, (SELECT COALESCE(SUM(played_seconds), 0) FROM play_history) AS totalPlaySeconds, (SELECT COALESCE(SUM(played_seconds), 0) FROM play_history WHERE date(started_at / 1000, 'unixepoch', 'localtime') = date('now', 'localtime')) AS todayPlaySeconds FROM song`
+    )
+    .get() as OverviewStats
+}

@@ -1,0 +1,41 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- 毛玻璃卡片 -->
+  <rect x="40" y="40" width="1520" height="820" rx="100" ry="100"
+        fill="#f0f8ff" fill-opacity="0.5"
+        stroke="#c8c8c8" stroke-opacity="0.5" stroke-width="2"/>
+
+  <!-- 中轴线（可选） -->
+  <line x1="200" y1="450" x2="1400" y2="450"
+        stroke="#d0d0d0" stroke-width="2" stroke-opacity="0.4"/>
+
+  <!-- 模拟频谱 -->
+  <g fill="#2c3e50">
+
+    <!-- 左侧 -->
+    <rect x="300" y="420" width="30" height="60" rx="15"/>
+    <rect x="350" y="380" width="30" height="140" rx="15"/>
+    <rect x="400" y="350" width="30" height="200" rx="15"/>
+    <rect x="450" y="300" width="30" height="300" rx="15"/>
+    <rect x="500" y="260" width="30" height="380" rx="15"/>
+    <rect x="550" y="220" width="30" height="460" rx="15"/>
+    <rect x="600" y="180" width="30" height="540" rx="15"/>
+    <rect x="650" y="220" width="30" height="460" rx="15"/>
+    <rect x="700" y="260" width="30" height="380" rx="15"/>
+    <rect x="750" y="300" width="30" height="300" rx="15"/>
+
+    <!-- 右侧 -->
+    <rect x="820" y="300" width="30" height="300" rx="15"/>
+    <rect x="870" y="260" width="30" height="380" rx="15"/>
+    <rect x="920" y="220" width="30" height="460" rx="15"/>
+    <rect x="970" y="180" width="30" height="540" rx="15"/>
+    <rect x="1020" y="220" width="30" height="460" rx="15"/>
+    <rect x="1070" y="260" width="30" height="380" rx="15"/>
+    <rect x="1120" y="300" width="30" height="300" rx="15"/>
+    <rect x="1170" y="350" width="30" height="200" rx="15"/>
+    <rect x="1220" y="380" width="30" height="140" rx="15"/>
+    <rect x="1270" y="420" width="30" height="60" rx="15"/>
+
+  </g>
+
+</svg>

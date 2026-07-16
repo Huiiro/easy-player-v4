@@ -1,0 +1,115 @@
+<!-- audio-bars-super-random.svg -->
+<svg width="80" height="40" viewBox="0 0 80 40" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="barGradient2" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="50%" stop-color="#eab308"/>
+      <stop offset="100%" stop-color="#84cc16"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 律动条 -->
+  <g class="audio-bars">
+    <rect class="bar bar-r1" x="4" y="22" width="6" height="13" rx="3"/>
+    <rect class="bar bar-r2" x="12" y="18" width="6" height="17" rx="3"/>
+    <rect class="bar bar-r3" x="20" y="15" width="6" height="20" rx="3"/>
+    <rect class="bar bar-r4" x="28" y="12" width="6" height="23" rx="3"/>
+    <rect class="bar bar-r5" x="36" y="10" width="6" height="25" rx="3"/>
+    <rect class="bar bar-r6" x="44" y="14" width="6" height="21" rx="3"/>
+    <rect class="bar bar-r7" x="52" y="16" width="6" height="19" rx="3"/>
+    <rect class="bar bar-r8" x="60" y="20" width="6" height="15" rx="3"/>
+    <rect class="bar bar-r9" x="68" y="24" width="6" height="11" rx="3"/>
+  </g>
+
+  <style>
+    .bar {
+    fill: url(#barGradient2);
+    transform-origin: bottom;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    }
+
+    /* 每个条都有不同的动画 */
+    .bar-r1 { animation: random1 0.6s infinite; }
+    .bar-r2 { animation: random2 0.8s infinite 0.1s; }
+    .bar-r3 { animation: random3 0.7s infinite 0.05s; }
+    .bar-r4 { animation: random4 0.9s infinite 0.2s; }
+    .bar-r5 { animation: random5 0.5s infinite 0.15s; }
+    .bar-r6 { animation: random6 0.8s infinite 0.25s; }
+    .bar-r7 { animation: random7 0.6s infinite 0.3s; }
+    .bar-r8 { animation: random8 0.7s infinite 0.35s; }
+    .bar-r9 { animation: random9 0.9s infinite 0.4s; }
+
+    @keyframes random1 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    20% { transform: scaleY(2.1); opacity: 1; }
+    40% { transform: scaleY(1.3); opacity: 0.8; }
+    60% { transform: scaleY(1.8); opacity: 0.9; }
+    80% { transform: scaleY(1.5); opacity: 0.8; }
+    }
+
+    @keyframes random2 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    15% { transform: scaleY(1.6); opacity: 0.9; }
+    30% { transform: scaleY(2.3); opacity: 1; }
+    50% { transform: scaleY(1.4); opacity: 0.8; }
+    70% { transform: scaleY(1.9); opacity: 0.9; }
+    85% { transform: scaleY(1.2); opacity: 0.7; }
+    }
+
+    @keyframes random3 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    25% { transform: scaleY(2.4); opacity: 1; }
+    45% { transform: scaleY(1.7); opacity: 0.9; }
+    65% { transform: scaleY(2.1); opacity: 1; }
+    80% { transform: scaleY(1.5); opacity: 0.8; }
+    }
+
+    @keyframes random4 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    10% { transform: scaleY(1.9); opacity: 0.9; }
+    35% { transform: scaleY(2.2); opacity: 1; }
+    55% { transform: scaleY(1.6); opacity: 0.8; }
+    75% { transform: scaleY(2.0); opacity: 0.9; }
+    90% { transform: scaleY(1.3); opacity: 0.7; }
+    }
+
+    @keyframes random5 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    30% { transform: scaleY(2.5); opacity: 1; }
+    60% { transform: scaleY(1.8); opacity: 0.9; }
+    80% { transform: scaleY(2.1); opacity: 1; }
+    }
+
+    @keyframes random6 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    20% { transform: scaleY(1.7); opacity: 0.9; }
+    40% { transform: scaleY(2.0); opacity: 1; }
+    60% { transform: scaleY(1.4); opacity: 0.8; }
+    80% { transform: scaleY(1.9); opacity: 0.9; }
+    }
+
+    @keyframes random7 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    25% { transform: scaleY(2.3); opacity: 1; }
+    50% { transform: scaleY(1.6); opacity: 0.8; }
+    75% { transform: scaleY(2.1); opacity: 0.9; }
+    }
+
+    @keyframes random8 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    15% { transform: scaleY(1.8); opacity: 0.9; }
+    35% { transform: scaleY(2.2); opacity: 1; }
+    65% { transform: scaleY(1.5); opacity: 0.8; }
+    85% { transform: scaleY(1.9); opacity: 0.9; }
+    }
+
+    @keyframes random9 {
+    0%, 100% { transform: scaleY(1); opacity: 0.7; }
+    20% { transform: scaleY(2.1); opacity: 1; }
+    45% { transform: scaleY(1.7); opacity: 0.9; }
+    70% { transform: scaleY(2.0); opacity: 1; }
+    90% { transform: scaleY(1.4); opacity: 0.8; }
+    }
+  </style>
+</svg>

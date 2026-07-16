@@ -1,0 +1,27 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" xmlns="http://www.w3.org/2000/svg">
+  <rect x="40" y="40" width="1520" height="820" rx="100" ry="100" fill="#f0f8ff" fill-opacity="0.5" stroke="#c8c8c8" stroke-opacity="0.5" stroke-width="2"/>
+  <g fill="#00caff">
+    <!-- 上半 -->
+    <rect x="585" y="350" width="30" height="300" rx="15"/>
+    <rect x="635" y="300" width="30" height="350" rx="15"/>
+    <rect x="685" y="250" width="30" height="400" rx="15"/>
+    <rect x="735" y="200" width="30" height="450" rx="15"/>
+    <rect x="785" y="150" width="30" height="500" rx="15"/>
+    <rect x="835" y="200" width="30" height="450" rx="15"/>
+    <rect x="885" y="250" width="30" height="400" rx="15"/>
+    <rect x="935" y="300" width="30" height="350" rx="15"/>
+    <rect x="985" y="350" width="30" height="300" rx="15"/>
+  </g>
+  <g fill="#00caff" fill-opacity="0.4">
+    <!-- 下半倒影 -->
+    <rect x="585" y="650" width="30" height="100" rx="15"/>
+    <rect x="635" y="650" width="30" height="125" rx="15"/>
+    <rect x="685" y="650" width="30" height="150" rx="15"/>
+    <rect x="735" y="650" width="30" height="175" rx="15"/>
+    <rect x="785" y="650" width="30" height="200" rx="15"/>
+    <rect x="835" y="650" width="30" height="175" rx="15"/>
+    <rect x="885" y="650" width="30" height="150" rx="15"/>
+    <rect x="935" y="650" width="30" height="125" rx="15"/>
+    <rect x="985" y="650" width="30" height="100" rx="15"/>
+  </g>
+</svg>

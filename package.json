@@ -1,10 +1,10 @@
 {
   "name": "easy-player",
-  "version": "1.0.0",
-  "description": "An Electron application with Vue and TypeScript",
+  "version": "3.0.0",
+  "description": "Easy Player V4",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "homepage": "https://electron-vite.org",
+  "author": "huiiro",
+  "homepage": "https://github.com/Huiiro",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -25,13 +25,22 @@
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "better-sqlite3": "^12.4.1",
+    "music-metadata": "^11.14.0",
     "node-addon-api": "^8.9.0",
-    "pinia": "^3.0.4"
+    "pinia": "^3.0.4",
+    "pinia-plugin-persistedstate": "^4.7.1",
+    "tailwindcss": "^4.3.3",
+    "vue-i18n": "^11.4.2",
+    "vue-router": "^5.2.0",
+    "vue-virtual-scroller": "^3.0.4"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.1",
     "@vitejs/plugin-vue": "^6.0.2",
     "cmake-js": "^8.0.0",
@@ -40,9 +49,12 @@
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-vue": "^10.6.2",
+    "fast-glob": "^3.3.3",
+    "music-metadata-browser": "^2.5.11",
     "prettier": "^3.7.4",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
+    "vite-plugin-svg-icons": "^2.0.1",
     "vue": "^3.5.25",
     "vue-eslint-parser": "^10.2.0",
     "vue-tsc": "^3.1.6"

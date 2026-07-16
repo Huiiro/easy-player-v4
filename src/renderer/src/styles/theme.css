@@ -1,0 +1,180 @@
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-primary: ;
+  --color-primary-l-10: ;
+  --color-primary-l-20: ;
+  --color-primary-l-50: ;
+  --color-primary-l-75: ;
+  --color-primary-d-10: ;
+  --color-primary-d-20: ;
+  --color-primary-d-50: ;
+  --color-primary-d-75: ;
+  --color-black-10: ;
+  --color-black-20: ;
+  --color-black-40: ;
+  --color-black-50: ;
+  --color-white-90: ;
+  --color-white: ;
+  --color-danger: ;
+  --color-success: ;
+  --color-warning: ;
+  --color-text: ;
+  --color-text-l: ;
+  --color-text-l2: ;
+  --color-text-l3: ;
+  --color-bg: ;
+  --color-bg-l: ;
+  --color-bg-l2: ;
+  --color-bg-d: ;
+
+  --color-hover: ;
+  --color-hover-bg: ;
+  --color-hover-danger: ;
+  --color-hover-t-10: ;
+  --color-hover-t-20: ;
+  --color-hover-t-30: ;
+  --color-hover-t-40: ;
+  --color-hover-t-50: ;
+
+  --color-border: ;
+  --color-border-l: ;
+  --color-border-danger: ;
+  --color-border-success: ;
+  --color-border-warning: ;
+
+  --color-icon: ;
+  --color-icon-l: ;
+
+  --el-dialog-bg-color: ;
+  --el-dialog-title-color: ;
+
+  --scrollbar-track: ;
+  --scrollbar-thumb: ;
+  --scrollbar-thumb-hover: ;
+
+  --btn-primary-bg: ;
+  --btn-primary-text: ;
+  --btn-primary-bg-hover: ;
+  --btn-primary-ring: ;
+
+  --btn-danger-bg: ;
+  --btn-danger-bg-hover: ;
+  --btn-danger-text: ;
+  --btn-danger-ring: ;
+
+  --lrc-default: oklch(70.7% 0.022 261.325);
+  --lrc-highlight: #ffffff;
+  --lrc-translate: oklch(87.2% 0.01 258.338);
+  --lrc-size: 2.4rem;
+  --lrc-translate-size: calc(var(--lrc-size) * 0.6);
+  --lrc-height: 1.6;
+  --lrc-padding: 30px;
+}
+
+:root {
+  --color-primary: oklch(0.691 0.198 148.262);
+  --color-primary-l-10: color-mix(in srgb, var(--color-primary), #fff 10%);
+  --color-primary-l-20: color-mix(in srgb, var(--color-primary), #fff 20%);
+  --color-primary-l-50: color-mix(in srgb, var(--color-primary), #fff 50%);
+  --color-primary-l-75: color-mix(in srgb, var(--color-primary), #fff 75%);
+  --color-primary-d-10: color-mix(in srgb, var(--color-primary), transparent 10%);
+  --color-primary-d-20: color-mix(in srgb, var(--color-primary), transparent 20%);
+  --color-primary-d-50: color-mix(in srgb, var(--color-primary), transparent 50%);
+  --color-primary-d-75: color-mix(in srgb, var(--color-primary), transparent 75%);
+  --color-black-10: color-mix(in srgb, #000, transparent 90%);
+  --color-black-20: color-mix(in srgb, #000, transparent 80%);
+  --color-black-40: color-mix(in srgb, #000, transparent 60%);
+  --color-black-50: color-mix(in srgb, #000, transparent 50%);
+  --color-white-90: color-mix(in srgb, #fff, transparent 10%);
+  --color-white: rgb(255 255 255);
+  --color-danger: oklch(55% 0.22 25);
+  --color-success: oklch(65% 0.18 145);
+  --color-warning: oklch(75% 0.16 80);
+  --color-text: oklch(21% 0.034 264.665);      /* 主文字（深） */
+  --color-text-l: oklch(45% 0.02 260);         /* 次级文字 */
+  --color-text-l2: oklch(36% 0.01 260);        /* 更弱文字（辅助信息） */
+  --color-text-l3: oklch(87.2% 0.01 258.338);  /* 浅色文字（反差用） */
+  --color-bg: oklch(98.5% 0.001 106.423);  /* 主背景 */
+  --color-bg-l: oklch(95% 0.01 110);       /* 卡片背景（微灰） */
+  --color-bg-l2: oklch(96% 0.005 110);     /* 更浅卡片 */
+  --color-bg-d: oklch(55.1% 0.027 264.364);/* 深背景（特殊） */
+
+  --color-hover: rgba(0, 0, 0, 0.05);
+  --color-hover-bg: oklch(92% 0.01 110);
+  --color-hover-danger: oklch(92% 0.03 25);
+  --color-hover-t-10: rgba(0, 0, 0, 0.03);
+  --color-hover-t-20: rgba(0, 0, 0, 0.06);
+  --color-hover-t-30: rgba(0, 0, 0, 0.1);
+  --color-hover-t-40: rgba(0, 0, 0, 0.15);
+  --color-hover-t-50: rgba(0, 0, 0, 0.2);
+
+  --color-border: oklch(0.678 0.009 253.88);
+  --color-border-l: oklch(0.778 0.011 196.927);
+  --color-border-danger: oklch(60% 0.22 25);
+  --color-border-success: oklch(65% 0.18 145);
+  --color-border-warning: oklch(75% 0.16 80);
+
+  --color-icon: oklch(30% 0.03 260);
+  --color-icon-l: oklch(70% 0.01 260);
+
+  --el-dialog-bg-color: oklch(98.5% 0.001 106.423);
+  --el-dialog-title-color: oklch(21% 0.034 264.665);
+
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: oklch(92.3% 0.003 48.717);
+  --scrollbar-thumb-hover: oklch(86.9% 0.005 56.366);
+
+  --btn-primary-bg: var(--color-primary);
+  --btn-primary-text: var(--color-white);
+  --btn-primary-bg-hover: var(--color-primary-l-20);
+  --btn-primary-ring: var(--color-primary);
+
+  --btn-danger-bg: #fee2e2;
+  --btn-danger-bg-hover: #fecaca;
+  --btn-danger-text: #7f1d1d;
+  --btn-danger-ring: #7f1d1d;
+}
+
+.dark {
+
+  --color-danger: oklch(65% 0.20 25);
+  --color-success: oklch(70% 0.18 145);
+  --color-warning: oklch(80% 0.16 80);
+
+  --color-text: oklch(92% 0.01 260);      /* 主文字（亮） */
+  --color-text-l: oklch(70% 0.02 260);    /* 次级文字 */
+  --color-text-l2: oklch(55% 0.015 260);  /* 辅助文字 */
+  --color-text-l3: oklch(35% 0.01 260);   /* 最弱文字 */
+
+  --color-bg: oklch(14% 0.01 260);        /* 主背景（接近 #0f172a） */
+  --color-bg-l: oklch(18% 0.015 260);     /* 卡片背景 */
+  --color-bg-l2: oklch(22% 0.02 260);     /* 浅一层 */
+  --color-bg-d: oklch(10% 0.01 260);      /* 更深背景（overlay） */
+
+  --color-hover: rgba(255, 255, 255, 0.06);
+
+  --color-hover-bg: oklch(25% 0.02 260);
+
+  --color-hover-danger: oklch(30% 0.05 25);
+
+  --color-hover-t-10: rgba(255, 255, 255, 0.04);
+  --color-hover-t-20: rgba(255, 255, 255, 0.08);
+  --color-hover-t-30: rgba(255, 255, 255, 0.12);
+  --color-hover-t-40: rgba(255, 255, 255, 0.16);
+  --color-hover-t-50: rgba(255, 255, 255, 0.22);
+
+  --color-border: oklch(0.306 0.005 286.081);
+  --color-border-l: oklch(0.532 0.002 286.347);
+
+  --color-border-danger: oklch(60% 0.20 25);
+  --color-border-success: oklch(65% 0.18 145);
+  --color-border-warning: oklch(75% 0.16 80);
+
+  --color-icon: oklch(80% 0.01 260);
+  --color-icon-l: oklch(55% 0.01 260);
+
+  --scrollbar-track: transparent;
+  --scrollbar-thumb: oklch(0.228 0.031 256.878);
+  --scrollbar-thumb-hover: oklch(0.402 0.025 257.521);
+}

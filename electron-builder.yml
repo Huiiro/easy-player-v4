@@ -1,5 +1,5 @@
-appId: com.electron.app
-productName: easy-player
+appId: com.huiiro.easyplayer
+productName: Easy Player
 directories:
   buildResources: build
 files:
@@ -10,14 +10,15 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 extraResources:
-  - from: "build/native-addon/"
-    to: "native/"
+  - from: 'build/native-addon/'
+    to: 'native/'
     filter:
-      - "**/*.node"
-      - "**/*.dll"
+      - '**/*.node'
+      - '**/*.dll'
 asarUnpack:
   - resources/**
-  - "build/native-addon/**/*.node"
+  - 'node_modules/better-sqlite3/**'
+  - 'build/native-addon/**/*.node'
 win:
   executableName: easy-player
 nsis:
