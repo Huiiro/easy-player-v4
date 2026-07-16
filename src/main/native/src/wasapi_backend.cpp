@@ -524,7 +524,12 @@ AudioFormat WasapiBackend::open(
     impl_->render_client = rc;
 
     current_format_.sample_rate = fmt->nSamplesPerSec;
-    current_format_.bit_depth   = fmt->wBitsPerSample;
+    // Report PCM precision rather than transport container width. In
+    // particular, PCM24-in-32 (requested as 25) is format-matched with a
+    // 24-bit source; treating its 32-bit container as a conversion made the
+    // bit-perfect assessment reject a valid exclusive-mode negotiation.
+    current_format_.bit_depth   = impl_->is_f32 ? fmt->wBitsPerSample :
+        (impl_->pcm_valid_bits > 0 ? impl_->pcm_valid_bits : fmt->wBitsPerSample);
     current_format_.channels    = fmt->nChannels;
     buffer_frames_ = (int)impl_->buffer_frames;
     latency_ms_    = impl_->latency_ms;

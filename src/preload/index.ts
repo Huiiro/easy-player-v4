@@ -44,6 +44,10 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setDopEnabled', params: { enabled } }),
   getDopEnabled: () =>
     ipcRenderer.invoke('audio:command', { action: 'getDopEnabled', params: {} }),
+  setTransitionConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setTransitionConfig', params: { config } }),
+  getTransitionConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getTransitionConfig', params: {} }),
   setDspNodes: (nodes: unknown[]) =>
     ipcRenderer.invoke('audio:command', { action: 'setDspNodes', params: { nodes } }),
   getDspNodes: () =>

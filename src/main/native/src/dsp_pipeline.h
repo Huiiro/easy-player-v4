@@ -22,6 +22,10 @@ struct AudioChainStatus {
     std::vector<std::string> active_nodes;
     std::vector<std::string> bypassed_nodes;
     std::vector<std::string> bit_perfect_blockers;
+    // Eligible means software routing and negotiated format meet the strict
+    // prerequisites. It is deliberately not a hardware-verification claim.
+    bool is_bit_perfect_eligible = false;
+    std::string bit_perfect_verification_state = "blocked"; // blocked | eligible_unverified | verified
     bool is_bit_perfect = false;
 };
 
@@ -443,15 +447,20 @@ public:
                 result.bit_perfect_blockers.push_back("Backend format differs from the source format");
             }
 
-            // The current backends receive f32 PCM and may perform a format
-            // conversion before writing to the device. Until a native sample
-            // passthrough path is implemented and hardware-verified, claiming
-            // bit-perfect here would be false.
-            result.bit_perfect_blockers.push_back(
-                "Current f32 output path has not been hardware-verified for bit-perfect playback");
         }
+        result.is_bit_perfect_eligible = result.bit_perfect_blockers.empty();
+        result.bit_perfect_verification_state = result.is_bit_perfect_eligible
+            ? "eligible_unverified" : "blocked";
 
-        result.is_bit_perfect = result.bit_perfect_blockers.empty();
+        // The current backends receive f32 PCM and may perform a format
+        // conversion before writing to the device. A software precondition
+        // match is useful to show, but it must not become a verified claim
+        // until a retained DAC/loopback sample comparison exists.
+        if (result.is_bit_perfect_eligible) {
+            result.bit_perfect_blockers.push_back(
+                "Current f32 output path requires retained hardware verification");
+        }
+        result.is_bit_perfect = result.bit_perfect_verification_state == "verified";
         return result;
     }
 

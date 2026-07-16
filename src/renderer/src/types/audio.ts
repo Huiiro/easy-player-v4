@@ -50,6 +50,8 @@ export interface AudioChainStatus {
   activeNodes: string[]
   bypassedNodes: string[]
   bitPerfectBlockers: string[]
+  isBitPerfectEligible: boolean
+  bitPerfectVerificationState: 'blocked' | 'eligible_unverified' | 'verified'
   isBitPerfect: boolean
 }
 
@@ -65,6 +67,7 @@ export interface ResamplerConfig {
   targetSampleRate: number
   quality: 'best' | 'medium' | 'fast'
 }
+export interface TransitionConfig { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }
 
 export interface DspNodeConfig {
   id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'

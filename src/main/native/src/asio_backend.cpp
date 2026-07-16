@@ -152,6 +152,17 @@ case ASIOSTFloat32LSB:return"Float32LSB";case ASIOSTFloat64LSB:return"Float64LSB
 case ASIOSTInt32LSB16:return"Int32LSB16";case ASIOSTInt32LSB18:return"Int32LSB18";
 case ASIOSTInt32LSB20:return"Int32LSB20";case ASIOSTInt32LSB24:return"Int32LSB24";
 default:return"unknown";}}
+static int tp_valid_bits(int t) {
+    switch (t) {
+        case ASIOSTInt16LSB: return 16;
+        case ASIOSTInt24LSB: case ASIOSTInt32LSB24: return 24;
+        case ASIOSTInt32LSB: case ASIOSTFloat32LSB: return 32;
+        case ASIOSTInt32LSB16: return 16;
+        case ASIOSTInt32LSB18: return 18;
+        case ASIOSTInt32LSB20: return 20;
+        default: return 0;
+    }
+}
 
 // ── ASIO callbacks ────────────────────────────────────────
 static void buf_switch(long idx, ASIOBool /*direct_process*/) {
@@ -364,7 +375,11 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     if (impl_->raw_transport) impl_->raw_interleaved_buf.resize(static_cast<size_t>(impl_->buffer_size) * uc * 3);
     impl_->output_channels=uc;
     g_impl.store(impl_.get(),std::memory_order_release);
-    current_format_.sample_rate=(int)sr;current_format_.bit_depth=impl_->raw_transport ? 24 : 32;
+    int valid_bits = impl_->raw_transport ? 24 : tp_valid_bits(impl_->channel_types.front());
+    for (const int type : impl_->channel_types) {
+        if (tp_valid_bits(type) != valid_bits) { valid_bits = 0; break; }
+    }
+    current_format_.sample_rate=(int)sr;current_format_.bit_depth=valid_bits;
     current_format_.channels=uc;buffer_frames_=(int)impl_->buffer_size;
 
     LOG_INFO("AsioBackend opened: "+impl_->driver_name+" "+std::to_string(current_format_.sample_rate)+"Hz "+

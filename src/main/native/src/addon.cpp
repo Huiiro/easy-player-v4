@@ -49,6 +49,8 @@ public:
             InstanceMethod("getChannelMatrixConfig", &AudioEngineWrapper::GetChannelMatrixConfig),
             InstanceMethod("setLimiter", &AudioEngineWrapper::SetLimiter),
             InstanceMethod("getLimiter", &AudioEngineWrapper::GetLimiter),
+            InstanceMethod("setTransitionConfig", &AudioEngineWrapper::SetTransitionConfig),
+            InstanceMethod("getTransitionConfig", &AudioEngineWrapper::GetTransitionConfig),
             InstanceMethod("enumerateDevices", &AudioEngineWrapper::EnumerateDevices),
             InstanceMethod("setDevice", &AudioEngineWrapper::SetDevice),
             InstanceMethod("setBackend", &AudioEngineWrapper::SetBackend),
@@ -377,6 +379,21 @@ private:
         const auto c = engine_->limiter_config(); auto v=Napi::Object::New(info.Env());
         v.Set("enabled", Napi::Boolean::New(info.Env(), engine_->limiter_enabled())); v.Set("ceilingDb", Napi::Number::New(info.Env(), c.ceiling_db)); v.Set("releaseMs", Napi::Number::New(info.Env(), c.release_ms)); return v;
     }
+    Napi::Value SetTransitionConfig(const Napi::CallbackInfo& info) {
+        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
+        const auto v = info[0].As<Napi::Object>();
+        return Napi::Boolean::New(info.Env(), engine_->set_transition_config({
+            v.Get("gaplessEnabled").ToBoolean().Value(),
+            v.Get("crossfadeEnabled").ToBoolean().Value(),
+            v.Get("crossfadeMs").ToNumber().Int32Value()
+        }));
+    }
+    Napi::Value GetTransitionConfig(const Napi::CallbackInfo& info) {
+        const auto c = engine_->transition_config(); auto v = Napi::Object::New(info.Env());
+        v.Set("gaplessEnabled", Napi::Boolean::New(info.Env(), c.gapless_enabled));
+        v.Set("crossfadeEnabled", Napi::Boolean::New(info.Env(), c.crossfade_enabled));
+        v.Set("crossfadeMs", Napi::Number::New(info.Env(), c.crossfade_ms)); return v;
+    }
 
     Napi::Value EnumerateDevices(const Napi::CallbackInfo& info) {
         auto devices = engine_->enumerate_devices();
@@ -497,6 +514,8 @@ private:
         obj.Set("activeNodes", make_strings(chain.active_nodes));
         obj.Set("bypassedNodes", make_strings(chain.bypassed_nodes));
         obj.Set("bitPerfectBlockers", make_strings(chain.bit_perfect_blockers));
+        obj.Set("isBitPerfectEligible", Napi::Boolean::New(info.Env(), chain.is_bit_perfect_eligible));
+        obj.Set("bitPerfectVerificationState", Napi::String::New(info.Env(), chain.bit_perfect_verification_state));
         obj.Set("isBitPerfect", Napi::Boolean::New(info.Env(), chain.is_bit_perfect));
         return obj;
     }

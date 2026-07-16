@@ -1,4 +1,4 @@
-import type { AudioChainStatus, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DeviceInfo, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, PlaybackStatus, ResamplerConfig } from '../types/audio'
+import type { AudioChainStatus, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DeviceInfo, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, PlaybackStatus, ResamplerConfig, TransitionConfig } from '../types/audio'
 
 // ── Typed wrapper around window.api.audio ──
 
@@ -67,6 +67,8 @@ export const audioBridge = {
     const r = await window.api.audio.getResamplerConfig()
     return cmd<ResamplerConfig>(r)
   },
+  async setTransitionConfig(config: TransitionConfig): Promise<boolean> { return (await window.api.audio.setTransitionConfig(config)).success },
+  async getTransitionConfig(): Promise<TransitionConfig | null> { return cmd(await window.api.audio.getTransitionConfig()) },
 
   async setDspNodes(nodes: DspNodeConfig[]): Promise<boolean> {
     const r = await window.api.audio.setDspNodes(nodes)

@@ -63,6 +63,12 @@ public:
     // Total samples in the file (duration * sample_rate * channels).
     int64_t total_samples() const;
 
+    void swap(Decoder& other) noexcept {
+        using std::swap;
+        swap(impl_, other.impl_);
+        swap(track_info_, other.track_info_);
+    }
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

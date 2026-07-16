@@ -34,13 +34,54 @@ AudioAnalysisSnapshot AudioEngine::audio_analysis_snapshot() const {
 }
 
 AudioChainStatus AudioEngine::audio_chain_status() const {
-    if (!dop_transport_active_.load(std::memory_order_acquire)) return dsp_pipeline_.status();
+    if (!dop_transport_active_.load(std::memory_order_acquire)) {
+        auto status = dsp_pipeline_.status();
+        if (transition_config_.crossfade_enabled && transition_config_.crossfade_ms > 0) {
+            status.active_nodes.push_back("Crossfade");
+            status.bit_perfect_blockers.push_back("Crossfade mixes consecutive tracks");
+            status.is_bit_perfect_eligible = false;
+            status.bit_perfect_verification_state = "blocked";
+            status.is_bit_perfect = false;
+        }
+        return status;
+    }
     AudioChainStatus status{};
     status.source_format = {track_info_.dsd_sample_rate, 1, track_info_.channels};
     status.backend_format = backend_ ? backend_->current_format() : AudioFormat{};
     status.active_nodes = {"DoP encoded transport"};
     status.bit_perfect_blockers = {"DoP is an encoded DSD transport, not PCM bit-perfect"};
+    status.is_bit_perfect_eligible = false;
+    status.bit_perfect_verification_state = "blocked";
     return status;
+}
+
+bool AudioEngine::set_transition_config(const TransitionConfig& input) {
+    TransitionConfig value{};
+    value.gapless_enabled = input.gapless_enabled;
+    value.crossfade_enabled = input.crossfade_enabled;
+    value.crossfade_ms = std::max(0, std::min(30000, input.crossfade_ms));
+    if (!value.gapless_enabled) value.crossfade_enabled = false;
+    // DoP is encoded data, so mixing it would corrupt the transport.
+    if (dop_transport_active_.load(std::memory_order_acquire) && value.crossfade_enabled) return false;
+    transition_config_ = value;
+    return true;
+}
+
+bool AudioEngine::prepare_next_decoder_locked() {
+    next_decoder_.close();
+    if (next_track_path_.empty() || !next_decoder_.open(next_track_path_)) return false;
+    const auto& next = next_decoder_.track_info();
+    const bool compatible = next.sample_rate == track_info_.sample_rate &&
+        next.channels == track_info_.channels && !next.is_dsd;
+    if (!compatible) next_decoder_.close();
+    return compatible;
+}
+
+bool AudioEngine::switch_to_next_decoder_locked() {
+    if (!next_decoder_.track_info().file_path.empty()) decoder_.swap(next_decoder_);
+    else if (!decoder_.seek(0)) return false;
+    next_decoder_.close();
+    return prepare_next_decoder_locked();
 }
 
 void AudioEngine::set_replay_gain_mode(int mode, bool prevent_clipping) {
@@ -87,6 +128,7 @@ bool AudioEngine::open(const std::string& file_path) {
     }
 
     track_info_ = decoder_.track_info();
+    next_track_path_ = file_path;
     update_replay_gain_for_track();
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
@@ -96,10 +138,16 @@ bool AudioEngine::open(const std::string& file_path) {
     dop_transport_active_.store(false, std::memory_order_release);
     dop_ring_buffer_.reset();
     dop_output_marker_ = 0x05;
+    transition_active_.store(false, std::memory_order_release);
+    transition_work_buffer_.clear();
 
     // Create ring buffer: ~750ms capacity
     int buffer_frames = (int)(track_info_.sample_rate * 0.75);
     ring_buffer_ = std::make_unique<RingBuffer>(track_info_.channels, buffer_frames);
+    if (!track_info_.is_dsd) {
+        std::lock_guard<std::mutex> lock(decoder_mutex_);
+        if (!prepare_next_decoder_locked()) LOG_WARN("Could not pre-open next loop instance; EOF will seek decoder");
+    }
 
     set_state(EngineState::Ready);
     LOG_INFO("Track opened: " + std::to_string(track_info_.sample_rate) + "Hz/" +
@@ -213,8 +261,25 @@ bool AudioEngine::play() {
                 ? "DSD transport decision: Native DSD unavailable; using FFmpeg PCM conversion"
                 : "PCM transport selected");
         for (int rate : candidate_rates) {
-            const std::vector<int> candidate_bits = current_backend_type_ == BackendType::WASAPI_EXCLUSIVE
-                ? std::vector<int>{32, 24, 25, 16} : std::vector<int>{16};
+            // For Exclusive output, ask for the source precision first. The
+            // previous fixed {32, 24, ...} order unnecessarily negotiated a
+            // 32-bit float endpoint for 16/24-bit sources and permanently
+            // disqualified an otherwise format-matched bypass chain.
+            std::vector<int> candidate_bits;
+            if (current_backend_type_ == BackendType::WASAPI_EXCLUSIVE) {
+                const int source_bits = track_info_.bit_depth == 16 || track_info_.bit_depth == 24 ||
+                    track_info_.bit_depth == 32 ? track_info_.bit_depth : 16;
+                candidate_bits.push_back(source_bits);
+                // 25 denotes 24 valid PCM bits in a 32-bit container.
+                if (source_bits == 24) candidate_bits.push_back(25);
+                for (const int fallback : {32, 24, 25, 16}) {
+                    if (std::find(candidate_bits.begin(), candidate_bits.end(), fallback) == candidate_bits.end()) {
+                        candidate_bits.push_back(fallback);
+                    }
+                }
+            } else {
+                candidate_bits = {16};
+            }
             for (int bits : candidate_bits) {
                 requested.sample_rate = rate;
                 requested.bit_depth = bits;
@@ -374,6 +439,10 @@ bool AudioEngine::stop() {
     analysis_work_buffer_.clear();
     source_work_buffer_.clear();
     source_work_frames_ = 0;
+    transition_work_buffer_.clear();
+    next_decoder_.close();
+    next_track_path_.clear();
+    transition_active_.store(false, std::memory_order_release);
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
     dop_carrier_frames_.store(0, std::memory_order_release);
@@ -651,8 +720,13 @@ double AudioEngine::position_ms() const {
                backend_->current_format().sample_rate * 1000.0;
     }
     if (track_info_.sample_rate <= 0) return 0.0;
-    return static_cast<double>(played_frames_.load(std::memory_order_acquire)) /
-           track_info_.sample_rate * 1000.0;
+    const int64_t total = static_cast<int64_t>(track_info_.duration_ms / 1000.0 * track_info_.sample_rate);
+    const int64_t played = played_frames_.load(std::memory_order_acquire);
+    // In the temporary single-track queue, the playback clock is cyclic.
+    // Keep the UI position inside the opened track even though the decoder
+    // thread may already have prepared another loop instance.
+    const int64_t loop_position = total > 0 ? played % total : played;
+    return static_cast<double>(loop_position) / track_info_.sample_rate * 1000.0;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -713,15 +787,56 @@ void AudioEngine::decoder_thread_func() {
             // - No concurrent FFmpeg access (thread safety)
             // - Ring buffer reset can't happen between decode and write
             std::lock_guard<std::mutex> lock(decoder_mutex_);
+            const int64_t total = decoder_.total_samples();
+            const int64_t position = decoder_.position();
+            const int fade_frames = transition_config_.crossfade_enabled && !track_info_.is_dsd
+                ? std::min<int64_t>(total, static_cast<int64_t>(track_info_.sample_rate) * transition_config_.crossfade_ms / 1000)
+                : 0;
+            const int64_t remaining = std::max<int64_t>(0, total - position);
+            const bool in_fade = fade_frames > 0 && remaining <= fade_frames;
+            if (in_fade) decode_chunk = static_cast<int>(std::min<int64_t>(decode_chunk, remaining));
             decoded = decoder_.decode(buffer.data(), decode_chunk);
 
+            if (decoded > 0 && in_fade) {
+                if (next_decoder_.track_info().file_path.empty() && !prepare_next_decoder_locked()) {
+                    LOG_WARN("Crossfade target unavailable; continuing gaplessly without a mix");
+                } else {
+                    transition_work_buffer_.resize(static_cast<size_t>(decoded) * channels);
+                    const int next_frames = next_decoder_.decode(transition_work_buffer_.data(), decoded);
+                    if (next_frames == decoded) {
+                        const int64_t fade_offset = fade_frames - remaining;
+                        for (int frame = 0; frame < decoded; ++frame) {
+                            const float t = std::min(1.0f, static_cast<float>(fade_offset + frame) /
+                                static_cast<float>(std::max(1, fade_frames - 1)));
+                            const float outgoing = std::cos(1.57079632679f * t);
+                            const float incoming = std::sin(1.57079632679f * t);
+                            for (int channel = 0; channel < channels; ++channel) {
+                                const size_t index = static_cast<size_t>(frame) * channels + channel;
+                                buffer[index] = buffer[index] * outgoing + transition_work_buffer_[index] * incoming;
+                            }
+                        }
+                        transition_active_.store(true, std::memory_order_release);
+                    }
+                }
+            }
+
             if (decoded <= 0) {
+                if (transition_config_.gapless_enabled && !track_info_.is_dsd && switch_to_next_decoder_locked()) {
+                    transition_active_.store(false, std::memory_order_release);
+                    continue;
+                }
                 LOG_INFO("Decoder reached EOF");
                 decoder_running_ = false;
                 break;
             }
 
             ring_buffer_->write(buffer.data(), decoded, 0); // timeout=0: non-blocking
+            // Switch immediately after the tail is queued. The already-open
+            // decoder has advanced by fade_frames, so the overlap is not
+            // replayed after a crossfade.
+            if (decoder_.position() >= decoder_.total_samples() && transition_config_.gapless_enabled && !track_info_.is_dsd) {
+                if (switch_to_next_decoder_locked()) transition_active_.store(false, std::memory_order_release);
+            }
         }
     }
     LOG_INFO("Decoder thread stopped");

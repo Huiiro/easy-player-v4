@@ -5,6 +5,7 @@
 #include "dsp_pipeline.h"
 #include "ring_buffer.h"
 #include <atomic>
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -18,6 +19,14 @@ enum class EngineState {
     Playing,
     Paused,
     Stopped
+};
+
+// With no library yet, the next queue entry is another instance of the
+// opened file. A future queue can replace next_track_path_ before the window.
+struct TransitionConfig {
+    bool gapless_enabled = true;
+    bool crossfade_enabled = false;
+    int crossfade_ms = 5000;
 };
 
 struct AudioAnalysisSnapshot {
@@ -91,6 +100,8 @@ public:
     bool limiter_enabled() const { return dsp_pipeline_.limiter_enabled(); }
     bool set_limiter_config(const LimiterConfig& config) { return dsp_pipeline_.set_limiter_config(config); }
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
+    bool set_transition_config(const TransitionConfig& config);
+    TransitionConfig transition_config() const { return transition_config_; }
 
     // ── Device / Backend ──
     std::vector<DeviceInfo> enumerate_devices();
@@ -126,6 +137,8 @@ private:
     int dop_audio_callback(uint8_t* output, int frames, int channels);
     void update_replay_gain_for_track();
     void analysis_thread_func();
+    bool prepare_next_decoder_locked();
+    bool switch_to_next_decoder_locked();
 
     // ── State ──
     std::atomic<EngineState> state_{EngineState::Idle};
@@ -145,7 +158,12 @@ private:
 
     // ── Decoder ──
     Decoder decoder_;
+    Decoder next_decoder_;
     TrackInfo track_info_;
+    std::string next_track_path_;
+    TransitionConfig transition_config_{};
+    std::atomic<bool> transition_active_{false};
+    std::vector<float> transition_work_buffer_;
     std::unique_ptr<RingBuffer> ring_buffer_;
     // Encoded transport path. Never share this queue with PCM/DSP buffers.
     std::unique_ptr<ByteRingBuffer> dop_ring_buffer_;

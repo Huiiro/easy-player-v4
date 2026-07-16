@@ -90,6 +90,12 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       }
       case 'setDopEnabled': return { success: engine.setDopEnabled(params.enabled === true) }
       case 'getDopEnabled': return { success: true, data: engine.getDopEnabled() }
+      case 'setTransitionConfig': {
+        const ok = engine.setTransitionConfig(params.config)
+        if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+        return { success: ok }
+      }
+      case 'getTransitionConfig': return { success: true, data: engine.getTransitionConfig() }
 
       case 'setDspNodes': {
         const ok = engine.setDspNodes(params.nodes)

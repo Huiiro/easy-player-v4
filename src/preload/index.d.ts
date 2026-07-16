@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { AudioChainStatus, CompressorConfig, DelayConfig, DeviceInfo, DspNodeConfig, EqBand, PlaybackStatus, ResamplerConfig } from '../renderer/src/types/audio'
+import type { AudioChainStatus, CompressorConfig, DelayConfig, DeviceInfo, DspNodeConfig, EqBand, PlaybackStatus, ResamplerConfig, TransitionConfig } from '../renderer/src/types/audio'
 
 declare global {
   interface Window {
@@ -24,6 +24,8 @@ declare global {
         getResamplerConfig(): Promise<{ success: boolean; data?: ResamplerConfig; error?: string }>
         setDopEnabled(enabled: boolean): Promise<{ success: boolean }>
         getDopEnabled(): Promise<{ success: boolean; data?: boolean; error?: string }>
+        setTransitionConfig(config: TransitionConfig): Promise<{ success: boolean }>
+        getTransitionConfig(): Promise<{ success: boolean; data?: TransitionConfig; error?: string }>
         setDspNodes(nodes: DspNodeConfig[]): Promise<{ success: boolean }>
         getDspNodes(): Promise<{ success: boolean; data?: DspNodeConfig[]; error?: string }>
         setCompressorConfig(config: CompressorConfig): Promise<{ success: boolean }>

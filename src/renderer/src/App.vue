@@ -83,6 +83,13 @@ function waterfallColor(level: number): string {
   const normalized = Math.max(0, Math.min(1, level))
   return `hsl(${218 - normalized * 178} 78% ${18 + normalized * 48}%)`
 }
+function bitPerfectLabel(): string {
+  const chain = player.audioChain
+  if (!chain) return 'Bit-perfect unavailable'
+  if (chain.isBitPerfect) return 'Bit-perfect verified'
+  if (chain.bitPerfectVerificationState === 'eligible_unverified') return 'Bit-perfect candidate — verify hardware'
+  return 'Bit-perfect unavailable'
+}
 
 // ── Startup ──
 onMounted(async () => {
@@ -105,6 +112,7 @@ onMounted(async () => {
   await player.loadPlaybackSpeed()
   await player.loadResamplerConfig()
   await player.loadDopEnabled()
+  await player.loadTransitionConfig()
   await player.loadDspNodes()
   await player.loadCompressorConfig()
   await player.loadDelayConfig()
@@ -200,6 +208,7 @@ function updateResampler(): void {
   void player.setResamplerConfig(player.resamplerConfig)
 }
 function updateDopEnabled(event: Event): void { void player.setDopEnabled((event.target as HTMLInputElement).checked) }
+function updateTransitionConfig(): void { void player.setTransitionConfig() }
 
 function nodeLabel(id: string): string {
   return id === 'compressor' ? 'Compressor' : id === 'delay' ? 'Delay' : id === 'reverb' ? 'Reverb' : id === 'chorus' ? 'Chorus' : id === 'noise_gate' ? 'Noise Gate' : 'Phaser'
@@ -528,12 +537,19 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       </label>
       <small>Only for a confirmed DoP-capable DAC with WASAPI Exclusive or ASIO. Takes effect on the next DSD playback; DSP, volume and analysis are bypassed.</small>
     </section>
+    <section class="resampler-section">
+      <div class="resampler-heading">Track transition</div>
+      <label><input v-model="player.transitionConfig.gaplessEnabled" type="checkbox" @change="updateTransitionConfig" /> Gapless loop</label>
+      <label><input v-model="player.transitionConfig.crossfadeEnabled" :disabled="!player.transitionConfig.gaplessEnabled" type="checkbox" @change="updateTransitionConfig" /> Crossfade</label>
+      <label>Duration <input v-model.number="player.transitionConfig.crossfadeMs" :disabled="!player.transitionConfig.gaplessEnabled || !player.transitionConfig.crossfadeEnabled" type="number" min="0" max="30000" step="100" @change="updateTransitionConfig" /> ms</label>
+      <small>Current single-track mode loops the opened file. Crossfade disables PCM bit-perfect status.</small>
+    </section>
 
     <section v-if="player.audioChain" class="chain-section">
       <div class="chain-heading">
         <span>Audio pipeline</span>
-        <span :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : 'bit-perfect-off'">
-          {{ player.audioChain.isBitPerfect ? 'Bit-perfect verified' : 'Bit-perfect unavailable' }}
+        <span :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : player.audioChain.isBitPerfectEligible ? 'bit-perfect-candidate' : 'bit-perfect-off'">
+          {{ bitPerfectLabel() }}
         </span>
       </div>
       <div class="chain-format">
@@ -568,10 +584,10 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
       </span>
       <span
         v-if="player.audioChain"
-        :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : 'bit-perfect-off'"
+        :class="player.audioChain.isBitPerfect ? 'bit-perfect-ok' : player.audioChain.isBitPerfectEligible ? 'bit-perfect-candidate' : 'bit-perfect-off'"
         :title="player.audioChain.bitPerfectBlockers.join('\n')"
       >
-        | {{ player.audioChain.isBitPerfect ? 'Bit-perfect verified' : 'Bit-perfect unavailable' }}
+        | {{ bitPerfectLabel() }}
       </span>
     </div>
 
@@ -802,6 +818,7 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
 }
 .glitch-warn { color: #e74c3c; }
 .bit-perfect-ok { color: #70d6a0; }
+.bit-perfect-candidate { color: #80c8f0; }
 .bit-perfect-off { color: #d6a970; }
 .dsd-status { color: #a88de1; }
 

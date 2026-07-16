@@ -144,6 +144,12 @@ export class AudioEngineManager {
     return ok
   }
   getDopEnabled(): boolean { return this.engine?.getDopEnabled() === true }
+  setTransitionConfig(config: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }): boolean {
+    const ok = this.engine?.setTransitionConfig(config) ?? false
+    if (ok) { this.dspSettings.transition = config; this.persistDspSettings() }
+    return ok
+  }
+  getTransitionConfig(): { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number } | null { return this.engine?.getTransitionConfig() ?? null }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setDspNodes(nodes: any[]): boolean {
@@ -295,6 +301,7 @@ export class AudioEngineManager {
     this.engine.setLimiter(this.dspSettings.limiter)
     this.engine.setResamplerConfig(this.dspSettings.resampler)
     this.engine.setDopEnabled(this.dspSettings.dopEnabled)
+    this.engine.setTransitionConfig(this.dspSettings.transition)
   }
 
   private persistDspSettings(): void {

@@ -48,6 +48,8 @@ export interface AudioChainStatus {
   activeNodes: string[]
   bypassedNodes: string[]
   bitPerfectBlockers: string[]
+  isBitPerfectEligible: boolean
+  bitPerfectVerificationState: 'blocked' | 'eligible_unverified' | 'verified'
   isBitPerfect: boolean
 }
 
@@ -102,6 +104,8 @@ export type AudioCommandAction =
   | 'getResamplerConfig'
   | 'setDopEnabled'
   | 'getDopEnabled'
+  | 'setTransitionConfig'
+  | 'getTransitionConfig'
   | 'setDspNodes'
   | 'getDspNodes'
   | 'setCompressorConfig'

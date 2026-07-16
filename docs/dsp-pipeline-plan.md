@@ -21,7 +21,7 @@
 
 WASAPI Shared、DirectSound、DSD→PCM、DoP 和 Native DSD 都不得报告 PCM bit-perfect；DSD 应在后续单独增加 `nativeDsd`/`dop` 状态，不能滥用此布尔值。
 
-当前 P3.0 的 f32 输出路径尚未具备经验证的原始 PCM 直通实现，因此状态会保守地报告 `isBitPerfect=false` 并给出该原因；在原生格式直通与硬件验证完成前，绝不显示为 true。
+当前 f32 输出路径尚未具备经验证的原始 PCM 直通实现，因此状态会保守地报告 `isBitPerfect=false`。为避免把“条件满足”误作“已验证”，状态额外上报 `isBitPerfectEligible` 与 `bitPerfectVerificationState`：`blocked`（存在软件/输出条件 blocker）、`eligible_unverified`（软件条件满足，仍需要留存的 DAC/loopback 逐样本验证）和 `verified`。在原生格式直通与硬件验证完成前，绝不显示为 true。
 
 ## 运行时模型
 
@@ -124,6 +124,8 @@ interface AudioChainStatus {
   activeNodes: string[]
   bypassedNodes: string[]
   isBitPerfect: boolean
+  isBitPerfectEligible: boolean
+  bitPerfectVerificationState: 'blocked' | 'eligible_unverified' | 'verified'
   bitPerfectBlockers: string[]
 }
 ```

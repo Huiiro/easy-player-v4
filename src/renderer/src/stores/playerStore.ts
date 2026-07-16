@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { AudioChainStatus, PlaybackState, TrackInfo, DeviceInfo, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, ResamplerConfig } from '../types/audio'
+import type { AudioChainStatus, PlaybackState, TrackInfo, DeviceInfo, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, ResamplerConfig, TransitionConfig } from '../types/audio'
 import { audioBridge } from '../services/audioBridge'
 import { useLogStore } from './logStore'
 
@@ -26,6 +26,7 @@ export const usePlayerStore = defineStore('player', () => {
   const eqBands = ref<EqBand[]>(createDefaultEqBands())
   const resamplerConfig = ref<ResamplerConfig>({ forceOutputRate: false, targetSampleRate: 48000, quality: 'best' })
   const dopEnabled = ref(false)
+  const transitionConfig = ref<TransitionConfig>({ gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000 })
   const dspNodes = ref<DspNodeConfig[]>([
     { id: 'compressor', enabled: false }, { id: 'delay', enabled: false }, { id: 'reverb', enabled: false }, { id: 'chorus', enabled: false }, { id: 'noise_gate', enabled: false }, { id: 'phaser', enabled: false }
   ])
@@ -149,6 +150,13 @@ export const usePlayerStore = defineStore('player', () => {
     if (config) resamplerConfig.value = config
   }
   async function loadDopEnabled(): Promise<void> { dopEnabled.value = await audioBridge.getDopEnabled() }
+  async function loadTransitionConfig(): Promise<void> { const config = await audioBridge.getTransitionConfig(); if (config) transitionConfig.value = config }
+  async function setTransitionConfig(): Promise<boolean> {
+    const next = { ...transitionConfig.value, crossfadeMs: Math.max(0, Math.min(30000, transitionConfig.value.crossfadeMs)) }
+    const ok = await audioBridge.setTransitionConfig(next)
+    if (ok) { transitionConfig.value = next; await refreshAudioChain() }
+    return ok
+  }
   async function setDopEnabled(enabled: boolean): Promise<boolean> {
     const ok = await audioBridge.setDopEnabled(enabled)
     if (ok) dopEnabled.value = enabled
@@ -361,6 +369,7 @@ export const usePlayerStore = defineStore('player', () => {
     eqBands,
     resamplerConfig,
     dopEnabled,
+    transitionConfig,
     dspNodes,
     compressorConfig,
     delayConfig,
@@ -394,6 +403,8 @@ export const usePlayerStore = defineStore('player', () => {
     setResamplerConfig,
     loadDopEnabled,
     setDopEnabled,
+    loadTransitionConfig,
+    setTransitionConfig,
     loadDspNodes,
     commitDspNodes,
     moveDspNode,

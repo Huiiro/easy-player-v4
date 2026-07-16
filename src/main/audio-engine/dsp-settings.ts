@@ -36,6 +36,7 @@ export interface DspSettings {
   channelMatrix: PersistedChannelMatrix
   resampler: { forceOutputRate: boolean; targetSampleRate: number; quality: 'best' | 'medium' | 'fast' }
   dopEnabled: boolean
+  transition: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }
 }
 
 export const defaultDspSettings = (): DspSettings => ({
@@ -58,6 +59,7 @@ export const defaultDspSettings = (): DspSettings => ({
   channelMatrix: { enabled: false, balance: 0, swapStereo: false, monoDownmix: false, outputGains: [1,1,1,1,1,1,1,1] },
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' }
   , dopEnabled: false
+  , transition: { gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000 }
 })
 
 function filePath(): string {
@@ -155,7 +157,13 @@ export function loadDspSettings(): DspSettings {
         quality: settings.resampler?.quality === 'medium' || settings.resampler?.quality === 'fast'
           ? settings.resampler.quality : 'best'
       },
-      dopEnabled: settings.dopEnabled === true
+      dopEnabled: settings.dopEnabled === true,
+      transition: {
+        gaplessEnabled: settings.transition?.gaplessEnabled !== false,
+        crossfadeEnabled: settings.transition?.crossfadeEnabled === true,
+        crossfadeMs: typeof settings.transition?.crossfadeMs === 'number'
+          ? Math.max(0, Math.min(30000, settings.transition.crossfadeMs)) : defaults.transition.crossfadeMs
+      }
     }
   } catch {
     return defaultDspSettings()
