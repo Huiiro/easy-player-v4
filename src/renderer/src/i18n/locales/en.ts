@@ -30,5 +30,30 @@ export default {
     progress: 'Scanned {current} / {total} songs',
     added: 'Added {count}',
     duplicates: 'Duplicates {count}'
+  },
+  songList: {
+    total: '{count} songs',
+    search: 'Search songs, artists, or albums',
+    refresh: 'Refresh',
+    title: 'Title',
+    artist: 'Artist',
+    album: 'Album',
+    duration: 'Duration',
+    loading: 'Loading songs…',
+    empty: 'No songs yet',
+    unknownArtist: 'Unknown artist',
+    unknownAlbum: 'Unknown album',
+    select: 'Select',
+    cancelSelection: 'Cancel selection',
+    selectAll: 'Select all',
+    clearSelection: 'Clear selection',
+    selected: '{count} selected',
+    play: 'Play',
+    addToQueue: 'Add to queue',
+    addToPlaylist: 'Add to playlist',
+    editTags: 'Edit tags',
+    details: 'Song details',
+    openFolder: 'Open folder',
+    delete: 'Delete'
   }
 }

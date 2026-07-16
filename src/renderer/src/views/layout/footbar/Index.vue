@@ -1,121 +1,251 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
-import { formatTime } from '@/utils/formatter'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+
+const trackTitle = computed(() => player.trackInfo?.metadata?.title || '未选择音乐')
+const trackArtist = computed(() => player.trackInfo?.metadata?.artist || 'Easy Player')
+const progressPercent = computed(() => `${Math.round(player.progress * 100)}%`)
+const volumePercent = computed(() => `${Math.round(player.volume * 100)}%`)
+
+function togglePlayback(): void {
+  if (player.isPlaying) {
+    void player.pause()
+    return
+  }
+  if (player.currentFile) void player.play()
+}
+
+function seek(event: Event): void {
+  void player.seek(Number((event.target as HTMLInputElement).value))
+}
+
+function setVolume(event: Event): void {
+  void player.setVolume(Number((event.target as HTMLInputElement).value) / 100)
+}
 </script>
 
 <template>
-<!--  <footer-->
-<!--    class="relative z-50 bg-bg text-text flex items-center h-16 px-4 select-none transition-opacity duration-300"-->
-<!--    :class="[-->
-<!--      ui.showPlayer ? 'bg-transparent' : '',-->
-<!--      visible ? 'opacity-100' : 'opacity-0 pointer-events-none'-->
-<!--    ]"-->
-<!--    @click="ui.toggleShowPlayer"-->
-<!--  >-->
-<!--    &lt;!&ndash; 遮罩 &ndash;&gt;-->
-<!--    <div-->
-<!--      class="absolute inset-0 -z-10 bg-black pointer-events-none"-->
-<!--      :class="ui.showPlayer ? 'opacity-0' : 'opacity-35'"-->
-<!--    />-->
+  <div class="footbar-shell px-4 pb-4 pt-2" :class="{ 'is-card-mode': ui.useCardView }">
+    <section class="footbar-dock" aria-label="播放器控制栏">
+      <div class="track-info">
+        <div class="cover-art" :class="{ 'is-playing': player.isPlaying }">
+          <SvgIcon name="common-music" class-name="size-6" />
+        </div>
+        <div class="min-w-0">
+          <p class="truncate text-sm font-semibold text-[var(--color-text)]">{{ trackTitle }}</p>
+          <p class="truncate text-xs text-[var(--color-text-l)]">{{ trackArtist }}</p>
+        </div>
+      </div>
 
-<!--    &lt;!&ndash; 遮罩 &ndash;&gt;-->
-<!--    <div-->
-<!--      v-if="ui.useDynamicBg && ui.currentDynamicBg.footer"-->
-<!--      class="absolute inset-0 -z-10"-->
-<!--      :style="ui.currentDynamicBg.footer"-->
-<!--    />-->
+      <div class="player-controls">
+        <div class="flex items-center justify-center gap-1.5">
+          <button class="control-button" title="上一首" disabled>
+            <SvgIcon name="play-prev" class-name="size-4" />
+          </button>
+          <button
+            class="play-button"
+            :disabled="!player.currentFile"
+            :title="player.isPlaying ? '暂停' : '播放'"
+            @click="togglePlayback"
+          >
+            <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
+          </button>
+          <button class="control-button" title="下一首" disabled>
+            <SvgIcon name="play-next" class-name="size-4" />
+          </button>
+        </div>
+        <div class="flex items-center gap-2 text-[11px] tabular-nums text-[var(--color-text-l)]">
+          <span>{{ player.positionFormatted }}</span>
+          <input
+            class="dock-range progress-range"
+            type="range"
+            min="0"
+            :max="player.durationMs || 0"
+            :value="player.positionMs"
+            :style="{ '--range-progress': progressPercent }"
+            :disabled="!player.durationMs"
+            aria-label="播放进度"
+            @input="seek"
+          />
+          <span>{{ player.durationFormatted }}</span>
+        </div>
+      </div>
 
-<!--    &lt;!&ndash; 新播放条控制 &ndash;&gt;-->
-<!--&lt;!&ndash;    <PlayerProgressControl&ndash;&gt;-->
-<!--&lt;!&ndash;      v-if="ui.useFullProgress"&ndash;&gt;-->
-<!--&lt;!&ndash;      :current-time="player.currentTime"&ndash;&gt;-->
-<!--&lt;!&ndash;      :duration="player.duration"&ndash;&gt;-->
-<!--&lt;!&ndash;      @progress-change="(t) => audioController.setCurrentTime(t)"&ndash;&gt;-->
-<!--&lt;!&ndash;    />&ndash;&gt;-->
-
-<!--    &lt;!&ndash; 左侧封面与信息 &ndash;&gt;-->
-<!--&lt;!&ndash;    <TrackInfo&ndash;&gt;-->
-<!--&lt;!&ndash;      v-if="!playStore.showPlayer"&ndash;&gt;-->
-<!--&lt;!&ndash;      :cover="playStore.currentTrack.cover"&ndash;&gt;-->
-<!--&lt;!&ndash;      :title="playStore.currentTrack.title"&ndash;&gt;-->
-<!--&lt;!&ndash;      :artist="playStore.currentTrack.artist"&ndash;&gt;-->
-<!--&lt;!&ndash;    />&ndash;&gt;-->
-
-<!--    &lt;!&ndash; 播放控制器 &ndash;&gt;-->
-<!--    <div-->
-<!--      class="absolute left-1/2 -translate-x-1/2"-->
-<!--      :class="ui.useFullProgress ? '' : 'w-[22rem] xl:w-[36rem]'"-->
-<!--    >-->
-<!--      <PlayerControls-->
-<!--        :current-track="playStore.currentTrack"-->
-<!--        :is-playing="playStore.isPlaying"-->
-<!--        :current-time="formatTime(player.positionMs)"-->
-<!--        :use-full-progress="uiStore.useFullProgressStyle"-->
-<!--        @toggle-play="audioController.togglePlay()"-->
-<!--        @prev-track="audioController.playPrevSong()"-->
-<!--        @next-track="audioController.playNextSong()"-->
-<!--        @progress-change="(t) => audioController.setCurrentTime(t)"-->
-<!--      />-->
-<!--    </div>-->
-
-<!--    &lt;!&ndash; 右侧控制区 &ndash;&gt;-->
-<!--    <div class="flex items-center gap-3 h-full ml-auto" @click.stop>-->
-<!--      &lt;!&ndash; 新播放条样式时间 &ndash;&gt;-->
-<!--      <div-->
-<!--        v-if="ui.useFullProgress"-->
-<!--        class="w-full flex justify-between text-xs text-white select-none"-->
-<!--      >-->
-<!--        <span>{{ formatTime(playStore.currentTime) }}</span>-->
-<!--        <span>&nbsp;/&nbsp;</span>-->
-<!--        <span>{{ formatTime(playStore.currentTrack.duration) }}</span>-->
-<!--      </div>-->
-<!--      &lt;!&ndash; 播放方式控制按钮 &ndash;&gt;-->
-<!--      <button-->
-<!--        :title="playModeTitle"-->
-<!--        class="text-white text-lg select-none btn-hover"-->
-<!--        @click.stop="playStore.togglePlayMode"-->
-<!--      >-->
-<!--        <svgIcon :name="playModeIconName" class-name="w-6 h-6 icon" />-->
-<!--      </button>-->
-
-<!--      &lt;!&ndash; 播放列表控制 &ndash;&gt;-->
-<!--      <button-->
-<!--        v-if="uiStore.customComponentPlaylistBtn"-->
-<!--        :title="t('playlist_alt')"-->
-<!--        class="text-white text-lg select-none btn-hover"-->
-<!--        @click.stop="drawer = true"-->
-<!--      >-->
-<!--        <svgIcon name="control-playlist" class-name="w-6 h-6 icon" />-->
-<!--      </button>-->
-
-<!--      &lt;!&ndash; 桌面歌词 &ndash;&gt;-->
-<!--      <button-->
-<!--        :title="t('desktop_lyrics_alt')"-->
-<!--        class="text-white text-lg select-none btn-hover"-->
-<!--        :class="uiStore.desktopLyrics ? 'text-primary' : 'text-white'"-->
-<!--        @click.stop="uiStore.toggleDesktopLyrics"-->
-<!--      >-->
-<!--        <svgIcon name="common-lyrics" class-name="w-7 h-7 icon mt-1" />-->
-<!--      </button>-->
-
-<!--      &lt;!&ndash; 效果均衡器 &ndash;&gt;-->
-<!--      <button-->
-<!--        :title="t('eq_alt')"-->
-<!--        class="text-white text-lg select-none btn-hover"-->
-<!--        @click.stop="EQDialogVisible = true"-->
-<!--      >-->
-<!--        <svgIcon name="common-equalizer" class-name="w-5 h-5 icon" />-->
-<!--      </button>-->
-
-<!--      &lt;!&ndash; 音量 &ndash;&gt;-->
-<!--&lt;!&ndash;      <VolumeVertical />&ndash;&gt;-->
-
-<!--      &lt;!&ndash; 更多 &ndash;&gt;-->
-<!--&lt;!&ndash;      <More />&ndash;&gt;-->
-<!--    </div>-->
-<!--  </footer>-->
+      <div class="volume-control">
+        <SvgIcon
+          :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
+          class-name="size-5"
+        />
+        <input
+          class="dock-range volume-range"
+          type="range"
+          min="0"
+          max="100"
+          :value="Math.round(player.volume * 100)"
+          :style="{ '--range-progress': volumePercent }"
+          aria-label="音量"
+          @input="setVolume"
+        />
+      </div>
+    </section>
+  </div>
 </template>
+
+<style scoped>
+.footbar-shell {
+  background: linear-gradient(
+    to top,
+    color-mix(in srgb, var(--color-bg) 88%, transparent),
+    transparent
+  );
+}
+.footbar-dock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 1.2fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+  min-height: 72px;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0.625rem 1rem;
+  color: var(--color-text-l);
+  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 12px 35px color-mix(in srgb, #000 20%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
+  backdrop-filter: blur(22px) saturate(145%);
+  -webkit-backdrop-filter: blur(22px) saturate(145%);
+}
+.track-info,
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.volume-control {
+  justify-content: flex-end;
+}
+.cover-art {
+  display: grid;
+  flex: 0 0 auto;
+  width: 3.1rem;
+  height: 3.1rem;
+  place-items: center;
+  color: white;
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    color-mix(in srgb, var(--color-primary) 45%, #8b5cf6)
+  );
+  border-radius: 0.9rem;
+  box-shadow: 0 5px 14px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.cover-art.is-playing {
+  animation: cover-breathe 2.5s ease-in-out infinite;
+}
+.player-controls {
+  display: grid;
+  gap: 0.25rem;
+}
+.control-button,
+.play-button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    opacity 0.18s ease;
+}
+.control-button {
+  width: 2rem;
+  height: 2rem;
+  color: var(--color-text);
+  background: transparent;
+  border-radius: 999px;
+}
+.control-button:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-text) 10%, transparent);
+  transform: scale(1.06);
+}
+.control-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+.play-button {
+  width: 2.45rem;
+  height: 2.45rem;
+  color: white;
+  background: var(--color-primary);
+  border-radius: 999px;
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.play-button:not(:disabled):hover {
+  transform: scale(1.08);
+}
+.play-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  box-shadow: none;
+}
+.dock-range {
+  --range-progress: 0%;
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-primary) var(--range-progress),
+    color-mix(in srgb, var(--color-text) 15%, transparent) var(--range-progress)
+  );
+}
+.dock-range::-webkit-slider-thumb {
+  width: 11px;
+  height: 11px;
+  appearance: none;
+  background: var(--color-primary);
+  border: 2px solid color-mix(in srgb, var(--color-bg) 85%, white);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 22%);
+}
+.dock-range:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+.volume-range {
+  max-width: 100px;
+}
+@keyframes cover-breathe {
+  50% {
+    transform: scale(1.045);
+    box-shadow: 0 7px 20px color-mix(in srgb, var(--color-primary) 55%, transparent);
+  }
+}
+@media (max-width: 700px) {
+  .footbar-shell {
+    padding: 0.5rem 0.75rem 0.75rem;
+  }
+  .footbar-dock {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.65rem;
+    padding: 0.55rem 0.7rem;
+  }
+  .volume-control {
+    display: none;
+  }
+  .track-info p {
+    max-width: 120px;
+  }
+}
+</style>

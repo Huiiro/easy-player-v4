@@ -1,11 +1,7 @@
 <script setup lang="ts">
-
+import SongListView from '@/components/songlist/SongListView.vue'
 </script>
 
 <template>
-song
+  <SongListView />
 </template>
-
-<style scoped>
-
-</style>

@@ -51,7 +51,7 @@ function createPlaylist(): void {
 
 <template>
   <aside
-    class="flex h-full flex-col overflow-hidden border-r border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-text)] transition-[width] duration-200"
+    class="flex h-full flex-col overflow-hidden border-r border-[var(--color-border)] text-[var(--color-text)] transition-[width] duration-200"
     :class="expanded ? 'w-54' : 'w-14'"
   >
     <nav

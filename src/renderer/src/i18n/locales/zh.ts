@@ -30,5 +30,30 @@ export default {
     progress: '已扫描 {current} / {total} 首歌曲',
     added: '新增 {count}',
     duplicates: '重复 {count}'
+  },
+  songList: {
+    total: '共 {count} 首歌曲',
+    search: '搜索歌曲、歌手或专辑',
+    refresh: '刷新',
+    title: '歌曲',
+    artist: '歌手',
+    album: '专辑',
+    duration: '时长',
+    loading: '正在加载歌曲…',
+    empty: '暂无歌曲',
+    unknownArtist: '未知歌手',
+    unknownAlbum: '未知专辑',
+    select: '多选',
+    cancelSelection: '取消选择',
+    selectAll: '全选',
+    clearSelection: '取消全选',
+    selected: '已选择 {count} 首',
+    play: '播放',
+    addToQueue: '加入播放队列',
+    addToPlaylist: '添加到歌单',
+    editTags: '编辑标签',
+    details: '歌曲详情',
+    openFolder: '打开所在文件夹',
+    delete: '删除'
   }
 }

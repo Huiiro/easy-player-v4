@@ -11,6 +11,7 @@ const handlers = {
   getSongsByAlbum: ({ album, artist }: { album: string; artist?: string }) =>
     library.getSongsByAlbum(album, artist),
   getSongsByGenre: ({ genre }: { genre: string }) => library.getSongsByGenre(genre),
+  getSongsByArtist: ({ artist }: { artist: string }) => library.getSongsByArtist(artist),
   queryAlbums: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
     library.queryAlbums(sort, search),
   queryArtists: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>

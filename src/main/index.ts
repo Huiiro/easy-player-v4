@@ -1,14 +1,46 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
-import { join } from 'path'
+import { app, shell, BrowserWindow, ipcMain, net, protocol } from 'electron'
+import { existsSync } from 'node:fs'
+import { isAbsolute, join, relative, resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import icon from '../../resources/icon.png?asset'
 import { AudioEngineManager } from './audio-engine/index'
 import { registerIpcHandlers } from './audio-engine/ipc-handlers'
 import { closeDatabase, initDatabase } from './database'
 import { registerDatabaseIpcHandlers } from './database/ipc-handlers'
 import { registerScanIpcHandlers } from './service/scan-ipc-handlers'
+import { getDataPath } from './utils/pathUtils'
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'easy-player-media',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
+  }
+])
+import { createDir } from './utils/pathUtils'
 
 let mainWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
+
+function registerMediaProtocol(): void {
+  protocol.handle('easy-player-media', async (request) => {
+    const url = new URL(request.url)
+    const requestedPath = url.hostname === 'cover' ? url.searchParams.get('path') : null
+    if (!requestedPath) return new Response('Not Found', { status: 404 })
+
+    const coverDirectory = resolve(getDataPath(), 'covers')
+    const coverPath = resolve(requestedPath)
+    const pathRelativeToCovers = relative(coverDirectory, coverPath)
+    if (
+      pathRelativeToCovers.startsWith('..') ||
+      isAbsolute(pathRelativeToCovers) ||
+      !existsSync(coverPath)
+    ) {
+      return new Response('Not Found', { status: 404 })
+    }
+
+    return net.fetch(pathToFileURL(coverPath).toString())
+  })
+}
 
 function createWindow(): void {
   // Create the browser window.
@@ -59,10 +91,11 @@ function createWindow(): void {
 app.whenReady().then(() => {
   // Set app user model id for windows
   app.setAppUserModelId('com.electron')
-
+  createDir()
   initDatabase()
   registerDatabaseIpcHandlers()
   registerScanIpcHandlers()
+  registerMediaProtocol()
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

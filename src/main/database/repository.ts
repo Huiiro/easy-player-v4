@@ -109,6 +109,12 @@ export function getSongsByGenre(genre: string): Song[] {
     .all(genre)
     .map((row) => mapSong(row as SongRow))
 }
+export function getSongsByArtist(artist: string): Song[] {
+  return getDatabase()
+    .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY title COLLATE NOCASE`)
+    .all(artist)
+    .map((row) => mapSong(row as SongRow))
+}
 export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
   const keyword = search.trim()

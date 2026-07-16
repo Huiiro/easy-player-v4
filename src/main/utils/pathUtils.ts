@@ -1,5 +1,6 @@
 import path from 'path'
 import os from 'os'
+import fs from 'fs'
 
 export function getBaseDir(): string {
   const baseDir =
@@ -22,6 +23,28 @@ export function getLogPath(): string {
 }
 
 export function createDir(): boolean {
-  // TODO
-  return true
+  const dirs = [
+    getBaseDir(),
+    getDataPath(),
+    getPluginPath(),
+    getLogPath(),
+    path.join(getDataPath(), 'cache'),
+    path.join(getDataPath(), 'covers'),
+    path.join(getDataPath(), 'temp')
+  ]
+
+  try {
+    for (const dir of dirs) {
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, {
+          recursive: true
+        })
+      }
+    }
+
+    return true
+  } catch (error) {
+    console.error('[Directory] create failed:', error)
+    return false
+  }
 }
