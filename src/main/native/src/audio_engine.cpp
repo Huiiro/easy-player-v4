@@ -139,7 +139,11 @@ bool AudioEngine::open(const std::string& file_path) {
     }
 
     track_info_ = decoder_.track_info();
-    next_track_path_ = file_path;
+    // The renderer owns the actual playlist. Reopening the current file as a
+    // speculative "next" decoder makes gapless playback loop the same track
+    // forever and prevents the renderer from receiving a real EOF event.
+    // Keep this empty until the native engine receives a real queue hand-off.
+    next_track_path_.clear();
     update_replay_gain_for_track();
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
@@ -155,10 +159,6 @@ bool AudioEngine::open(const std::string& file_path) {
     // Create ring buffer: ~750ms capacity
     int buffer_frames = (int)(track_info_.sample_rate * 0.75);
     ring_buffer_ = std::make_unique<RingBuffer>(track_info_.channels, buffer_frames);
-    if (!track_info_.is_dsd) {
-        std::lock_guard<std::mutex> lock(decoder_mutex_);
-        if (!prepare_next_decoder_locked()) LOG_WARN("Could not pre-open next loop instance; EOF will seek decoder");
-    }
 
     set_state(EngineState::Ready);
     LOG_INFO("Track opened: " + std::to_string(track_info_.sample_rate) + "Hz/" +

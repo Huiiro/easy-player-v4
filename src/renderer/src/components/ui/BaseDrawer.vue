@@ -153,7 +153,7 @@ const leaveTo = computed(() => {
 
 <template>
   <TransitionRoot :show="modelValue" as="template">
-    <Dialog as="div" class="fixed inset-0 z-50 text-text" @close="handleClose">
+    <Dialog as="div" class="pointer-events-auto fixed inset-0 z-50 text-text" @close="handleClose">
       <!-- overlay -->
 
       <TransitionChild

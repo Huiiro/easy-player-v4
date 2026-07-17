@@ -51,6 +51,7 @@ export interface Playlist {
   id: number
   name: string
   cover: string | null
+  customCover: string | null
   description: string | null
   position: number
   createdAt: string
@@ -59,6 +60,7 @@ export interface PlaylistInput {
   name: string
   cover?: string | null
   description?: string | null
+  customCover?: string | null
 }
 export interface Tag {
   id: number

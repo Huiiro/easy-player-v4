@@ -1,14 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
-const trackTitle = computed(() => player.trackInfo?.metadata?.title || '未选择音乐')
-const trackArtist = computed(() => player.trackInfo?.metadata?.artist || 'Easy Player')
+const trackTitle = computed(
+  () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || '未选择音乐'
+)
+const trackArtist = computed(
+  () => player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist || 'Easy Player'
+)
 const progressPercent = computed(() => `${Math.round(player.progress * 100)}%`)
+const coverFailed = ref(false)
+const coverUrl = computed(() => {
+  const cover = player.currentQueueSong?.cover
+  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
+})
+const audioDetails = computed(() => {
+  const info = player.trackInfo
+  if (!info) return []
+  const channels =
+    info.channels === 1 ? '单声道' : info.channels === 2 ? '立体声' : `${info.channels} 声道`
+  return [
+    ['格式', info.format?.toUpperCase() || info.codecName || '—'],
+    ['采样率', info.sampleRate ? `${info.sampleRate / 1000} kHz` : '—'],
+    ['位深', info.bitDepth ? `${info.bitDepth} bit` : '—'],
+    ['声道', channels],
+    ['码率', info.bitrateKbps ? `${info.bitrateKbps} kbps` : '—']
+  ]
+})
+watch(coverUrl, () => {
+  coverFailed.value = false
+})
 
 function close(): void {
   ui.showPlayer = false
@@ -16,6 +41,12 @@ function close(): void {
 function togglePlayback(): void {
   if (player.isPlaying) void player.pause()
   else if (player.currentFile) void player.play()
+}
+function playPrevious(): void {
+  void player.playPrevious()
+}
+function playNext(): void {
+  void player.playNext()
 }
 function seek(event: Event): void {
   void player.seek(Number((event.target as HTMLInputElement).value))
@@ -35,12 +66,25 @@ function seek(event: Event): void {
       <div class="panel-layout">
         <section class="panel-content">
           <div class="panel-cover" :class="{ 'is-playing': player.isPlaying }">
-            <SvgIcon name="common-music" class-name="size-20" />
+            <img
+              v-if="coverUrl && !coverFailed"
+              :src="coverUrl"
+              class="size-full object-cover"
+              :alt="trackTitle"
+              @error="coverFailed = true"
+            />
+            <SvgIcon v-else name="common-music" class-name="size-20" />
           </div>
           <div class="min-w-0 text-center">
             <h2 class="truncate text-xl font-bold text-[var(--color-text)]">{{ trackTitle }}</h2>
             <p class="mt-1 truncate text-sm text-[var(--color-text-l)]">{{ trackArtist }}</p>
           </div>
+          <dl v-if="audioDetails.length" class="audio-details">
+            <div v-for="[label, value] in audioDetails" :key="label">
+              <dt>{{ label }}</dt>
+              <dd>{{ value }}</dd>
+            </div>
+          </dl>
           <div class="progress-block">
             <input
               class="panel-range"
@@ -59,7 +103,12 @@ function seek(event: Event): void {
             </div>
           </div>
           <div class="panel-controls">
-            <button class="panel-control" disabled title="上一首">
+            <button
+              class="panel-control"
+              :disabled="!player.queue.length"
+              title="上一首"
+              @click="playPrevious"
+            >
               <SvgIcon name="play-prev" class-name="size-6" />
             </button>
             <button
@@ -70,7 +119,12 @@ function seek(event: Event): void {
             >
               <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-8" />
             </button>
-            <button class="panel-control" disabled title="下一首">
+            <button
+              class="panel-control"
+              :disabled="!player.queue.length"
+              title="下一首"
+              @click="playNext"
+            >
               <SvgIcon name="play-next" class-name="size-6" />
             </button>
           </div>
@@ -172,6 +226,39 @@ function seek(event: Event): void {
 }
 .panel-cover.is-playing {
   animation: breathe 2.5s ease-in-out infinite;
+}
+.panel-cover img {
+  border-radius: inherit;
+}
+.audio-details {
+  display: grid;
+  width: min(440px, 100%);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--color-text) 4%, transparent);
+}
+.audio-details div {
+  min-width: 0;
+  padding: 0.55rem 0.35rem;
+  text-align: center;
+}
+.audio-details dt {
+  overflow: hidden;
+  color: var(--color-text-l);
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audio-details dd {
+  margin: 0.2rem 0 0;
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .progress-block {
   width: min(440px, 100%);
@@ -287,6 +374,9 @@ function seek(event: Event): void {
   }
   .panel-cover {
     width: min(260px, 62vw);
+  }
+  .audio-details {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .lyrics-panel {
     min-height: 250px;

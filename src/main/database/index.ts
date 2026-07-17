@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { join } from 'node:path'
-import { DATABASE_SCHEMA_VERSION, schemaV1 } from './schema'
+import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2 } from './schema'
 import { getDataPath } from '../utils/pathUtils'
 
 let database: Database.Database | undefined
@@ -21,13 +21,18 @@ function migrate(db: Database.Database): void {
   const currentVersion = db
     .prepare('SELECT MAX(version) AS version FROM schema_migration')
     .get() as { version: number | null }
-  if ((currentVersion.version ?? 0) >= DATABASE_SCHEMA_VERSION) return
+  const version = currentVersion.version ?? 0
+  if (version >= DATABASE_SCHEMA_VERSION) return
 
   db.transaction(() => {
-    db.exec(schemaV1)
-    db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (?)').run(
-      DATABASE_SCHEMA_VERSION
-    )
+    if (version < 1) {
+      db.exec(schemaV1)
+      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (1)').run()
+    }
+    if (version < 2) {
+      db.exec(schemaV2)
+      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (2)').run()
+    }
   })()
 }
 

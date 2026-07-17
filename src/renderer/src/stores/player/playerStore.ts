@@ -1,8 +1,25 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { AudioChainStatus, PlaybackState, TrackInfo, DeviceInfo, ChannelMatrixConfig, ChorusConfig, CompressorConfig, DelayConfig, DspNodeConfig, EqBand, NoiseGateConfig, PhaserConfig, ResamplerConfig, TransitionConfig } from '../types/audio'
+import type {
+  AudioChainStatus,
+  PlaybackState,
+  TrackInfo,
+  DeviceInfo,
+  ChannelMatrixConfig,
+  ChorusConfig,
+  CompressorConfig,
+  DelayConfig,
+  DspNodeConfig,
+  EqBand,
+  NoiseGateConfig,
+  PhaserConfig,
+  ResamplerConfig,
+  TransitionConfig
+} from '../types/audio'
 import { audioBridge } from '@/services/audioBridge'
 import { useLogStore } from '@/stores/log/logStore'
+import { PlayMode } from '@/consts'
+import type { LibrarySong } from '@/types/library'
 
 export const usePlayerStore = defineStore('player', () => {
   // ── State ──
@@ -17,36 +34,95 @@ export const usePlayerStore = defineStore('player', () => {
   const devices = ref<DeviceInfo[]>([])
   const currentDeviceId = ref('default')
   const audioChain = ref<AudioChainStatus | null>(null)
-  const audioAnalysis = ref({ outputTimeMs: 0, analysisTimeMs: 0, analysisLatencyMs: 0, rms: 0, lowEnergy: 0, onsetStrength: 0, droppedFrames: 0, beatSequence: 0, bpm: 0, momentaryLufs: -70, shortTermLufs: -70, integratedLufs: -70, spectrum: Array.from({ length: 64 }, () => 0) })
+  const audioAnalysis = ref({
+    outputTimeMs: 0,
+    analysisTimeMs: 0,
+    analysisLatencyMs: 0,
+    rms: 0,
+    lowEnergy: 0,
+    onsetStrength: 0,
+    droppedFrames: 0,
+    beatSequence: 0,
+    bpm: 0,
+    momentaryLufs: -70,
+    shortTermLufs: -70,
+    integratedLufs: -70,
+    spectrum: Array.from({ length: 64 }, () => 0)
+  })
   const rhythmVisualConfig = ref({ enabled: true, intensity: 0.65, reducedMotion: false })
   const preampEnabled = ref(false)
   const preampDb = ref(0)
-  const replayGainConfig = ref<{ mode: 'off' | 'track' | 'album'; preventClipping: boolean; active: boolean; appliedGainDb: number }>({ mode: 'off', preventClipping: true, active: false, appliedGainDb: 0 })
+  const replayGainConfig = ref<{
+    mode: 'off' | 'track' | 'album'
+    preventClipping: boolean
+    active: boolean
+    appliedGainDb: number
+  }>({ mode: 'off', preventClipping: true, active: false, appliedGainDb: 0 })
   const playbackSpeedConfig = ref({ enabled: false, speed: 1 })
   const eqBands = ref<EqBand[]>(createDefaultEqBands())
-  const resamplerConfig = ref<ResamplerConfig>({ forceOutputRate: false, targetSampleRate: 48000, quality: 'best' })
+  const resamplerConfig = ref<ResamplerConfig>({
+    forceOutputRate: false,
+    targetSampleRate: 48000,
+    quality: 'best'
+  })
   const dopEnabled = ref(false)
-  const transitionConfig = ref<TransitionConfig>({ gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000 })
+  const transitionConfig = ref<TransitionConfig>({
+    gaplessEnabled: true,
+    crossfadeEnabled: false,
+    crossfadeMs: 5000
+  })
   const dspNodes = ref<DspNodeConfig[]>([
-    { id: 'compressor', enabled: false }, { id: 'delay', enabled: false }, { id: 'reverb', enabled: false }, { id: 'chorus', enabled: false }, { id: 'noise_gate', enabled: false }, { id: 'phaser', enabled: false }
+    { id: 'compressor', enabled: false },
+    { id: 'delay', enabled: false },
+    { id: 'reverb', enabled: false },
+    { id: 'chorus', enabled: false },
+    { id: 'noise_gate', enabled: false },
+    { id: 'phaser', enabled: false }
   ])
-  const compressorConfig = ref<CompressorConfig>({ thresholdDb: -18, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0 })
+  const compressorConfig = ref<CompressorConfig>({
+    thresholdDb: -18,
+    ratio: 4,
+    attackMs: 10,
+    releaseMs: 100,
+    makeupDb: 0
+  })
   const delayConfig = ref<DelayConfig>({ delayMs: 250, feedback: 0.25, mix: 0.2 })
   const reverbConfig = ref({ roomSize: 0.5, decay: 0.4, mix: 0.15 })
   const limiterConfig = ref({ enabled: false, ceilingDb: -1, releaseMs: 80 })
   const chorusConfig = ref<ChorusConfig>({ rateHz: 0.8, depthMs: 8, mix: 0.35 })
-  const noiseGateConfig = ref<NoiseGateConfig>({ thresholdDb: -50, attackMs: 5, holdMs: 50, releaseMs: 150, rangeDb: -80 })
-  const phaserConfig = ref<PhaserConfig>({ rateHz: 0.4, depth: 0.6, centerHz: 800, feedback: 0.2, mix: 0.5 })
-  const channelMatrixConfig = ref<ChannelMatrixConfig>({ enabled: false, balance: 0, swapStereo: false, monoDownmix: false, outputGains: [1, 1, 1, 1, 1, 1, 1, 1] })
+  const noiseGateConfig = ref<NoiseGateConfig>({
+    thresholdDb: -50,
+    attackMs: 5,
+    holdMs: 50,
+    releaseMs: 150,
+    rangeDb: -80
+  })
+  const phaserConfig = ref<PhaserConfig>({
+    rateHz: 0.4,
+    depth: 0.6,
+    centerHz: 800,
+    feedback: 0.2,
+    mix: 0.5
+  })
+  const channelMatrixConfig = ref<ChannelMatrixConfig>({
+    enabled: false,
+    balance: 0,
+    swapStereo: false,
+    monoDownmix: false,
+    outputGains: [1, 1, 1, 1, 1, 1, 1, 1]
+  })
+  const queue = ref<LibrarySong[]>([])
+  const currentQueueIndex = ref(-1)
+  const playMode = ref<PlayMode>(PlayMode.List)
+  let ignorePositionRolloverUntil = 0
 
   // ── Computed ──
   const isPlaying = computed(() => state.value === 'playing')
   const isPaused = computed(() => state.value === 'paused')
-  const progress = computed(() =>
-    durationMs.value > 0 ? positionMs.value / durationMs.value : 0
-  )
+  const progress = computed(() => (durationMs.value > 0 ? positionMs.value / durationMs.value : 0))
   const positionFormatted = computed(() => formatTime(positionMs.value))
   const durationFormatted = computed(() => formatTime(durationMs.value))
+  const currentQueueSong = computed(() => queue.value[currentQueueIndex.value] ?? null)
 
   // ── Actions ──
   async function openFile(filePath: string) {
@@ -71,6 +147,109 @@ export const usePlayerStore = defineStore('player', () => {
     return ok
   }
 
+  function setPlayMode(mode: PlayMode): void {
+    playMode.value = mode
+  }
+
+  function addToQueue(songs: LibrarySong[], insertAfterCurrent = false): void {
+    const existingIds = new Set(queue.value.map((song) => song.id))
+    const additions = songs.filter((song) => !existingIds.has(song.id))
+    if (!additions.length) return
+    if (insertAfterCurrent && currentQueueIndex.value >= 0) {
+      queue.value.splice(currentQueueIndex.value + 1, 0, ...additions)
+      return
+    }
+    queue.value.push(...additions)
+  }
+
+  function setQueue(songs: LibrarySong[]): void {
+    const ids = new Set<number>()
+    queue.value = songs.filter((song) => {
+      if (ids.has(song.id)) return false
+      ids.add(song.id)
+      return true
+    })
+    currentQueueIndex.value = -1
+  }
+
+  async function playQueueItem(index: number): Promise<boolean> {
+    const song = queue.value[index]
+    if (!song || song.songStatus === 0) return false
+    currentQueueIndex.value = index
+    const opened = await openFile(song.audio)
+    if (opened) await play()
+    return opened
+  }
+
+  async function playCollection(songs: LibrarySong[], songId: number): Promise<boolean> {
+    setQueue(songs)
+    const index = queue.value.findIndex((song) => song.id === songId)
+    return index >= 0 ? playQueueItem(index) : false
+  }
+
+  function moveQueueItem(from: number, to: number): void {
+    if (from === to || from < 0 || to < 0 || from >= queue.value.length || to >= queue.value.length)
+      return
+    const [song] = queue.value.splice(from, 1)
+    queue.value.splice(to, 0, song)
+    if (currentQueueIndex.value === from) currentQueueIndex.value = to
+    else if (from < currentQueueIndex.value && to >= currentQueueIndex.value)
+      currentQueueIndex.value--
+    else if (from > currentQueueIndex.value && to <= currentQueueIndex.value)
+      currentQueueIndex.value++
+  }
+
+  async function removeQueueItem(index: number): Promise<void> {
+    if (index < 0 || index >= queue.value.length) return
+    const isCurrent = index === currentQueueIndex.value
+    queue.value.splice(index, 1)
+    if (index < currentQueueIndex.value) currentQueueIndex.value--
+    if (!isCurrent) return
+    if (!queue.value.length) {
+      currentQueueIndex.value = -1
+      await stop()
+      return
+    }
+    currentQueueIndex.value = Math.min(index, queue.value.length - 1)
+    await playQueueItem(currentQueueIndex.value)
+  }
+
+  function clearQueue(): void {
+    queue.value = []
+    currentQueueIndex.value = -1
+  }
+
+  function nextIndex(): number {
+    const length = queue.value.length
+    if (!length || currentQueueIndex.value < 0) return -1
+    if (playMode.value === PlayMode.Single) return currentQueueIndex.value
+    if (playMode.value === PlayMode.Random) {
+      if (length === 1) return 0
+      let index = currentQueueIndex.value
+      while (index === currentQueueIndex.value) index = Math.floor(Math.random() * length)
+      return index
+    }
+    const next = currentQueueIndex.value + 1
+    if (next < length) return next
+    return playMode.value === PlayMode.List ? 0 : -1
+  }
+
+  async function playNext(): Promise<boolean> {
+    const index = nextIndex()
+    return index >= 0 ? playQueueItem(index) : false
+  }
+
+  async function playPrevious(): Promise<boolean> {
+    if (!queue.value.length || currentQueueIndex.value < 0) return false
+    const index =
+      currentQueueIndex.value > 0
+        ? currentQueueIndex.value - 1
+        : playMode.value === PlayMode.List
+          ? queue.value.length - 1
+          : 0
+    return playQueueItem(index)
+  }
+
   async function pause() {
     return audioBridge.pause()
   }
@@ -81,6 +260,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function seek(ms: number) {
     const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
+    // A manual seek from the tail back to the beginning must not look like a
+    // legacy native-engine loop rollover.
+    ignorePositionRolloverUntil = Date.now() + 1000
     positionMs.value = targetMs
     return audioBridge.seek(targetMs)
   }
@@ -95,13 +277,25 @@ export const usePlayerStore = defineStore('player', () => {
     preampEnabled.value = enabled
     await audioBridge.setPreamp(preampDb.value, preampEnabled.value)
   }
-  async function loadReplayGain(): Promise<void> { const c = await audioBridge.getReplayGain(); if (c) replayGainConfig.value = c }
+  async function loadReplayGain(): Promise<void> {
+    const c = await audioBridge.getReplayGain()
+    if (c) replayGainConfig.value = c
+  }
   async function setReplayGain(): Promise<boolean> {
-    const ok = await audioBridge.setReplayGain({ mode: replayGainConfig.value.mode, preventClipping: replayGainConfig.value.preventClipping })
-    if (ok) { await loadReplayGain(); await refreshAudioChain() }
+    const ok = await audioBridge.setReplayGain({
+      mode: replayGainConfig.value.mode,
+      preventClipping: replayGainConfig.value.preventClipping
+    })
+    if (ok) {
+      await loadReplayGain()
+      await refreshAudioChain()
+    }
     return ok
   }
-  async function loadPlaybackSpeed(): Promise<void> { const c = await audioBridge.getPlaybackSpeed(); if (c) playbackSpeedConfig.value = c }
+  async function loadPlaybackSpeed(): Promise<void> {
+    const c = await audioBridge.getPlaybackSpeed()
+    if (c) playbackSpeedConfig.value = c
+  }
   async function setPlaybackSpeed(): Promise<boolean> {
     const ok = await audioBridge.setPlaybackSpeed({ ...playbackSpeedConfig.value })
     if (ok) await refreshAudioChain()
@@ -115,7 +309,9 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function commitEqBands(): Promise<void> {
     const logStore = useLogStore()
-    const activeBands = eqBands.value.filter((band) => band.enabled && Math.abs(band.gainDb) >= 0.0001).length
+    const activeBands = eqBands.value.filter(
+      (band) => band.enabled && Math.abs(band.gainDb) >= 0.0001
+    ).length
     logStore.addEntry({
       level: 'info',
       message: `Renderer EQ submit: ${activeBands} active band(s)`,
@@ -149,12 +345,23 @@ export const usePlayerStore = defineStore('player', () => {
     const config = await audioBridge.getResamplerConfig()
     if (config) resamplerConfig.value = config
   }
-  async function loadDopEnabled(): Promise<void> { dopEnabled.value = await audioBridge.getDopEnabled() }
-  async function loadTransitionConfig(): Promise<void> { const config = await audioBridge.getTransitionConfig(); if (config) transitionConfig.value = config }
+  async function loadDopEnabled(): Promise<void> {
+    dopEnabled.value = await audioBridge.getDopEnabled()
+  }
+  async function loadTransitionConfig(): Promise<void> {
+    const config = await audioBridge.getTransitionConfig()
+    if (config) transitionConfig.value = config
+  }
   async function setTransitionConfig(): Promise<boolean> {
-    const next = { ...transitionConfig.value, crossfadeMs: Math.max(0, Math.min(30000, transitionConfig.value.crossfadeMs)) }
+    const next = {
+      ...transitionConfig.value,
+      crossfadeMs: Math.max(0, Math.min(30000, transitionConfig.value.crossfadeMs))
+    }
     const ok = await audioBridge.setTransitionConfig(next)
-    if (ok) { transitionConfig.value = next; await refreshAudioChain() }
+    if (ok) {
+      transitionConfig.value = next
+      await refreshAudioChain()
+    }
     return ok
   }
   async function setDopEnabled(enabled: boolean): Promise<boolean> {
@@ -190,17 +397,45 @@ export const usePlayerStore = defineStore('player', () => {
     if (ok) await refreshAudioChain()
     return ok
   }
-  async function loadDelayConfig(): Promise<void> { const config = await audioBridge.getDelayConfig(); if (config) delayConfig.value = config }
-  async function setDelayConfig(): Promise<boolean> { return audioBridge.setDelayConfig({ ...delayConfig.value }) }
-  async function loadReverbConfig(): Promise<void> { const c = await audioBridge.getReverbConfig(); if (c) reverbConfig.value = c }
-  async function setReverbConfig(): Promise<boolean> { return audioBridge.setReverbConfig({ ...reverbConfig.value }) }
-  async function loadChorusConfig(): Promise<void> { const c = await audioBridge.getChorusConfig(); if (c) chorusConfig.value = c }
-  async function setChorusConfig(): Promise<boolean> { return audioBridge.setChorusConfig({ ...chorusConfig.value }) }
-  async function loadNoiseGateConfig(): Promise<void> { const c = await audioBridge.getNoiseGateConfig(); if (c) noiseGateConfig.value = c }
-  async function setNoiseGateConfig(): Promise<boolean> { return audioBridge.setNoiseGateConfig({ ...noiseGateConfig.value }) }
-  async function loadPhaserConfig(): Promise<void> { const c = await audioBridge.getPhaserConfig(); if (c) phaserConfig.value = c }
-  async function setPhaserConfig(): Promise<boolean> { return audioBridge.setPhaserConfig({ ...phaserConfig.value }) }
-  async function loadChannelMatrixConfig(): Promise<void> { const c = await audioBridge.getChannelMatrixConfig(); if (c) channelMatrixConfig.value = c }
+  async function loadDelayConfig(): Promise<void> {
+    const config = await audioBridge.getDelayConfig()
+    if (config) delayConfig.value = config
+  }
+  async function setDelayConfig(): Promise<boolean> {
+    return audioBridge.setDelayConfig({ ...delayConfig.value })
+  }
+  async function loadReverbConfig(): Promise<void> {
+    const c = await audioBridge.getReverbConfig()
+    if (c) reverbConfig.value = c
+  }
+  async function setReverbConfig(): Promise<boolean> {
+    return audioBridge.setReverbConfig({ ...reverbConfig.value })
+  }
+  async function loadChorusConfig(): Promise<void> {
+    const c = await audioBridge.getChorusConfig()
+    if (c) chorusConfig.value = c
+  }
+  async function setChorusConfig(): Promise<boolean> {
+    return audioBridge.setChorusConfig({ ...chorusConfig.value })
+  }
+  async function loadNoiseGateConfig(): Promise<void> {
+    const c = await audioBridge.getNoiseGateConfig()
+    if (c) noiseGateConfig.value = c
+  }
+  async function setNoiseGateConfig(): Promise<boolean> {
+    return audioBridge.setNoiseGateConfig({ ...noiseGateConfig.value })
+  }
+  async function loadPhaserConfig(): Promise<void> {
+    const c = await audioBridge.getPhaserConfig()
+    if (c) phaserConfig.value = c
+  }
+  async function setPhaserConfig(): Promise<boolean> {
+    return audioBridge.setPhaserConfig({ ...phaserConfig.value })
+  }
+  async function loadChannelMatrixConfig(): Promise<void> {
+    const c = await audioBridge.getChannelMatrixConfig()
+    if (c) channelMatrixConfig.value = c
+  }
   async function setChannelMatrixConfig(): Promise<boolean> {
     const config = {
       enabled: channelMatrixConfig.value.enabled,
@@ -216,12 +451,23 @@ export const usePlayerStore = defineStore('player', () => {
       if (ok) await refreshAudioChain()
       return ok
     } catch (error) {
-      useLogStore().addEntry({ level: 'error', message: `Channel Matrix submit exception: ${error instanceof Error ? error.message : String(error)}`, timestamp: Date.now() })
+      useLogStore().addEntry({
+        level: 'error',
+        message: `Channel Matrix submit exception: ${error instanceof Error ? error.message : String(error)}`,
+        timestamp: Date.now()
+      })
       return false
     }
   }
-  async function loadLimiter(): Promise<void> { const c = await audioBridge.getLimiter(); if (c) limiterConfig.value = c }
-  async function setLimiter(): Promise<boolean> { const ok = await audioBridge.setLimiter({ ...limiterConfig.value }); if (ok) await refreshAudioChain(); return ok }
+  async function loadLimiter(): Promise<void> {
+    const c = await audioBridge.getLimiter()
+    if (c) limiterConfig.value = c
+  }
+  async function setLimiter(): Promise<boolean> {
+    const ok = await audioBridge.setLimiter({ ...limiterConfig.value })
+    if (ok) await refreshAudioChain()
+    return ok
+  }
 
   async function commitDspNodes(): Promise<boolean> {
     const nodes = dspNodes.value.map((node) => ({ id: node.id, enabled: node.enabled }))
@@ -242,7 +488,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (currentBackend.value === backend) return true
     const ok = await audioBridge.setBackend(backend)
     if (!ok) {
-      useLogStore().addEntry({ level: 'error', message: `Failed to switch audio backend to ${backend}`, timestamp: Date.now() })
+      useLogStore().addEntry({
+        level: 'error',
+        message: `Failed to switch audio backend to ${backend}`,
+        timestamp: Date.now()
+      })
       return false
     }
     currentBackend.value = backend
@@ -260,7 +510,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (currentDeviceId.value === deviceId) return true
     const ok = await audioBridge.setDevice(deviceId)
     if (!ok) {
-      useLogStore().addEntry({ level: 'error', message: `Failed to select audio device ${deviceId}`, timestamp: Date.now() })
+      useLogStore().addEntry({
+        level: 'error',
+        message: `Failed to select audio device ${deviceId}`,
+        timestamp: Date.now()
+      })
       return false
     }
     currentDeviceId.value = deviceId
@@ -272,7 +526,11 @@ export const usePlayerStore = defineStore('player', () => {
 
     const ok = await audioBridge.selectOutputDevice(device.backend, device.id)
     if (!ok) {
-      useLogStore().addEntry({ level: 'error', message: `Failed to select ${device.backend} device ${device.name}`, timestamp: Date.now() })
+      useLogStore().addEntry({
+        level: 'error',
+        message: `Failed to select ${device.backend} device ${device.name}`,
+        timestamp: Date.now()
+      })
       return false
     }
 
@@ -317,7 +575,10 @@ export const usePlayerStore = defineStore('player', () => {
       const parsed = JSON.parse(stored) as Partial<typeof rhythmVisualConfig.value>
       rhythmVisualConfig.value = {
         enabled: parsed.enabled !== false,
-        intensity: Math.max(0, Math.min(1, typeof parsed.intensity === 'number' ? parsed.intensity : 0.65)),
+        intensity: Math.max(
+          0,
+          Math.min(1, typeof parsed.intensity === 'number' ? parsed.intensity : 0.65)
+        ),
         reducedMotion: parsed.reducedMotion === true
       }
     } catch {
@@ -326,15 +587,44 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function saveRhythmVisualConfig(): void {
-    localStorage.setItem('easy-player.rhythm-visual-config', JSON.stringify(rhythmVisualConfig.value))
+    localStorage.setItem(
+      'easy-player.rhythm-visual-config',
+      JSON.stringify(rhythmVisualConfig.value)
+    )
   }
 
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
   let analysisTimer: ReturnType<typeof setInterval> | undefined
+  let autoAdvanceInProgress = false
+  let lastTrackEndedAt = 0
+
+  async function handleTrackEnded(reason: string): Promise<void> {
+    const now = Date.now()
+    // Native backends may emit an EOF notification more than once while the
+    // previous output callback drains. Only one event may advance the queue.
+    if (autoAdvanceInProgress || now - lastTrackEndedAt < 500) return
+    lastTrackEndedAt = now
+    autoAdvanceInProgress = true
+    state.value = 'stopped'
+    useLogStore().addEntry({
+      level: 'info',
+      message: `Playback reached end of track (${reason})`,
+      timestamp: now
+    })
+    try {
+      await playNext()
+    } finally {
+      autoAdvanceInProgress = false
+    }
+  }
 
   function subscribeToEvents() {
-    if (!analysisTimer) analysisTimer = setInterval(() => { void refreshAudioAnalysis() }, 20)
+    if (unsubs.length) return
+    if (!analysisTimer)
+      analysisTimer = setInterval(() => {
+        void refreshAudioAnalysis()
+      }, 20)
     unsubs.push(
       audioBridge.onStateChanged((data) => {
         state.value = data.state as PlaybackState
@@ -352,17 +642,26 @@ export const usePlayerStore = defineStore('player', () => {
 
     unsubs.push(
       audioBridge.onPositionChanged((data) => {
+        const previousPosition = positionMs.value
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
+        // Older native addons implement their temporary "next decoder" by
+        // reopening the current file. They therefore never emit trackEnded,
+        // but their cyclic clock visibly jumps from the tail to the start.
+        // Treat that rollover as EOF so the renderer-owned queue still
+        // advances correctly while the addon is awaiting replacement.
+        if (
+          Date.now() >= ignorePositionRolloverUntil &&
+          data.durationMs > 0 &&
+          previousPosition > data.durationMs * 0.8 &&
+          data.positionMs < data.durationMs * 0.15
+        ) {
+          void handleTrackEnded('position rollover')
+        }
       })
     )
 
-    unsubs.push(
-      audioBridge.onTrackEnded((data) => {
-        state.value = 'stopped'
-        useLogStore().addEntry({ level: 'info', message: `Playback reached end of track (${data.reason})`, timestamp: Date.now() })
-      })
-    )
+    unsubs.push(audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason)))
 
     // Forward engine errors to the log store
     unsubs.push(
@@ -416,6 +715,10 @@ export const usePlayerStore = defineStore('player', () => {
     noiseGateConfig,
     phaserConfig,
     channelMatrixConfig,
+    queue,
+    currentQueueIndex,
+    currentQueueSong,
+    playMode,
     // Computed
     isPlaying,
     isPaused,
@@ -425,6 +728,16 @@ export const usePlayerStore = defineStore('player', () => {
     // Actions
     openFile,
     play,
+    setPlayMode,
+    addToQueue,
+    setQueue,
+    playQueueItem,
+    playCollection,
+    moveQueueItem,
+    removeQueueItem,
+    clearQueue,
+    playNext,
+    playPrevious,
     pause,
     stop,
     seek,
@@ -478,8 +791,10 @@ export const usePlayerStore = defineStore('player', () => {
 })
 
 function createDefaultEqBands(): EqBand[] {
-  const frequencies = [20, 31.5, 50, 80, 125, 200, 315, 500, 800, 1250,
-    2000, 3150, 5000, 8000, 10000, 12000, 14000, 16000, 18000, 20000]
+  const frequencies = [
+    20, 31.5, 50, 80, 125, 200, 315, 500, 800, 1250, 2000, 3150, 5000, 8000, 10000, 12000, 14000,
+    16000, 18000, 20000
+  ]
   return frequencies.map((frequencyHz) => ({ enabled: false, frequencyHz, gainDb: 0, q: 1 }))
 }
 

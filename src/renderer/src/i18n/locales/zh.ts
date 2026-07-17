@@ -55,5 +55,14 @@ export default {
     details: '歌曲详情',
     openFolder: '打开所在文件夹',
     delete: '删除'
+  },
+  queue: {
+    title: '播放队列',
+    empty: '播放队列为空',
+    clear: '清空',
+    sequential: '顺序播放',
+    list: '列表循环',
+    single: '单曲循环',
+    random: '随机播放'
   }
 }

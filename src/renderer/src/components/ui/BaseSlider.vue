@@ -15,6 +15,7 @@ interface Props {
   marks?: Record<number, string>
   size?: SliderSize
   vertical?: boolean
+  disabled?: boolean
 
   transform?: (v: number) => number
   reverseTransform?: (v: number) => number
@@ -25,7 +26,8 @@ const props = withDefaults(defineProps<Props>(), {
   max: 100,
   step: 1,
   size: 'md',
-  vertical: false
+  vertical: false,
+  disabled: false
 })
 
 const emit = defineEmits<{
@@ -292,16 +294,18 @@ function onMarkClick(v: number) {
 </script>
 
 <template>
-  <div class="select-none" :class="vertical ? 'inline-flex h-full' : 'w-full'">
+  <div class="select-none" :class="vertical ? 'inline-flex h-full' : ''">
     <div
       ref="sliderRef"
       role="slider"
-      tabindex="0"
+      :tabindex="disabled ? -1 : 0"
       class="relative outline-none"
+      :class="disabled ? 'pointer-events-none opacity-50' : ''"
       :style="containerStyle"
       :aria-valuemin="min"
       :aria-valuemax="max"
       :aria-valuenow="modelValue"
+      :aria-disabled="disabled"
       @click="onTrackClick"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"

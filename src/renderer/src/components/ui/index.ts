@@ -8,6 +8,7 @@ import BaseSlider from './BaseSlider.vue'
 import BaseDrawer from './BaseDrawer.vue'
 import BaseSwitch from './BaseSwitch.vue'
 import BaseMessage from './BaseMessage.vue'
+import BaseSelect from './BaseSelect.vue'
 import BaseSkeleton from './BaseSkeleton.vue'
 
 // 统一管理
@@ -20,6 +21,7 @@ const components = [
   BaseDrawer,
   BaseSwitch,
   BaseMessage,
+  BaseSelect,
   BaseSkeleton
 ]
 

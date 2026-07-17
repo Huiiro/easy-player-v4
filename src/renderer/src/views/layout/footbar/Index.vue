@@ -1,17 +1,67 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PlayMode } from '@/consts'
+import BaseDrawer from '@/components/ui/BaseDrawer.vue'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
+import PlayQueue from '@/components/player/PlayQueue.vue'
+import AudioControlPanel from '@/components/player/AudioControlPanel.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+const { t } = useI18n()
 const collapsed = ref(false)
+const queueVisible = ref(false)
+const audioControlsVisible = ref(false)
+let audioControlsLoaded = false
 
-const trackTitle = computed(() => player.trackInfo?.metadata?.title || '未选择音乐')
-const trackArtist = computed(() => player.trackInfo?.metadata?.artist || 'Easy Player')
+const trackTitle = computed(
+  () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || '未选择音乐'
+)
+const trackArtist = computed(
+  () => player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist || 'Easy Player'
+)
+const coverFailed = ref(false)
+const coverUrl = computed(() => {
+  const cover = player.currentQueueSong?.cover
+  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
+})
+const audioSummary = computed(() => {
+  const info = player.trackInfo
+  if (!info) return ''
+  const parts = [
+    info.format?.toUpperCase(),
+    info.sampleRate ? `${info.sampleRate / 1000} kHz` : '',
+    info.bitDepth ? `${info.bitDepth} bit` : ''
+  ]
+  return parts.filter(Boolean).join(' · ')
+})
+watch(coverUrl, () => {
+  coverFailed.value = false
+})
 const progressPercent = computed(() => `${Math.round(player.progress * 100)}%`)
 const volumePercent = computed(() => `${Math.round(player.volume * 100)}%`)
+const playModeIcon = computed(() => {
+  const icons: Record<PlayMode, string> = {
+    [PlayMode.Sequential]: 'control-order',
+    [PlayMode.List]: 'control-loop',
+    [PlayMode.Single]: 'control-single',
+    [PlayMode.Random]: 'control-shuffle'
+  }
+  return icons[player.playMode]
+})
+const playModeLabel = computed(() => {
+  const labels: Record<PlayMode, string> = {
+    [PlayMode.Sequential]: 'queue.sequential',
+    [PlayMode.List]: 'queue.list',
+    [PlayMode.Single]: 'queue.single',
+    [PlayMode.Random]: 'queue.random'
+  }
+  return t(labels[player.playMode])
+})
 
 function togglePlayback(): void {
   if (player.isPlaying) {
@@ -19,6 +69,18 @@ function togglePlayback(): void {
     return
   }
   if (player.currentFile) void player.play()
+}
+
+function playPrevious(): void {
+  void player.playPrevious()
+}
+
+function playNext(): void {
+  void player.playNext()
+}
+
+function cyclePlayMode(): void {
+  player.setPlayMode(((player.playMode + 1) % 4) as PlayMode)
 }
 
 function seek(event: Event): void {
@@ -36,6 +98,31 @@ function openPlayerPanel(): void {
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
 }
+async function openAudioControls(): Promise<void> {
+  audioControlsVisible.value = true
+  if (audioControlsLoaded) return
+  audioControlsLoaded = true
+  await Promise.all([
+    player.loadEqBands(),
+    player.loadDspNodes(),
+    player.loadCompressorConfig(),
+    player.loadDelayConfig(),
+    player.loadReverbConfig(),
+    player.loadChorusConfig(),
+    player.loadNoiseGateConfig(),
+    player.loadPhaserConfig(),
+    player.loadResamplerConfig(),
+    player.loadChannelMatrixConfig(),
+    player.loadLimiter(),
+    player.loadReplayGain(),
+    player.loadPlaybackSpeed(),
+    player.loadDopEnabled(),
+    player.loadTransitionConfig(),
+    player.refreshAudioChain(),
+    player.refreshDevices(),
+    player.loadOutputDeviceSettings()
+  ])
+}
 </script>
 
 <template>
@@ -48,17 +135,35 @@ function toggleCollapsed(): void {
     >
       <div class="track-info">
         <div class="cover-art" :class="{ 'is-playing': player.isPlaying }">
-          <SvgIcon name="common-music" class-name="size-6" />
+          <img
+            v-if="coverUrl && !coverFailed"
+            :src="coverUrl"
+            class="size-full object-cover"
+            :alt="trackTitle"
+            @error="coverFailed = true"
+          />
+          <SvgIcon v-else name="common-music" class-name="size-6" />
         </div>
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-[var(--color-text)]">{{ trackTitle }}</p>
           <p class="truncate text-xs text-[var(--color-text-l)]">{{ trackArtist }}</p>
+          <p
+            v-if="!collapsed && audioSummary"
+            class="truncate text-[10px] text-[var(--color-text-l)]"
+          >
+            {{ audioSummary }}
+          </p>
         </div>
       </div>
 
       <div v-if="!collapsed" class="player-controls">
         <div class="flex items-center justify-center gap-1.5">
-          <button class="control-button" title="上一首" disabled @click.stop>
+          <button
+            class="control-button"
+            title="上一首"
+            :disabled="!player.queue.length"
+            @click.stop="playPrevious"
+          >
             <SvgIcon name="play-prev" class-name="size-4" />
           </button>
           <button
@@ -69,7 +174,12 @@ function toggleCollapsed(): void {
           >
             <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
           </button>
-          <button class="control-button" title="下一首" disabled @click.stop>
+          <button
+            class="control-button"
+            title="下一首"
+            :disabled="!player.queue.length"
+            @click.stop="playNext"
+          >
             <SvgIcon name="play-next" class-name="size-4" />
           </button>
         </div>
@@ -92,6 +202,9 @@ function toggleCollapsed(): void {
       </div>
 
       <div v-if="!collapsed" class="volume-control">
+        <button class="control-button" :title="playModeLabel" @click.stop="cyclePlayMode">
+          <SvgIcon :name="playModeIcon" class-name="size-4" />
+        </button>
         <SvgIcon
           :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
           class-name="size-5"
@@ -107,6 +220,12 @@ function toggleCollapsed(): void {
           @click.stop
           @input="setVolume"
         />
+        <button class="control-button" :title="t('queue.title')" @click.stop="queueVisible = true">
+          <SvgIcon name="control-playlist" class-name="size-4" />
+        </button>
+        <button class="control-button" title="音频控制" @click.stop="openAudioControls">
+          <SvgIcon name="common-equalizer" class-name="size-4" />
+        </button>
       </div>
 
       <button
@@ -118,6 +237,23 @@ function toggleCollapsed(): void {
         <SvgIcon :name="collapsed ? 'arrow-arrow-up' : 'arrow-arrow-down'" class-name="size-4" />
       </button>
     </section>
+    <BaseDrawer
+      v-model="queueVisible"
+      class="pointer-events-auto"
+      :title="t('queue.title')"
+      direction="right"
+      width="26rem"
+    >
+      <PlayQueue />
+    </BaseDrawer>
+    <BaseDialog
+      v-model="audioControlsVisible"
+      class="pointer-events-auto"
+      title="音频控制"
+      width="max-w-5xl"
+    >
+      <AudioControlPanel class="h-[72vh]" />
+    </BaseDialog>
   </div>
 </template>
 

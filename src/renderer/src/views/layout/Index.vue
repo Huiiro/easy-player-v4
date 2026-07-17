@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted } from 'vue'
 import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
 import FootBar from '@/views/layout/footbar/Index.vue'
@@ -6,8 +7,13 @@ import PlayerPanel from '@/views/layout/playerPanel/Index.vue'
 import CardView from '@/views/layout/card/Index.vue'
 
 import { useUIStore } from '@/stores/ui/uiStore'
+import { usePlayerStore } from '@/stores/player/playerStore'
 
 const ui = useUIStore()
+const player = usePlayerStore()
+
+onMounted(() => player.subscribeToEvents())
+onBeforeUnmount(() => player.unsubscribe())
 </script>
 
 <template>

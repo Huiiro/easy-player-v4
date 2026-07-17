@@ -1,5 +1,8 @@
-import { existsSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { extname, join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
+import { getDataPath } from '../utils/pathUtils'
 import type {
   Album,
   Artist,
@@ -277,7 +280,7 @@ export function getTopDurationSongs(limit = 10): RankedSong[] {
 export function listPlaylists(): Playlist[] {
   return getDatabase()
     .prepare(
-      'SELECT id, name, cover, description, position, created_at AS createdAt FROM song_list ORDER BY position, id'
+      'SELECT id, name, COALESCE(custom_cover, cover) AS cover, custom_cover AS customCover, description, position, created_at AS createdAt FROM song_list ORDER BY position, id'
     )
     .all() as Playlist[]
 }
@@ -285,7 +288,7 @@ export function getPlaylist(id: number): Playlist | null {
   return (
     (getDatabase()
       .prepare(
-        'SELECT id, name, cover, description, position, created_at AS createdAt FROM song_list WHERE id = ?'
+        'SELECT id, name, COALESCE(custom_cover, cover) AS cover, custom_cover AS customCover, description, position, created_at AS createdAt FROM song_list WHERE id = ?'
       )
       .get(id) as Playlist | undefined) ?? null
   )
@@ -294,18 +297,56 @@ export function createPlaylist(input: PlaylistInput): Playlist {
   const db = getDatabase()
   const name = input.name.trim()
   if (!name) throw new Error('Playlist name is required')
+  if (name.length > 64) throw new Error('Playlist name must be 64 characters or fewer')
+  if (db.prepare('SELECT 1 FROM song_list WHERE name = ? COLLATE NOCASE').get(name)) {
+    throw new Error('Playlist name already exists')
+  }
   const result = db
     .prepare(
-      `INSERT INTO song_list (name, cover, description, position) VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM song_list))`
+      `INSERT INTO song_list (name, cover, custom_cover, description, position) VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 0) + 1 FROM song_list))`
     )
-    .run(name, input.cover ?? null, input.description ?? null)
+    .run(name, input.cover ?? null, input.customCover ?? null, input.description ?? null)
   return getPlaylist(Number(result.lastInsertRowid))!
 }
 export function updatePlaylist(id: number, input: PlaylistInput): boolean {
+  const name = input.name.trim()
+  if (!name || name.length > 64)
+    throw new Error('Playlist name must be between 1 and 64 characters')
+  if (
+    getDatabase()
+      .prepare('SELECT 1 FROM song_list WHERE name = ? COLLATE NOCASE AND id != ?')
+      .get(name, id)
+  ) {
+    throw new Error('Playlist name already exists')
+  }
   const result = getDatabase()
     .prepare('UPDATE song_list SET name = ?, cover = ?, description = ? WHERE id = ?')
-    .run(input.name.trim(), input.cover ?? null, input.description ?? null, id)
+    .run(name, input.cover ?? null, input.description ?? null, id)
   return result.changes > 0
+}
+export function setPlaylistCustomCover(id: number, path: string | null): boolean {
+  const db = getDatabase()
+  return db.transaction(() => {
+    const customCover = path ? copyPlaylistCover(path) : null
+    const changed =
+      db.prepare('UPDATE song_list SET custom_cover = ? WHERE id = ?').run(customCover, id)
+        .changes > 0
+    if (changed && !path) refreshPlaylistCover(id)
+    return changed
+  })()
+}
+
+function copyPlaylistCover(sourcePath: string): string {
+  if (!existsSync(sourcePath)) throw new Error('The selected cover file no longer exists')
+  const extension = extname(sourcePath).toLowerCase()
+  if (!['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension)) {
+    throw new Error('Unsupported cover image format')
+  }
+  const coverDirectory = join(getDataPath(), 'covers')
+  mkdirSync(coverDirectory, { recursive: true })
+  const destination = join(coverDirectory, `playlist-${randomUUID()}${extension}`)
+  copyFileSync(sourcePath, destination)
+  return destination
 }
 export function deletePlaylists(ids: number[]): number {
   if (!ids.length) return 0
@@ -323,20 +364,47 @@ export function addSongsToPlaylist(playlistId: number, songIds: number[]): numbe
     'INSERT OR IGNORE INTO song_list_item (song_list_id, song_id, position) VALUES (@playlistId, @songId, @position)'
   )
   let added = 0
-  db.transaction(() =>
+  db.transaction(() => {
+    const start =
+      (
+        db
+          .prepare(
+            'SELECT COALESCE(MAX(position), -1) AS position FROM song_list_item WHERE song_list_id = ?'
+          )
+          .get(playlistId) as { position: number }
+      ).position + 1
     songIds.forEach((songId, index) => {
-      added += stmt.run({ playlistId, songId, position: index }).changes
+      added += stmt.run({ playlistId, songId, position: start + index }).changes
     })
-  )()
+    refreshPlaylistCover(playlistId)
+  })()
   return added
 }
 export function removeSongsFromPlaylist(playlistId: number, songIds: number[]): number {
   if (!songIds.length) return 0
-  return getDatabase()
+  const db = getDatabase()
+  return db.transaction(() => {
+    const removed = db
+      .prepare(
+        `DELETE FROM song_list_item WHERE song_list_id = ? AND song_id IN (${songIds.map(() => '?').join(',')})`
+      )
+      .run(playlistId, ...songIds).changes
+    refreshPlaylistCover(playlistId)
+    return removed
+  })()
+}
+
+function refreshPlaylistCover(playlistId: number): void {
+  const db = getDatabase()
+  const playlist = db.prepare('SELECT custom_cover FROM song_list WHERE id = ?').get(playlistId) as
+    { custom_cover: string | null } | undefined
+  if (!playlist || playlist.custom_cover) return
+  const song = db
     .prepare(
-      `DELETE FROM song_list_item WHERE song_list_id = ? AND song_id IN (${songIds.map(() => '?').join(',')})`
+      `SELECT s.cover FROM song_list_item sli JOIN song s ON s.id = sli.song_id WHERE sli.song_list_id = ? ORDER BY sli.position DESC, sli.id DESC LIMIT 1`
     )
-    .run(playlistId, ...songIds).changes
+    .get(playlistId) as { cover: string | null } | undefined
+  db.prepare('UPDATE song_list SET cover = ? WHERE id = ?').run(song?.cover ?? null, playlistId)
 }
 export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
@@ -390,7 +458,7 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
 export function listPlaylistMemberships(songId: number): PlaylistMembership[] {
   return getDatabase()
     .prepare(
-      `SELECT sl.id, sl.name, sl.cover, sl.description, sl.position, sl.created_at AS createdAt, EXISTS(SELECT 1 FROM song_list_item sli WHERE sli.song_list_id = sl.id AND sli.song_id = ?) AS isIncluded FROM song_list sl ORDER BY sl.position, sl.id`
+      `SELECT sl.id, sl.name, COALESCE(sl.custom_cover, sl.cover) AS cover, sl.custom_cover AS customCover, sl.description, sl.position, sl.created_at AS createdAt, EXISTS(SELECT 1 FROM song_list_item sli WHERE sli.song_list_id = sl.id AND sli.song_id = ?) AS isIncluded FROM song_list sl ORDER BY sl.position, sl.id`
     )
     .all(songId)
     .map((row) => ({

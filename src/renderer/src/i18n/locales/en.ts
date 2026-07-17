@@ -55,5 +55,14 @@ export default {
     details: 'Song details',
     openFolder: 'Open folder',
     delete: 'Delete'
+  },
+  queue: {
+    title: 'Play queue',
+    empty: 'The play queue is empty',
+    clear: 'Clear',
+    sequential: 'Sequential',
+    list: 'Repeat all',
+    single: 'Repeat one',
+    random: 'Shuffle'
   }
 }

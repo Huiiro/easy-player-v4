@@ -8,6 +8,7 @@ const props = defineProps<{
   index: number
   selectionMode: boolean
   selected: boolean
+  current: boolean
 }>()
 
 const emit = defineEmits<{
@@ -47,6 +48,11 @@ const requestMenu = (event: MouseEvent): void => {
   <div class="h-16 border-b border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]">
     <div
       class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 transition-colors hover:bg-[var(--color-hover)]"
+      :class="
+        current
+          ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]'
+          : ''
+      "
       @dblclick="emit('play', song)"
     >
       <span class="flex items-center gap-2 text-sm text-[var(--color-text-l)]">

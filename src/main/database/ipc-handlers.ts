@@ -46,6 +46,8 @@ const handlers = {
     id: number
     input: Parameters<typeof library.updatePlaylist>[1]
   }) => library.updatePlaylist(id, input),
+  setPlaylistCustomCover: ({ id, path }: { id: number; path: string | null }) =>
+    library.setPlaylistCustomCover(id, path),
   deletePlaylists: ({ ids }: { ids: number[] }) => library.deletePlaylists(ids),
   reorderPlaylists: ({ items }: { items: Array<{ id: number; position: number }> }) =>
     library.reorderPlaylists(items),
