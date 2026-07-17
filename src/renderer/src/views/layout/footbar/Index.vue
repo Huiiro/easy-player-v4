@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+const collapsed = ref(false)
 
 const trackTitle = computed(() => player.trackInfo?.metadata?.title || '未选择音乐')
 const trackArtist = computed(() => player.trackInfo?.metadata?.artist || 'Easy Player')
@@ -27,11 +28,24 @@ function seek(event: Event): void {
 function setVolume(event: Event): void {
   void player.setVolume(Number((event.target as HTMLInputElement).value) / 100)
 }
+
+function openPlayerPanel(): void {
+  ui.showPlayer = true
+}
+
+function toggleCollapsed(): void {
+  collapsed.value = !collapsed.value
+}
 </script>
 
 <template>
   <div class="footbar-shell px-4 pb-4 pt-2" :class="{ 'is-card-mode': ui.useCardView }">
-    <section class="footbar-dock" aria-label="播放器控制栏">
+    <section
+      class="footbar-dock"
+      :class="{ 'is-collapsed': collapsed }"
+      aria-label="播放器控制栏，点击打开播放器面板"
+      @click="openPlayerPanel"
+    >
       <div class="track-info">
         <div class="cover-art" :class="{ 'is-playing': player.isPlaying }">
           <SvgIcon name="common-music" class-name="size-6" />
@@ -42,20 +56,20 @@ function setVolume(event: Event): void {
         </div>
       </div>
 
-      <div class="player-controls">
+      <div v-if="!collapsed" class="player-controls">
         <div class="flex items-center justify-center gap-1.5">
-          <button class="control-button" title="上一首" disabled>
+          <button class="control-button" title="上一首" disabled @click.stop>
             <SvgIcon name="play-prev" class-name="size-4" />
           </button>
           <button
             class="play-button"
             :disabled="!player.currentFile"
             :title="player.isPlaying ? '暂停' : '播放'"
-            @click="togglePlayback"
+            @click.stop="togglePlayback"
           >
             <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
           </button>
-          <button class="control-button" title="下一首" disabled>
+          <button class="control-button" title="下一首" disabled @click.stop>
             <SvgIcon name="play-next" class-name="size-4" />
           </button>
         </div>
@@ -70,13 +84,14 @@ function setVolume(event: Event): void {
             :style="{ '--range-progress': progressPercent }"
             :disabled="!player.durationMs"
             aria-label="播放进度"
+            @click.stop
             @input="seek"
           />
           <span>{{ player.durationFormatted }}</span>
         </div>
       </div>
 
-      <div class="volume-control">
+      <div v-if="!collapsed" class="volume-control">
         <SvgIcon
           :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
           class-name="size-5"
@@ -89,24 +104,35 @@ function setVolume(event: Event): void {
           :value="Math.round(player.volume * 100)"
           :style="{ '--range-progress': volumePercent }"
           aria-label="音量"
+          @click.stop
           @input="setVolume"
         />
       </div>
+
+      <button
+        class="collapse-button"
+        :title="collapsed ? '展开控制栏' : '收起控制栏'"
+        :aria-label="collapsed ? '展开控制栏' : '收起控制栏'"
+        @click.stop="toggleCollapsed"
+      >
+        <SvgIcon :name="collapsed ? 'arrow-arrow-up' : 'arrow-arrow-down'" class-name="size-4" />
+      </button>
     </section>
   </div>
 </template>
 
 <style scoped>
 .footbar-shell {
+  pointer-events: none;
   background: linear-gradient(
     to top,
-    color-mix(in srgb, var(--color-bg) 88%, transparent),
+    color-mix(in srgb, var(--color-bg) 28%, transparent),
     transparent
   );
 }
 .footbar-dock {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(270px, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(270px, 1.2fr) minmax(0, 1fr) auto;
   align-items: center;
   gap: 1.5rem;
   min-height: 72px;
@@ -122,6 +148,12 @@ function setVolume(event: Event): void {
     inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
   backdrop-filter: blur(22px) saturate(145%);
   -webkit-backdrop-filter: blur(22px) saturate(145%);
+  pointer-events: auto;
+  transition:
+    max-width 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+    min-height 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
+    padding 0.25s cubic-bezier(0.34, 1.3, 0.64, 1),
+    gap 0.25s ease;
 }
 .track-info,
 .volume-control {
@@ -132,6 +164,31 @@ function setVolume(event: Event): void {
 }
 .volume-control {
   justify-content: flex-end;
+}
+.collapse-button {
+  display: grid;
+  width: 2rem;
+  height: 2rem;
+  place-items: center;
+  color: var(--color-text-l);
+  background: color-mix(in srgb, var(--color-text) 7%, transparent);
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease;
+}
+.collapse-button:hover {
+  color: var(--color-text);
+  background: color-mix(in srgb, var(--color-text) 13%, transparent);
+  transform: scale(1.08);
+}
+.footbar-dock.is-collapsed {
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 62px;
+  max-width: 410px;
+  gap: 0.75rem;
 }
 .cover-art {
   display: grid;
@@ -237,12 +294,15 @@ function setVolume(event: Event): void {
     padding: 0.5rem 0.75rem 0.75rem;
   }
   .footbar-dock {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 0.65rem;
     padding: 0.55rem 0.7rem;
   }
   .volume-control {
     display: none;
+  }
+  .footbar-dock.is-collapsed {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .track-info p {
     max-width: 120px;

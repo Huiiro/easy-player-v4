@@ -2,6 +2,7 @@
 import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
 import FootBar from '@/views/layout/footbar/Index.vue'
+import PlayerPanel from '@/views/layout/playerPanel/Index.vue'
 import CardView from '@/views/layout/card/Index.vue'
 
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -53,9 +54,48 @@ const ui = useUIStore()
       </section>
 
       <!-- 底栏 -->
-      <footer class="shrink-0 z-20">
+      <footer
+        class="footer-motion absolute inset-x-0 bottom-0 z-20"
+        :class="ui.showPlayer ? 'translate-y-[calc(100%+1rem)] opacity-0 pointer-events-none' : ''"
+      >
         <FootBar />
       </footer>
+
+      <Transition name="player-panel">
+        <PlayerPanel v-if="ui.showPlayer" />
+      </Transition>
     </div>
   </div>
 </template>
+
+<style scoped>
+.player-panel-enter-active,
+.player-panel-leave-active {
+  transition: opacity 0.24s ease;
+}
+.player-panel-enter-active :deep(.player-panel) {
+  transition:
+    transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.24s ease-out;
+}
+.player-panel-leave-active :deep(.player-panel) {
+  transition:
+    transform 0.24s cubic-bezier(0.4, 0, 1, 1),
+    opacity 0.18s ease-in;
+}
+.player-panel-enter-from,
+.player-panel-leave-to {
+  opacity: 0;
+}
+.player-panel-enter-from :deep(.player-panel),
+.player-panel-leave-to :deep(.player-panel) {
+  transform: translateY(calc(100% + 2rem));
+  opacity: 0;
+}
+.footer-motion {
+  pointer-events: none;
+  transition:
+    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+    opacity 0.18s ease-out;
+}
+</style>

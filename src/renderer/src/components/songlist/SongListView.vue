@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import eventBus from '@/utils/eventBus'
 import SongListHeader from './SongListHeader.vue'
@@ -19,6 +20,7 @@ const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
 })
 
 const player = usePlayerStore()
+const { t } = useI18n()
 const songs = ref<LibrarySong[]>([])
 const loading = ref(false)
 const keyword = ref('')
@@ -26,7 +28,8 @@ const sortBy = ref<SortField>('title')
 const sortOrder = ref<'asc' | 'desc'>('asc')
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
-const activeMenuId = ref<number | null>(null)
+const activeMenuSong = ref<LibrarySong | null>(null)
+const menuPosition = ref({ left: '0px', top: '0px' })
 
 const filteredSongs = computed(() => {
   const search = keyword.value.trim().toLocaleLowerCase()
@@ -106,11 +109,12 @@ const toggleAll = (): void => {
     ? new Set()
     : new Set(filteredSongs.value.map((song) => song.id))
 }
-const toggleMenu = (id: number): void => {
-  activeMenuId.value = activeMenuId.value === id ? null : id
+const openMenu = (song: LibrarySong, position: { left: string; top: string }): void => {
+  activeMenuSong.value = activeMenuSong.value?.id === song.id ? null : song
+  menuPosition.value = position
 }
 const closeMenu = (): void => {
-  activeMenuId.value = null
+  activeMenuSong.value = null
 }
 const playSong = async (song: LibrarySong): Promise<void> => {
   if (song.songStatus === 0) return
@@ -119,6 +123,10 @@ const playSong = async (song: LibrarySong): Promise<void> => {
 const playSelected = (): void => {
   const song = filteredSongs.value.find((item) => selectedIds.value.has(item.id))
   if (song) void playSong(song)
+}
+const playActiveMenuSong = (): void => {
+  if (activeMenuSong.value) void playSong(activeMenuSong.value)
+  closeMenu()
 }
 
 // TODO: Connect these actions to the migrated dialogs/services when they are available.
@@ -178,18 +186,92 @@ watch(
         :index="index"
         :selection-mode="selectionMode"
         :selected="selectedIds.has(item.id)"
-        :active-menu-id="activeMenuId"
         @play="playSong"
         @toggle-select="toggleSelect"
-        @add-to-queue="todoAction"
-        @add-to-playlist="todoAction"
-        @edit-tags="todoAction"
-        @show-details="todoAction"
-        @open-folder="todoAction"
-        @delete="todoAction"
-        @toggle-menu="toggleMenu"
-        @close-menu="closeMenu"
+        @request-menu="openMenu"
       />
     </RecycleScroller>
+    <Teleport to="body">
+      <div
+        v-if="activeMenuSong"
+        class="fixed z-[9999] w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-1 text-left shadow-xl"
+        :style="menuPosition"
+        @click.stop
+        @dblclick.stop
+      >
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="playActiveMenuSong"
+        >
+          {{ t('songList.play') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.addToQueue') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.addToPlaylist') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.editTags') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.details') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.openFolder') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[var(--color-hover)]"
+          @click="
+            () => {
+              todoAction()
+              closeMenu()
+            }
+          "
+        >
+          {{ t('songList.delete') }}
+        </button>
+      </div>
+    </Teleport>
   </section>
 </template>

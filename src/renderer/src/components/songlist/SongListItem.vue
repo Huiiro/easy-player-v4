@@ -8,27 +8,16 @@ const props = defineProps<{
   index: number
   selectionMode: boolean
   selected: boolean
-  activeMenuId: number | null
 }>()
 
 const emit = defineEmits<{
   play: [song: LibrarySong]
   toggleSelect: [id: number]
-  addToQueue: [song: LibrarySong]
-  addToPlaylist: [song: LibrarySong]
-  editTags: [song: LibrarySong]
-  showDetails: [song: LibrarySong]
-  openFolder: [song: LibrarySong]
-  delete: [song: LibrarySong]
-  toggleMenu: [id: number]
-  closeMenu: []
+  requestMenu: [song: LibrarySong, position: { left: string; top: string }]
 }>()
 
 const { t } = useI18n()
 const coverFailed = ref(false)
-const menuTrigger = ref<HTMLElement | null>(null)
-const menuStyle = ref({ left: '0px', top: '0px' })
-const menuOpen = computed(() => props.activeMenuId === props.song.id)
 const coverUrl = computed(() =>
   props.song.cover ? `easy-player-media://cover?path=${encodeURIComponent(props.song.cover)}` : null
 )
@@ -44,21 +33,13 @@ watch(
   }
 )
 
-const selectAction = (action: () => void): void => {
-  action()
-  emit('closeMenu')
-}
-
-const toggleMenu = (): void => {
-  const rect = menuTrigger.value?.getBoundingClientRect()
-  if (rect) {
-    const menuHeight = 250
-    menuStyle.value = {
-      left: `${Math.max(8, rect.right - 160)}px`,
-      top: `${window.innerHeight - rect.bottom < menuHeight ? Math.max(8, rect.top - menuHeight) : rect.bottom + 6}px`
-    }
-  }
-  emit('toggleMenu', props.song.id)
+const requestMenu = (event: MouseEvent): void => {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const menuHeight = 250
+  emit('requestMenu', props.song, {
+    left: `${Math.max(8, rect.right - 160)}px`,
+    top: `${window.innerHeight - rect.bottom < menuHeight ? Math.max(8, rect.top - menuHeight) : rect.bottom + 6}px`
+  })
 }
 </script>
 
@@ -75,6 +56,7 @@ const toggleMenu = (): void => {
           class="accent-[var(--color-primary)]"
           :checked="selected"
           @click.stop="emit('toggleSelect', song.id)"
+          @dblclick.stop
         />
         <span>{{ index + 1 }}</span>
       </span>
@@ -104,63 +86,10 @@ const toggleMenu = (): void => {
         song.album || t('songList.unknownAlbum')
       }}</span>
       <span class="text-right text-sm text-[var(--color-text-l)]">{{ formatDuration }}</span>
-      <span class="text-right">
-        <button ref="menuTrigger" class="btn-hover" @click.stop="toggleMenu">
-          <svgIcon name="menu-more-horizontal" class-name="size-5" />
-        </button>
-        <Teleport to="body">
-          <div
-            v-if="menuOpen"
-            class="fixed z-[9999] w-40 rounded-lg border border-[var(--color-border)] bg-[var(--color-bg)] p-1 text-left shadow-xl"
-            :style="menuStyle"
-            @click.stop
-            @dblclick.stop
-          >
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('play', song))"
-            >
-              {{ t('songList.play') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('addToQueue', song))"
-            >
-              {{ t('songList.addToQueue') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('addToPlaylist', song))"
-            >
-              {{ t('songList.addToPlaylist') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('editTags', song))"
-            >
-              {{ t('songList.editTags') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('showDetails', song))"
-            >
-              {{ t('songList.details') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('openFolder', song))"
-            >
-              {{ t('songList.openFolder') }}
-            </button>
-            <button
-              class="block w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[var(--color-hover)]"
-              @click="selectAction(() => emit('delete', song))"
-            >
-              {{ t('songList.delete') }}
-            </button>
-          </div>
-        </Teleport>
-      </span>
+      <span class="text-right"
+        ><button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>
+          <svgIcon name="menu-more-horizontal" class-name="size-5" /></button
+      ></span>
     </div>
   </div>
 </template>
