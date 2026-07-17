@@ -250,7 +250,7 @@ async function openAudioControls(): Promise<void> {
       v-model="audioControlsVisible"
       class="pointer-events-auto"
       title="音频控制"
-      width="max-w-5xl"
+      width="max-w-6xl"
     >
       <AudioControlPanel class="h-[72vh]" />
     </BaseDialog>

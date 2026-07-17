@@ -10,7 +10,12 @@ const player = usePlayerStore()
 let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
 let draggingNodeIndex: number | null = null
 function resetEqBands(): void {
-  // TODO
+  for (const band of player.eqBands) {
+    band.enabled = false
+    band.gainDb = 0
+    band.q = 1
+  }
+  commitEqBands()
 }
 function commitEqBands(): void {
   if (eqCommitTimer) clearTimeout(eqCommitTimer)
@@ -19,7 +24,7 @@ function commitEqBands(): void {
 }
 function previewEqGain(index: number, event: Event): void {
   const band = player.eqBands[index]
-  band.gainDb = Number((event.target as HTMLInputElement).value)
+  band.gainDb = clamp(Number((event.target as HTMLInputElement).value), -12, 12, 0)
   band.enabled = Math.abs(band.gainDb) >= 0.0001
   scheduleEqCommit()
 }
@@ -59,25 +64,104 @@ function nodeLabel(id: string): string {
             : 'Phaser'
 }
 function updateCompressor(): void {
+  const config = player.compressorConfig
+  config.thresholdDb = clamp(config.thresholdDb, -60, 0, -18)
+  config.ratio = clamp(config.ratio, 1, 20, 4)
+  config.attackMs = clamp(config.attackMs, 0.1, 500, 10)
+  config.releaseMs = clamp(config.releaseMs, 5, 2000, 100)
+  config.makeupDb = clamp(config.makeupDb, -12, 24, 0)
   void player.setCompressorConfig()
 }
 function updateDelay(): void {
+  const config = player.delayConfig
+  config.delayMs = clamp(config.delayMs, 1, 2000, 250)
+  config.feedback = clamp(config.feedback, 0, 0.95, 0.25)
+  config.mix = clamp(config.mix, 0, 1, 0.2)
   void player.setDelayConfig()
 }
 function updateReverb(): void {
+  const config = player.reverbConfig
+  config.roomSize = clamp(config.roomSize, 0, 1, 0.5)
+  config.decay = clamp(config.decay, 0, 1, 0.4)
+  config.mix = clamp(config.mix, 0, 1, 0.15)
   void player.setReverbConfig()
 }
 function updateChorus(): void {
+  const config = player.chorusConfig
+  config.rateHz = clamp(config.rateHz, 0.05, 10, 0.8)
+  config.depthMs = clamp(config.depthMs, 0.1, 15, 8)
+  config.mix = clamp(config.mix, 0, 1, 0.35)
   void player.setChorusConfig()
 }
 function updateNoiseGate(): void {
+  const config = player.noiseGateConfig
+  config.thresholdDb = clamp(config.thresholdDb, -80, 0, -50)
+  config.attackMs = clamp(config.attackMs, 0.1, 200, 5)
+  config.holdMs = clamp(config.holdMs, 0, 2000, 50)
+  config.releaseMs = clamp(config.releaseMs, 5, 2000, 150)
+  config.rangeDb = clamp(config.rangeDb, -100, 0, -80)
   void player.setNoiseGateConfig()
 }
 function updatePhaser(): void {
+  const config = player.phaserConfig
+  config.rateHz = clamp(config.rateHz, 0.05, 10, 0.4)
+  config.depth = clamp(config.depth, 0, 1, 0.6)
+  config.centerHz = clamp(config.centerHz, 100, 5000, 800)
+  config.feedback = clamp(config.feedback, -0.95, 0.95, 0.2)
+  config.mix = clamp(config.mix, 0, 1, 0.5)
   void player.setPhaserConfig()
 }
 function updateLimiter(): void {
+  player.limiterConfig.ceilingDb = clamp(player.limiterConfig.ceilingDb, -12, 0, -1)
+  player.limiterConfig.releaseMs = clamp(player.limiterConfig.releaseMs, 5, 2000, 80)
   void player.setLimiter()
+}
+function resetLimiter(): void {
+  Object.assign(player.limiterConfig, { ceilingDb: -1, releaseMs: 80 })
+  updateLimiter()
+}
+function clamp(value: number, min: number, max: number, fallback: number): number {
+  if (!Number.isFinite(value)) return fallback
+  return Math.min(max, Math.max(min, value))
+}
+function resetDspNode(id: string): void {
+  if (id === 'compressor') {
+    Object.assign(player.compressorConfig, {
+      thresholdDb: -18,
+      ratio: 4,
+      attackMs: 10,
+      releaseMs: 100,
+      makeupDb: 0
+    })
+    updateCompressor()
+  } else if (id === 'delay') {
+    Object.assign(player.delayConfig, { delayMs: 250, feedback: 0.25, mix: 0.2 })
+    updateDelay()
+  } else if (id === 'reverb') {
+    Object.assign(player.reverbConfig, { roomSize: 0.5, decay: 0.4, mix: 0.15 })
+    updateReverb()
+  } else if (id === 'chorus') {
+    Object.assign(player.chorusConfig, { rateHz: 0.8, depthMs: 8, mix: 0.35 })
+    updateChorus()
+  } else if (id === 'noise_gate') {
+    Object.assign(player.noiseGateConfig, {
+      thresholdDb: -50,
+      attackMs: 5,
+      holdMs: 50,
+      releaseMs: 150,
+      rangeDb: -80
+    })
+    updateNoiseGate()
+  } else if (id === 'phaser') {
+    Object.assign(player.phaserConfig, {
+      rateHz: 0.4,
+      depth: 0.6,
+      centerHz: 800,
+      feedback: 0.2,
+      mix: 0.5
+    })
+    updatePhaser()
+  }
 }
 function setLimiterEnabled(enabled: boolean | string | number): void {
   player.limiterConfig.enabled = enabled === true
@@ -129,6 +213,10 @@ function setCrossfadeEnabled(enabled: boolean | string | number): void {
   updateTransitionConfig()
 }
 function updateChannelMatrix(): void {
+  player.channelMatrixConfig.balance = clamp(player.channelMatrixConfig.balance, -1, 1, 0)
+  player.channelMatrixConfig.outputGains = player.channelMatrixConfig.outputGains.map((gain) =>
+    clamp(gain, 0, 2, 1)
+  )
   void player.setChannelMatrixConfig()
 }
 function setChannelMatrixEnabled(enabled: boolean | string | number): void {
@@ -206,6 +294,7 @@ async function onDeviceChange(val: string | number): Promise<void> {
 function refreshOutputDevices(): void {
   void player.refreshDevices()
 }
+
 const { t } = useI18n()
 </script>
 
@@ -299,7 +388,112 @@ const { t } = useI18n()
         </p>
       </div>
     </section>
-    <!-- audio device && audio settings -->
+    <!-- audio analyze -->
+    <section class="mt-5 rounded-xl border border-border p-3">
+      <div class="mb-3 text-xs font-medium text-text">
+        {{ t('ap.analyze') }}
+      </div>
+      <div class="space-y-2">
+        <!-- timing -->
+        <div class="px-2">
+          <p class="text-[11px] text-text-l">
+            out {{ player.audioAnalysis.outputTimeMs.toFixed(0) }} ms
+            <span class="mx-1 text-border">·</span>
+            analysis {{ player.audioAnalysis.analysisTimeMs.toFixed(0) }} ms
+            <span class="mx-1 text-border">·</span>
+            lag {{ player.audioAnalysis.analysisLatencyMs.toFixed(0) }} ms
+            <span class="mx-1 text-border">·</span>
+            dropped {{ player.audioAnalysis.droppedFrames }}
+          </p>
+        </div>
+
+        <!-- audio metrics -->
+        <div class="px-2">
+          <p class="text-[11px] text-text-l">
+            RMS {{ player.audioAnalysis.rms.toFixed(3) }}
+            <span class="mx-1 text-border">·</span>
+            Low {{ player.audioAnalysis.lowEnergy.toFixed(3) }}
+            <span class="mx-1 text-border">·</span>
+            Onset {{ player.audioAnalysis.onsetStrength.toFixed(3) }}
+            <span class="mx-1 text-border">·</span>
+            Beat {{ player.audioAnalysis.beatSequence }}
+            <span class="mx-1 text-border">·</span>
+            Est. BPM {{ player.audioAnalysis.bpm > 0 ? player.audioAnalysis.bpm.toFixed(1) : '—' }}
+          </p>
+        </div>
+
+        <!-- LUFS -->
+        <div class="px-2">
+          <div class="flex items-center gap-4">
+            <span class="text-[11px] text-text-l">
+              M
+              <span class="text-sm font-medium text-text">{{
+                player.audioAnalysis.momentaryLufs.toFixed(1)
+              }}</span>
+            </span>
+            <span class="text-[11px] text-text-l">
+              S
+              <span class="text-sm font-medium text-text">{{
+                player.audioAnalysis.shortTermLufs.toFixed(1)
+              }}</span>
+            </span>
+            <span class="text-[11px] text-text-l">
+              I
+              <span class="text-sm font-medium text-text">{{
+                player.audioAnalysis.integratedLufs.toFixed(1)
+              }}</span>
+            </span>
+            <span class="text-[11px] text-text-l2">LUFS</span>
+          </div>
+        </div>
+
+        <!-- rhythm visual -->
+        <div class="px-2">
+          <div class="flex items-center gap-4 flex-wrap">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-text-l">Rhythm visuals</span>
+              <BaseSwitch
+                :model-value="player.rhythmVisualConfig.enabled"
+                size="sm"
+                @change="
+                  (val) => {
+                    player.rhythmVisualConfig.enabled = val === true
+                    player.saveRhythmVisualConfig()
+                  }
+                "
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-text-l whitespace-nowrap">
+                Intensity {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%
+              </span>
+              <BaseSlider
+                v-model="player.rhythmVisualConfig.intensity"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                class="w-48"
+                @change="player.saveRhythmVisualConfig()"
+              />
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-text-l">Reduce motion</span>
+              <BaseSwitch
+                :model-value="player.rhythmVisualConfig.reducedMotion"
+                size="sm"
+                @change="
+                  (val) => {
+                    player.rhythmVisualConfig.reducedMotion = val === true
+                    player.saveRhythmVisualConfig()
+                  }
+                "
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- audio output settings -->
     <section class="mt-5 rounded-xl border border-border p-3">
       <div class="mb-3 text-xs font-medium text-text">
         {{ t('ap.outputSettings') }}
@@ -323,11 +517,23 @@ const { t } = useI18n()
             ↻
           </button>
         </div>
+        <!-- Volume -->
+        <div class="flex items-center gap-3 mt-3">
+          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.volume') }}</span>
+          <BaseSlider
+            :model-value="Math.round(player.volume * 100)"
+            :min="0"
+            :max="100"
+            class="w-64"
+            @update:model-value="(val: number) => player.setVolume(val / 100)"
+          />
+          <span class="text-sm text-text-l whitespace-nowrap"
+            >{{ Math.round(player.volume * 100) }} %</span
+          >
+        </div>
         <!-- Speed -->
         <div class="flex items-center gap-3 mt-3">
-          <span class="text-sm whitespace-nowrap w-36"
-            >{{ t('ap.playSpeed') }} {{ player.playbackSpeedConfig.speed.toFixed(2) }}×</span
-          >
+          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.playSpeed') }} </span>
           <BaseSwitch
             :model-value="player.playbackSpeedConfig.enabled"
             size="sm"
@@ -342,12 +548,13 @@ const { t } = useI18n()
             class="w-64"
             @change="updatePlaybackSpeed"
           />
+          <span class="text-sm text-text-l whitespace-nowrap"
+            >{{ player.playbackSpeedConfig.speed.toFixed(2) }}×</span
+          >
         </div>
         <!-- Preamp -->
         <div class="flex items-center gap-3 mt-3">
-          <span class="text-sm whitespace-nowrap w-36"
-            >{{ t('ap.preamp') }} {{ player.preampDb.toFixed(1) }} dB</span
-          >
+          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.preamp') }} </span>
           <BaseSwitch
             :model-value="player.preampEnabled"
             size="sm"
@@ -362,6 +569,9 @@ const { t } = useI18n()
             class="w-64"
             @change="setPreampDb"
           />
+          <span class="text-sm text-text-l whitespace-nowrap"
+            >{{ player.preampDb.toFixed(1) }} dB</span
+          >
         </div>
         <!-- ReplayGain -->
         <div class="flex items-center gap-3 mt-3">
@@ -514,7 +724,6 @@ const { t } = useI18n()
         </div>
       </div>
     </section>
-
     <!-- EQ -->
     <section class="rounded-xl border border-border p-3 mt-5">
       <div class="flex items-center justify-between mb-2 text-xs">
@@ -540,16 +749,21 @@ const { t } = useI18n()
         </div>
       </div>
 
-      <div class="flex gap-4 overflow-x-auto pb-1 scrollbar-thin">
+      <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
         <div
           v-for="(band, index) in player.eqBands"
           :key="band.frequencyHz"
-          class="flex flex-col items-center gap-1 shrink-0 w-7 text-[11px]"
+          class="flex w-10 shrink-0 flex-col items-center gap-1 text-[10px]"
         >
-          <!-- gain value -->
-          <span class="tabular-nums">
-            {{ band.gainDb.toFixed(1) }}
-          </span>
+          <input
+            :value="band.gainDb.toFixed(1)"
+            class="input-base h-5 w-full min-w-0 px-0.5 text-center text-[9px] tracking-tighter tabular-nums"
+            type="text"
+            inputmode="decimal"
+            pattern="-?[0-9]*[.,]?[0-9]*"
+            aria-label="EQ gain"
+            @change="previewEqGain(index, $event)"
+          />
 
           <!-- slider -->
           <div class="h-32 flex items-center justify-center">
@@ -608,6 +822,14 @@ const { t } = useI18n()
               size="sm"
               @change="(enabled) => setDspNodeEnabled(index, enabled)"
             />
+            <button
+              class="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-l transition-colors hover:border-primary hover:text-primary"
+              type="button"
+              title="重置节点参数"
+              @click="resetDspNode(node.id)"
+            >
+              重置
+            </button>
           </div>
           <div v-if="node.enabled" class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
             <template v-if="node.id === 'compressor'"
@@ -636,6 +858,9 @@ const { t } = useI18n()
                   v-model.number="player.compressorConfig.attackMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  step=".1"
+                  min=".1"
+                  max="500"
                   @change="updateCompressor" /></label
               ><label
                 >释放
@@ -643,6 +868,18 @@ const { t } = useI18n()
                   v-model.number="player.compressorConfig.releaseMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="5"
+                  max="2000"
+                  @change="updateCompressor" /></label
+              ><label
+                >补偿增益
+                <input
+                  v-model.number="player.compressorConfig.makeupDb"
+                  class="input-base h-6 mt-1"
+                  type="number"
+                  step=".1"
+                  min="-12"
+                  max="24"
                   @change="updateCompressor" /></label
             ></template>
             <template v-else-if="node.id === 'delay'"
@@ -652,6 +889,8 @@ const { t } = useI18n()
                   v-model.number="player.delayConfig.delayMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="1"
+                  max="2000"
                   @change="updateDelay" /></label
               ><label
                 >反馈
@@ -660,6 +899,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".01"
+                  min="0"
+                  max=".95"
                   @change="updateDelay" /></label
               ><label
                 >混合
@@ -668,6 +909,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".01"
+                  min="0"
+                  max="1"
                   @change="updateDelay" /></label
             ></template>
             <template v-else-if="node.id === 'reverb'"
@@ -678,6 +921,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min="0"
+                  max="1"
                   @change="updateReverb" /></label
               ><label
                 >衰减
@@ -686,6 +931,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min="0"
+                  max="1"
                   @change="updateReverb" /></label
               ><label
                 >混合
@@ -694,6 +941,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min="0"
+                  max="1"
                   @change="updateReverb" /></label
             ></template>
             <template v-else-if="node.id === 'chorus'"
@@ -704,6 +953,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min=".05"
+                  max="10"
                   @change="updateChorus" /></label
               ><label
                 >深度
@@ -712,6 +963,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".1"
+                  min=".1"
+                  max="15"
                   @change="updateChorus" /></label
               ><label
                 >混合
@@ -720,6 +973,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".01"
+                  min="0"
+                  max="1"
                   @change="updateChorus" /></label
             ></template>
             <template v-else-if="node.id === 'noise_gate'"
@@ -729,6 +984,8 @@ const { t } = useI18n()
                   v-model.number="player.noiseGateConfig.thresholdDb"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="-80"
+                  max="0"
                   @change="updateNoiseGate" /></label
               ><label
                 >启动
@@ -736,6 +993,9 @@ const { t } = useI18n()
                   v-model.number="player.noiseGateConfig.attackMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  step=".1"
+                  min=".1"
+                  max="200"
                   @change="updateNoiseGate" /></label
               ><label
                 >保持
@@ -743,6 +1003,8 @@ const { t } = useI18n()
                   v-model.number="player.noiseGateConfig.holdMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="0"
+                  max="2000"
                   @change="updateNoiseGate" /></label
               ><label
                 >释放
@@ -750,6 +1012,17 @@ const { t } = useI18n()
                   v-model.number="player.noiseGateConfig.releaseMs"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="5"
+                  max="2000"
+                  @change="updateNoiseGate" /></label
+              ><label
+                >衰减范围
+                <input
+                  v-model.number="player.noiseGateConfig.rangeDb"
+                  class="input-base h-6 mt-1"
+                  type="number"
+                  min="-100"
+                  max="0"
                   @change="updateNoiseGate" /></label
             ></template>
             <template v-else
@@ -760,6 +1033,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min=".05"
+                  max="10"
                   @change="updatePhaser" /></label
               ><label
                 >深度
@@ -768,6 +1043,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min="0"
+                  max="1"
                   @change="updatePhaser" /></label
               ><label
                 >中心频率
@@ -775,6 +1052,18 @@ const { t } = useI18n()
                   v-model.number="player.phaserConfig.centerHz"
                   class="input-base h-6 mt-1"
                   type="number"
+                  min="100"
+                  max="5000"
+                  @change="updatePhaser" /></label
+              ><label
+                >反馈
+                <input
+                  v-model.number="player.phaserConfig.feedback"
+                  class="input-base h-6 mt-1"
+                  type="number"
+                  step=".05"
+                  min="-.95"
+                  max=".95"
                   @change="updatePhaser" /></label
               ><label
                 >混合
@@ -783,6 +1072,8 @@ const { t } = useI18n()
                   class="input-base h-6 mt-1"
                   type="number"
                   step=".05"
+                  min="0"
+                  max="1"
                   @change="updatePhaser" /></label
             ></template>
           </div>
@@ -798,6 +1089,14 @@ const { t } = useI18n()
               size="sm"
               @change="(enabled) => setLimiterEnabled(enabled)"
             />
+            <button
+              class="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-l transition-colors hover:border-primary hover:text-primary"
+              type="button"
+              title="重置 Limiter 参数"
+              @click="resetLimiter"
+            >
+              重置
+            </button>
           </div>
           <div
             v-if="player.limiterConfig.enabled"
@@ -809,6 +1108,8 @@ const { t } = useI18n()
                 class="input-base h-6 mt-1"
                 type="number"
                 step=".1"
+                min="-12"
+                max="0"
                 @change="updateLimiter"
             /></label>
             <label
@@ -816,6 +1117,8 @@ const { t } = useI18n()
                 v-model.number="player.limiterConfig.releaseMs"
                 class="input-base h-6 mt-1"
                 type="number"
+                min="5"
+                max="2000"
                 @change="updateLimiter"
             /></label>
           </div>
