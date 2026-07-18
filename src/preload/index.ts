@@ -127,7 +127,9 @@ const audioAPI = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this as any).onEvent('positionChanged', callback)
   },
-  onTrackEnded: function (callback: (data: { reason: string }) => void): () => void {
+  onTrackEnded: function (
+    callback: (data: { reason: string; filePath: string }) => void
+  ): () => void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this as any).onEvent('trackEnded', callback)
   },
@@ -197,11 +199,17 @@ const windowAPI = {
   }
 }
 
+const lyricsAPI = {
+  loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
+    ipcRenderer.invoke('lyrics:load-source', { audioPath, source })
+}
+
 // Custom APIs for renderer
 const api = {
   audio: audioAPI,
   database: databaseAPI,
   library: libraryAPI,
+  lyrics: lyricsAPI,
   window: windowAPI
 }
 

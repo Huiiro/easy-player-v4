@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { PlayerBgType } from '@/consts'
 
 const ui = useUIStore()
 const { locale, t } = useI18n()
@@ -27,6 +28,19 @@ const themeMode = computed({
     ui.setTheme(value)
   }
 })
+const playerBackground = computed<PlayerBgType>({
+  get: () => ui.playerBgType,
+  set: (value) => {
+    ui.playerBgType = value
+  }
+})
+function moveLyricSource(index: number, direction: -1 | 1): void {
+  const target = index + direction
+  if (target < 0 || target >= ui.lyricSourceOrder.length) return
+  const next = [...ui.lyricSourceOrder]
+  ;[next[index], next[target]] = [next[target], next[index]]
+  ui.lyricSourceOrder = next
+}
 
 function chooseBackground(): void {
   backgroundInput.value?.click()
@@ -111,6 +125,42 @@ function clearBackground(): void {
       <section class="settings-section">
         <div class="section-heading">
           <div>
+            <h2>{{ t('settings.lyrics') }}</h2>
+            <p>{{ t('settings.lyricsDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div
+            v-for="(source, index) in ui.lyricSourceOrder"
+            :key="source"
+            class="setting-row !min-h-0 py-3"
+          >
+            <div>
+              <h3>{{ t(`lyrics.source.${source}`) }}</h3>
+              <p>{{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}</p>
+            </div>
+            <div class="flex gap-1">
+              <button
+                class="icon-button"
+                :disabled="index === 0"
+                @click="moveLyricSource(index, -1)"
+              >
+                ↑</button
+              ><button
+                class="icon-button"
+                :disabled="index === ui.lyricSourceOrder.length - 1"
+                @click="moveLyricSource(index, 1)"
+              >
+                ↓
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
             <h2>{{ t('settings.playback') }}</h2>
             <p>{{ t('settings.playbackDescription') }}</p>
           </div>
@@ -123,6 +173,51 @@ function clearBackground(): void {
               <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
             </div>
             <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.playerBackground') }}</h2>
+            <p>{{ t('settings.playerBackgroundDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row setting-row-stack">
+            <div>
+              <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
+              <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
+            </div>
+            <div
+              class="theme-options"
+              role="radiogroup"
+              :aria-label="t('settings.playerBackgroundStyle')"
+            >
+              <button
+                type="button"
+                class="theme-option album-background-preview"
+                :class="{ selected: playerBackground === PlayerBgType.ALBUM }"
+                :aria-checked="playerBackground === PlayerBgType.ALBUM"
+                role="radio"
+                @click="playerBackground = PlayerBgType.ALBUM"
+              >
+                <span class="preview-window"><i /><b /></span>
+                <span>{{ t('settings.playerBackgroundAlbum') }}</span>
+              </button>
+              <button
+                type="button"
+                class="theme-option ambient-background-preview"
+                :class="{ selected: playerBackground === PlayerBgType.AMBIENT }"
+                :aria-checked="playerBackground === PlayerBgType.AMBIENT"
+                role="radio"
+                @click="playerBackground = PlayerBgType.AMBIENT"
+              >
+                <span class="preview-window"><i /><b /></span>
+                <span>{{ t('settings.playerBackgroundAmbient') }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -407,6 +502,35 @@ function clearBackground(): void {
 }
 .custom-preview b {
   background: rgb(255 255 255 / 10%);
+}
+.album-background-preview .preview-window {
+  background: linear-gradient(135deg, #6e4467, #171524);
+}
+.album-background-preview i {
+  background: linear-gradient(135deg, #f5a4a8, #553a73);
+}
+.album-background-preview b {
+  background: rgb(255 255 255 / 15%);
+}
+.ambient-background-preview .preview-window {
+  background:
+    radial-gradient(circle at 20% 25%, #356fa9, transparent 48%),
+    radial-gradient(circle at 80% 70%, #984e85, transparent 55%), #141827;
+}
+.ambient-background-preview i {
+  background: rgb(255 255 255 / 17%);
+}
+.ambient-background-preview b {
+  background: rgb(255 255 255 / 10%);
+}
+.default-background-preview .preview-window {
+  background: #1e2427;
+}
+.default-background-preview i {
+  background: #30383d;
+}
+.default-background-preview b {
+  background: #283035;
 }
 .color-control {
   display: flex;

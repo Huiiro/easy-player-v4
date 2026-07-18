@@ -298,7 +298,7 @@ export class AudioEngineManager {
     this.engine?.onPositionChanged(callback)
   }
 
-  onTrackEnded(callback: (reason: string) => void): void {
+  onTrackEnded(callback: (reason: string, filePath: string) => void): void {
     this.engine?.onTrackEnded(callback)
   }
 

@@ -239,7 +239,7 @@ export const audioBridge = {
     return window.api.audio.onPositionChanged(callback)
   },
 
-  onTrackEnded(callback: (data: { reason: string }) => void): () => void {
+  onTrackEnded(callback: (data: { reason: string; filePath: string }) => void): () => void {
     return window.api.audio.onTrackEnded(callback)
   },
 

@@ -15,7 +15,6 @@ export enum PlayerDisplayMode {
 export enum PlayerBgType {
   AMBIENT = 'ambient',
   IMMERSE = 'immerse',
-  TRANSPARENT = 'transparent',
   ALBUM = 'album',
   CUSTOM = 'custom',
   DEFAULT = 'default'

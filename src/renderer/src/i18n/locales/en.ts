@@ -56,6 +56,32 @@ export default {
     openFolder: 'Open folder',
     delete: 'Delete'
   },
+  tags: {
+    title: 'Tag management',
+    manageAndFilter: 'Manage & filter tags',
+    filterHint:
+      'Click a tag color to filter songs. Selecting several tags matches songs containing all of them.',
+    activeFilterCount: '{count} tag filters active',
+    clearFilter: 'Clear filter',
+    toggleFilter: 'Toggle filter',
+    name: 'Tag name',
+    namePlaceholder: 'New tag name',
+    color: 'Tag color',
+    create: 'Create',
+    delete: 'Delete',
+    cancel: 'Cancel',
+    dragSort: 'Drag to reorder',
+    remove: 'Remove tag',
+    add: 'Add tag',
+    loading: 'Loading tags…',
+    empty: 'No tags yet. Create one to get started.',
+    confirmDelete: 'Delete the tag “{name}”? It will be removed from all songs.',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    editSong: 'Edit song tags',
+    batchEdit: 'Batch edit tags',
+    batchHint: 'Add or remove one tag for the selected {count} songs.'
+  },
   queue: {
     title: 'Play queue',
     empty: 'The play queue is empty',
@@ -81,7 +107,20 @@ export default {
     playbackDescription: 'Control how the previous playback session is restored at startup.',
     autoPlayOnRestore: 'Autoplay on startup',
     autoPlayOnRestoreDescription:
-      'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.'
+      'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.',
+    playerBackground: 'Player background',
+    playerBackgroundDescription: 'Choose the immersive backdrop for the player panel.',
+    playerBackgroundStyle: 'Background style',
+    playerBackgroundStyleDescription:
+      'Album artwork automatically receives blur, gradients, and rhythm effects.',
+    playerBackgroundAlbum: 'Album artwork',
+    playerBackgroundAmbient: 'Ambient glow',
+    playerBackgroundDefault: 'Solid',
+    lyrics: 'Lyrics',
+    lyricsDescription:
+      'Adjust the priority used to load lyrics. The network provider is reserved for later.',
+    lyricsFirst: 'Preferred source',
+    lyricsFallback: 'Used when earlier sources are unavailable'
   },
   playerPanel: {
     label: 'Player panel',
@@ -109,6 +148,14 @@ export default {
     lyrics: 'Lyrics',
     noLyrics: 'No lyrics available',
     lyricsHint: 'Lyrics will appear here as playback progresses'
+  },
+  lyrics: {
+    source: {
+      embedded: 'Embedded lyrics',
+      database: 'Database lyrics',
+      local: 'Local lyrics',
+      network: 'Network lyrics'
+    }
   },
   footer: {
     playerControls: 'Player controls, click to open the player panel',

@@ -188,7 +188,7 @@ declare global {
         onPositionChanged(
           callback: (data: { positionMs: number; durationMs: number }) => void
         ): () => void
-        onTrackEnded(callback: (data: { reason: string }) => void): () => void
+        onTrackEnded(callback: (data: { reason: string; filePath: string }) => void): () => void
         onAudioChainChanged(callback: (data: AudioChainStatus) => void): () => void
         onError(
           callback: (data: { code: number; message: string; recoverable: boolean }) => void
@@ -205,6 +205,12 @@ declare global {
       library: {
         importLocalFolder(): Promise<ImportLocalMusicResult>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
+      }
+      lyrics: {
+        loadSource(
+          audioPath: string,
+          source: 'embedded' | 'local' | 'network'
+        ): Promise<{ success: boolean; data?: string | null; error?: string }>
       }
       window: {
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>

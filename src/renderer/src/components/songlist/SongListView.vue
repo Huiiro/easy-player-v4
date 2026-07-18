@@ -5,6 +5,9 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import eventBus from '@/utils/eventBus'
 import SongListHeader from './SongListHeader.vue'
 import SongListItem from './SongListItem.vue'
+import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
+import SongTagDialog from '@/components/tag/SongTagDialog.vue'
+import BatchTagDialog from '@/components/tag/BatchTagDialog.vue'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 
@@ -41,6 +44,14 @@ const playlistTargets = ref<PlaylistTarget[]>([])
 const pickerSongIds = ref<number[]>([])
 const playlistPickerLoading = ref(false)
 const playlistPickerError = ref('')
+const tagManagerOpen = ref(false)
+const songTagDialogOpen = ref(false)
+const batchTagDialogOpen = ref(false)
+const selectedTagIds = ref<number[]>([])
+const tagSongId = ref<number | null>(null)
+const canFilterByTags = computed(() =>
+  ['songs', 'local', 'remote', 'playlist'].includes(props.source.type)
+)
 
 const filteredSongs = computed(() => {
   const search = keyword.value.trim().toLocaleLowerCase()
@@ -72,7 +83,10 @@ const getSongs = async (): Promise<LibrarySong[]> => {
   const { source } = props
   const response =
     source.type === 'playlist'
-      ? await window.api.database.command('queryPlaylistSongs', { playlistId: source.id })
+      ? await window.api.database.command('queryPlaylistSongs', {
+          playlistId: source.id,
+          query: { size: 500, tags: [...selectedTagIds.value] }
+        })
       : source.type === 'album'
         ? await window.api.database.command('getSongsByAlbum', {
             album: source.album,
@@ -86,6 +100,7 @@ const getSongs = async (): Promise<LibrarySong[]> => {
               ? await window.api.database.command('queryRecentPlayedSongs', { size: 500 })
               : await window.api.database.command('querySongs', {
                   size: 500,
+                  tags: [...selectedTagIds.value],
                   source:
                     source.type === 'local' ? 'local' : source.type === 'remote' ? 'remote' : 'all'
                 })
@@ -213,14 +228,27 @@ function removeActiveMenuSong(): void {
   if (activeMenuSong.value) void removeSongsFromCurrentPlaylist([activeMenuSong.value.id])
   closeMenu()
 }
+function openSongTags(): void {
+  if (!activeMenuSong.value) return
+  tagSongId.value = activeMenuSong.value.id
+  songTagDialogOpen.value = true
+  closeMenu()
+}
+function openBatchTags(): void {
+  if (!selectedIds.value.size) return
+  batchTagDialogOpen.value = true
+}
 const onScanFinished = (): void => void load()
+const onTagsChanged = (): void => void load()
 onMounted(() => {
   void load()
   eventBus.on('scanFinished', onScanFinished)
+  eventBus.on('tagsChanged', onTagsChanged)
   window.addEventListener('click', closeMenu)
 })
 onBeforeUnmount(() => {
   eventBus.off('scanFinished', onScanFinished)
+  eventBus.off('tagsChanged', onTagsChanged)
   window.removeEventListener('click', closeMenu)
 })
 watch(
@@ -228,6 +256,7 @@ watch(
   () => void load(),
   { deep: true }
 )
+watch(selectedTagIds, () => canFilterByTags.value && void load())
 </script>
 
 <template>
@@ -246,9 +275,32 @@ watch(
       @toggle-all="toggleAll"
       @batch-play="playSelected"
       @batch-add-to-playlist="addSelectedToPlaylist"
-      @batch-edit-tags="() => undefined"
+      @batch-edit-tags="openBatchTags"
       @batch-delete="removeSongsFromCurrentPlaylist([...selectedIds])"
     />
+    <div
+      v-if="canFilterByTags"
+      class="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2"
+    >
+      <button
+        class="btn-hover rounded-lg border border-[var(--color-border)] px-3 py-1 text-sm"
+        @click="tagManagerOpen = true"
+      >
+        {{ t('tags.manageAndFilter') }}
+      </button>
+      <span
+        v-if="selectedTagIds.length"
+        class="rounded-full border border-primary px-2 py-0.5 text-xs text-primary"
+        >{{ t('tags.activeFilterCount', { count: selectedTagIds.length }) }}</span
+      >
+      <button
+        v-if="selectedTagIds.length"
+        class="btn-hover text-xs text-[var(--color-text-l)]"
+        @click="selectedTagIds = []"
+      >
+        {{ t('tags.clearFilter') }}
+      </button>
+    </div>
     <div v-if="loading" class="p-6 text-sm text-[var(--color-text-l)]">
       {{ $t('songList.loading') }}
     </div>
@@ -302,7 +354,7 @@ watch(
         </button>
         <button
           class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-          @click="closeMenu"
+          @click="openSongTags"
         >
           {{ t('songList.editTags') }}
         </button>
@@ -327,6 +379,9 @@ watch(
         </button>
       </div>
     </Teleport>
+    <TagManagerDialog v-model="tagManagerOpen" v-model:selected-ids="selectedTagIds" />
+    <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="load" />
+    <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="[...selectedIds]" @changed="load" />
     <Teleport to="body">
       <div
         v-if="playlistPickerOpen"

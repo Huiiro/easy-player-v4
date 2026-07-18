@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, reactive, ref, watch } from 'vue'
 import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
+import type { LyricSource } from '@/services/lyrics'
 
 export const useUIStore = defineStore('ui', () => {
   const themeSettingsKey = 'ui.theme-settings'
@@ -44,8 +45,9 @@ export const useUIStore = defineStore('ui', () => {
   const showLyricsEditor = ref(false)
   const showLyricsTranslation = ref(false)
   const autoLyricsFontResizer = ref(true)
+  const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
   // ========== 播放器设置 ==========
-  const playerBgType = ref(PlayerBgType.DEFAULT)
+  const playerBgType = ref(PlayerBgType.ALBUM)
   const playerDisplayMode = ref(PlayerDisplayMode.Normal)
   const allowSwitchCoverStyle = ref(true)
   const isCircularCover = ref(false)
@@ -111,6 +113,8 @@ export const useUIStore = defineStore('ui', () => {
     root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
     if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
     else root.style.removeProperty('--color-primary')
+    root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
+    root.style.setProperty('--lrc-padding', `${lyricsFontPadding.value}px`)
   }
 
   function themeSnapshot(): Record<string, unknown> {
@@ -119,6 +123,8 @@ export const useUIStore = defineStore('ui', () => {
       customThemeColor: customThemeColor.value,
       useCustomBg: useCustomBg.value,
       autoPlayOnRestore: autoPlayOnRestore.value,
+      playerBgType: playerBgType.value,
+      lyricSourceOrder: lyricSourceOrder.value,
       customBg: { ...customBg }
     }
   }
@@ -154,6 +160,15 @@ export const useUIStore = defineStore('ui', () => {
     if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
     if (typeof saved.autoPlayOnRestore === 'boolean')
       autoPlayOnRestore.value = saved.autoPlayOnRestore
+    if (Object.values(PlayerBgType).includes(saved.playerBgType as PlayerBgType))
+      playerBgType.value = saved.playerBgType as PlayerBgType
+    if (Array.isArray(saved.lyricSourceOrder)) {
+      const allowed: LyricSource[] = ['embedded', 'database', 'local', 'network']
+      const order = saved.lyricSourceOrder.filter((item): item is LyricSource =>
+        allowed.includes(item as LyricSource)
+      )
+      if (order.length) lyricSourceOrder.value = order
+    }
     if (saved.customBg && typeof saved.customBg === 'object') {
       const background = saved.customBg as Record<string, unknown>
       customBg.url = typeof background.url === 'string' ? background.url : ''
@@ -176,15 +191,27 @@ export const useUIStore = defineStore('ui', () => {
     useDarkMode.value = true
     customThemeColor.value = ''
     useCustomBg.value = false
+    playerBgType.value = PlayerBgType.ALBUM
     Object.assign(customBg, { url: '', path: '', blur: 0, brightness: 100 })
   }
-
+  function setLyricsFontSize(size?: number) {
+    if (size) lyricsFontSize.value = size
+    const root = document.documentElement
+    root.style.setProperty('--lrc-size', lyricsFontSize.value + 'rem')
+  }
+  function setLyricsFontPadding(padding?: number) {
+    if (padding) lyricsFontPadding.value = padding
+    const root = document.documentElement
+    root.style.setProperty('--lrc-padding', lyricsFontPadding.value + 'px')
+  }
   watch(
     [
       useDarkMode,
       customThemeColor,
       useCustomBg,
       autoPlayOnRestore,
+      playerBgType,
+      lyricSourceOrder,
       () => customBg.url,
       () => customBg.blur,
       () => customBg.brightness
@@ -221,6 +248,7 @@ export const useUIStore = defineStore('ui', () => {
     showLyricsEditor,
     showLyricsTranslation,
     autoLyricsFontResizer,
+    lyricSourceOrder,
     playerBgType,
     playerDisplayMode,
     allowSwitchCoverStyle,
@@ -244,6 +272,8 @@ export const useUIStore = defineStore('ui', () => {
     setTheme,
     resetTheme,
     toggleCardStyle,
-    setCardStyle
+    setCardStyle,
+    setLyricsFontSize,
+    setLyricsFontPadding
   }
 })

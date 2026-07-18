@@ -56,6 +56,31 @@ export default {
     openFolder: '打开所在文件夹',
     delete: '删除'
   },
+  tags: {
+    title: '标签管理',
+    manageAndFilter: '管理与筛选标签',
+    filterHint: '点击标签色块可筛选歌曲；同时选择多个标签时仅显示包含全部标签的歌曲。',
+    activeFilterCount: '已筛选 {count} 个标签',
+    clearFilter: '清除筛选',
+    toggleFilter: '切换筛选',
+    name: '标签名称',
+    namePlaceholder: '输入新标签名称',
+    color: '标签颜色',
+    create: '新建',
+    delete: '删除',
+    cancel: '取消',
+    dragSort: '拖拽排序',
+    remove: '移除标签',
+    add: '添加标签',
+    loading: '正在加载标签…',
+    empty: '还没有标签，请先新建一个。',
+    confirmDelete: '确定删除标签“{name}”吗？该标签将从所有歌曲中移除。',
+    moveUp: '上移',
+    moveDown: '下移',
+    editSong: '编辑歌曲标签',
+    batchEdit: '批量编辑标签',
+    batchHint: '为已选择的 {count} 首歌曲添加或移除一个标签。'
+  },
   queue: {
     title: '播放队列',
     empty: '播放队列为空',
@@ -81,7 +106,18 @@ export default {
     playbackDescription: '控制启动后恢复上次播放会话的方式。',
     autoPlayOnRestore: '启动后自动播放',
     autoPlayOnRestoreDescription:
-      '开启后，仅当上次退出前正在播放时自动继续播放；关闭时只恢复歌曲和位置。'
+      '开启后，仅当上次退出前正在播放时自动继续播放；关闭时只恢复歌曲和位置。',
+    playerBackground: '播放器背景',
+    playerBackgroundDescription: '选择播放器面板的沉浸式背景效果。',
+    playerBackgroundStyle: '背景样式',
+    playerBackgroundStyleDescription: '专辑封面会自动加入模糊、渐变和律动效果。',
+    playerBackgroundAlbum: '专辑封面',
+    playerBackgroundAmbient: '氛围光晕',
+    playerBackgroundDefault: '纯色',
+    lyrics: '歌词设置',
+    lyricsDescription: '拖动优先级决定歌词的加载顺序；网络歌词接口已预留。',
+    lyricsFirst: '优先使用',
+    lyricsFallback: '当前来源不可用时使用'
   },
   playerPanel: {
     label: '播放器面板',
@@ -109,6 +145,9 @@ export default {
     lyrics: '歌词',
     noLyrics: '暂无歌词',
     lyricsHint: '歌词将在这里随播放进度显示'
+  },
+  lyrics: {
+    source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词' }
   },
   footer: {
     playerControls: '播放器控制栏，点击打开播放器面板',

@@ -130,7 +130,7 @@ public:
     using PositionCallback = std::function<void(double ms, double duration_ms)>;
     using ErrorCallback = std::function<void(int code, const std::string& msg)>;
     using LogCallback = std::function<void(int level, const std::string& msg)>;
-    using TrackEndedCallback = std::function<void(const std::string& reason)>;
+    using TrackEndedCallback = std::function<void(const std::string& reason, const std::string& file_path)>;
 
     void set_state_callback(StateChangedCallback cb) { state_cb_ = std::move(cb); }
     void set_position_callback(PositionCallback cb) { pos_cb_ = std::move(cb); }
@@ -148,6 +148,7 @@ private:
     void stop_analysis_thread();
     bool prepare_next_decoder_locked();
     bool switch_to_next_decoder_locked();
+    void mark_track_ended_pending();
 
     // ── State ──
     std::atomic<EngineState> state_{EngineState::Idle};
@@ -239,4 +240,7 @@ private:
     // are dispatched by the position timer, never from the real-time thread.
     std::atomic<bool> track_ended_fired_{false};
     std::atomic<bool> track_end_pending_{false};
+    // Preserve the source of an asynchronous EOF notification.
+    std::mutex track_end_mutex_;
+    std::string ended_track_path_;
 };

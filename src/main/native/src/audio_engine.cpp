@@ -89,10 +89,16 @@ bool AudioEngine::prepare_next_decoder_locked() {
 }
 
 bool AudioEngine::switch_to_next_decoder_locked() {
-    if (!next_decoder_.track_info().file_path.empty()) decoder_.swap(next_decoder_);
-    else if (!decoder_.seek(0)) return false;
+    // The renderer owns the queue, so an unavailable native "next" decoder
+    // is not a request to replay the current file. Seeking back to zero here
+    // made queue-loop mode look like single-track repeat and forced the
+    // renderer to infer EOF from a position rollover.
+    if (next_decoder_.track_info().file_path.empty()) return false;
+    decoder_.swap(next_decoder_);
     next_decoder_.close();
-    return prepare_next_decoder_locked();
+    // Preparing a following decoder is optional; the switch itself succeeded.
+    prepare_next_decoder_locked();
+    return true;
 }
 
 void AudioEngine::set_replay_gain_mode(int mode, bool prevent_clipping) {
@@ -872,6 +878,16 @@ void AudioEngine::decoder_thread_func() {
 // Position timer thread
 // ──────────────────────────────────────────────────────────
 
+void AudioEngine::mark_track_ended_pending() {
+    // This path runs only once at EOF; capturing the source prevents a late
+    // notification from being attributed to a track selected in the meantime.
+    {
+        std::lock_guard<std::mutex> lock(track_end_mutex_);
+        ended_track_path_ = track_info_.file_path;
+    }
+    track_end_pending_.store(true, std::memory_order_release);
+}
+
 void AudioEngine::position_timer_func() {
     while (timer_running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -881,7 +897,12 @@ void AudioEngine::position_timer_func() {
             // transition is deliberately deferred out of audio_callback().
             set_state(EngineState::Stopped);
             LOG_INFO("Track ended (EOF reached)");
-            if (track_ended_cb_) track_ended_cb_("eof");
+            std::string ended_track_path;
+            {
+                std::lock_guard<std::mutex> lock(track_end_mutex_);
+                ended_track_path = ended_track_path_;
+            }
+            if (track_ended_cb_) track_ended_cb_("eof", ended_track_path);
             // Do not leave an inactive callback pumping silence forever.
             // This thread never joins itself; stop() will join the finished
             // timer later when the user opens another track or stops.
@@ -932,7 +953,7 @@ int AudioEngine::dop_audio_callback(uint8_t* output, int frames, int channels) {
     dop_carrier_frames_.fetch_add(read, std::memory_order_relaxed);
     if (!decoder_running_ && dop_ring_buffer_->readable_frames() == 0 &&
         !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
-        track_end_pending_.store(true, std::memory_order_release);
+        mark_track_ended_pending();
     }
     return frames;
 }
@@ -996,7 +1017,7 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
     // resampler tail would be cut off when the decoder reaches EOF.
     if (input_ended && source_work_frames_ == 0 && result.stream_drained &&
         !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
-        track_end_pending_.store(true, std::memory_order_release);
+        mark_track_ended_pending();
     }
 
     if (analysis_ring_buffer_) {

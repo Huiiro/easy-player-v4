@@ -79,11 +79,22 @@ const requestMenu = (event: MouseEvent): void => {
           class="grid size-10 shrink-0 place-items-center rounded-md bg-[var(--color-bg-l)]"
           ><svgIcon name="common-music" class-name="size-5"
         /></span>
-        <span
-          class="min-w-0 truncate"
-          :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
-          >{{ song.title }}</span
-        >
+        <span class="min-w-0">
+          <span
+            class="block truncate"
+            :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
+            >{{ song.title }}</span
+          >
+          <span v-if="song.tags?.length" class="mt-0.5 flex gap-1 overflow-hidden">
+            <span
+              v-for="tag in song.tags"
+              :key="tag.id"
+              class="max-w-24 truncate rounded-full px-1.5 py-px text-[10px] leading-4 text-white"
+              :style="{ backgroundColor: tag.color || '#7c3aed' }"
+              >{{ tag.name }}</span
+            >
+          </span>
+        </span>
       </span>
       <span class="truncate text-sm text-[var(--color-text-l)]">{{
         song.artist || t('songList.unknownArtist')

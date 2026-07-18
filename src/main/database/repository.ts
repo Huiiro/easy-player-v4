@@ -59,6 +59,25 @@ const mapSong = (row: SongRow): Song => ({
   isNewest: row.isNewest === 1
 })
 
+function attachTags(songs: Song[]): Song[] {
+  if (!songs.length) return songs
+  const placeholders = songs.map(() => '?').join(',')
+  const rows = getDatabase()
+    .prepare(
+      `SELECT st.song_id AS songId, t.id, t.name, t.color, t.description, t.tag_order AS tagOrder
+       FROM song_tag st JOIN tag t ON t.id = st.tag_id
+       WHERE st.song_id IN (${placeholders}) ORDER BY t.tag_order, t.id`
+    )
+    .all(...songs.map((song) => song.id)) as Array<Tag & { songId: number }>
+  const tagsBySong = new Map<number, Tag[]>()
+  for (const { songId, ...tag } of rows) {
+    const tags = tagsBySong.get(songId) ?? []
+    tags.push(tag)
+    tagsBySong.set(songId, tags)
+  }
+  return songs.map((song) => ({ ...song, tags: tagsBySong.get(song.id) ?? [] }))
+}
+
 export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
   const where: string[] = []
@@ -92,12 +111,14 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const size = Math.max(1, Math.min(query.size ?? 50, 500))
   params.size = size
   params.offset = Math.max(0, (query.page ?? 1) - 1) * size
-  const data = db
-    .prepare(
-      `SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} LIMIT @size OFFSET @offset`
-    )
-    .all(params)
-    .map((row) => mapSong(row as SongRow))
+  const data = attachTags(
+    db
+      .prepare(
+        `SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} LIMIT @size OFFSET @offset`
+      )
+      .all(params)
+      .map((row) => mapSong(row as SongRow))
+  )
   const total = (
     db.prepare(`SELECT COUNT(*) AS count FROM song ${clause}`).get(params) as { count: number }
   ).count
@@ -109,10 +130,12 @@ export function getSong(id: number): Song | null {
   return row ? mapSong(row) : null
 }
 export function queryAllSongs(): Song[] {
-  return getDatabase()
-    .prepare(`SELECT ${songColumns} FROM song ORDER BY id`)
-    .all()
-    .map((row) => mapSong(row as SongRow))
+  return attachTags(
+    getDatabase()
+      .prepare(`SELECT ${songColumns} FROM song ORDER BY id`)
+      .all()
+      .map((row) => mapSong(row as SongRow))
+  )
 }
 export function getSongsByAlbum(album: string, artist?: string): Song[] {
   const db = getDatabase()
@@ -125,19 +148,23 @@ export function getSongsByAlbum(album: string, artist?: string): Song[] {
     : db
         .prepare(`SELECT ${songColumns} FROM song WHERE album = ? ORDER BY title COLLATE NOCASE`)
         .all(album)
-  return rows.map((row) => mapSong(row as SongRow))
+  return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
 export function getSongsByGenre(genre: string): Song[] {
-  return getDatabase()
-    .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY title COLLATE NOCASE`)
-    .all(genre)
-    .map((row) => mapSong(row as SongRow))
+  return attachTags(
+    getDatabase()
+      .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY title COLLATE NOCASE`)
+      .all(genre)
+      .map((row) => mapSong(row as SongRow))
+  )
 }
 export function getSongsByArtist(artist: string): Song[] {
-  return getDatabase()
-    .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY title COLLATE NOCASE`)
-    .all(artist)
-    .map((row) => mapSong(row as SongRow))
+  return attachTags(
+    getDatabase()
+      .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY title COLLATE NOCASE`)
+      .all(artist)
+      .map((row) => mapSong(row as SongRow))
+  )
 }
 export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
@@ -247,7 +274,9 @@ export function queryRecentPlayedSongs(
       `SELECT ${songColumnsFor('s.')}, h.play_time AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
     )
     .all(params)
-  const data = rows.map((row) => mapSong(row as SongRow) as Song & { playTime: string })
+  const data = attachTags(
+    rows.map((row) => mapSong(row as SongRow) as Song & { playTime: string })
+  ) as Array<Song & { playTime: string }>
   const total = (
     db
       .prepare(`SELECT COUNT(*) AS count FROM history h JOIN song s ON s.id = h.song_id ${clause}`)
@@ -461,12 +490,14 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   params.size = size
   params.offset = Math.max(0, (query.page ?? 1) - 1) * size
   const clause = `WHERE ${where.join(' AND ')}`
-  const data = db
-    .prepare(
-      `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
-    )
-    .all(params)
-    .map((row) => mapSong(row as SongRow))
+  const data = attachTags(
+    db
+      .prepare(
+        `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
+      )
+      .all(params)
+      .map((row) => mapSong(row as SongRow))
+  )
   const total = (
     db
       .prepare(

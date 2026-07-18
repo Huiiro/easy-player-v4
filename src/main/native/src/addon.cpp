@@ -89,8 +89,8 @@ public:
         engine_->set_error_callback([this](int code, const std::string& msg) {
             NotifyError(code, msg);
         });
-        engine_->set_track_ended_callback([this](const std::string& reason) {
-            NotifyTrackEnded(reason);
+        engine_->set_track_ended_callback([this](const std::string& reason, const std::string& file_path) {
+            NotifyTrackEnded(reason, file_path);
         });
 
         // Wire logger to JS console
@@ -603,10 +603,10 @@ private:
         });
     }
 
-    void NotifyTrackEnded(const std::string& reason) {
+    void NotifyTrackEnded(const std::string& reason, const std::string& file_path) {
         if (!track_ended_tsfn_) return;
-        track_ended_tsfn_->NonBlockingCall([reason](Napi::Env env, Napi::Function jsCallback) {
-            jsCallback.Call({Napi::String::New(env, reason)});
+        track_ended_tsfn_->NonBlockingCall([reason, file_path](Napi::Env env, Napi::Function jsCallback) {
+            jsCallback.Call({Napi::String::New(env, reason), Napi::String::New(env, file_path)});
         });
     }
 

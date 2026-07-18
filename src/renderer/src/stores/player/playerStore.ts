@@ -114,7 +114,6 @@ export const usePlayerStore = defineStore('player', () => {
   const queue = ref<LibrarySong[]>([])
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
-  let ignorePositionRolloverUntil = 0
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
 
   // ── Computed ──
@@ -275,9 +274,6 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function seek(ms: number): Promise<boolean> {
     const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
-    // A manual seek from the tail back to the beginning must not look like a
-    // legacy native-engine loop rollover.
-    ignorePositionRolloverUntil = Date.now() + 1000
     positionMs.value = targetMs
     const result = await audioBridge.seek(targetMs)
     schedulePlaybackSessionSave()
@@ -709,7 +705,11 @@ export const usePlayerStore = defineStore('player', () => {
   let autoAdvanceInProgress = false
   let lastTrackEndedAt = 0
 
-  async function handleTrackEnded(reason: string): Promise<void> {
+  async function handleTrackEnded(reason: string, filePath?: string): Promise<void> {
+    // `trackEnded` crosses the native, main and renderer event queues. If a
+    // user selects the next track just as the old one ends, its late event
+    // must not advance the newly selected track a second time.
+    if (filePath && filePath !== currentFile.value) return
     const now = Date.now()
     // Native backends may emit an EOF notification more than once while the
     // previous output callback drains. Only one event may advance the queue.
@@ -753,27 +753,15 @@ export const usePlayerStore = defineStore('player', () => {
 
     unsubs.push(
       audioBridge.onPositionChanged((data) => {
-        const previousPosition = positionMs.value
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
-        // Older native addons implement their temporary "next decoder" by
-        // reopening the current file. They therefore never emit trackEnded,
-        // but their cyclic clock visibly jumps from the tail to the start.
-        // Treat that rollover as EOF so the renderer-owned queue still
-        // advances correctly while the addon is awaiting replacement.
-        if (
-          Date.now() >= ignorePositionRolloverUntil &&
-          data.durationMs > 0 &&
-          previousPosition > data.durationMs * 0.8 &&
-          data.positionMs < data.durationMs * 0.15
-        ) {
-          void handleTrackEnded('position rollover')
-        }
         schedulePlaybackSessionSave()
       })
     )
 
-    unsubs.push(audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason)))
+    unsubs.push(
+      audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason, data.filePath))
+    )
 
     // Forward engine errors to the log store
     unsubs.push(

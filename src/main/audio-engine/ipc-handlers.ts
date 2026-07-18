@@ -339,8 +339,8 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       durationMs: durMs
     })
   })
-  engine.onTrackEnded((reason: string) => {
-    sendEvent(mainWindow, 'trackEnded', { reason })
+  engine.onTrackEnded((reason: string, filePath: string) => {
+    sendEvent(mainWindow, 'trackEnded', { reason, filePath })
     sendEvent(mainWindow, 'logEntry', {
       level: 'info',
       message: `Playback reached end of track (${reason})`,

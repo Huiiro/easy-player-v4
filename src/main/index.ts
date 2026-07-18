@@ -9,6 +9,7 @@ import { closeDatabase, initDatabase } from './database'
 import { registerDatabaseIpcHandlers } from './database/ipc-handlers'
 import { getAppSetting, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './service/scan-ipc-handlers'
+import { registerLyricsIpcHandlers } from './service/lyrics-ipc-handlers'
 import { getDataPath } from './utils/pathUtils'
 
 protocol.registerSchemesAsPrivileged([
@@ -82,7 +83,17 @@ function registerMediaProtocol(): void {
       return new Response('Not Found', { status: 404 })
     }
 
-    return net.fetch(pathToFileURL(coverPath).toString())
+    const response = await net.fetch(pathToFileURL(coverPath).toString())
+    const headers = new Headers(response.headers)
+    // The renderer samples cover pixels with Canvas for player-panel colors.
+    // `easy-player-media` is a separate origin from the Vite renderer, so the
+    // response must opt in to anonymous CORS reads.
+    headers.set('Access-Control-Allow-Origin', '*')
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers
+    })
   })
 }
 
@@ -168,6 +179,7 @@ app.whenReady().then(() => {
   initDatabase()
   registerDatabaseIpcHandlers()
   registerScanIpcHandlers()
+  registerLyricsIpcHandlers()
   registerMediaProtocol()
 
   // IPC test
