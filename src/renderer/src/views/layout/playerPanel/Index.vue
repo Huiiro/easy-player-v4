@@ -35,11 +35,14 @@ const playModeIcon = computed(
 const playModeLabel = computed(() =>
   t(['queue.sequential', 'queue.list', 'queue.single', 'queue.random'][player.playMode])
 )
+const lyricsStyleLabel = computed(() =>
+  t(`playerPanel.lyricEffect${ui.lyricsStyle[0].toUpperCase()}${ui.lyricsStyle.slice(1)}`)
+)
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
 })
-const rhythmAmount = computed(() => {
+const targetRhythmAmount = computed(() => {
   if (
     !player.isPlaying ||
     !player.rhythmVisualConfig.enabled ||
@@ -50,6 +53,24 @@ const rhythmAmount = computed(() => {
   const energy = Math.max(0, Math.min(1, Math.max(rms, lowEnergy, onsetStrength)))
   return Math.min(1, energy * player.rhythmVisualConfig.intensity * 1.8)
 })
+const rhythmAmount = ref(0)
+let lastVisualUpdateAt = 0
+
+watch(
+  targetRhythmAmount,
+  (target) => {
+    if (target === 0) {
+      rhythmAmount.value = 0
+      return
+    }
+
+    const now = performance.now()
+    if (now - lastVisualUpdateAt < 1000 / 30) return
+    lastVisualUpdateAt = now
+    rhythmAmount.value += (target - rhythmAmount.value) * 0.72
+  },
+  { immediate: true }
+)
 // `DEFAULT` was the old persisted value before the album-art setting existed.
 // Treat it as album artwork so existing users receive the new default immediately.
 const useAlbumArtwork = computed(
@@ -76,12 +97,39 @@ const coverGlowStyle = computed(() => ({
   '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
   '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
 }))
+
+const coverFrameStyle = computed(() => ({
+  transform: `scale(${1 + rhythmAmount.value * 0.085})`,
+  filter: `brightness(${1 + rhythmAmount.value * 0.12})`
+}))
+const coverCardStyle = computed(() => {
+  const energy = rhythmAmount.value
+  const primary = coverColors.value.primary
+
+  return {
+    '--cover-shadow-rgb': primary,
+    boxShadow: `0 ${18 + energy * 10}px ${35 + energy * 28}px rgb(${primary} / ${0.3 + energy * 0.38})`
+  }
+})
 const shouldAnimate = computed(
   () =>
     player.isPlaying &&
     player.rhythmVisualConfig.enabled &&
     !player.rhythmVisualConfig.reducedMotion
 )
+const beatRingRef = ref<HTMLElement>()
+
+function restartBeatRing(): void {
+  const ring = beatRingRef.value
+  if (!ring || !shouldAnimate.value) return
+  ring.classList.remove('beat-ring--pulse')
+  void ring.offsetWidth
+  ring.classList.add('beat-ring--pulse')
+}
+
+watch(() => [player.audioAnalysis.beatSequence, shouldAnimate.value], restartBeatRing, {
+  flush: 'post'
+})
 const audioDetails = computed(() => {
   const info = player.trackInfo
   if (!info) return []
@@ -210,20 +258,23 @@ function extractCoverColors(event: Event): void {
 <template>
   <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l">
     <!-- bg -->
-    <img
-      v-if="backgroundSource"
-      :src="backgroundSource"
-      class="pointer-events-none absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[22px] transition-transform duration-150"
-      :class="[
-        useAlbumArtwork ? 'opacity-100' : 'opacity-0',
-        shouldAnimate ? 'panel-cover--animated' : ''
-      ]"
-      :style="backgroundStyle"
-      alt=""
-      crossorigin="anonymous"
-      @load="extractCoverColors"
-      @error="coverFailed = true"
-    />
+    <Transition name="panel-background">
+      <img
+        v-if="backgroundSource"
+        :key="backgroundSource"
+        :src="backgroundSource"
+        class="panel-background-item pointer-events-none absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[28px] transition-transform duration-150"
+        :class="[
+          useAlbumArtwork ? 'opacity-100' : 'opacity-0',
+          shouldAnimate ? 'panel-cover--animated' : ''
+        ]"
+        :style="backgroundStyle"
+        alt=""
+        crossorigin="anonymous"
+        @load="extractCoverColors"
+        @error="coverFailed = true"
+      />
+    </Transition>
     <!-- glow -->
     <div
       class="pointer-events-none absolute -left-[12%] -top-[16%] size-[58vw] max-h-[76vh] max-w-[76vh] rounded-full panel-orb panel-orb-primary"
@@ -247,7 +298,7 @@ function extractCoverColors(event: Event): void {
     <!-- beat -->
     <div
       v-if="shouldAnimate"
-      :key="player.audioAnalysis.beatSequence"
+      ref="beatRingRef"
       class="pointer-events-none absolute left-1/2 top-1/2 size-[min(78vw,78vh)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 beat-ring"
       :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
     />
@@ -282,7 +333,8 @@ function extractCoverColors(event: Event): void {
         >
           <!-- cover -->
           <div
-            class="relative w-[min(320px,32vw)] max-[760px]:w-[min(260px,62vw)] max-[700px]:w-[min(205px,44vh)]"
+            class="cover-frame relative w-[min(320px,32vw)] transition-[transform,filter] duration-100 max-[760px]:w-[min(260px,62vw)] max-[700px]:w-[min(205px,44vh)]"
+            :style="coverFrameStyle"
           >
             <div
               class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura"
@@ -290,13 +342,14 @@ function extractCoverColors(event: Event): void {
               :style="coverGlowStyle"
             />
             <div
-              class="relative grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_18px_35px_color-mix(in_srgb,var(--color-primary)_38%,transparent)]"
+              class="cover-card relative grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
+              :class="shouldAnimate ? 'cover-card--breathing' : ''"
+              :style="coverCardStyle"
             >
               <img
                 v-if="coverUrl && !coverFailed"
                 :src="coverUrl"
-                class="size-full object-cover transition-transform duration-150"
-                :style="{ transform: `scale(${1 + rhythmAmount * 0.055})` }"
+                class="size-full object-cover"
                 :alt="trackTitle"
                 crossorigin="anonymous"
                 @load="extractCoverColors"
@@ -349,7 +402,7 @@ function extractCoverColors(event: Event): void {
               </span>
             </label>
             <!-- speed -->
-            <label class="panel-tool vertical-tool" title="倍速">
+            <label class="panel-tool vertical-tool" :title="t('playerPanel.speed')">
               <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
               <span class="vertical-popup">
                 <b>{{ player.playbackSpeedConfig.speed.toFixed(2) }}×</b>
@@ -389,14 +442,18 @@ function extractCoverColors(event: Event): void {
             <!-- rhythm spectrum -->
             <button
               class="panel-tool"
-              title="频谱"
+              :title="t('playerPanel.spectrum')"
               :class="showSpectrum && 'active'"
               @click="showSpectrum = !showSpectrum"
             >
               <svg-icon name="common-rhythm" class-name="w-[16px] h-[16px]" />
             </button>
             <!-- font size -->
-            <label class="panel-tool vertical-tool" title="歌词字体大小" @wheel="changeLyricSize">
+            <label
+              class="panel-tool vertical-tool"
+              :title="t('playerPanel.lyricFontSize')"
+              @wheel="changeLyricSize"
+            >
               <span class="w-[16px] h-[16px] flex items-center justify-center">
                 <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
               </span>
@@ -414,7 +471,11 @@ function extractCoverColors(event: Event): void {
               </span>
             </label>
             <!-- font padding -->
-            <label class="panel-tool vertical-tool" title="歌词间距" @wheel="changeLyricPadding">
+            <label
+              class="panel-tool vertical-tool"
+              :title="t('playerPanel.lyricSpacing')"
+              @wheel="changeLyricPadding"
+            >
               <span class="w-[16px] h-[16px] flex items-center justify-center">
                 <svg-icon name="arrow-arrow-up-down" class-name="w-[12px] h-[12px]" />
               </span>
@@ -436,7 +497,13 @@ function extractCoverColors(event: Event): void {
             <!-- lyrics align -->
             <button
               class="panel-tool"
-              title="切换歌词对齐"
+              :title="
+                t('playerPanel.lyricAlignment', {
+                  alignment: t(
+                    `playerPanel.align${ui.lyricsAlignment[0].toUpperCase()}${ui.lyricsAlignment.slice(1)}`
+                  )
+                })
+              "
               @click="
                 ui.lyricsAlignment =
                   ui.lyricsAlignment === 'left'
@@ -448,6 +515,17 @@ function extractCoverColors(event: Event): void {
             >
               <span class="w-[16px] h-[16px] flex items-center justify-center">
                 <svg-icon name="arrow-arrow-left-right" class-name="w-[12px] h-[12px]" />
+              </span>
+            </button>
+            <!-- lyrics style -->
+            <button
+              class="panel-tool"
+              :title="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
+              :aria-label="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
+              @click="ui.handleClickStyle()"
+            >
+              <span class="w-[16px] h-[16px] flex items-center justify-center">
+                <svg-icon name="common-lyrics" class-name="w-[16px] h-[16px] mt-0.5" />
               </span>
             </button>
           </div>
@@ -514,7 +592,10 @@ function extractCoverColors(event: Event): void {
       <!-- play queue-->
       <BaseDrawer v-model="showQueue" direction="right" width="26rem"><PlayQueue /></BaseDrawer>
       <!-- play spectrum-->
-      <div v-if="showSpectrum" class="absolute inset-x-0 bottom-0 px-4 opacity-80">
+      <div
+        v-if="showSpectrum"
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-80"
+      >
         <PlayerSpectrum :spectrum="player.audioAnalysis.spectrum" :color="coverColors.primary" />
       </div>
     </section>
@@ -607,6 +688,24 @@ function extractCoverColors(event: Event): void {
 .panel-orb--delayed {
   animation-delay: -3.4s;
 }
+.cover-frame {
+  transform-origin: center;
+  will-change: transform, filter;
+}
+.cover-card {
+  transition: box-shadow 100ms ease-out;
+}
+.cover-card--breathing {
+  animation: cover-card-breathe 2.8s ease-in-out infinite;
+}
+.panel-background-enter-active,
+.panel-background-leave-active {
+  transition: opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.panel-background-enter-from,
+.panel-background-leave-to {
+  opacity: 0 !important;
+}
 .cover-aura {
   background:
     radial-gradient(circle at 25% 22%, var(--cover-primary-solid), transparent 51%),
@@ -631,10 +730,13 @@ function extractCoverColors(event: Event): void {
     linear-gradient(180deg, rgb(9 12 17 / 8%), rgb(7 9 14 / 38%));
 }
 .beat-ring {
-  animation: player-panel-beat 820ms cubic-bezier(0.14, 0.74, 0.24, 1) both;
+  opacity: 0;
   box-shadow:
     0 0 80px rgb(255 255 255 / 18%),
     inset 0 0 60px rgb(255 255 255 / 10%);
+}
+.beat-ring--pulse {
+  animation: player-panel-beat 820ms cubic-bezier(0.14, 0.74, 0.24, 1) both;
 }
 @keyframes player-panel-beat {
   from {
@@ -685,12 +787,23 @@ function extractCoverColors(event: Event): void {
     filter: blur(28px) saturate(1.45) brightness(1.18);
   }
 }
+@keyframes cover-card-breathe {
+  0%,
+  100% {
+    filter: drop-shadow(0 10px 16px rgb(var(--cover-shadow-rgb) / 18%));
+  }
+  50% {
+    filter: drop-shadow(0 18px 26px rgb(var(--cover-shadow-rgb) / 42%));
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .beat-ring,
+  .beat-ring--pulse,
   .panel-cover--animated,
   .panel-ambient--animated,
   .panel-orb--animated,
-  .cover-aura--breathing {
+  .cover-aura--breathing,
+  .cover-card--breathing {
     animation: none;
   }
 }

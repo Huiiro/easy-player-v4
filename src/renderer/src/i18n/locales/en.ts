@@ -147,7 +147,20 @@ export default {
     next: 'Next track',
     lyrics: 'Lyrics',
     noLyrics: 'No lyrics available',
-    lyricsHint: 'Lyrics will appear here as playback progresses'
+    lyricsHint: 'Lyrics will appear here as playback progresses',
+    speed: 'Speed',
+    spectrum: 'Spectrum',
+    lyricFontSize: 'Lyric font size',
+    lyricSpacing: 'Lyric spacing',
+    progressStyle: 'Toggle progress style',
+    alignLeft: 'Left',
+    alignCenter: 'Center',
+    alignRight: 'Right',
+    lyricAlignment: 'Lyric alignment: {alignment}',
+    lyricEffect: 'Lyric effect: {effect}',
+    lyricEffectNone: 'None',
+    lyricEffectGlow: 'Glow',
+    lyricEffectFollow: 'Follow'
   },
   lyrics: {
     source: {

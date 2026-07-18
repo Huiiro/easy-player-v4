@@ -38,8 +38,7 @@ export const useUIStore = defineStore('ui', () => {
   const lyricsAlignment = ref<'left' | 'center' | 'right'>('center')
   const lyricsFontSize = ref(2.4)
   const lyricsFontPadding = ref(30)
-  const lyricsGlow = ref(false)
-  const lyricsFollow = ref(false)
+  const lyricsStyle = ref<'none' | 'glow' | 'follow'>('none')
   const lyricsFontSizeIndex = ref(1)
   const showLyricsSizeSlider = ref(false)
   const showLyricsEditor = ref(false)
@@ -204,6 +203,17 @@ export const useUIStore = defineStore('ui', () => {
     const root = document.documentElement
     root.style.setProperty('--lrc-padding', lyricsFontPadding.value + 'px')
   }
+  function handleClickStyle() {
+    console.log('clicked')
+    if (lyricsStyle.value === 'none') {
+      lyricsStyle.value = 'glow'
+    } else if (lyricsStyle.value === 'glow') {
+      lyricsStyle.value = 'follow'
+    } else {
+      lyricsStyle.value = 'none'
+    }
+    console.log(lyricsStyle.value)
+  }
   watch(
     [
       useDarkMode,
@@ -241,8 +251,7 @@ export const useUIStore = defineStore('ui', () => {
     lyricsAlignment,
     lyricsFontSize,
     lyricsFontPadding,
-    lyricsGlow,
-    lyricsFollow,
+    lyricsStyle,
     lyricsFontSizeIndex,
     showLyricsSizeSlider,
     showLyricsEditor,
@@ -274,6 +283,7 @@ export const useUIStore = defineStore('ui', () => {
     toggleCardStyle,
     setCardStyle,
     setLyricsFontSize,
-    setLyricsFontPadding
+    setLyricsFontPadding,
+    handleClickStyle
   }
 })

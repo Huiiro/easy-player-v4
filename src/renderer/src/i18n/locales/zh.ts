@@ -144,7 +144,20 @@ export default {
     next: '下一首',
     lyrics: '歌词',
     noLyrics: '暂无歌词',
-    lyricsHint: '歌词将在这里随播放进度显示'
+    lyricsHint: '歌词将在这里随播放进度显示',
+    speed: '倍速',
+    spectrum: '频谱',
+    lyricFontSize: '歌词字体大小',
+    lyricSpacing: '歌词间距',
+    progressStyle: '切换进度条样式',
+    alignLeft: '左对齐',
+    alignCenter: '居中',
+    alignRight: '右对齐',
+    lyricAlignment: '歌词对齐：{alignment}',
+    lyricEffect: '歌词效果：{effect}',
+    lyricEffectNone: '无',
+    lyricEffectGlow: '发光',
+    lyricEffectFollow: '跟随'
   },
   lyrics: {
     source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词' }
