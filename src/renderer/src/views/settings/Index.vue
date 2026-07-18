@@ -2,10 +2,11 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
+import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 const ui = useUIStore()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 const backgroundInput = ref<HTMLInputElement | null>(null)
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
@@ -103,6 +104,25 @@ function clearBackground(): void {
                 English
               </button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.playback') }}</h2>
+            <p>{{ t('settings.playbackDescription') }}</p>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
+              <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
+            </div>
+            <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
           </div>
         </div>
       </section>

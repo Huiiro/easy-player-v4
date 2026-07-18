@@ -5,6 +5,9 @@ export const DATABASE_IPC_CHANNEL = 'database:command'
 
 type Handler = (params?: never) => unknown
 const handlers = {
+  getSetting: ({ key }: { key: string }) => library.getAppSetting(key),
+  setSetting: ({ key, value }: { key: string; value: unknown }) =>
+    library.setAppSetting(key, value),
   querySongs: (params: Parameters<typeof library.querySongs>[0]) => library.querySongs(params),
   queryAllSongs: () => library.queryAllSongs(),
   getSong: ({ id }: { id: number }) => library.getSong(id),

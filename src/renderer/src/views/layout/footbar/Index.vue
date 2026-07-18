@@ -18,10 +18,13 @@ const queueVisible = ref(false)
 const audioControlsVisible = ref(false)
 
 const trackTitle = computed(
-  () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || '未选择音乐'
+  () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
 )
 const trackArtist = computed(
-  () => player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist || 'Easy Player'
+  () =>
+    player.trackInfo?.metadata?.artist ||
+    player.currentQueueSong?.artist ||
+    t('footer.defaultArtist')
 )
 const coverFailed = ref(false)
 const coverUrl = computed(() => {
@@ -33,16 +36,14 @@ const audioSummary = computed(() => {
   if (!info) return ''
   const parts = [
     info.format?.toUpperCase(),
-    info.sampleRate ? `${info.sampleRate / 1000} kHz` : '',
-    info.bitDepth ? `${info.bitDepth} bit` : ''
+    info.sampleRate ? `${info.sampleRate / 1000} ${t('footer.kilohertz')}` : '',
+    info.bitDepth ? `${info.bitDepth} ${t('footer.bitDepth')}` : ''
   ]
   return parts.filter(Boolean).join(' · ')
 })
 watch(coverUrl, () => {
   coverFailed.value = false
 })
-const progressPercent = computed(() => `${Math.round(player.progress * 100)}%`)
-const volumePercent = computed(() => `${Math.round(player.volume * 100)}%`)
 const playModeIcon = computed(() => {
   const icons: Record<PlayMode, string> = {
     [PlayMode.Sequential]: 'control-order',
@@ -97,21 +98,30 @@ function openPlayerPanel(): void {
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
 }
+
 function openAudioControls(): void {
   audioControlsVisible.value = true
 }
 </script>
 
 <template>
-  <div class="footbar-shell px-4 pb-4 pt-2" :class="{ 'is-card-mode': ui.useCardView }">
+  <div
+    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 max-[700px]:px-3 max-[700px]:pb-3"
+  >
     <section
-      class="footbar-dock"
-      :class="{ 'is-collapsed': collapsed }"
-      aria-label="播放器控制栏，点击打开播放器面板"
+      class="pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border border-text/10 bg-bg/75 px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
+      :class="
+        collapsed
+          ? 'grid-cols-[minmax(0,1fr)_auto] min-h-[62px] max-w-md gap-3'
+          : 'grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
+      "
+      :aria-label="t('footer.playerControls')"
       @click="openPlayerPanel"
     >
-      <div class="track-info">
-        <div class="cover-art" :class="{ 'is-playing': player.isPlaying }">
+      <div class="flex min-w-0 items-center gap-3">
+        <div
+          class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+        >
           <img
             v-if="coverUrl && !coverFailed"
             :src="coverUrl"
@@ -122,55 +132,51 @@ function openAudioControls(): void {
           <SvgIcon v-else name="common-music" class-name="size-6" />
         </div>
         <div class="min-w-0">
-          <p class="truncate text-sm font-semibold text-[var(--color-text)]">{{ trackTitle }}</p>
-          <p class="truncate text-xs text-[var(--color-text-l)]">{{ trackArtist }}</p>
-          <p
-            v-if="!collapsed && audioSummary"
-            class="truncate text-[10px] text-[var(--color-text-l)]"
-          >
+          <p class="truncate text-sm font-semibold text-text">{{ trackTitle }}</p>
+          <p class="truncate text-xs text-text-l">{{ trackArtist }}</p>
+          <p v-if="!collapsed && audioSummary" class="truncate text-[10px] text-text-l">
             {{ audioSummary }}
           </p>
         </div>
       </div>
 
-      <div v-if="!collapsed" class="player-controls">
+      <div v-if="!collapsed" class="grid gap-1 max-[700px]:hidden">
         <div class="flex items-center justify-center gap-1.5">
           <button
-            class="control-button"
-            title="上一首"
+            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
+            :title="t('footer.previous')"
             :disabled="!player.queue.length"
             @click.stop="playPrevious"
           >
             <SvgIcon name="play-prev" class-name="size-4" />
           </button>
           <button
-            class="play-button"
+            class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
             :disabled="!player.currentFile"
-            :title="player.isPlaying ? '暂停' : '播放'"
+            :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
             @click.stop="togglePlayback"
           >
             <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
           </button>
           <button
-            class="control-button"
-            title="下一首"
+            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
+            :title="t('footer.next')"
             :disabled="!player.queue.length"
             @click.stop="playNext"
           >
             <SvgIcon name="play-next" class-name="size-4" />
           </button>
         </div>
-        <div class="flex items-center gap-2 text-[11px] tabular-nums text-[var(--color-text-l)]">
+        <div class="flex items-center gap-2 text-[11px] tabular-nums text-text-l">
           <span>{{ player.positionFormatted }}</span>
           <input
-            class="dock-range progress-range"
+            class="h-2 w-full cursor-pointer appearance-auto accent-primary disabled:cursor-default disabled:opacity-45"
             type="range"
             min="0"
             :max="player.durationMs || 0"
             :value="player.positionMs"
-            :style="{ '--range-progress': progressPercent }"
             :disabled="!player.durationMs"
-            aria-label="播放进度"
+            :aria-label="t('footer.progress')"
             @click.stop
             @input="seek"
           />
@@ -178,37 +184,49 @@ function openAudioControls(): void {
         </div>
       </div>
 
-      <div v-if="!collapsed" class="volume-control">
-        <button class="control-button" :title="playModeLabel" @click.stop="cyclePlayMode">
+      <div v-if="!collapsed" class="flex min-w-0 items-center justify-end gap-3 max-[700px]:hidden">
+        <button
+          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          :title="playModeLabel"
+          @click.stop="cyclePlayMode"
+        >
           <SvgIcon :name="playModeIcon" class-name="size-4" />
         </button>
-        <SvgIcon
-          :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
-          class-name="size-5"
-        />
-        <input
-          class="dock-range volume-range"
-          type="range"
-          min="0"
-          max="100"
-          :value="Math.round(player.volume * 100)"
-          :style="{ '--range-progress': volumePercent }"
-          aria-label="音量"
-          @click.stop
-          @input="setVolume"
-        />
-        <button class="control-button" :title="t('queue.title')" @click.stop="queueVisible = true">
+        <div class="group flex items-center" @click.stop>
+          <SvgIcon
+            :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
+            class-name="size-5 shrink-0"
+          />
+          <input
+            class="h-2 w-0 cursor-pointer appearance-auto opacity-0 accent-primary transition-[width,opacity] duration-200 group-hover:ml-2 group-hover:w-24 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:w-24 group-focus-within:opacity-100"
+            type="range"
+            min="0"
+            max="100"
+            :value="Math.round(player.volume * 100)"
+            :aria-label="t('footer.volume')"
+            @input="setVolume"
+          />
+        </div>
+        <button
+          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          :title="t('queue.title')"
+          @click.stop="queueVisible = true"
+        >
           <SvgIcon name="control-playlist" class-name="size-4" />
         </button>
-        <button class="control-button" title="音频控制" @click.stop="openAudioControls">
+        <button
+          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          :title="t('footer.audioControls')"
+          @click.stop="openAudioControls"
+        >
           <SvgIcon name="common-equalizer" class-name="size-4" />
         </button>
       </div>
 
       <button
-        class="collapse-button"
-        :title="collapsed ? '展开控制栏' : '收起控制栏'"
-        :aria-label="collapsed ? '展开控制栏' : '收起控制栏'"
+        class="grid size-8 place-items-center rounded-full bg-text/[0.07] text-text-l transition hover:scale-105 hover:bg-text/[0.13] hover:text-text"
+        :title="collapsed ? t('footer.expand') : t('footer.collapse')"
+        :aria-label="collapsed ? t('footer.expand') : t('footer.collapse')"
         @click.stop="toggleCollapsed"
       >
         <SvgIcon :name="collapsed ? 'arrow-arrow-up' : 'arrow-arrow-down'" class-name="size-4" />
@@ -226,199 +244,10 @@ function openAudioControls(): void {
     <BaseDialog
       v-model="audioControlsVisible"
       class="pointer-events-auto"
-      title="音频控制"
+      :title="t('footer.audioControls')"
       width="max-w-6xl"
     >
       <AudioControlPanel class="h-[72vh]" />
     </BaseDialog>
   </div>
 </template>
-
-<style scoped>
-.footbar-shell {
-  pointer-events: none;
-  background: linear-gradient(
-    to top,
-    color-mix(in srgb, var(--color-bg) 28%, transparent),
-    transparent
-  );
-}
-.footbar-dock {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(270px, 1.2fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1.5rem;
-  min-height: 72px;
-  max-width: 1160px;
-  margin: 0 auto;
-  padding: 0.625rem 1rem;
-  color: var(--color-text-l);
-  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-text) 14%, transparent);
-  border-radius: 1.5rem;
-  box-shadow:
-    0 12px 35px color-mix(in srgb, #000 20%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #fff 22%, transparent);
-  backdrop-filter: blur(22px) saturate(145%);
-  -webkit-backdrop-filter: blur(22px) saturate(145%);
-  pointer-events: auto;
-  transition:
-    max-width 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
-    min-height 0.32s cubic-bezier(0.34, 1.56, 0.64, 1),
-    padding 0.25s cubic-bezier(0.34, 1.3, 0.64, 1),
-    gap 0.25s ease;
-}
-.track-info,
-.volume-control {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
-}
-.volume-control {
-  justify-content: flex-end;
-}
-.collapse-button {
-  display: grid;
-  width: 2rem;
-  height: 2rem;
-  place-items: center;
-  color: var(--color-text-l);
-  background: color-mix(in srgb, var(--color-text) 7%, transparent);
-  border: 0;
-  border-radius: 999px;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    background-color 0.18s ease;
-}
-.collapse-button:hover {
-  color: var(--color-text);
-  background: color-mix(in srgb, var(--color-text) 13%, transparent);
-  transform: scale(1.08);
-}
-.footbar-dock.is-collapsed {
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-height: 62px;
-  max-width: 410px;
-  gap: 0.75rem;
-}
-.cover-art {
-  display: grid;
-  flex: 0 0 auto;
-  width: 3.1rem;
-  height: 3.1rem;
-  place-items: center;
-  color: white;
-  background: linear-gradient(
-    135deg,
-    var(--color-primary),
-    color-mix(in srgb, var(--color-primary) 45%, #8b5cf6)
-  );
-  border-radius: 0.9rem;
-  box-shadow: 0 5px 14px color-mix(in srgb, var(--color-primary) 35%, transparent);
-}
-.cover-art.is-playing {
-  animation: cover-breathe 2.5s ease-in-out infinite;
-}
-.player-controls {
-  display: grid;
-  gap: 0.25rem;
-}
-.control-button,
-.play-button {
-  display: grid;
-  place-items: center;
-  border: 0;
-  cursor: pointer;
-  transition:
-    transform 0.18s ease,
-    background-color 0.18s ease,
-    opacity 0.18s ease;
-}
-.control-button {
-  width: 2rem;
-  height: 2rem;
-  color: var(--color-text);
-  background: transparent;
-  border-radius: 999px;
-}
-.control-button:not(:disabled):hover {
-  background: color-mix(in srgb, var(--color-text) 10%, transparent);
-  transform: scale(1.06);
-}
-.control-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.35;
-}
-.play-button {
-  width: 2.45rem;
-  height: 2.45rem;
-  color: white;
-  background: var(--color-primary);
-  border-radius: 999px;
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-primary) 45%, transparent);
-}
-.play-button:not(:disabled):hover {
-  transform: scale(1.08);
-}
-.play-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-  box-shadow: none;
-}
-.dock-range {
-  --range-progress: 0%;
-  width: 100%;
-  height: 4px;
-  appearance: none;
-  cursor: pointer;
-  border-radius: 999px;
-  background: linear-gradient(
-    to right,
-    var(--color-primary) var(--range-progress),
-    color-mix(in srgb, var(--color-text) 15%, transparent) var(--range-progress)
-  );
-}
-.dock-range::-webkit-slider-thumb {
-  width: 11px;
-  height: 11px;
-  appearance: none;
-  background: var(--color-primary);
-  border: 2px solid color-mix(in srgb, var(--color-bg) 85%, white);
-  border-radius: 999px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 22%);
-}
-.dock-range:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-.volume-range {
-  max-width: 100px;
-}
-@keyframes cover-breathe {
-  50% {
-    transform: scale(1.045);
-    box-shadow: 0 7px 20px color-mix(in srgb, var(--color-primary) 55%, transparent);
-  }
-}
-@media (max-width: 700px) {
-  .footbar-shell {
-    padding: 0.5rem 0.75rem 0.75rem;
-  }
-  .footbar-dock {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 0.65rem;
-    padding: 0.55rem 0.7rem;
-  }
-  .volume-control {
-    display: none;
-  }
-  .footbar-dock.is-collapsed {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .track-info p {
-    max-width: 120px;
-  }
-}
-</style>

@@ -3,7 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
 
 export const useUIStore = defineStore('ui', () => {
-  const themeStorageKey = 'easy-player.theme-settings'
+  const themeSettingsKey = 'ui.theme-settings'
   // ========== 基础设置 ==========
   const locale = ref<'zh' | 'en'>('zh')
   const platform = ref<'win' | 'macOS' | 'linux'>('win')
@@ -18,6 +18,7 @@ export const useUIStore = defineStore('ui', () => {
   const useDynamicBg = ref(false)
   const useLocalFileName = ref(false)
   const useFullProgress = ref(false)
+  const autoPlayOnRestore = ref(false)
   const showWelcomeText = ref(true)
   const customFontFamily = ref('')
   const customThemeColor = ref('')
@@ -112,52 +113,59 @@ export const useUIStore = defineStore('ui', () => {
     else root.style.removeProperty('--color-primary')
   }
 
-  function persistTheme(): void {
-    try {
-      localStorage.setItem(
-        themeStorageKey,
-        JSON.stringify({
-          useDarkMode: useDarkMode.value,
-          customThemeColor: customThemeColor.value,
-          useCustomBg: useCustomBg.value,
-          customBg: { ...customBg }
-        })
-      )
-    } catch {
-      // A large background can exceed local storage. Preserve the remaining theme choices.
-      try {
-        localStorage.setItem(
-          themeStorageKey,
-          JSON.stringify({
-            useDarkMode: useDarkMode.value,
-            customThemeColor: customThemeColor.value,
-            useCustomBg: false,
-            customBg: { url: '', path: '', blur: customBg.blur, brightness: customBg.brightness }
-          })
-        )
-      } catch {
-        // Storage can be disabled by the host; keep the active session settings instead.
-      }
+  function themeSnapshot(): Record<string, unknown> {
+    return {
+      useDarkMode: useDarkMode.value,
+      customThemeColor: customThemeColor.value,
+      useCustomBg: useCustomBg.value,
+      autoPlayOnRestore: autoPlayOnRestore.value,
+      customBg: { ...customBg }
     }
   }
 
-  function initializeTheme(): void {
+  async function persistTheme(): Promise<void> {
     try {
-      const saved = JSON.parse(localStorage.getItem(themeStorageKey) || '{}')
-      if (typeof saved.useDarkMode === 'boolean') useDarkMode.value = saved.useDarkMode
-      if (typeof saved.customThemeColor === 'string')
-        customThemeColor.value = saved.customThemeColor
-      if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
-      if (saved.customBg && typeof saved.customBg === 'object') {
-        customBg.url = typeof saved.customBg.url === 'string' ? saved.customBg.url : ''
-        customBg.path = typeof saved.customBg.path === 'string' ? saved.customBg.path : ''
-        customBg.blur = Number(saved.customBg.blur) || 0
-        customBg.brightness = Number(saved.customBg.brightness) || 100
+      window.api.database.saveSync(themeSettingsKey, themeSnapshot())
+    } catch {
+      // Database failures must not block visual preference changes for the current session.
+    }
+  }
+
+  async function initializeTheme(): Promise<void> {
+    let saved: Record<string, unknown> = {}
+    let migratedLegacyTheme = false
+    try {
+      const response = window.api.database.getSync(themeSettingsKey)
+      if (response.success && response.data && typeof response.data === 'object') {
+        saved = response.data as Record<string, unknown>
+      } else {
+        const legacy = localStorage.getItem('easy-player.theme-settings')
+        if (legacy) {
+          const parsed = JSON.parse(legacy)
+          if (parsed && typeof parsed === 'object') saved = parsed as Record<string, unknown>
+          migratedLegacyTheme = true
+        }
       }
     } catch {
-      // Invalid legacy settings should not prevent the app from starting.
+      // Invalid persisted preferences should not prevent the app from starting.
+    }
+    if (typeof saved.useDarkMode === 'boolean') useDarkMode.value = saved.useDarkMode
+    if (typeof saved.customThemeColor === 'string') customThemeColor.value = saved.customThemeColor
+    if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
+    if (typeof saved.autoPlayOnRestore === 'boolean')
+      autoPlayOnRestore.value = saved.autoPlayOnRestore
+    if (saved.customBg && typeof saved.customBg === 'object') {
+      const background = saved.customBg as Record<string, unknown>
+      customBg.url = typeof background.url === 'string' ? background.url : ''
+      customBg.path = typeof background.path === 'string' ? background.path : ''
+      customBg.blur = Number(background.blur) || 0
+      customBg.brightness = Number(background.brightness) || 100
     }
     applyTheme()
+    if (migratedLegacyTheme) {
+      await persistTheme()
+      localStorage.removeItem('easy-player.theme-settings')
+    }
   }
 
   function setTheme(mode: 'light' | 'dark'): void {
@@ -176,13 +184,14 @@ export const useUIStore = defineStore('ui', () => {
       useDarkMode,
       customThemeColor,
       useCustomBg,
+      autoPlayOnRestore,
       () => customBg.url,
       () => customBg.blur,
       () => customBg.brightness
     ],
     () => {
       applyTheme()
-      persistTheme()
+      void persistTheme()
     }
   )
   return {
@@ -194,6 +203,7 @@ export const useUIStore = defineStore('ui', () => {
     useDarkMode,
     useCardView,
     useCustomBg,
+    autoPlayOnRestore,
     useDynamicBg,
     useLocalFileName,
     useFullProgress,

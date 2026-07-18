@@ -5,10 +5,12 @@ import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useRoute } from 'vue-router'
 import router from '@/router'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
 const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
 const ui = useUIStore()
+const { t } = useI18n()
 const route = useRoute()
 const maximized = ref(false)
 const scanVisible = ref(false)
@@ -64,7 +66,10 @@ async function uploadLocalFiles(): Promise<void> {
 </script>
 
 <template>
-  <header class="titlebar" :class="visible ? '' : 'opacity-0 pointer-events-none'">
+  <header
+    class="flex h-[42px] items-center border-b border-border/80 bg-bg/80 transition-opacity [-webkit-app-region:drag]"
+    :class="visible ? '' : 'pointer-events-none opacity-0'"
+  >
     <ScanProgress
       v-model:visible="scanVisible"
       :scanning="scanning"
@@ -74,29 +79,44 @@ async function uploadLocalFiles(): Promise<void> {
       :duplicates="scanDuplicates"
     />
 
-    <div class="titlebar-brand header-no-drag" @click="go('/home')">
-      <span class="brand-mark">E</span><span class="brand-name">{{ ui.logoText }}</span>
+    <div
+      class="flex min-w-max cursor-pointer items-center gap-2 pl-3.5 text-text [-webkit-app-region:no-drag]"
+      @click="go('/home')"
+    >
+      <span
+        class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
+        >E</span
+      >
+      <span class="text-sm font-semibold tracking-tight">{{ ui.logoText }}</span>
     </div>
     <button
       v-if="!ui.useCardView"
-      class="toolbar-button header-no-drag back-button"
-      title="返回"
-      aria-label="返回"
+      class="ml-1 grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
+      :title="t('header.back')"
+      :aria-label="t('header.back')"
       @click="router.back()"
     >
       <svgIcon name="common-back" class-name="size-4" />
     </button>
-    <div class="titlebar-drag" />
-    <div class="titlebar-actions header-no-drag">
-      <button class="toolbar-button" title="导入本地音乐" @click="uploadLocalFiles">
+    <div class="h-full min-w-4 flex-1" />
+    <div class="flex self-stretch [-webkit-app-region:no-drag]">
+      <button
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('header.importLocalMusic')"
+        @click="uploadLocalFiles"
+      >
         <svgIcon name="common-plus" class-name="size-4" />
       </button>
-      <button class="toolbar-button" title="设置" @click="go('/settings')">
+      <button
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('header.settings')"
+        @click="go('/settings')"
+      >
         <svgIcon name="menu-settings" class-name="size-4" />
       </button>
       <button
-        class="toolbar-button"
-        :title="ui.useCardView ? '退出卡片模式' : '卡片模式'"
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="ui.useCardView ? t('header.exitCardMode') : t('header.cardMode')"
         @click="ui.toggleCardStyle"
       >
         <svgIcon
@@ -106,144 +126,40 @@ async function uploadLocalFiles(): Promise<void> {
         />
       </button>
     </div>
-    <div class="window-controls header-no-drag">
+    <div class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
-        class="window-control"
-        title="最小化"
-        aria-label="最小化"
+        class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('header.minimize')"
+        :aria-label="t('header.minimize')"
         @click="runWindowCommand('minimize')"
       >
-        <span class="window-minimize" />
+        <span class="w-3 border-t-[1.5px] border-current" />
       </button>
       <button
-        class="window-control"
-        :title="maximized ? '还原窗口' : '最大化'"
-        :aria-label="maximized ? '还原窗口' : '最大化'"
+        class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="maximized ? t('header.restore') : t('header.maximize')"
+        :aria-label="maximized ? t('header.restore') : t('header.maximize')"
         @click="runWindowCommand('toggle-maximize')"
       >
-        <span class="window-maximize" :class="{ restored: maximized }" />
+        <span
+          class="relative size-[11px] border-[1.4px] border-current"
+          :class="
+            maximized
+              ? 'translate-x-px -translate-y-px before:absolute before:-left-[5px] before:top-[3px] before:size-2 before:border-[1.4px] before:border-current before:bg-bg'
+              : ''
+          "
+        />
       </button>
       <button
-        class="window-control close-control"
-        title="关闭"
-        aria-label="关闭"
+        class="grid w-[46px] place-items-center text-text-l transition hover:bg-[#e5484d] hover:text-white"
+        :title="t('header.close')"
+        :aria-label="t('header.close')"
         @click="runWindowCommand('close')"
       >
-        <span class="window-close" />
+        <span
+          class="relative size-3 before:absolute before:left-0 before:top-[5px] before:w-3 before:border-t-[1.4px] before:border-current before:rotate-45 after:absolute after:left-0 after:top-[5px] after:w-3 after:border-t-[1.4px] after:border-current after:-rotate-45"
+        />
       </button>
     </div>
   </header>
 </template>
-
-<style scoped>
-.titlebar {
-  display: flex;
-  height: 42px;
-  align-items: center;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
-  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
-  transition: opacity 0.2s ease;
-  -webkit-app-region: drag;
-}
-.titlebar-brand {
-  display: flex;
-  min-width: max-content;
-  align-items: center;
-  gap: 0.55rem;
-  padding-left: 0.9rem;
-  color: var(--color-text);
-  cursor: pointer;
-}
-.brand-mark {
-  display: grid;
-  width: 21px;
-  height: 21px;
-  place-items: center;
-  border-radius: 6px;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 750;
-}
-.brand-name {
-  font-size: 0.85rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-.titlebar-drag {
-  min-width: 1rem;
-  flex: 1;
-  height: 100%;
-}
-.back-button {
-  margin-left: 0.2rem;
-}
-.titlebar-actions,
-.window-controls {
-  display: flex;
-  align-self: stretch;
-}
-.toolbar-button,
-.window-control {
-  display: grid;
-  width: 42px;
-  place-items: center;
-  color: var(--color-text-l);
-  transition:
-    color 0.16s ease,
-    background 0.16s ease;
-}
-.toolbar-button:hover,
-.window-control:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-.window-control {
-  width: 46px;
-}
-.close-control:hover {
-  background: #e5484d;
-  color: white;
-}
-.window-minimize {
-  width: 11px;
-  border-top: 1.5px solid currentColor;
-}
-.window-maximize {
-  width: 11px;
-  height: 11px;
-  border: 1.4px solid currentColor;
-}
-.window-maximize.restored {
-  position: relative;
-  transform: translate(1px, -1px);
-}
-.window-maximize.restored::after {
-  content: '';
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  left: -4px;
-  top: 3px;
-  border: 1.4px solid currentColor;
-  background: var(--color-bg);
-}
-.window-close {
-  position: relative;
-  width: 12px;
-  height: 12px;
-}
-.window-close::before,
-.window-close::after {
-  content: '';
-  position: absolute;
-  top: 5px;
-  left: 0;
-  width: 12px;
-  border-top: 1.4px solid currentColor;
-  transform: rotate(45deg);
-}
-.window-close::after {
-  transform: rotate(-45deg);
-}
-</style>

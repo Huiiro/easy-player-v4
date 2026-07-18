@@ -1,19 +1,19 @@
-import { ref, computed } from 'vue'
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type {
   AudioChainStatus,
-  PlaybackState,
-  TrackInfo,
-  DeviceInfo,
   ChannelMatrixConfig,
   ChorusConfig,
   CompressorConfig,
   DelayConfig,
+  DeviceInfo,
   DspNodeConfig,
   EqBand,
   NoiseGateConfig,
   PhaserConfig,
+  PlaybackState,
   ResamplerConfig,
+  TrackInfo,
   TransitionConfig
 } from '../types/audio'
 import { audioBridge } from '@/services/audioBridge'
@@ -115,6 +115,7 @@ export const usePlayerStore = defineStore('player', () => {
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
   let ignorePositionRolloverUntil = 0
+  let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
 
   // ── Computed ──
   const isPlaying = computed(() => state.value === 'playing')
@@ -125,7 +126,7 @@ export const usePlayerStore = defineStore('player', () => {
   const currentQueueSong = computed(() => queue.value[currentQueueIndex.value] ?? null)
 
   // ── Actions ──
-  async function openFile(filePath: string) {
+  async function openFile(filePath: string): Promise<boolean> {
     currentFile.value = filePath
     const ok = await audioBridge.open(filePath)
     if (ok) {
@@ -138,17 +139,20 @@ export const usePlayerStore = defineStore('player', () => {
       // native decoder, so the startup snapshot is no longer authoritative.
       await loadReplayGain()
       await refreshAudioChain()
+      await savePlaybackSession()
     }
     return ok
   }
 
-  async function play() {
-    const ok = await audioBridge.play()
-    return ok
+  async function play(): Promise<boolean> {
+    const result = await audioBridge.play()
+    schedulePlaybackSessionSave()
+    return result
   }
 
   function setPlayMode(mode: PlayMode): void {
     playMode.value = mode
+    schedulePlaybackSessionSave()
   }
 
   function addToQueue(songs: LibrarySong[], insertAfterCurrent = false): void {
@@ -157,9 +161,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (!additions.length) return
     if (insertAfterCurrent && currentQueueIndex.value >= 0) {
       queue.value.splice(currentQueueIndex.value + 1, 0, ...additions)
+      schedulePlaybackSessionSave()
       return
     }
     queue.value.push(...additions)
+    schedulePlaybackSessionSave()
   }
 
   function setQueue(songs: LibrarySong[]): void {
@@ -170,12 +176,14 @@ export const usePlayerStore = defineStore('player', () => {
       return true
     })
     currentQueueIndex.value = -1
+    savePlaybackSessionSync()
   }
 
   async function playQueueItem(index: number): Promise<boolean> {
     const song = queue.value[index]
     if (!song || song.songStatus === 0) return false
     currentQueueIndex.value = index
+    savePlaybackSessionSync()
     const opened = await openFile(song.audio)
     if (opened) await play()
     return opened
@@ -197,6 +205,7 @@ export const usePlayerStore = defineStore('player', () => {
       currentQueueIndex.value--
     else if (from > currentQueueIndex.value && to <= currentQueueIndex.value)
       currentQueueIndex.value++
+    schedulePlaybackSessionSave()
   }
 
   async function removeQueueItem(index: number): Promise<void> {
@@ -211,12 +220,14 @@ export const usePlayerStore = defineStore('player', () => {
       return
     }
     currentQueueIndex.value = Math.min(index, queue.value.length - 1)
+    schedulePlaybackSessionSave()
     await playQueueItem(currentQueueIndex.value)
   }
 
   function clearQueue(): void {
     queue.value = []
     currentQueueIndex.value = -1
+    schedulePlaybackSessionSave()
   }
 
   function nextIndex(): number {
@@ -250,24 +261,107 @@ export const usePlayerStore = defineStore('player', () => {
     return playQueueItem(index)
   }
 
-  async function pause() {
-    return audioBridge.pause()
+  async function pause(): Promise<boolean> {
+    const result = await audioBridge.pause()
+    schedulePlaybackSessionSave()
+    return result
   }
 
-  async function stop() {
-    return audioBridge.stop()
+  async function stop(): Promise<boolean> {
+    const result = await audioBridge.stop()
+    schedulePlaybackSessionSave()
+    return result
   }
 
-  async function seek(ms: number) {
+  async function seek(ms: number): Promise<boolean> {
     const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
     // A manual seek from the tail back to the beginning must not look like a
     // legacy native-engine loop rollover.
     ignorePositionRolloverUntil = Date.now() + 1000
     positionMs.value = targetMs
-    return audioBridge.seek(targetMs)
+    const result = await audioBridge.seek(targetMs)
+    schedulePlaybackSessionSave()
+    return result
   }
 
-  async function setVolume(vol: number) {
+  interface PlaybackSession {
+    currentFile: string | null
+    positionMs: number
+    durationMs: number
+    trackInfo: TrackInfo | null
+    queue: LibrarySong[]
+    currentQueueIndex: number
+    playMode: PlayMode
+    wasPlaying: boolean
+  }
+
+  function schedulePlaybackSessionSave(): void {
+    if (playbackSessionTimer) return
+    playbackSessionTimer = setTimeout(() => {
+      playbackSessionTimer = undefined
+      void savePlaybackSession()
+    }, 750)
+  }
+
+  async function savePlaybackSession(): Promise<void> {
+    savePlaybackSessionSync()
+  }
+
+  function savePlaybackSessionSync(): void {
+    const session: PlaybackSession = {
+      currentFile: currentFile.value,
+      positionMs: positionMs.value,
+      durationMs: durationMs.value,
+      trackInfo: toPlainData(trackInfo.value),
+      queue: toPlainData(queue.value),
+      currentQueueIndex: currentQueueIndex.value,
+      playMode: playMode.value,
+      wasPlaying: isPlaying.value
+    }
+    try {
+      const result = window.api.database.saveSync('player.playback-session', session)
+      if (!result.success) {
+        console.warn('[Player] Failed to persist playback session:', result.error)
+      }
+    } catch (error) {
+      console.warn('[Player] Failed to serialize playback session:', error)
+    }
+  }
+
+  async function restorePlaybackSession(autoPlay = false): Promise<void> {
+    try {
+      const response = window.api.database.getSync('player.playback-session')
+      if (!response.success || !response.data || typeof response.data !== 'object') return
+      const session = response.data as Partial<PlaybackSession>
+      if (Array.isArray(session.queue)) queue.value = session.queue as LibrarySong[]
+      if (session.trackInfo && typeof session.trackInfo === 'object') {
+        trackInfo.value = session.trackInfo as TrackInfo
+      }
+      if (typeof session.durationMs === 'number' && session.durationMs >= 0) {
+        durationMs.value = session.durationMs
+      }
+      if (typeof session.currentQueueIndex === 'number') {
+        currentQueueIndex.value = Math.max(
+          -1,
+          Math.min(session.currentQueueIndex, queue.value.length - 1)
+        )
+      }
+      if (typeof session.playMode === 'number' && session.playMode >= 0 && session.playMode <= 3) {
+        playMode.value = session.playMode as PlayMode
+      }
+      if (typeof session.currentFile !== 'string' || !session.currentFile) return
+      const opened = await openFile(session.currentFile)
+      if (!opened) return
+      if (typeof session.positionMs === 'number' && session.positionMs > 0) {
+        await seek(session.positionMs)
+      }
+      if (autoPlay && session.wasPlaying === true) await play()
+    } catch {
+      // A missing file or malformed prior session should start with an idle player.
+    }
+  }
+
+  async function setVolume(vol: number): Promise<void> {
     volume.value = Math.max(0, Math.min(1, vol))
     await audioBridge.setVolume(volume.value)
   }
@@ -521,7 +615,7 @@ export const usePlayerStore = defineStore('player', () => {
     return true
   }
 
-  async function selectOutputDevice(device: DeviceInfo) {
+  async function selectOutputDevice(device: DeviceInfo): Promise<boolean> {
     if (currentBackend.value === device.backend && currentDeviceId.value === device.id) return true
 
     const ok = await audioBridge.selectOutputDevice(device.backend, device.id)
@@ -556,7 +650,7 @@ export const usePlayerStore = defineStore('player', () => {
     })
   }
 
-  async function refreshDevices() {
+  async function refreshDevices(): Promise<void> {
     devices.value = await audioBridge.enumerateDevices()
   }
 
@@ -568,11 +662,23 @@ export const usePlayerStore = defineStore('player', () => {
     if (snapshot) audioAnalysis.value = snapshot
   }
 
-  function loadRhythmVisualConfig(): void {
+  async function loadRhythmVisualConfig(): Promise<void> {
     try {
-      const stored = localStorage.getItem('easy-player.rhythm-visual-config')
-      if (!stored) return
-      const parsed = JSON.parse(stored) as Partial<typeof rhythmVisualConfig.value>
+      const response = await window.api.database.command('getSetting', {
+        key: 'player.rhythm-visual-config'
+      })
+      let parsed: Partial<typeof rhythmVisualConfig.value> | undefined
+      let migratedLegacyConfig = false
+      if (response.success && response.data && typeof response.data === 'object') {
+        parsed = response.data as Partial<typeof rhythmVisualConfig.value>
+      } else {
+        const legacy = localStorage.getItem('easy-player.rhythm-visual-config')
+        if (legacy) {
+          parsed = JSON.parse(legacy) as Partial<typeof rhythmVisualConfig.value>
+          migratedLegacyConfig = true
+        }
+      }
+      if (!parsed) return
       rhythmVisualConfig.value = {
         enabled: parsed.enabled !== false,
         intensity: Math.max(
@@ -581,16 +687,20 @@ export const usePlayerStore = defineStore('player', () => {
         ),
         reducedMotion: parsed.reducedMotion === true
       }
+      if (migratedLegacyConfig) {
+        await saveRhythmVisualConfig()
+        localStorage.removeItem('easy-player.rhythm-visual-config')
+      }
     } catch {
       // Corrupt renderer preferences must never stop playback controls loading.
     }
   }
 
-  function saveRhythmVisualConfig(): void {
-    localStorage.setItem(
-      'easy-player.rhythm-visual-config',
-      JSON.stringify(rhythmVisualConfig.value)
-    )
+  async function saveRhythmVisualConfig(): Promise<void> {
+    await window.api.database.command('setSetting', {
+      key: 'player.rhythm-visual-config',
+      value: rhythmVisualConfig.value
+    })
   }
 
   // ── Event subscriptions ──
@@ -619,7 +729,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function subscribeToEvents() {
+  function subscribeToEvents(): void {
     if (unsubs.length) return
     if (!analysisTimer)
       analysisTimer = setInterval(() => {
@@ -631,6 +741,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
+        schedulePlaybackSessionSave()
       })
     )
 
@@ -658,6 +769,7 @@ export const usePlayerStore = defineStore('player', () => {
         ) {
           void handleTrackEnded('position rollover')
         }
+        schedulePlaybackSessionSave()
       })
     )
 
@@ -676,11 +788,14 @@ export const usePlayerStore = defineStore('player', () => {
     )
   }
 
-  function unsubscribe() {
+  function unsubscribe(): void {
     unsubs.forEach((fn) => fn())
     unsubs = []
     if (analysisTimer) clearInterval(analysisTimer)
     analysisTimer = undefined
+    if (playbackSessionTimer) clearTimeout(playbackSessionTimer)
+    playbackSessionTimer = undefined
+    savePlaybackSessionSync()
   }
 
   return {
@@ -784,11 +899,18 @@ export const usePlayerStore = defineStore('player', () => {
     refreshAudioAnalysis,
     loadRhythmVisualConfig,
     saveRhythmVisualConfig,
+    savePlaybackSession,
+    savePlaybackSessionSync,
+    restorePlaybackSession,
     // Events
     subscribeToEvents,
     unsubscribe
   }
 })
+
+function toPlainData<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
+}
 
 function createDefaultEqBands(): EqBand[] {
   const frequencies = [

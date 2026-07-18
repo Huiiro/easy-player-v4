@@ -12,11 +12,18 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 const ui = useUIStore()
 const player = usePlayerStore()
 
-onMounted(() => {
-  ui.initializeTheme()
+onMounted(async () => {
+  await ui.initializeTheme()
   player.subscribeToEvents()
+  await player.loadRhythmVisualConfig()
+  await player.restorePlaybackSession(ui.autoPlayOnRestore)
+  window.addEventListener('beforeunload', player.savePlaybackSessionSync)
 })
-onBeforeUnmount(() => player.unsubscribe())
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', player.savePlaybackSessionSync)
+  player.savePlaybackSessionSync()
+  player.unsubscribe()
+})
 </script>
 
 <template>

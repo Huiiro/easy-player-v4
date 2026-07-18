@@ -151,7 +151,18 @@ const audioAPI = {
 
 const databaseAPI = {
   command: (action: string, params?: unknown) =>
-    ipcRenderer.invoke('database:command', { action, params })
+    ipcRenderer.invoke('database:command', { action, params }),
+  saveSync: (key: string, value: unknown) =>
+    ipcRenderer.sendSync('database:save-setting-sync', { key, value }) as {
+      success: boolean
+      error?: string
+    },
+  getSync: (key: string) =>
+    ipcRenderer.sendSync('database:get-setting-sync', key) as {
+      success: boolean
+      data?: unknown
+      error?: string
+    }
 }
 
 const libraryAPI = {

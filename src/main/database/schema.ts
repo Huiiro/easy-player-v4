@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 2
+export const DATABASE_SCHEMA_VERSION = 3
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -144,4 +144,12 @@ export const schemaV1 = `
 
 export const schemaV2 = `
   ALTER TABLE song_list ADD COLUMN custom_cover TEXT;
+`
+
+export const schemaV3 = `
+  CREATE TABLE IF NOT EXISTS app_setting (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
 `
