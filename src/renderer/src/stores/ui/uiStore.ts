@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
 
 export const useUIStore = defineStore('ui', () => {
+  const themeStorageKey = 'easy-player.theme-settings'
   // ========== 基础设置 ==========
   const locale = ref<'zh' | 'en'>('zh')
   const platform = ref<'win' | 'macOS' | 'linux'>('win')
@@ -10,7 +11,8 @@ export const useUIStore = defineStore('ui', () => {
   const userName = ref('Easy Player')
   const itemOrder = ref<'asc' | 'desc'>('desc')
   // ========== UI设置 ==========
-  const useDarkMode = ref(false)
+  // The player is dark by default; custom backgrounds inherit this mode for contrast.
+  const useDarkMode = ref(true)
   const useCardView = ref(false)
   const useCustomBg = ref(false)
   const useDynamicBg = ref(false)
@@ -22,8 +24,8 @@ export const useUIStore = defineStore('ui', () => {
   const customBg = reactive({
     url: '',
     path: '',
-    blur: '',
-    brightness: ''
+    blur: 0,
+    brightness: 100
   })
   const currentDynamicBg = reactive({
     bg: 'static_light',
@@ -84,7 +86,7 @@ export const useUIStore = defineStore('ui', () => {
     fontFamily: customFontFamily.value || 'inherit'
   }))
   const getCustomBgStyle = computed(() => {
-    const brightness = customBg.brightness ?? 1
+    const brightness = customBg.brightness / 100
     const blur = customBg.blur ?? 0
     return {
       backgroundImage: customBg.url ? `url(${customBg.url})` : 'none',
@@ -99,8 +101,90 @@ export const useUIStore = defineStore('ui', () => {
     useCardView.value = !useCardView.value
   }
   function setCardStyle(v: boolean): void {
-    this.useCardView = v
+    useCardView.value = v
   }
+
+  function applyTheme(): void {
+    const root = document.documentElement
+    root.classList.toggle('dark', useDarkMode.value)
+    root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
+    if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
+    else root.style.removeProperty('--color-primary')
+  }
+
+  function persistTheme(): void {
+    try {
+      localStorage.setItem(
+        themeStorageKey,
+        JSON.stringify({
+          useDarkMode: useDarkMode.value,
+          customThemeColor: customThemeColor.value,
+          useCustomBg: useCustomBg.value,
+          customBg: { ...customBg }
+        })
+      )
+    } catch {
+      // A large background can exceed local storage. Preserve the remaining theme choices.
+      try {
+        localStorage.setItem(
+          themeStorageKey,
+          JSON.stringify({
+            useDarkMode: useDarkMode.value,
+            customThemeColor: customThemeColor.value,
+            useCustomBg: false,
+            customBg: { url: '', path: '', blur: customBg.blur, brightness: customBg.brightness }
+          })
+        )
+      } catch {
+        // Storage can be disabled by the host; keep the active session settings instead.
+      }
+    }
+  }
+
+  function initializeTheme(): void {
+    try {
+      const saved = JSON.parse(localStorage.getItem(themeStorageKey) || '{}')
+      if (typeof saved.useDarkMode === 'boolean') useDarkMode.value = saved.useDarkMode
+      if (typeof saved.customThemeColor === 'string')
+        customThemeColor.value = saved.customThemeColor
+      if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
+      if (saved.customBg && typeof saved.customBg === 'object') {
+        customBg.url = typeof saved.customBg.url === 'string' ? saved.customBg.url : ''
+        customBg.path = typeof saved.customBg.path === 'string' ? saved.customBg.path : ''
+        customBg.blur = Number(saved.customBg.blur) || 0
+        customBg.brightness = Number(saved.customBg.brightness) || 100
+      }
+    } catch {
+      // Invalid legacy settings should not prevent the app from starting.
+    }
+    applyTheme()
+  }
+
+  function setTheme(mode: 'light' | 'dark'): void {
+    useDarkMode.value = mode === 'dark'
+  }
+
+  function resetTheme(): void {
+    useDarkMode.value = true
+    customThemeColor.value = ''
+    useCustomBg.value = false
+    Object.assign(customBg, { url: '', path: '', blur: 0, brightness: 100 })
+  }
+
+  watch(
+    [
+      useDarkMode,
+      customThemeColor,
+      useCustomBg,
+      () => customBg.url,
+      () => customBg.blur,
+      () => customBg.brightness
+    ],
+    () => {
+      applyTheme()
+      persistTheme()
+    }
+  )
   return {
     locale,
     platform,
@@ -146,6 +230,9 @@ export const useUIStore = defineStore('ui', () => {
     globalShortcutKeys,
     getCustomFontStyle,
     getCustomBgStyle,
+    initializeTheme,
+    setTheme,
+    resetTheme,
     toggleCardStyle,
     setCardStyle
   }

@@ -16,7 +16,6 @@ const { t } = useI18n()
 const collapsed = ref(false)
 const queueVisible = ref(false)
 const audioControlsVisible = ref(false)
-let audioControlsLoaded = false
 
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || '未选择音乐'
@@ -98,30 +97,8 @@ function openPlayerPanel(): void {
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
 }
-async function openAudioControls(): Promise<void> {
+function openAudioControls(): void {
   audioControlsVisible.value = true
-  if (audioControlsLoaded) return
-  audioControlsLoaded = true
-  await Promise.all([
-    player.loadEqBands(),
-    player.loadDspNodes(),
-    player.loadCompressorConfig(),
-    player.loadDelayConfig(),
-    player.loadReverbConfig(),
-    player.loadChorusConfig(),
-    player.loadNoiseGateConfig(),
-    player.loadPhaserConfig(),
-    player.loadResamplerConfig(),
-    player.loadChannelMatrixConfig(),
-    player.loadLimiter(),
-    player.loadReplayGain(),
-    player.loadPlaybackSpeed(),
-    player.loadDopEnabled(),
-    player.loadTransitionConfig(),
-    player.refreshAudioChain(),
-    player.refreshDevices(),
-    player.loadOutputDeviceSettings()
-  ])
 }
 </script>
 

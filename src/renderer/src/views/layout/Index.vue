@@ -12,25 +12,33 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 const ui = useUIStore()
 const player = usePlayerStore()
 
-onMounted(() => player.subscribeToEvents())
+onMounted(() => {
+  ui.initializeTheme()
+  player.subscribeToEvents()
+})
 onBeforeUnmount(() => player.unsubscribe())
 </script>
 
 <template>
   <div
-    class="relative flex flex-col w-full h-full overflow-hidden text-base"
+    class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
+    :class="ui.useCustomBg ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
     <!-- 背景层 -->
     <div
-      class="absolute inset-0 -z-10 bg-cover bg-center transition-all duration-300"
+      class="pointer-events-none absolute -inset-6 z-0 bg-cover bg-center transition-[filter,opacity] duration-300"
       :style="ui.useCustomBg ? ui.getCustomBgStyle : undefined"
+    />
+    <div
+      v-if="ui.useCustomBg"
+      class="pointer-events-none absolute inset-0 z-[1] bg-[color:color-mix(in_srgb,var(--color-bg)_76%,transparent)]"
     />
     <!-- 动态背景 -->
     <!--<DynamicBackground />-->
 
     <!-- 主容器 -->
-    <div class="relative flex flex-col w-full h-full">
+    <div class="relative z-[2] flex flex-col w-full h-full">
       <!-- 顶栏 -->
       <header class="shrink-0 z-20">
         <Header />

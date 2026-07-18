@@ -204,6 +204,10 @@ declare global {
         importLocalFolder(): Promise<ImportLocalMusicResult>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }
+      window: {
+        command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>
+        onState(callback: (state: { maximized: boolean }) => void): () => void
+      }
     }
   }
 }

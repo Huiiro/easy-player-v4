@@ -3,7 +3,7 @@ import en from './locales/en.ts'
 import zh from './locales/zh.ts'
 
 const i18n = createI18n({
-  locale: localStorage.getItem('locale') || 'zh',
+  locale: 'zh',
   fallbackLocale: 'en',
   messages: {
     en,

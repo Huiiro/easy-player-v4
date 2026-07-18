@@ -175,11 +175,23 @@ const libraryAPI = {
   }
 }
 
+const windowAPI = {
+  command: (command: 'minimize' | 'toggle-maximize' | 'close') =>
+    ipcRenderer.invoke('window:command', command) as Promise<{ maximized: boolean }>,
+  onState: (callback: (state: { maximized: boolean }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: { maximized: boolean }): void =>
+      callback(state)
+    ipcRenderer.on('window:state', handler)
+    return () => ipcRenderer.removeListener('window:state', handler)
+  }
+}
+
 // Custom APIs for renderer
 const api = {
   audio: audioAPI,
   database: databaseAPI,
-  library: libraryAPI
+  library: libraryAPI,
+  window: windowAPI
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

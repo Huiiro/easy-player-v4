@@ -1,14 +1,48 @@
 <script setup lang="ts">
 import { usePlayerStore } from '@/stores/player/playerStore'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 
 const player = usePlayerStore()
+const { t } = useI18n()
 let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
 let draggingNodeIndex: number | null = null
+
+async function initializeAudioControls(): Promise<void> {
+  const results = await Promise.allSettled([
+    player.loadOutputDeviceSettings(),
+    player.refreshDevices(),
+    player.refreshAudioChain(),
+    player.loadEqBands(),
+    player.loadReplayGain(),
+    player.loadPlaybackSpeed(),
+    player.loadResamplerConfig(),
+    player.loadDopEnabled(),
+    player.loadTransitionConfig(),
+    player.loadDspNodes(),
+    player.loadCompressorConfig(),
+    player.loadDelayConfig(),
+    player.loadReverbConfig(),
+    player.loadChorusConfig(),
+    player.loadNoiseGateConfig(),
+    player.loadPhaserConfig(),
+    player.loadChannelMatrixConfig(),
+    player.loadLimiter()
+  ])
+
+  const failed = results.filter((result) => result.status === 'rejected')
+  if (failed.length > 0) {
+    console.warn(`[AudioControlPanel] ${failed.length} control value(s) could not be initialized`)
+  }
+}
+
+onMounted(() => {
+  void initializeAudioControls()
+})
+
 function resetEqBands(): void {
   for (const band of player.eqBands) {
     band.enabled = false
@@ -52,16 +86,16 @@ function setDspNodeEnabled(index: number, enabled: boolean | string | number): v
 }
 function nodeLabel(id: string): string {
   return id === 'compressor'
-    ? 'Compressor'
+    ? t('ap.compressor')
     : id === 'delay'
-      ? 'Delay'
+      ? t('ap.delay')
       : id === 'reverb'
-        ? 'Reverb'
+        ? t('ap.reverb')
         : id === 'chorus'
-          ? 'Chorus'
+          ? t('ap.chorus')
           : id === 'noise_gate'
-            ? 'Noise Gate'
-            : 'Phaser'
+            ? t('ap.noiseGate')
+            : t('ap.phaser')
 }
 function updateCompressor(): void {
   const config = player.compressorConfig
@@ -190,9 +224,9 @@ const sampleRateOptions = [
   { label: '192 kHz', value: 192000 }
 ]
 const qualityOptions = [
-  { label: '最佳质量', value: 'best' },
-  { label: '均衡', value: 'medium' },
-  { label: '快速', value: 'fast' }
+  { label: t('ap.qualityBest'), value: 'best' },
+  { label: t('ap.qualityMedium'), value: 'medium' },
+  { label: t('ap.qualityFast'), value: 'fast' }
 ]
 function setResamplerEnabled(enabled: boolean | string | number): void {
   player.resamplerConfig.forceOutputRate = enabled === true
@@ -241,9 +275,9 @@ function setPreampDb(val: number): void {
 }
 
 const replayGainModeOptions = [
-  { label: '关闭', value: 'off' },
-  { label: '单曲', value: 'track' },
-  { label: '专辑', value: 'album' }
+  { label: t('ap.off'), value: 'off' },
+  { label: t('ap.track'), value: 'track' },
+  { label: t('ap.album'), value: 'album' }
 ]
 function updateReplayGain(): void {
   void player.setReplayGain()
@@ -262,11 +296,11 @@ function setPlaybackSpeedEnabled(enabled: boolean | string | number): void {
 
 function bitPerfectLabel(): string {
   const chain = player.audioChain
-  if (!chain) return 'Bit-perfect unavailable'
-  if (chain.isBitPerfect) return 'Bit-perfect verified'
+  if (!chain) return t('ap.bitPerfectUnavailable')
+  if (chain.isBitPerfect) return t('ap.bitPerfectVerified')
   if (chain.bitPerfectVerificationState === 'eligible_unverified')
-    return 'Bit-perfect candidate — verify hardware'
-  return 'Bit-perfect unavailable'
+    return t('ap.bitPerfectCandidate')
+  return t('ap.bitPerfectUnavailable')
 }
 const backendLabel: Record<string, string> = {
   asio: 'ASIO',
@@ -283,7 +317,7 @@ const selectedOutputDeviceKey = computed(() =>
 )
 const deviceOptions = computed(() =>
   player.devices.map((dev) => ({
-    label: `${backendLabel[dev.backend]} · ${dev.name}${dev.isDefault ? ' (default) ' : ''}`,
+    label: `${backendLabel[dev.backend]} · ${dev.name}${dev.isDefault ? ` (${t('ap.defaultDevice')})` : ''}`,
     value: deviceKey(dev.backend, dev.id)
   }))
 )
@@ -294,8 +328,6 @@ async function onDeviceChange(val: string | number): Promise<void> {
 function refreshOutputDevices(): void {
   void player.refreshDevices()
 }
-
-const { t } = useI18n()
 </script>
 
 <template>
@@ -342,16 +374,17 @@ const { t } = useI18n()
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-text-l">
           <span
             >{{ t('ap.input') }} {{ player.audioChain.sourceFormat.sampleRate || '—' }} Hz ·
-            {{ player.audioChain.sourceFormat.channels || '—' }} ch</span
+            {{ player.audioChain.sourceFormat.channels || '—' }} {{ t('ap.channels') }}</span
           ><span>→</span
           ><span
             >{{ t('ap.output') }} {{ player.audioChain.backendFormat.sampleRate || '—' }} Hz ·
-            {{ player.audioChain.backendFormat.channels || '—' }} ch</span
+            {{ player.audioChain.backendFormat.channels || '—' }} {{ t('ap.channels') }}</span
           >
           <span>|</span>
           <span class="mt-0.5 truncate">
             {{ player.trackInfo.format }} · {{ player.trackInfo.sampleRate }} Hz ·
-            {{ player.trackInfo.bitDepth }} bit · {{ player.trackInfo.channels }} ch
+            {{ player.trackInfo.bitDepth }} bit · {{ player.trackInfo.channels }}
+            {{ t('ap.channels') }}
           </span>
         </div>
         <!-- node -->
@@ -366,7 +399,7 @@ const { t } = useI18n()
             v-for="node in player.audioChain.bypassedNodes"
             :key="`bypassed-${node}`"
             class="rounded bg-bg-l px-1.5 py-0.5 text-[11px] text-text-l"
-            >{{ node }} · bypass</span
+            >{{ node }} · {{ t('ap.bypass') }}</span
           >
         </div>
         <p
@@ -384,7 +417,7 @@ const { t } = useI18n()
           }}
         </p>
         <p v-if="player.glitchCount > 0" class="text-[11px] text-amber-500">
-          {{ t('ap.playEx') }} {{ player.glitchCount }} glitches
+          {{ t('ap.playEx') }} {{ player.glitchCount }}
         </p>
       </div>
     </section>
@@ -397,28 +430,29 @@ const { t } = useI18n()
         <!-- timing -->
         <div class="px-2">
           <p class="text-[11px] text-text-l">
-            out {{ player.audioAnalysis.outputTimeMs.toFixed(0) }} ms
+            {{ t('ap.outputTime') }} {{ player.audioAnalysis.outputTimeMs.toFixed(0) }} ms
             <span class="mx-1 text-border">·</span>
-            analysis {{ player.audioAnalysis.analysisTimeMs.toFixed(0) }} ms
+            {{ t('ap.analysisTime') }} {{ player.audioAnalysis.analysisTimeMs.toFixed(0) }} ms
             <span class="mx-1 text-border">·</span>
-            lag {{ player.audioAnalysis.analysisLatencyMs.toFixed(0) }} ms
+            {{ t('ap.latency') }} {{ player.audioAnalysis.analysisLatencyMs.toFixed(0) }} ms
             <span class="mx-1 text-border">·</span>
-            dropped {{ player.audioAnalysis.droppedFrames }}
+            {{ t('ap.dropped') }} {{ player.audioAnalysis.droppedFrames }}
           </p>
         </div>
 
         <!-- audio metrics -->
         <div class="px-2">
           <p class="text-[11px] text-text-l">
-            RMS {{ player.audioAnalysis.rms.toFixed(3) }}
+            {{ t('ap.rms') }} {{ player.audioAnalysis.rms.toFixed(3) }}
             <span class="mx-1 text-border">·</span>
-            Low {{ player.audioAnalysis.lowEnergy.toFixed(3) }}
+            {{ t('ap.low') }} {{ player.audioAnalysis.lowEnergy.toFixed(3) }}
             <span class="mx-1 text-border">·</span>
-            Onset {{ player.audioAnalysis.onsetStrength.toFixed(3) }}
+            {{ t('ap.onset') }} {{ player.audioAnalysis.onsetStrength.toFixed(3) }}
             <span class="mx-1 text-border">·</span>
-            Beat {{ player.audioAnalysis.beatSequence }}
+            {{ t('ap.beat') }} {{ player.audioAnalysis.beatSequence }}
             <span class="mx-1 text-border">·</span>
-            Est. BPM {{ player.audioAnalysis.bpm > 0 ? player.audioAnalysis.bpm.toFixed(1) : '—' }}
+            {{ t('ap.estimatedBpm') }}
+            {{ player.audioAnalysis.bpm > 0 ? player.audioAnalysis.bpm.toFixed(1) : '—' }}
           </p>
         </div>
 
@@ -451,7 +485,7 @@ const { t } = useI18n()
         <div class="px-2">
           <div class="flex items-center gap-4 flex-wrap">
             <div class="flex items-center gap-2">
-              <span class="text-xs text-text-l">Rhythm visuals</span>
+              <span class="text-xs text-text-l">{{ t('ap.rhythmVisuals') }}</span>
               <BaseSwitch
                 :model-value="player.rhythmVisualConfig.enabled"
                 size="sm"
@@ -465,7 +499,7 @@ const { t } = useI18n()
             </div>
             <div class="flex items-center gap-2">
               <span class="text-xs text-text-l whitespace-nowrap">
-                Intensity {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%
+                {{ t('ap.intensity') }} {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%
               </span>
               <BaseSlider
                 v-model="player.rhythmVisualConfig.intensity"
@@ -477,7 +511,7 @@ const { t } = useI18n()
               />
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-text-l">Reduce motion</span>
+              <span class="text-xs text-text-l">{{ t('ap.reduceMotion') }}</span>
               <BaseSwitch
                 :model-value="player.rhythmVisualConfig.reducedMotion"
                 size="sm"
@@ -501,7 +535,7 @@ const { t } = useI18n()
       <div class="flex flex-col">
         <!-- Device -->
         <div class="flex gap-2 rounded-lg">
-          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.outputDevice ') }}</span>
+          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.outputDevice') }}</span>
           <BaseSelect
             :model-value="selectedOutputDeviceKey"
             :options="deviceOptions"
@@ -727,24 +761,24 @@ const { t } = useI18n()
     <!-- EQ -->
     <section class="rounded-xl border border-border p-3 mt-5">
       <div class="flex items-center justify-between mb-2 text-xs">
-        <span class="font-medium"> Parametric EQ </span>
+        <span class="font-medium">{{ t('ap.eq') }}</span>
 
         <div class="flex items-center gap-2 text-sm text-text-l">
           <small>
             {{ player.eqBands.filter((b) => b.enabled && Math.abs(b.gainDb) >= 0.0001).length }}
-            active · ±12 dB · Q 1.0
+            {{ t('ap.eqActive') }} · ±12 dB · Q 1.0
           </small>
           <button
             class="px-2 py-0.5 rounded text-[11px] bg-primary border border-primary cursor-pointer hover:opacity-90 transition-opacity"
             @click="commitEqBands"
           >
-            Apply EQ
+            {{ t('ap.applyEq') }}
           </button>
           <button
             class="px-2 py-0.5 rounded text-[11px] bg-bg border border-primary cursor-pointer hover:opacity-90 transition-opacity"
             @click="resetEqBands"
           >
-            Reset EQ
+            {{ t('ap.resetEq') }}
           </button>
         </div>
       </div>
@@ -761,7 +795,7 @@ const { t } = useI18n()
             type="text"
             inputmode="decimal"
             pattern="-?[0-9]*[.,]?[0-9]*"
-            aria-label="EQ gain"
+            :aria-label="t('ap.eqGain')"
             @change="previewEqGain(index, $event)"
           />
 
@@ -795,7 +829,7 @@ const { t } = useI18n()
     </section>
     <!-- DSP -->
     <section class="mt-5 rounded-xl border border-border p-3">
-      <div class="mb-3 text-xs font-medium text-text">DSP Node</div>
+      <div class="mb-3 text-xs font-medium text-text">{{ t('ap.dspNode') }}</div>
       <div class="space-y-2">
         <div
           v-for="(node, index) in player.dspNodes"
@@ -808,7 +842,7 @@ const { t } = useI18n()
             <span
               draggable="true"
               class="cursor-grab text-text-l active:cursor-grabbing"
-              title="拖拽排序"
+              :title="t('ap.dragSort')"
               @dragstart="draggingNodeIndex = index"
               @dragend="draggingNodeIndex = null"
               >⠿</span
@@ -825,16 +859,16 @@ const { t } = useI18n()
             <button
               class="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-l transition-colors hover:border-primary hover:text-primary"
               type="button"
-              title="重置节点参数"
+              :title="t('ap.resetDspNode')"
               @click="resetDspNode(node.id)"
             >
-              重置
+              {{ t('ap.reset') }}
             </button>
           </div>
           <div v-if="node.enabled" class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
             <template v-if="node.id === 'compressor'"
               ><label
-                >阈值
+                >{{ t('ap.threshold') }}
                 <input
                   v-model.number="player.compressorConfig.thresholdDb"
                   class="input-base h-6 mt-1"
@@ -843,7 +877,7 @@ const { t } = useI18n()
                   max="0"
                   @change="updateCompressor" /></label
               ><label
-                >比例
+                >{{ t('ap.ratio') }}
                 <input
                   v-model.number="player.compressorConfig.ratio"
                   class="input-base h-6 mt-1"
@@ -853,7 +887,7 @@ const { t } = useI18n()
                   step=".1"
                   @change="updateCompressor" /></label
               ><label
-                >启动
+                >{{ t('ap.attack') }}
                 <input
                   v-model.number="player.compressorConfig.attackMs"
                   class="input-base h-6 mt-1"
@@ -863,7 +897,7 @@ const { t } = useI18n()
                   max="500"
                   @change="updateCompressor" /></label
               ><label
-                >释放
+                >{{ t('ap.release') }}
                 <input
                   v-model.number="player.compressorConfig.releaseMs"
                   class="input-base h-6 mt-1"
@@ -872,7 +906,7 @@ const { t } = useI18n()
                   max="2000"
                   @change="updateCompressor" /></label
               ><label
-                >补偿增益
+                >{{ t('ap.makeupGain') }}
                 <input
                   v-model.number="player.compressorConfig.makeupDb"
                   class="input-base h-6 mt-1"
@@ -884,7 +918,7 @@ const { t } = useI18n()
             ></template>
             <template v-else-if="node.id === 'delay'"
               ><label
-                >时间
+                >{{ t('ap.time') }}
                 <input
                   v-model.number="player.delayConfig.delayMs"
                   class="input-base h-6 mt-1"
@@ -893,7 +927,7 @@ const { t } = useI18n()
                   max="2000"
                   @change="updateDelay" /></label
               ><label
-                >反馈
+                >{{ t('ap.feedback') }}
                 <input
                   v-model.number="player.delayConfig.feedback"
                   class="input-base h-6 mt-1"
@@ -903,7 +937,7 @@ const { t } = useI18n()
                   max=".95"
                   @change="updateDelay" /></label
               ><label
-                >混合
+                >{{ t('ap.mix') }}
                 <input
                   v-model.number="player.delayConfig.mix"
                   class="input-base h-6 mt-1"
@@ -915,7 +949,7 @@ const { t } = useI18n()
             ></template>
             <template v-else-if="node.id === 'reverb'"
               ><label
-                >空间
+                >{{ t('ap.roomSize') }}
                 <input
                   v-model.number="player.reverbConfig.roomSize"
                   class="input-base h-6 mt-1"
@@ -925,7 +959,7 @@ const { t } = useI18n()
                   max="1"
                   @change="updateReverb" /></label
               ><label
-                >衰减
+                >{{ t('ap.decay') }}
                 <input
                   v-model.number="player.reverbConfig.decay"
                   class="input-base h-6 mt-1"
@@ -935,7 +969,7 @@ const { t } = useI18n()
                   max="1"
                   @change="updateReverb" /></label
               ><label
-                >混合
+                >{{ t('ap.mix') }}
                 <input
                   v-model.number="player.reverbConfig.mix"
                   class="input-base h-6 mt-1"
@@ -947,7 +981,7 @@ const { t } = useI18n()
             ></template>
             <template v-else-if="node.id === 'chorus'"
               ><label
-                >速率
+                >{{ t('ap.rate') }}
                 <input
                   v-model.number="player.chorusConfig.rateHz"
                   class="input-base h-6 mt-1"
@@ -957,7 +991,7 @@ const { t } = useI18n()
                   max="10"
                   @change="updateChorus" /></label
               ><label
-                >深度
+                >{{ t('ap.depth') }}
                 <input
                   v-model.number="player.chorusConfig.depthMs"
                   class="input-base h-6 mt-1"
@@ -967,7 +1001,7 @@ const { t } = useI18n()
                   max="15"
                   @change="updateChorus" /></label
               ><label
-                >混合
+                >{{ t('ap.mix') }}
                 <input
                   v-model.number="player.chorusConfig.mix"
                   class="input-base h-6 mt-1"
@@ -979,7 +1013,7 @@ const { t } = useI18n()
             ></template>
             <template v-else-if="node.id === 'noise_gate'"
               ><label
-                >阈值
+                >{{ t('ap.threshold') }}
                 <input
                   v-model.number="player.noiseGateConfig.thresholdDb"
                   class="input-base h-6 mt-1"
@@ -988,7 +1022,7 @@ const { t } = useI18n()
                   max="0"
                   @change="updateNoiseGate" /></label
               ><label
-                >启动
+                >{{ t('ap.attack') }}
                 <input
                   v-model.number="player.noiseGateConfig.attackMs"
                   class="input-base h-6 mt-1"
@@ -998,7 +1032,7 @@ const { t } = useI18n()
                   max="200"
                   @change="updateNoiseGate" /></label
               ><label
-                >保持
+                >{{ t('ap.hold') }}
                 <input
                   v-model.number="player.noiseGateConfig.holdMs"
                   class="input-base h-6 mt-1"
@@ -1007,7 +1041,7 @@ const { t } = useI18n()
                   max="2000"
                   @change="updateNoiseGate" /></label
               ><label
-                >释放
+                >{{ t('ap.release') }}
                 <input
                   v-model.number="player.noiseGateConfig.releaseMs"
                   class="input-base h-6 mt-1"
@@ -1016,7 +1050,7 @@ const { t } = useI18n()
                   max="2000"
                   @change="updateNoiseGate" /></label
               ><label
-                >衰减范围
+                >{{ t('ap.attenuationRange') }}
                 <input
                   v-model.number="player.noiseGateConfig.rangeDb"
                   class="input-base h-6 mt-1"
@@ -1027,7 +1061,7 @@ const { t } = useI18n()
             ></template>
             <template v-else
               ><label
-                >速率
+                >{{ t('ap.rate') }}
                 <input
                   v-model.number="player.phaserConfig.rateHz"
                   class="input-base h-6 mt-1"
@@ -1037,7 +1071,7 @@ const { t } = useI18n()
                   max="10"
                   @change="updatePhaser" /></label
               ><label
-                >深度
+                >{{ t('ap.depth') }}
                 <input
                   v-model.number="player.phaserConfig.depth"
                   class="input-base h-6 mt-1"
@@ -1047,7 +1081,7 @@ const { t } = useI18n()
                   max="1"
                   @change="updatePhaser" /></label
               ><label
-                >中心频率
+                >{{ t('ap.centerFrequency') }}
                 <input
                   v-model.number="player.phaserConfig.centerHz"
                   class="input-base h-6 mt-1"
@@ -1056,7 +1090,7 @@ const { t } = useI18n()
                   max="5000"
                   @change="updatePhaser" /></label
               ><label
-                >反馈
+                >{{ t('ap.feedback') }}
                 <input
                   v-model.number="player.phaserConfig.feedback"
                   class="input-base h-6 mt-1"
@@ -1066,7 +1100,7 @@ const { t } = useI18n()
                   max=".95"
                   @change="updatePhaser" /></label
               ><label
-                >混合
+                >{{ t('ap.mix') }}
                 <input
                   v-model.number="player.phaserConfig.mix"
                   class="input-base h-6 mt-1"
@@ -1081,8 +1115,8 @@ const { t } = useI18n()
         <div class="rounded-lg border border-border bg-bg px-2 py-1">
           <div class="flex items-center gap-3">
             <div class="min-w-0 flex-1">
-              <p class="text-sm font-medium text-text">Limiter</p>
-              <p class="truncate text-[11px] text-text-l">output limiter</p>
+              <p class="text-sm font-medium text-text">{{ t('ap.limiter') }}</p>
+              <p class="truncate text-[11px] text-text-l">{{ t('ap.limiterDescription') }}</p>
             </div>
             <BaseSwitch
               :model-value="player.limiterConfig.enabled"
@@ -1092,10 +1126,10 @@ const { t } = useI18n()
             <button
               class="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-l transition-colors hover:border-primary hover:text-primary"
               type="button"
-              title="重置 Limiter 参数"
+              :title="t('ap.resetLimiter')"
               @click="resetLimiter"
             >
-              重置
+              {{ t('ap.reset') }}
             </button>
           </div>
           <div
@@ -1103,7 +1137,8 @@ const { t } = useI18n()
             class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2"
           >
             <label
-              >Ceiling<input
+              >{{ t('ap.ceiling')
+              }}<input
                 v-model.number="player.limiterConfig.ceilingDb"
                 class="input-base h-6 mt-1"
                 type="number"
@@ -1113,7 +1148,8 @@ const { t } = useI18n()
                 @change="updateLimiter"
             /></label>
             <label
-              >Release<input
+              >{{ t('ap.release')
+              }}<input
                 v-model.number="player.limiterConfig.releaseMs"
                 class="input-base h-6 mt-1"
                 type="number"

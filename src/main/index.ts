@@ -47,7 +47,11 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 900,
     height: 670,
+    minWidth: 760,
+    minHeight: 520,
     show: false,
+    frame: false,
+    backgroundColor: '#111614',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -59,6 +63,12 @@ function createWindow(): void {
   mainWindow.on('ready-to-show', () => {
     mainWindow?.show()
   })
+
+  const sendWindowState = (): void => {
+    mainWindow?.webContents.send('window:state', { maximized: mainWindow.isMaximized() })
+  }
+  mainWindow.on('maximize', sendWindowState)
+  mainWindow.on('unmaximize', sendWindowState)
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -99,6 +109,19 @@ app.whenReady().then(() => {
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.handle('window:command', (event, command: string) => {
+    const window = BrowserWindow.fromWebContents(event.sender)
+    if (!window) return { maximized: false }
+
+    if (command === 'minimize') window.minimize()
+    if (command === 'toggle-maximize') {
+      if (window.isMaximized()) window.unmaximize()
+      else window.maximize()
+    }
+    if (command === 'close') window.close()
+
+    return { maximized: window.isMaximized() }
+  })
 
   createWindow()
 

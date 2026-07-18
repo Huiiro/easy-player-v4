@@ -6,18 +6,11 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { useRoute } from 'vue-router'
 import router from '@/router'
 
-const props = defineProps<{
-  autoHide?: boolean
-  hideDelay?: number
-}>()
-
-const { visible } = useAutoHide({
-  enabled: () => props.autoHide,
-  delay: props.hideDelay || 5000
-})
-
+const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
+const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
 const ui = useUIStore()
 const route = useRoute()
+const maximized = ref(false)
 const scanVisible = ref(false)
 const scanning = ref(false)
 const scanCurrent = ref(0)
@@ -35,31 +28,24 @@ const removeScanProgressListener = window.api.library.onScanProgress((progress) 
   scanAdded.value = progress.added
   scanDuplicates.value = progress.duplicates
 })
+const removeWindowStateListener = window.api.window.onState((state) => {
+  maximized.value = state.maximized
+})
+onBeforeUnmount(() => {
+  removeScanProgressListener()
+  removeWindowStateListener()
+})
 
-onBeforeUnmount(removeScanProgressListener)
-
-const go = (path: string): void => {
+function go(path: string): void {
   if (ui.useCardView) ui.setCardStyle(false)
-  if (route.path !== path) router.push(path)
+  if (route.path !== path) void router.push(path)
 }
-const miniMode = (): void => {
-  // TODO
+async function runWindowCommand(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<void> {
+  const state = await window.api.window.command(command)
+  maximized.value = state.maximized
 }
-
-const minimize = (): void => {
-  // TODO
-}
-
-const maximize = (): void => {
-  // TODO
-}
-
-const close = async (): Promise<void> => {
-  // TODO
-}
-const uploadLocalFiles = async (): Promise<void> => {
+async function uploadLocalFiles(): Promise<void> {
   if (importingLocalFolder.value) return
-
   importingLocalFolder.value = true
   try {
     const response = await window.api.library.importLocalFolder()
@@ -78,10 +64,7 @@ const uploadLocalFiles = async (): Promise<void> => {
 </script>
 
 <template>
-  <header
-    class="h-10 text-text flex items-center justify-between px-3 header-drag z-10 transition-opacity duration-300"
-    :class="[visible ? 'opacity-100' : 'opacity-0 pointer-events-none']"
-  >
+  <header class="titlebar" :class="visible ? '' : 'opacity-0 pointer-events-none'">
     <ScanProgress
       v-model:visible="scanVisible"
       :scanning="scanning"
@@ -90,60 +73,177 @@ const uploadLocalFiles = async (): Promise<void> => {
       :added="scanAdded"
       :duplicates="scanDuplicates"
     />
-    <!-- 左侧组件 -->
-    <div class="flex items-center space-x-2">
-      <!-- LOGO -->
-      <h1
-        class="text-lg font-bold mr-2 cursor-pointer hover:text-primary header-no-drag transition-all duration-300 ease-out hover:scale-102 active:scale-100 select-none"
-        @click="go('/home')"
+
+    <div class="titlebar-brand header-no-drag" @click="go('/home')">
+      <span class="brand-mark">E</span><span class="brand-name">{{ ui.logoText }}</span>
+    </div>
+    <button
+      v-if="!ui.useCardView"
+      class="toolbar-button header-no-drag back-button"
+      title="返回"
+      aria-label="返回"
+      @click="router.back()"
+    >
+      <svgIcon name="common-back" class-name="size-4" />
+    </button>
+    <div class="titlebar-drag" />
+    <div class="titlebar-actions header-no-drag">
+      <button class="toolbar-button" title="导入本地音乐" @click="uploadLocalFiles">
+        <svgIcon name="common-plus" class-name="size-4" />
+      </button>
+      <button class="toolbar-button" title="设置" @click="go('/settings')">
+        <svgIcon name="menu-settings" class-name="size-4" />
+      </button>
+      <button
+        class="toolbar-button"
+        :title="ui.useCardView ? '退出卡片模式' : '卡片模式'"
+        @click="ui.toggleCardStyle"
       >
-        {{ ui.logoText }}
-      </h1>
-      <!-- 后退按钮 -->
-      <button v-if="!ui.useCardView" class="ml-1 header-no-drag btn-hover" @click="router.back()">
-        <svgIcon name="common-back" class-name="w-4 h-4 icon" />
+        <svgIcon
+          name="common-carousel-horizontal"
+          class-name="size-4"
+          :class="ui.useCardView ? 'text-primary' : ''"
+        />
       </button>
     </div>
-
-    <!-- 右侧组件 -->
-    <div class="flex items-center justify-center header-no-drag">
-      <div class="flex space-x-3">
-        <!-- 上传文件 -->
-        <button class="btn-hover" @click="uploadLocalFiles">
-          <svgIcon name="common-plus" class-name="w-5 h-5 icon" />
-        </button>
-        <!-- 设置按钮 -->
-        <button class="btn-hover" @click="go('/settings')">
-          <svgIcon name="menu-settings" class-name="w-4 h-4 icon" />
-        </button>
-        <!-- 卡片按钮 -->
-        <button class="btn-hover" @click="ui.toggleCardStyle">
-          <svgIcon
-            name="common-carousel-horizontal"
-            class-name="w-[18px] h-[18px] icon"
-            :class="ui.useCardView ? 'text-primary' : ''"
-          />
-        </button>
-        <div />
-      </div>
-      <div class="flex space-x-3">
-        <!-- 迷你模式 -->
-        <button class="btn-hover" @click="miniMode">
-          <svgIcon name="common-mini-player" class-name="w-5 h-5 icon" />
-        </button>
-        <!-- 最小化 -->
-        <button class="btn-hover" @click="minimize">
-          <svgIcon name="common-minimize" class-name="w-5 h-5 icon" />
-        </button>
-        <!-- 全屏 -->
-        <button class="btn-hover" @click="maximize">
-          <svgIcon name="menu-fullscreen" class-name="w-[18px] h-[18px] icon" />
-        </button>
-        <!-- 关闭 -->
-        <button class="btn-hover" @click="close">
-          <svgIcon name="menu-close" class-name="w-[18px] h-[18px] icon" />
-        </button>
-      </div>
+    <div class="window-controls header-no-drag">
+      <button
+        class="window-control"
+        title="最小化"
+        aria-label="最小化"
+        @click="runWindowCommand('minimize')"
+      >
+        <span class="window-minimize" />
+      </button>
+      <button
+        class="window-control"
+        :title="maximized ? '还原窗口' : '最大化'"
+        :aria-label="maximized ? '还原窗口' : '最大化'"
+        @click="runWindowCommand('toggle-maximize')"
+      >
+        <span class="window-maximize" :class="{ restored: maximized }" />
+      </button>
+      <button
+        class="window-control close-control"
+        title="关闭"
+        aria-label="关闭"
+        @click="runWindowCommand('close')"
+      >
+        <span class="window-close" />
+      </button>
     </div>
   </header>
 </template>
+
+<style scoped>
+.titlebar {
+  display: flex;
+  height: 42px;
+  align-items: center;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 82%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 82%, transparent);
+  transition: opacity 0.2s ease;
+  -webkit-app-region: drag;
+}
+.titlebar-brand {
+  display: flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.55rem;
+  padding-left: 0.9rem;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.brand-mark {
+  display: grid;
+  width: 21px;
+  height: 21px;
+  place-items: center;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+.brand-name {
+  font-size: 0.85rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.titlebar-drag {
+  min-width: 1rem;
+  flex: 1;
+  height: 100%;
+}
+.back-button {
+  margin-left: 0.2rem;
+}
+.titlebar-actions,
+.window-controls {
+  display: flex;
+  align-self: stretch;
+}
+.toolbar-button,
+.window-control {
+  display: grid;
+  width: 42px;
+  place-items: center;
+  color: var(--color-text-l);
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+.toolbar-button:hover,
+.window-control:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.window-control {
+  width: 46px;
+}
+.close-control:hover {
+  background: #e5484d;
+  color: white;
+}
+.window-minimize {
+  width: 11px;
+  border-top: 1.5px solid currentColor;
+}
+.window-maximize {
+  width: 11px;
+  height: 11px;
+  border: 1.4px solid currentColor;
+}
+.window-maximize.restored {
+  position: relative;
+  transform: translate(1px, -1px);
+}
+.window-maximize.restored::after {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: -4px;
+  top: 3px;
+  border: 1.4px solid currentColor;
+  background: var(--color-bg);
+}
+.window-close {
+  position: relative;
+  width: 12px;
+  height: 12px;
+}
+.window-close::before,
+.window-close::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  left: 0;
+  width: 12px;
+  border-top: 1.4px solid currentColor;
+  transform: rotate(45deg);
+}
+.window-close::after {
+  transform: rotate(-45deg);
+}
+</style>

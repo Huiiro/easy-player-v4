@@ -49,7 +49,7 @@ const variantClass = computed(() => {
     `,
     secondary: `
       border border-[var(--color-border)]
-      bg-[var(--bg-l2)]
+      bg-[var(--color-bg-l2)]
       text-[var(--color-text)]
       hover:bg-[var(--color-hover-bg)]
     `,

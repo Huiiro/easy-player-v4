@@ -1,10 +1,24 @@
-@import "tailwindcss";
-@import "theme.css";
+@import 'tailwindcss';
+@import 'theme.css';
 
-html, body {
+html,
+body {
   height: 100%;
   margin: 0;
   padding: 0;
+}
+
+body {
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-family: Inter, 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
 
 #app {
@@ -29,7 +43,6 @@ html, body {
   transition-property: transform, box-shadow, opacity !important;
 }
 
-
 /*electron drag webkit*/
 .header-drag {
   -webkit-app-region: drag;
@@ -42,7 +55,7 @@ html, body {
 
 /* 自定义滚动条样式 */
 .custom-scrollbar,
-.vue-recycle-scroller{
+.vue-recycle-scroller {
   &::-webkit-scrollbar {
     width: 8px;
     height: 6px;
@@ -88,7 +101,7 @@ html, body {
 }
 
 .lrc {
-  color: var(--lrc-default)
+  color: var(--lrc-default);
 }
 
 .lrc-hl {
@@ -96,7 +109,7 @@ html, body {
 }
 
 .lrc-trans {
-  color: var(--lrc-translate)
+  color: var(--lrc-translate);
 }
 
 .input-base {
@@ -114,7 +127,6 @@ html, body {
   @apply border-primary;
   box-shadow: 0 0 0 2px rgba(var(--color-primary), 0.25);
 }
-
 
 .input-label {
   @apply my-0.5;
@@ -169,7 +181,6 @@ html, body {
   gap-1;
 }
 
-
 .more-item {
   @apply px-3 py-2
   rounded-lg
@@ -208,12 +219,7 @@ html, body {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(255,255,255,0.08),
-    transparent
-  );
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
   animation: shimmer 1.2s infinite;
 }
 
@@ -269,4 +275,3 @@ html, body {
 .dsp-label {
   @apply text-xs text-neutral-400;
 }
-
