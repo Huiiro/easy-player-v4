@@ -497,15 +497,23 @@ AudioFormat WasapiBackend::open(
             return {};
         }
 
-        // Modify to match requested format (but keep wBitsPerSample/wFormatTag
-        // from the mix format so the engine can accept it)
-        mix_fmt->nChannels      = (WORD)channels;
-        mix_fmt->nSamplesPerSec = (DWORD)sample_rate;
-        mix_fmt->nBlockAlign    = mix_fmt->nChannels * mix_fmt->wBitsPerSample / 8;
-        mix_fmt->nAvgBytesPerSec = mix_fmt->nSamplesPerSec * mix_fmt->nBlockAlign;
-
+        // Shared-mode streams must use the endpoint mix format exactly.
+        // Replacing its rate or channel count with the source format makes
+        // IAudioClient::Initialize reject songs that differ from the Windows
+        // mixer configuration (AUDCLNT_E_UNSUPPORTED_FORMAT). The audio
+        // engine receives the actual format below and performs SRC/channel
+        // conversion before invoking the render callback.
         fmt = mix_fmt; // ownership transferred; will be freed below
-        impl_->is_f32 = (fmt->wBitsPerSample == 32);
+        const bool mix_is_f32 = fmt->wFormatTag == WAVE_FORMAT_IEEE_FLOAT ||
+            (fmt->wFormatTag == WAVE_FORMAT_EXTENSIBLE &&
+             IsEqualGUID(reinterpret_cast<WAVEFORMATEXTENSIBLE*>(fmt)->SubFormat,
+                         KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+        impl_->is_f32 = mix_is_f32;
+        impl_->pcm_bits = mix_is_f32 ? 0 : fmt->wBitsPerSample;
+        impl_->pcm_valid_bits = mix_is_f32 ? 0 :
+            (fmt->wFormatTag == WAVE_FORMAT_EXTENSIBLE
+                ? reinterpret_cast<WAVEFORMATEXTENSIBLE*>(fmt)->Samples.wValidBitsPerSample
+                : fmt->wBitsPerSample);
 
         hr = client->Initialize(AUDCLNT_SHAREMODE_SHARED,
                                  AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
