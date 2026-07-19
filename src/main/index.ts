@@ -3,13 +3,14 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import icon from '../../resources/icon.png?asset'
-import { AudioEngineManager } from './audio-engine/index'
+import { AudioEngineManager } from './audio-engine'
 import { registerIpcHandlers } from './audio-engine/ipc-handlers'
 import { closeDatabase, initDatabase } from './database'
 import { registerDatabaseIpcHandlers } from './database/ipc-handlers'
 import { getAppSetting, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './service/scan-ipc-handlers'
 import { registerLyricsIpcHandlers } from './service/lyrics-ipc-handlers'
+import { registerFontIpcHandlers } from './service/font-ipc-handlers'
 import { getDataPath } from './utils/pathUtils'
 
 protocol.registerSchemesAsPrivileged([
@@ -31,7 +32,7 @@ interface WindowState {
   maximized: boolean
 }
 
-const defaultWindowState: WindowState = { x: 80, y: 80, width: 900, height: 670, maximized: false }
+const defaultWindowState: WindowState = { x: 80, y: 80, width: 1280, height: 780, maximized: false }
 
 function loadWindowState(): WindowState {
   const saved = getAppSetting('window.main')
@@ -69,10 +70,12 @@ function saveWindowState(window: BrowserWindow): void {
 function registerMediaProtocol(): void {
   protocol.handle('easy-player-media', async (request) => {
     const url = new URL(request.url)
-    const requestedPath = url.hostname === 'cover' ? url.searchParams.get('path') : null
+    const requestedPath = ['cover', 'font'].includes(url.hostname)
+      ? url.searchParams.get('path')
+      : null
     if (!requestedPath) return new Response('Not Found', { status: 404 })
 
-    const coverDirectory = resolve(getDataPath(), 'covers')
+    const coverDirectory = resolve(getDataPath(), url.hostname === 'font' ? 'ttf' : 'covers')
     const coverPath = resolve(requestedPath)
     const pathRelativeToCovers = relative(coverDirectory, coverPath)
     if (
@@ -180,6 +183,7 @@ app.whenReady().then(() => {
   registerDatabaseIpcHandlers()
   registerScanIpcHandlers()
   registerLyricsIpcHandlers()
+  registerFontIpcHandlers()
   registerMediaProtocol()
 
   // IPC test

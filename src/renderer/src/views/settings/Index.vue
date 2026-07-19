@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -34,6 +35,14 @@ const playerBackground = computed<PlayerBgType>({
     ui.playerBgType = value
   }
 })
+const fontOptions = computed(() => [
+  { label: '系统默认', value: '' },
+  { label: '系统 UI', value: 'system-ui' },
+  { label: '微软雅黑', value: 'Microsoft YaHei' },
+  { label: '苹方', value: 'PingFang SC' },
+  { label: 'Noto Sans SC', value: 'Noto Sans SC' },
+  ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
+])
 function moveLyricSource(index: number, direction: -1 | 1): void {
   const target = index + direction
   if (target < 0 || target >= ui.lyricSourceOrder.length) return
@@ -67,6 +76,14 @@ function clearBackground(): void {
   ui.customBg.brightness = 100
   if (backgroundInput.value) backgroundInput.value.value = ''
 }
+
+async function refreshFonts(): Promise<void> {
+  await ui.loadCustomFonts()
+}
+
+async function openFontDirectory(): Promise<void> {
+  await window.api.fonts.openDirectory()
+}
 </script>
 
 <template>
@@ -81,6 +98,36 @@ function clearBackground(): void {
           调整界面外观与主题，让播放器更贴合你的使用环境。
         </p>
       </div>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>字体</h2>
+            <p>字体会全局应用；将字体文件直接放入 player_data/ttf 后可刷新读取。</p>
+          </div>
+        </div>
+        <div class="settings-card font-settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>界面字体</h3>
+              <p>选择系统字体或已导入的自定义字体。</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <BaseSelect
+                v-model="ui.customFontFamily"
+                :options="fontOptions"
+                placeholder="系统默认"
+                size="sm"
+                class="w-52"
+              />
+              <button class="secondary-button" type="button" @click="refreshFonts">刷新字体</button>
+              <button class="secondary-button" type="button" @click="openFontDirectory">
+                打开字体目录
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <section class="settings-section">
         <div class="section-heading">
@@ -154,6 +201,13 @@ function clearBackground(): void {
                 ↓
               </button>
             </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
+              <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
+            </div>
+            <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
           </div>
         </div>
       </section>
@@ -389,6 +443,9 @@ function clearBackground(): void {
 }
 .settings-card.muted {
   opacity: 0.58;
+}
+.font-settings-card {
+  overflow: visible;
 }
 .setting-row {
   display: flex;

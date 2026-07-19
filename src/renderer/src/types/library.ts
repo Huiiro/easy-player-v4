@@ -1,0 +1,19 @@
+export interface LibrarySong {
+  id: number
+  title: string
+  artist: string | null
+  album: string | null
+  duration: number | null
+  cover: string | null
+  audio: string
+  isNewest: boolean
+  songStatus: number
+  sourceId: number | null
+  playTime?: string
+  tags?: Array<{ id: number; name: string; color: string | null }>
+}
+
+export interface PagedLibrarySongs {
+  data: LibrarySong[]
+  total: number
+}

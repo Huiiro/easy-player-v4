@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import type {
   AudioChainStatus,
@@ -658,6 +658,42 @@ export const usePlayerStore = defineStore('player', () => {
     if (snapshot) audioAnalysis.value = snapshot
   }
 
+  /**
+   * Pinia restores the renderer snapshot synchronously. The audio engine owns
+   * the actual DSP state, so refresh it once during startup to prevent a stale
+   * renderer value (for example volume) from disagreeing with playback.
+   */
+  async function initializePersistentState(): Promise<void> {
+    const status = await audioBridge.getStatus()
+    if (status) {
+      state.value = status.state
+      positionMs.value = status.positionMs
+      durationMs.value = status.durationMs
+      volume.value = Math.max(0, Math.min(1, status.volume))
+      glitchCount.value = status.glitchCount
+      trackInfo.value = status.trackInfo
+    }
+
+    await Promise.allSettled([
+      loadOutputDeviceSettings(),
+      loadPlaybackSpeed(),
+      loadReplayGain(),
+      loadEqBands(),
+      loadResamplerConfig(),
+      loadDopEnabled(),
+      loadTransitionConfig(),
+      loadDspNodes(),
+      loadCompressorConfig(),
+      loadDelayConfig(),
+      loadReverbConfig(),
+      loadChorusConfig(),
+      loadNoiseGateConfig(),
+      loadPhaserConfig(),
+      loadChannelMatrixConfig(),
+      loadLimiter()
+    ])
+  }
+
   async function loadRhythmVisualConfig(): Promise<void> {
     try {
       const response = await window.api.database.command('getSetting', {
@@ -698,6 +734,14 @@ export const usePlayerStore = defineStore('player', () => {
       value: rhythmVisualConfig.value
     })
   }
+
+  watch(
+    rhythmVisualConfig,
+    () => {
+      void saveRhythmVisualConfig()
+    },
+    { deep: true }
+  )
 
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
@@ -885,6 +929,7 @@ export const usePlayerStore = defineStore('player', () => {
     refreshDevices,
     refreshAudioChain,
     refreshAudioAnalysis,
+    initializePersistentState,
     loadRhythmVisualConfig,
     saveRhythmVisualConfig,
     savePlaybackSession,

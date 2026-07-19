@@ -211,6 +211,30 @@ declare global {
           audioPath: string,
           source: 'embedded' | 'local' | 'network'
         ): Promise<{ success: boolean; data?: string | null; error?: string }>
+        searchNetwork(request: {
+          title: string
+          artist?: string | null
+          album?: string | null
+        }): Promise<{
+          success: boolean
+          data?: Array<{
+            id: string
+            provider: 'netease' | 'kugou'
+            title: string
+            artist: string
+            album?: string
+            lrc: string
+            translation?: string
+          }>
+          error?: string
+        }>
+      }
+      fonts: {
+        list(): Promise<{
+          success: boolean
+          data?: Array<{ family: string; file: string; url: string }>
+        }>
+        openDirectory(): Promise<{ success: boolean; error?: string }>
       }
       window: {
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>

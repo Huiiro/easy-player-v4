@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
 import FootBar from '@/views/layout/footbar/Index.vue'
@@ -8,14 +8,24 @@ import CardView from '@/views/layout/card/Index.vue'
 
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import i18n from '@/i18n'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+
+watch(
+  () => ui.locale,
+  (locale) => {
+    i18n.global.locale = locale
+  },
+  { immediate: true }
+)
 
 onMounted(async () => {
   await ui.initializeTheme()
   player.subscribeToEvents()
   await player.loadRhythmVisualConfig()
+  await player.initializePersistentState()
   await player.restorePlaybackSession(ui.autoPlayOnRestore)
   window.addEventListener('beforeunload', player.savePlaybackSessionSync)
 })

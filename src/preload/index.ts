@@ -201,7 +201,20 @@ const windowAPI = {
 
 const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
-    ipcRenderer.invoke('lyrics:load-source', { audioPath, source })
+    ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
+  searchNetwork: ({
+    title,
+    artist,
+    album
+  }: {
+    title: string
+    artist?: string | null
+    album?: string | null
+  }) => ipcRenderer.invoke('lyrics:search-network', { title, artist, album })
+}
+const fontsAPI = {
+  list: () => ipcRenderer.invoke('fonts:list'),
+  openDirectory: () => ipcRenderer.invoke('fonts:open-directory')
 }
 
 // Custom APIs for renderer
@@ -210,6 +223,7 @@ const api = {
   database: databaseAPI,
   library: libraryAPI,
   lyrics: lyricsAPI,
+  fonts: fontsAPI,
   window: windowAPI
 }
 

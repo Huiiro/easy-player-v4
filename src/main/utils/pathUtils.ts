@@ -30,7 +30,8 @@ export function createDir(): boolean {
     getLogPath(),
     path.join(getDataPath(), 'cache'),
     path.join(getDataPath(), 'covers'),
-    path.join(getDataPath(), 'temp')
+    path.join(getDataPath(), 'temp'),
+    path.join(getDataPath(), 'ttf')
   ]
 
   try {

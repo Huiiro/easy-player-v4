@@ -1,4 +1,8 @@
 export default {
+  common: {
+    cancel: '取消',
+    save: '保存'
+  },
   nav: {
     home: '主页',
     songs: '歌曲',
@@ -115,9 +119,12 @@ export default {
     playerBackgroundAmbient: '氛围光晕',
     playerBackgroundDefault: '纯色',
     lyrics: '歌词设置',
-    lyricsDescription: '拖动优先级决定歌词的加载顺序；网络歌词接口已预留。',
+    lyricsDescription: '拖动优先级决定歌词的加载顺序。',
     lyricsFirst: '优先使用',
-    lyricsFallback: '当前来源不可用时使用'
+    lyricsFallback: '当前来源不可用时使用',
+    autoSearchNetworkLyrics: '自动搜索网络歌词',
+    autoSearchNetworkLyricsDescription:
+      '仅在自动模式且内嵌、数据库和本地歌词都不可用时，采用第一个匹配结果。'
   },
   playerPanel: {
     label: '播放器面板',
@@ -157,7 +164,21 @@ export default {
     lyricEffect: '歌词效果：{effect}',
     lyricEffectNone: '无',
     lyricEffectGlow: '发光',
-    lyricEffectFollow: '跟随'
+    lyricEffectFollow: '跟随',
+    lyricManage: '歌词管理',
+    lyricSource: '歌词来源',
+    lyricSourceAuto: '自动（按优先级）',
+    lyricSearch: '搜索网络歌词',
+    lyricSearching: '正在搜索…',
+    lyricSearchEmpty: '没有找到可用的歌词。',
+    lyricSearchFailed: '歌词搜索失败。',
+    lyricTitle: '歌曲名',
+    lyricArtist: '歌手（可选）',
+    lyricAlbum: '专辑（可选）',
+    lyricEditorPlaceholder: '在此编辑 LRC 歌词…',
+    lyricTranslationPlaceholder: '在此编辑翻译歌词（可选）…',
+    lyricProviderNetease: '网易云',
+    lyricProviderKugou: '酷狗'
   },
   lyrics: {
     source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词' }

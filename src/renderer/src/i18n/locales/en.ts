@@ -1,4 +1,8 @@
 export default {
+  common: {
+    cancel: 'Cancel',
+    save: 'Save'
+  },
   nav: {
     home: 'Home',
     songs: 'Songs',
@@ -117,10 +121,12 @@ export default {
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundDefault: 'Solid',
     lyrics: 'Lyrics',
-    lyricsDescription:
-      'Adjust the priority used to load lyrics. The network provider is reserved for later.',
+    lyricsDescription: 'Adjust the lyric loading priority.',
     lyricsFirst: 'Preferred source',
-    lyricsFallback: 'Used when earlier sources are unavailable'
+    lyricsFallback: 'Used when earlier sources are unavailable',
+    autoSearchNetworkLyrics: 'Automatically search network lyrics',
+    autoSearchNetworkLyricsDescription:
+      'Only in Auto mode, when embedded, database, and local lyrics are unavailable, use the first match.'
   },
   playerPanel: {
     label: 'Player panel',
@@ -160,7 +166,21 @@ export default {
     lyricEffect: 'Lyric effect: {effect}',
     lyricEffectNone: 'None',
     lyricEffectGlow: 'Glow',
-    lyricEffectFollow: 'Follow'
+    lyricEffectFollow: 'Follow',
+    lyricManage: 'Lyrics manager',
+    lyricSource: 'Lyrics source',
+    lyricSourceAuto: 'Auto (priority order)',
+    lyricSearch: 'Search network lyrics',
+    lyricSearching: 'Searching…',
+    lyricSearchEmpty: 'No usable lyrics found.',
+    lyricSearchFailed: 'Lyrics search failed.',
+    lyricTitle: 'Song title',
+    lyricArtist: 'Artist (optional)',
+    lyricAlbum: 'Album (optional)',
+    lyricEditorPlaceholder: 'Edit LRC lyrics here…',
+    lyricTranslationPlaceholder: 'Edit translated lyrics here (optional)…',
+    lyricProviderNetease: 'NetEase Cloud Music',
+    lyricProviderKugou: 'KuGou'
   },
   lyrics: {
     source: {
