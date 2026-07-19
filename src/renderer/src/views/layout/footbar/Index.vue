@@ -91,6 +91,11 @@ function setVolume(event: Event): void {
   void player.setVolume(Number((event.target as HTMLInputElement).value) / 100)
 }
 
+function changeVolume(event: WheelEvent): void {
+  event.preventDefault()
+  void player.setVolume(Math.max(0, Math.min(1, player.volume + (event.deltaY < 0 ? 0.05 : -0.05))))
+}
+
 function openPlayerPanel(): void {
   ui.showPlayer = true
 }
@@ -101,6 +106,10 @@ function toggleCollapsed(): void {
 
 function openAudioControls(): void {
   audioControlsVisible.value = true
+}
+
+function openDesktopLyrics(): void {
+  ui.useDesktopLyrics = !ui.useDesktopLyrics
 }
 </script>
 
@@ -183,36 +192,52 @@ function openAudioControls(): void {
           <span>{{ player.durationFormatted }}</span>
         </div>
       </div>
-
-      <div v-if="!collapsed" class="flex min-w-0 items-center justify-end gap-3 max-[700px]:hidden">
+      <div v-if="!collapsed" class="flex min-w-0 items-center justify-end gap-2 max-[700px]:hidden">
+        <div
+          class="group relative"
+          :title="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+          @click.stop
+          @wheel="changeVolume"
+        >
+          <button
+            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            type="button"
+            :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+          >
+            <SvgIcon
+              :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
+              class-name="size-5"
+            />
+          </button>
+          <div
+            class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          >
+            <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
+            <input
+              class="absolute left-1/2 top-[5.5rem] h-1.5 w-28 -translate-x-1/2 -rotate-90 cursor-pointer accent-primary"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              :value="Math.round(player.volume * 100)"
+              :aria-label="t('footer.volume')"
+              @input="setVolume"
+            />
+          </div>
+        </div>
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="playModeLabel"
           @click.stop="cyclePlayMode"
         >
-          <SvgIcon :name="playModeIcon" class-name="size-4" />
+          <SvgIcon :name="playModeIcon" class-name="size-5" />
         </button>
-        <div class="group flex items-center" @click.stop>
-          <SvgIcon
-            :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
-            class-name="size-5 shrink-0"
-          />
-          <input
-            class="h-2 w-0 cursor-pointer appearance-auto opacity-0 accent-primary transition-[width,opacity] duration-200 group-hover:ml-2 group-hover:w-24 group-hover:opacity-100 group-focus-within:ml-2 group-focus-within:w-24 group-focus-within:opacity-100"
-            type="range"
-            min="0"
-            max="100"
-            :value="Math.round(player.volume * 100)"
-            :aria-label="t('footer.volume')"
-            @input="setVolume"
-          />
-        </div>
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('queue.title')"
           @click.stop="queueVisible = true"
         >
-          <SvgIcon name="control-playlist" class-name="size-4" />
+          <SvgIcon name="control-playlist" class-name="size-5" />
         </button>
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
@@ -220,6 +245,22 @@ function openAudioControls(): void {
           @click.stop="openAudioControls"
         >
           <SvgIcon name="common-equalizer" class-name="size-4" />
+        </button>
+        <!-- todo -->
+        <button
+          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          :title="t('footer.desktopLyrics')"
+          @click.stop="openDesktopLyrics"
+        >
+          <SvgIcon name="common-lyrics2" class-name="size-5" />
+        </button>
+        <!-- todo -->
+        <button
+          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          :title="t('footer.more')"
+          @click.stop="openMoreMenu"
+        >
+          <SvgIcon name="menu-more-vertical" class-name="size-5" />
         </button>
       </div>
 

@@ -236,6 +236,30 @@ declare global {
         }>
         openDirectory(): Promise<{ success: boolean; error?: string }>
       }
+      miniPlayer: {
+        enter(): Promise<{ success: boolean }>
+        restore(): Promise<{ success: boolean }>
+        ready(): void
+        update(data: unknown): void
+        action(action: 'previous' | 'toggle' | 'next'): void
+        setLocked(locked: boolean): void
+        resizeForFont(fontSize: number): void
+        onUpdate(callback: (data: unknown) => void): () => void
+        onAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
+        onRequestState(callback: () => void): () => void
+      }
+      desktopLyrics: {
+        open(): Promise<{ success: boolean }>
+        close(): Promise<{ success: boolean }>
+        ready(): void
+        update(data: unknown): void
+        action(action: 'previous' | 'toggle' | 'next'): void
+        onUpdate(callback: (data: unknown) => void): () => void
+        onAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
+        onRequestState(callback: () => void): () => void
+        onClosed(callback: () => void): () => void
+        onBounds(callback: (bounds: { width: number; height: number }) => void): () => void
+      }
       window: {
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>
         onState(callback: (state: { maximized: boolean }) => void): () => void

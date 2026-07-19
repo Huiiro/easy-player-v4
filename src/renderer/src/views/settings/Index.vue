@@ -132,6 +132,83 @@ async function openFontDirectory(): Promise<void> {
       <section class="settings-section">
         <div class="section-heading">
           <div>
+            <h2>{{ t('settings.desktopLyrics') }}</h2>
+            <p>{{ t('settings.desktopLyricsDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
+              <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
+            </div>
+            <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
+          </div>
+          <div class="setting-row setting-row-stack gap-4">
+            <div class="w-full">
+              <div class="slider-label">
+                <span>{{ t('settings.desktopLyricsFontSize') }}</span
+                ><strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+              </div>
+              <BaseSlider
+                v-model="ui.desktopLyricsStyles.fontSize"
+                :min="18"
+                :max="64"
+                :step="1"
+                size="sm"
+              />
+            </div>
+            <div class="flex flex-wrap gap-4">
+              <label class="color-control"
+                >{{ t('settings.desktopLyricsActiveColor')
+                }}<input v-model="ui.desktopLyricsStyles.activeColor" type="color"
+              /></label>
+              <label class="color-control"
+                >{{ t('settings.desktopLyricsInactiveColor')
+                }}<input v-model="ui.desktopLyricsStyles.inactiveColor" type="color"
+              /></label>
+              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
+                ><span>{{ t('settings.desktopLyricsBold') }}</span
+                ><BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" size="sm"
+              /></label>
+              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
+                ><span>{{ t('settings.desktopLyricsGlow') }}</span
+                ><BaseSwitch v-model="ui.desktopLyricsStyles.glow" size="sm"
+              /></label>
+              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
+                ><span>{{ t('settings.desktopLyricsTranslation') }}</span
+                ><BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" size="sm"
+              /></label>
+              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
+                ><span>{{ t('settings.desktopLyricsAutoHide') }}</span
+                ><BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" size="sm"
+              /></label>
+            </div>
+            <div
+              class="desktop-lyrics-preview"
+              :style="{
+                '--desktop-active': ui.desktopLyricsStyles.activeColor,
+                '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
+                '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
+              }"
+            >
+              <strong
+                :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
+                :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+                >{{ t('settings.desktopLyricsPreviewLine') }}</strong
+              >
+              <span v-if="ui.desktopLyricsStyles.showTranslation">{{
+                t('settings.desktopLyricsPreviewTranslation')
+              }}</span>
+              <span>{{ t('settings.desktopLyricsPreviewNext') }}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
             <h2>语言</h2>
             <p>选择播放器界面使用的显示语言。</p>
           </div>
@@ -609,6 +686,28 @@ async function openFontDirectory(): Promise<void> {
   padding: 0;
   background: transparent;
   cursor: pointer;
+}
+.desktop-lyrics-preview {
+  display: grid;
+  min-height: 116px;
+  place-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  border-radius: 12px;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgb(15 20 30 / 96%), rgb(38 28 56 / 88%));
+  text-align: center;
+}
+.desktop-lyrics-preview strong {
+  color: var(--desktop-active);
+  font-size: var(--desktop-size);
+}
+.desktop-lyrics-preview--glow {
+  text-shadow: 0 0 15px var(--desktop-active);
+}
+.desktop-lyrics-preview span {
+  color: var(--desktop-inactive);
+  font-size: 0.8125rem;
 }
 .background-row {
   border-bottom: 1px solid var(--color-border);

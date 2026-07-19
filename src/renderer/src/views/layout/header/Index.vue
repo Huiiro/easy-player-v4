@@ -46,6 +46,9 @@ async function runWindowCommand(command: 'minimize' | 'toggle-maximize' | 'close
   const state = await window.api.window.command(command)
   maximized.value = state.maximized
 }
+async function enterMiniPlayer(): Promise<void> {
+  await window.api.miniPlayer.enter()
+}
 async function uploadLocalFiles(): Promise<void> {
   if (importingLocalFolder.value) return
   importingLocalFolder.value = true
@@ -85,7 +88,7 @@ async function uploadLocalFiles(): Promise<void> {
     >
       <span
         class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
-        >E</span
+        >EY</span
       >
       <span class="text-sm font-semibold tracking-tight">{{ ui.logoText }}</span>
     </div>
@@ -105,7 +108,7 @@ async function uploadLocalFiles(): Promise<void> {
         :title="t('header.importLocalMusic')"
         @click="uploadLocalFiles"
       >
-        <svgIcon name="common-plus" class-name="size-4" />
+        <svgIcon name="common-plus" class-name="size-5" />
       </button>
       <button
         class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
@@ -121,12 +124,20 @@ async function uploadLocalFiles(): Promise<void> {
       >
         <svgIcon
           name="common-carousel-horizontal"
-          class-name="size-4"
+          class-name="size-5"
           :class="ui.useCardView ? 'text-primary' : ''"
         />
       </button>
     </div>
     <div class="flex self-stretch [-webkit-app-region:no-drag]">
+      <button
+        class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('header.miniPlayer')"
+        :aria-label="t('header.miniPlayer')"
+        @click="enterMiniPlayer"
+      >
+        <svgIcon name="common-mini-player" class-name="size-5" />
+      </button>
       <button
         class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="t('header.minimize')"

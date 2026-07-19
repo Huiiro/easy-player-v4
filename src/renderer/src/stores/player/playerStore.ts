@@ -788,6 +788,8 @@ export const usePlayerStore = defineStore('player', () => {
         schedulePlaybackSessionSave()
       })
     )
+    unsubs.push(window.api.miniPlayer.onAction(handleMiniPlayerAction))
+    unsubs.push(window.api.miniPlayer.onRequestState(publishMiniPlayerState))
 
     unsubs.push(
       audioBridge.onAudioChainChanged((data) => {
@@ -829,6 +831,32 @@ export const usePlayerStore = defineStore('player', () => {
     playbackSessionTimer = undefined
     savePlaybackSessionSync()
   }
+
+  function publishMiniPlayerState(): void {
+    const song = currentQueueSong.value
+    const metadata = trackInfo.value?.metadata
+    window.api.miniPlayer.update({
+      cover: song?.cover || null,
+      title: metadata?.title || song?.title || '',
+      artist: metadata?.artist || song?.artist || '',
+      isPlaying: isPlaying.value
+    })
+  }
+
+  function handleMiniPlayerAction(action: 'previous' | 'toggle' | 'next'): void {
+    if (action === 'previous') {
+      void playPrevious()
+      return
+    }
+    if (action === 'next') {
+      void playNext()
+      return
+    }
+    if (isPlaying.value) void pause()
+    else if (currentFile.value) void play()
+  }
+
+  watch([currentQueueSong, trackInfo, isPlaying], publishMiniPlayerState, { deep: true })
 
   return {
     // State

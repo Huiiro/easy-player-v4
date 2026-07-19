@@ -100,10 +100,20 @@ export default {
     settings: '设置',
     cardMode: '卡片模式',
     exitCardMode: '退出卡片模式',
+    miniPlayer: '迷你播放器',
     minimize: '最小化',
     maximize: '最大化',
     restore: '还原窗口',
     close: '关闭'
+  },
+  miniPlayer: {
+    noTrack: '未选择音乐',
+    defaultArtist: 'Easy Player',
+    previous: '上一首',
+    play: '播放',
+    pause: '暂停',
+    next: '下一首',
+    restore: '恢复主窗口'
   },
   settings: {
     playback: '播放设置',
@@ -124,7 +134,21 @@ export default {
     lyricsFallback: '当前来源不可用时使用',
     autoSearchNetworkLyrics: '自动搜索网络歌词',
     autoSearchNetworkLyricsDescription:
-      '仅在自动模式且内嵌、数据库和本地歌词都不可用时，采用第一个匹配结果。'
+      '仅在自动模式且内嵌、数据库和本地歌词都不可用时，采用第一个匹配结果。',
+    desktopLyrics: '桌面歌词',
+    desktopLyricsDescription: '设置桌面歌词的显示方式，修改会即时同步到独立窗口。',
+    desktopLyricsEnabled: '启用桌面歌词',
+    desktopLyricsEnabledDescription: '启用后显示可缩放、可拖拽的置顶歌词窗口。',
+    desktopLyricsFontSize: '字体大小',
+    desktopLyricsActiveColor: '当前行',
+    desktopLyricsInactiveColor: '非当前行',
+    desktopLyricsBold: '粗体',
+    desktopLyricsGlow: '发光效果',
+    desktopLyricsTranslation: '显示翻译',
+    desktopLyricsAutoHide: '自动隐藏背景',
+    desktopLyricsPreviewLine: '正在播放的歌词',
+    desktopLyricsPreviewTranslation: 'Lyrics translation preview',
+    desktopLyricsPreviewNext: '下一句歌词预览'
   },
   playerPanel: {
     label: '播放器面板',
@@ -193,7 +217,10 @@ export default {
     next: '下一首',
     progress: '播放进度',
     volume: '音量',
+    volumeValue: '音量：{value}%',
     audioControls: '音频控制',
+    desktopLyrics: '桌面歌词',
+    more: '更多',
     closeAudioControls: '关闭音频控制',
     expand: '展开控制栏',
     collapse: '收起控制栏',

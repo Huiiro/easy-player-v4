@@ -147,6 +147,20 @@ public:
         phaser_phase_ = 0.0f; phaser_feedback_.fill(0.0f);
         for (auto& stage : phaser_states_) stage.fill(0.0f);
         time_stretch_.clear();
+        // Settings are restored before the first track is opened. Keep the
+        // audio-thread gain state in sync here so the first callback does not
+        // ramp from the default 100% level down to the persisted volume.
+        // Runtime setting changes still use apply_smoothed_gain as before.
+        const bool preamp_enabled = preamp_enabled_.load(std::memory_order_acquire);
+        preamp_live_ = preamp_enabled
+            ? preamp_target_.load(std::memory_order_acquire)
+            : 1.0f;
+        const auto* replay_gain = replay_gain_config_.load(std::memory_order_acquire);
+        replay_gain_live_ = replay_gain->enabled
+            ? std::pow(10.0f, replay_gain->gain_db / 20.0f)
+            : 1.0f;
+        master_volume_live_ = master_volume_target_.load(std::memory_order_acquire);
+        limiter_gain_ = 1.0f;
         publish_eq_config();
     }
 

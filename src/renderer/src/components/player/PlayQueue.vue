@@ -9,7 +9,7 @@ const removeAt = (index: number): void => void player.removeQueueItem(index)
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col">
+  <section class="flex h-full min-h-0 flex-col overflow-hidden">
     <header class="flex items-center justify-between gap-3 pb-3">
       <p class="text-sm font-semibold text-[var(--color-text)]">{{ t('queue.title') }}</p>
       <div>
@@ -25,7 +25,7 @@ const removeAt = (index: number): void => void player.removeQueueItem(index)
     <p v-if="player.queue.length === 0" class="py-8 text-center text-sm text-[var(--color-text-l)]">
       {{ t('queue.empty') }}
     </p>
-    <div v-else class="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+    <div v-else class="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
       <div
         v-for="(song, index) in player.queue"
         :key="song.id"

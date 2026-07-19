@@ -101,10 +101,20 @@ export default {
     settings: 'Settings',
     cardMode: 'Card mode',
     exitCardMode: 'Exit card mode',
+    miniPlayer: 'Mini player',
     minimize: 'Minimize',
     maximize: 'Maximize',
     restore: 'Restore window',
     close: 'Close'
+  },
+  miniPlayer: {
+    noTrack: 'No track selected',
+    defaultArtist: 'Easy Player',
+    previous: 'Previous track',
+    play: 'Play',
+    pause: 'Pause',
+    next: 'Next track',
+    restore: 'Restore main window'
   },
   settings: {
     playback: 'Playback',
@@ -126,7 +136,23 @@ export default {
     lyricsFallback: 'Used when earlier sources are unavailable',
     autoSearchNetworkLyrics: 'Automatically search network lyrics',
     autoSearchNetworkLyricsDescription:
-      'Only in Auto mode, when embedded, database, and local lyrics are unavailable, use the first match.'
+      'Only in Auto mode, when embedded, database, and local lyrics are unavailable, use the first match.',
+    desktopLyrics: 'Desktop lyrics',
+    desktopLyricsDescription:
+      'Configure desktop lyric appearance; changes are applied to the separate window immediately.',
+    desktopLyricsEnabled: 'Enable desktop lyrics',
+    desktopLyricsEnabledDescription:
+      'Show an always-on-top lyric window that can be resized and dragged.',
+    desktopLyricsFontSize: 'Font size',
+    desktopLyricsActiveColor: 'Current line',
+    desktopLyricsInactiveColor: 'Other lines',
+    desktopLyricsBold: 'Bold',
+    desktopLyricsGlow: 'Glow effect',
+    desktopLyricsTranslation: 'Show translation',
+    desktopLyricsAutoHide: 'Auto-hide background',
+    desktopLyricsPreviewLine: 'Current lyric preview',
+    desktopLyricsPreviewTranslation: 'Lyrics translation preview',
+    desktopLyricsPreviewNext: 'Next lyric preview'
   },
   playerPanel: {
     label: 'Player panel',
@@ -200,7 +226,10 @@ export default {
     next: 'Next track',
     progress: 'Playback progress',
     volume: 'Volume',
+    volumeValue: 'Volume: {value}%',
     audioControls: 'Audio controls',
+    desktopLyrics: 'Desktop lyrics',
+    more: 'More',
     closeAudioControls: 'Close audio controls',
     expand: 'Expand controls',
     collapse: 'Collapse controls',

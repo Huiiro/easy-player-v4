@@ -199,6 +199,75 @@ const windowAPI = {
   }
 }
 
+const miniPlayerAPI = {
+  enter: () => ipcRenderer.invoke('mini-player:enter') as Promise<{ success: boolean }>,
+  restore: () => ipcRenderer.invoke('mini-player:restore') as Promise<{ success: boolean }>,
+  ready: () => ipcRenderer.send('mini-player:ready'),
+  update: (data: unknown) => ipcRenderer.send('mini-player:update', data),
+  action: (action: 'previous' | 'toggle' | 'next') =>
+    ipcRenderer.send('mini-player:action', action),
+  onUpdate: (callback: (data: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown): void => callback(data)
+    ipcRenderer.on('mini-player:update', handler)
+    return () => ipcRenderer.removeListener('mini-player:update', handler)
+  },
+  onAction: (callback: (action: 'previous' | 'toggle' | 'next') => void): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      action: 'previous' | 'toggle' | 'next'
+    ): void => callback(action)
+    ipcRenderer.on('mini-player:action', handler)
+    return () => ipcRenderer.removeListener('mini-player:action', handler)
+  },
+  onRequestState: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('mini-player:request-state', handler)
+    return () => ipcRenderer.removeListener('mini-player:request-state', handler)
+  }
+}
+
+const desktopLyricsAPI = {
+  open: () => ipcRenderer.invoke('desktop-lyrics:open') as Promise<{ success: boolean }>,
+  close: () => ipcRenderer.invoke('desktop-lyrics:close') as Promise<{ success: boolean }>,
+  ready: () => ipcRenderer.send('desktop-lyrics:ready'),
+  update: (data: unknown) => ipcRenderer.send('desktop-lyrics:update', data),
+  action: (action: 'previous' | 'toggle' | 'next') =>
+    ipcRenderer.send('desktop-lyrics:action', action),
+  setLocked: (locked: boolean) => ipcRenderer.send('desktop-lyrics:set-locked', locked),
+  resizeForFont: (fontSize: number) => ipcRenderer.send('desktop-lyrics:resize-for-font', fontSize),
+  onUpdate: (callback: (data: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown): void => callback(data)
+    ipcRenderer.on('desktop-lyrics:update', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:update', handler)
+  },
+  onAction: (callback: (action: 'previous' | 'toggle' | 'next') => void): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      action: 'previous' | 'toggle' | 'next'
+    ): void => callback(action)
+    ipcRenderer.on('desktop-lyrics:action', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:action', handler)
+  },
+  onRequestState: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('desktop-lyrics:request-state', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:request-state', handler)
+  },
+  onClosed: (callback: () => void): (() => void) => {
+    const handler = (): void => callback()
+    ipcRenderer.on('desktop-lyrics:closed', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:closed', handler)
+  },
+  onBounds: (callback: (bounds: { width: number; height: number }) => void): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      bounds: { width: number; height: number }
+    ): void => callback(bounds)
+    ipcRenderer.on('desktop-lyrics:bounds', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:bounds', handler)
+  }
+}
+
 const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
@@ -224,6 +293,8 @@ const api = {
   library: libraryAPI,
   lyrics: lyricsAPI,
   fonts: fontsAPI,
+  miniPlayer: miniPlayerAPI,
+  desktopLyrics: desktopLyricsAPI,
   window: windowAPI
 }
 

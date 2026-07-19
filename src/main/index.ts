@@ -22,6 +22,8 @@ protocol.registerSchemesAsPrivileged([
 import { createDir } from './utils/pathUtils'
 
 let mainWindow: BrowserWindow | null = null
+let miniWindow: BrowserWindow | null = null
+let desktopLyricsWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
 
 interface WindowState {
@@ -139,6 +141,12 @@ function createWindow(): void {
   mainWindow.on('close', () => {
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
     saveWindowState(mainWindow!)
+    // The desktop lyric window is independent, so it would otherwise keep
+    // the app alive (and leave audio playing) after its owner is closed.
+    if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
+      desktopLyricsWindow.close()
+    }
+    audioEngine?.stop()
   })
 
   const sendWindowState = (): void => {
@@ -170,6 +178,87 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+}
+
+function createMiniPlayerWindow(): BrowserWindow {
+  if (miniWindow && !miniWindow.isDestroyed()) return miniWindow
+  miniWindow = new BrowserWindow({
+    width: 360,
+    height: 84,
+    minWidth: 360,
+    minHeight: 84,
+    maxWidth: 360,
+    maxHeight: 84,
+    show: false,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    backgroundColor: '#111614',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+  miniWindow.setAlwaysOnTop(true, 'floating')
+  miniWindow.on('ready-to-show', () => miniWindow?.show())
+  miniWindow.on('closed', () => {
+    miniWindow = null
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+  })
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    void miniWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/mini`)
+  } else {
+    void miniWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/mini' })
+  }
+  return miniWindow
+}
+
+function createDesktopLyricsWindow(): BrowserWindow {
+  if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) return desktopLyricsWindow
+  const display = screen.getPrimaryDisplay().workArea
+  desktopLyricsWindow = new BrowserWindow({
+    width: 760,
+    height: 170,
+    x: Math.round(display.x + (display.width - 760) / 2),
+    y: Math.max(display.y, display.y + display.height - 220),
+    minWidth: 420,
+    minHeight: 110,
+    maxHeight: 360,
+    show: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    resizable: true,
+    hasShadow: false,
+    skipTaskbar: true,
+    backgroundColor: '#00000000',
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false
+    }
+  })
+  desktopLyricsWindow.setAlwaysOnTop(true, 'floating')
+  desktopLyricsWindow.on('ready-to-show', () => desktopLyricsWindow?.showInactive())
+  desktopLyricsWindow.on('closed', () => {
+    desktopLyricsWindow = null
+    mainWindow?.webContents.send('desktop-lyrics:closed')
+  })
+  desktopLyricsWindow.on('resize', () => {
+    const bounds = desktopLyricsWindow?.getBounds()
+    if (bounds) desktopLyricsWindow?.webContents.send('desktop-lyrics:bounds', bounds)
+  })
+  if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
+    void desktopLyricsWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/lyric`)
+  } else {
+    void desktopLyricsWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/lyric' })
+  }
+  return desktopLyricsWindow
 }
 
 // This method will be called when Electron has finished
@@ -231,6 +320,63 @@ app.whenReady().then(() => {
     if (command === 'close') window.close()
 
     return { maximized: window.isMaximized() }
+  })
+  ipcMain.handle('mini-player:enter', () => {
+    const mini = createMiniPlayerWindow()
+    mainWindow?.hide()
+    mini.show()
+    mini.focus()
+    if (!mini.webContents.isLoading()) mainWindow?.webContents.send('mini-player:request-state')
+    return { success: true }
+  })
+  ipcMain.handle('mini-player:restore', () => {
+    miniWindow?.hide()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+      mainWindow.focus()
+    }
+    return { success: true }
+  })
+  ipcMain.on('mini-player:ready', () => mainWindow?.webContents.send('mini-player:request-state'))
+  ipcMain.on('mini-player:update', (_event, data: unknown) => {
+    miniWindow?.webContents.send('mini-player:update', data)
+  })
+  ipcMain.on('mini-player:action', (_event, action: 'previous' | 'toggle' | 'next') => {
+    mainWindow?.webContents.send('mini-player:action', action)
+  })
+  ipcMain.handle('desktop-lyrics:open', () => {
+    const window = createDesktopLyricsWindow()
+    window.showInactive()
+    return { success: true }
+  })
+  ipcMain.handle('desktop-lyrics:close', () => {
+    desktopLyricsWindow?.close()
+    return { success: true }
+  })
+  ipcMain.on('desktop-lyrics:ready', () =>
+    mainWindow?.webContents.send('desktop-lyrics:request-state')
+  )
+  ipcMain.on('desktop-lyrics:update', (_event, data: unknown) =>
+    desktopLyricsWindow?.webContents.send('desktop-lyrics:update', data)
+  )
+  ipcMain.on('desktop-lyrics:action', (_event, action: 'previous' | 'toggle' | 'next') =>
+    mainWindow?.webContents.send('desktop-lyrics:action', action)
+  )
+  ipcMain.on('desktop-lyrics:set-locked', (_event, locked: unknown) => {
+    if (!desktopLyricsWindow) return
+    desktopLyricsWindow.setIgnoreMouseEvents(locked === true, { forward: true })
+  })
+  ipcMain.on('desktop-lyrics:resize-for-font', (_event, fontSize: unknown) => {
+    if (!desktopLyricsWindow || typeof fontSize !== 'number') return
+    const bounds = desktopLyricsWindow.getBounds()
+    const width = Math.max(420, Math.min(1120, Math.round(760 + (fontSize - 34) * 11)))
+    const height = Math.max(110, Math.min(360, Math.round(fontSize * 3.75 + 34)))
+    desktopLyricsWindow.setBounds({
+      x: Math.round(bounds.x - (width - bounds.width) / 2),
+      y: bounds.y,
+      width,
+      height
+    })
   })
 
   createWindow()

@@ -55,7 +55,7 @@ const close = (): void => {
 
 <template>
   <transition name="slide-fade">
-    <div v-if="visible" class="fixed bottom-18 right-0 z-50 pointer-events-none">
+    <div v-if="visible" class="fixed bottom-26 right-2 z-50 pointer-events-none">
       <div
         class="bg-bg rounded-xl shadow-lg p-4 w-80 border border-r border-border pointer-events-auto transform transition-all duration-300"
       >

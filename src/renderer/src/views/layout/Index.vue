@@ -4,6 +4,7 @@ import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
 import FootBar from '@/views/layout/footbar/Index.vue'
 import PlayerPanel from '@/views/layout/playerPanel/Index.vue'
+import DesktopLyricsSync from '@/components/lyrics/DesktopLyricsSync.vue'
 import CardView from '@/views/layout/card/Index.vue'
 
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -37,6 +38,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
+  <DesktopLyricsSync />
   <div
     class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
     :class="ui.useCustomBg ? 'bg-transparent' : 'bg-[var(--color-bg)]'"

@@ -85,17 +85,20 @@ function setDspNodeEnabled(index: number, enabled: boolean | string | number): v
   updateDspNodes()
 }
 function nodeLabel(id: string): string {
-  return id === 'compressor'
-    ? t('ap.compressor')
-    : id === 'delay'
-      ? t('ap.delay')
-      : id === 'reverb'
-        ? t('ap.reverb')
-        : id === 'chorus'
-          ? t('ap.chorus')
-          : id === 'noise_gate'
-            ? t('ap.noiseGate')
-            : t('ap.phaser')
+  switch (id) {
+    case 'compressor':
+      return t('ap.compressor')
+    case 'delay':
+      return t('ap.delay')
+    case 'reverb':
+      return t('ap.reverb')
+    case 'chorus':
+      return t('ap.chorus')
+    case 'noise_gate':
+      return t('ap.noiseGate')
+    default:
+      return t('ap.phaser')
+  }
 }
 function updateCompressor(): void {
   const config = player.compressorConfig

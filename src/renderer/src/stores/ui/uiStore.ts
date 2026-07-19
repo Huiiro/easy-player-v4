@@ -69,7 +69,15 @@ export const useUIStore = defineStore(
     const musicSourceId = ref(0)
     // ========== 桌面歌词 ==========
     const useDesktopLyrics = ref(false)
-    const desktopLyricsStyles = reactive({})
+    const desktopLyricsStyles = reactive({
+      fontSize: 34,
+      activeColor: '#ffffff',
+      inactiveColor: 'rgba(255, 255, 255, 0.58)',
+      fontBold: true,
+      glow: true,
+      showTranslation: true,
+      autoHideBackground: true
+    })
     // ========== 快捷键 ==========
     const useGlobalShortcutKeys = ref(false)
     const shortcutKeys = reactive({

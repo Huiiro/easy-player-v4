@@ -88,6 +88,7 @@ async function load(): Promise<void> {
   lyrics.value = result.lines
   source.value = result.source
 }
+
 const setLineRef = (el: Element | null, idx: number): void => {
   if (!el) return
   lineRefs.value[idx] = el as HTMLElement
@@ -293,7 +294,7 @@ watch(
   }
 )
 
-watch([() => ui.lyricsFontSize, () => ui.lyricsFontPadding], () => {
+watch([() => ui.lyricsFontSize, () => ui.lyricsFontPadding, () => ui.showLyricsTranslation], () => {
   scheduleSnapToCurrent()
 })
 
