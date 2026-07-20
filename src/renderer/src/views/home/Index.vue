@@ -293,7 +293,7 @@ onMounted(() => void load())
           <li v-for="(song, index) in topPlayed" :key="song.id">
             <button
               class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
-              @click="playRanked(topPlayed, song)"
+              @dblclick="playRanked(topPlayed, song)"
             >
               <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
               <img
@@ -327,7 +327,7 @@ onMounted(() => void load())
           <li v-for="(song, index) in topDuration" :key="song.id">
             <button
               class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
-              @click="playRanked(topDuration, song)"
+              @dblclick="playRanked(topDuration, song)"
             >
               <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
               <img
