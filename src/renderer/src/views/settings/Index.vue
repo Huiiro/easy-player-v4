@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
@@ -10,6 +10,9 @@ import { PlayerBgType } from '@/consts'
 const ui = useUIStore()
 const { locale, t } = useI18n()
 const backgroundInput = ref<HTMLInputElement | null>(null)
+const remoteCacheDirectory = ref('')
+const remoteCacheLimitGb = ref(2)
+const remoteCacheUsed = ref(0)
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
   set: (value) => {
@@ -36,10 +39,10 @@ const playerBackground = computed<PlayerBgType>({
   }
 })
 const fontOptions = computed(() => [
-  { label: '系统默认', value: '' },
-  { label: '系统 UI', value: 'system-ui' },
-  { label: '微软雅黑', value: 'Microsoft YaHei' },
-  { label: '苹方', value: 'PingFang SC' },
+  { label: t('settings.fontSystemDefault'), value: '' },
+  { label: t('settings.fontSystemUi'), value: 'system-ui' },
+  { label: t('settings.fontMicrosoftYahei'), value: 'Microsoft YaHei' },
+  { label: t('settings.fontPingfang'), value: 'PingFang SC' },
   { label: 'Noto Sans SC', value: 'Noto Sans SC' },
   ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
 ])
@@ -84,6 +87,37 @@ async function refreshFonts(): Promise<void> {
 async function openFontDirectory(): Promise<void> {
   await window.api.fonts.openDirectory()
 }
+const formatBytes = (bytes: number): string =>
+  bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
+async function loadRemoteCache(): Promise<void> {
+  const [directory, limit, fallback] = await Promise.all([
+    window.api.database.command('getSetting', { key: 'remote.cache-directory' }),
+    window.api.database.command('getSetting', { key: 'remote.cache-limit-gb' }),
+    window.api.remoteSource.defaultCacheDirectory()
+  ])
+  remoteCacheDirectory.value =
+    directory.success && typeof directory.data === 'string' ? directory.data : fallback.data || ''
+  remoteCacheLimitGb.value = limit.success && typeof limit.data === 'number' ? limit.data : 2
+  const size = await window.api.remoteSource.cacheSize(remoteCacheDirectory.value)
+  remoteCacheUsed.value = size.data || 0
+}
+async function chooseRemoteCacheDirectory(): Promise<void> {
+  const response = await window.api.remoteSource.chooseCacheDirectory()
+  if (!response.success || !response.data) return
+  await window.api.database.command('setSetting', {
+    key: 'remote.cache-directory',
+    value: response.data
+  })
+  await loadRemoteCache()
+}
+async function saveRemoteCacheLimit(): Promise<void> {
+  remoteCacheLimitGb.value = Math.max(0.5, Math.min(100, Number(remoteCacheLimitGb.value) || 2))
+  await window.api.database.command('setSetting', {
+    key: 'remote.cache-limit-gb',
+    value: remoteCacheLimitGb.value
+  })
+}
+onMounted(() => void loadRemoteCache())
 </script>
 
 <template>
@@ -93,36 +127,81 @@ async function openFontDirectory(): Promise<void> {
         <p class="text-xs font-semibold tracking-[0.14em] text-[var(--color-primary)]">
           PREFERENCES
         </p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--color-text)]">设置</h1>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--color-text)]">
+          {{ t('settings.title') }}
+        </h1>
         <p class="mt-2 text-sm text-[var(--color-text-l)]">
-          调整界面外观与主题，让播放器更贴合你的使用环境。
+          {{ t('settings.description') }}
         </p>
       </div>
 
       <section class="settings-section">
         <div class="section-heading">
           <div>
-            <h2>字体</h2>
-            <p>字体会全局应用；将字体文件直接放入 player_data/ttf 后可刷新读取。</p>
+            <h2>{{ t('remote.cache') }}</h2>
+            <p>{{ t('remote.cacheDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('remote.cacheDirectory') }}</h3>
+              <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input :value="remoteCacheDirectory" readonly class="input-base h-9 w-64" /><button
+                class="secondary-button"
+                type="button"
+                @click="chooseRemoteCacheDirectory"
+              >
+                {{ t('remote.chooseDirectory') }}
+              </button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('remote.cacheLimit') }}</h3>
+              <p>{{ t('remote.cacheDescription') }}</p>
+            </div>
+            <input
+              v-model.number="remoteCacheLimitGb"
+              class="input-base h-9 w-24"
+              type="number"
+              min="0.5"
+              max="100"
+              step="0.5"
+              @change="saveRemoteCacheLimit"
+            />
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.fonts') }}</h2>
+            <p>{{ t('settings.fontsDescription') }}</p>
           </div>
         </div>
         <div class="settings-card font-settings-card">
           <div class="setting-row">
             <div>
-              <h3>界面字体</h3>
-              <p>选择系统字体或已导入的自定义字体。</p>
+              <h3>{{ t('settings.interfaceFont') }}</h3>
+              <p>{{ t('settings.interfaceFontDescription') }}</p>
             </div>
             <div class="flex items-center gap-2">
               <BaseSelect
                 v-model="ui.customFontFamily"
                 :options="fontOptions"
-                placeholder="系统默认"
+                :placeholder="t('settings.fontSystemDefault')"
                 size="sm"
                 class="w-52"
               />
-              <button class="secondary-button" type="button" @click="refreshFonts">刷新字体</button>
+              <button class="secondary-button" type="button" @click="refreshFonts">
+                {{ t('settings.refreshFonts') }}
+              </button>
               <button class="secondary-button" type="button" @click="openFontDirectory">
-                打开字体目录
+                {{ t('settings.openFontDirectory') }}
               </button>
             </div>
           </div>
@@ -209,18 +288,22 @@ async function openFontDirectory(): Promise<void> {
       <section class="settings-section">
         <div class="section-heading">
           <div>
-            <h2>语言</h2>
-            <p>选择播放器界面使用的显示语言。</p>
+            <h2>{{ t('settings.language') }}</h2>
+            <p>{{ t('settings.languageDescription') }}</p>
           </div>
         </div>
 
         <div class="settings-card">
           <div class="setting-row">
             <div>
-              <h3>界面语言</h3>
-              <p>切换后立即应用到当前播放器会话。</p>
+              <h3>{{ t('settings.interfaceLanguage') }}</h3>
+              <p>{{ t('settings.interfaceLanguageDescription') }}</p>
             </div>
-            <div class="language-options" role="radiogroup" aria-label="界面语言">
+            <div
+              class="language-options"
+              role="radiogroup"
+              :aria-label="t('settings.interfaceLanguage')"
+            >
               <button
                 type="button"
                 class="language-option"
@@ -229,7 +312,7 @@ async function openFontDirectory(): Promise<void> {
                 role="radio"
                 @click="language = 'zh'"
               >
-                简体中文
+                {{ t('settings.languageChinese') }}
               </button>
               <button
                 type="button"
@@ -356,10 +439,12 @@ async function openFontDirectory(): Promise<void> {
       <section class="settings-section">
         <div class="section-heading">
           <div>
-            <h2>主题设置</h2>
-            <p>选择明暗方案和界面的强调色。</p>
+            <h2>{{ t('settings.theme') }}</h2>
+            <p>{{ t('settings.themeDescription') }}</p>
           </div>
-          <button class="reset-button" type="button" @click="ui.resetTheme">恢复默认</button>
+          <button class="reset-button" type="button" @click="ui.resetTheme">
+            {{ t('settings.restoreDefault') }}
+          </button>
         </div>
 
         <div class="settings-card">

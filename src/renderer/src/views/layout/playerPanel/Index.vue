@@ -7,8 +7,8 @@ import { useI18n } from 'vue-i18n'
 import { PlayerBgType } from '@/consts'
 import { PlayMode } from '@/consts'
 import PlayerLyrics from '@/components/lyrics/PlayerLyrics.vue'
+import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import BaseDrawer from '@/components/ui/BaseDrawer.vue'
-import BaseDialog from '@/components/ui/BaseDialog.vue'
 import PlayQueue from '@/components/player/PlayQueue.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 
@@ -30,13 +30,6 @@ const showSpectrum = ref(false)
 const showQueue = ref(false)
 const showLyricsManager = ref(false)
 const lyricReloadToken = ref(0)
-const lyricSearchLoading = ref(false)
-const lyricSearchError = ref('')
-const lyricCandidates = ref<import('@/services/lyrics').NetworkLyricCandidate[]>([])
-const selectedLyricCandidate = ref(0)
-const lyricDraft = ref('')
-const lyricTranslationDraft = ref('')
-const lyricSearchQuery = ref({ title: '', artist: '', album: '' })
 const progressStyle = ref<'thin' | 'thick'>('thin')
 const playModeIcon = computed(
   () => ['control-order', 'control-loop', 'control-single', 'control-shuffle'][player.playMode]
@@ -47,13 +40,6 @@ const playModeLabel = computed(() =>
 const lyricsStyleLabel = computed(() =>
   t(`playerPanel.lyricEffect${ui.lyricsStyle[0].toUpperCase()}${ui.lyricsStyle.slice(1)}`)
 )
-const lyricSources = computed(() => [
-  { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
-  { value: 'embedded', label: t('lyrics.source.embedded') },
-  { value: 'database', label: t('lyrics.source.database') },
-  { value: 'local', label: t('lyrics.source.local') },
-  { value: 'network', label: t('lyrics.source.network') }
-])
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
@@ -226,81 +212,6 @@ function changeLyricPadding(event: WheelEvent): void {
     Math.max(2, Math.min(80, ui.lyricsFontPadding + (event.deltaY < 0 ? 2 : -2)))
   )
 }
-function getLyricSearchQuery(): { title: string; artist: string; album: string } {
-  return {
-    title: player.currentQueueSong?.title || player.trackInfo?.metadata?.title || '',
-    artist: player.currentQueueSong?.artist || player.trackInfo?.metadata?.artist || '',
-    album: player.currentQueueSong?.album || player.trackInfo?.metadata?.album || ''
-  }
-}
-async function loadLyricDraft(source = ui.lyricSourceMode): Promise<void> {
-  const song = player.currentQueueSong
-  lyricDraft.value = ''
-  lyricTranslationDraft.value = ''
-  if (!song || source === 'auto' || source === 'network') return
-  if (source === 'database') {
-    const response = await window.api.database.command('getSong', { id: song.id })
-    const data = response.success
-      ? (response.data as { lrc?: string | null; translation?: string | null })
-      : null
-    lyricDraft.value = data?.lrc || ''
-    lyricTranslationDraft.value = data?.translation || ''
-    return
-  }
-  const response = await window.api.lyrics.loadSource(song.audio, source)
-  lyricDraft.value = response.success ? response.data || '' : ''
-}
-async function openLyricsManager(): Promise<void> {
-  lyricSearchQuery.value = getLyricSearchQuery()
-  lyricCandidates.value = []
-  lyricSearchError.value = ''
-  showLyricsManager.value = true
-  await loadLyricDraft()
-}
-async function setLyricSource(
-  source: 'auto' | import('@/services/lyrics').LyricSource
-): Promise<void> {
-  ui.lyricSourceMode = source
-  lyricReloadToken.value += 1
-  await loadLyricDraft(source)
-}
-function selectLyricCandidate(index: number): void {
-  selectedLyricCandidate.value = index
-  const candidate = lyricCandidates.value[index]
-  if (!candidate) return
-  lyricDraft.value = candidate.lrc
-  lyricTranslationDraft.value = candidate.translation || ''
-}
-async function searchNetworkLyrics(): Promise<void> {
-  if (!lyricSearchQuery.value.title.trim()) return
-  lyricSearchLoading.value = true
-  lyricSearchError.value = ''
-  lyricCandidates.value = []
-  try {
-    const response = await window.api.lyrics.searchNetwork({ ...lyricSearchQuery.value })
-    if (!response.success) throw new Error(response.error)
-    lyricCandidates.value = response.data || []
-    if (lyricCandidates.value.length) selectLyricCandidate(0)
-    else lyricSearchError.value = t('playerPanel.lyricSearchEmpty')
-  } catch (error) {
-    lyricSearchError.value =
-      error instanceof Error ? error.message : t('playerPanel.lyricSearchFailed')
-  } finally {
-    lyricSearchLoading.value = false
-  }
-}
-async function saveLyrics(): Promise<void> {
-  const song = player.currentQueueSong
-  if (!song || !lyricDraft.value.trim()) return
-  await window.api.database.command('updateSongLyrics', {
-    id: song.id,
-    lrc: lyricDraft.value,
-    translation: lyricTranslationDraft.value || undefined
-  })
-  ui.lyricSourceMode = 'database'
-  lyricReloadToken.value += 1
-  showLyricsManager.value = false
-}
 function averageColor(
   data: Uint8ClampedArray,
   startX: number,
@@ -347,7 +258,7 @@ function extractCoverColors(event: Event): void {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l">
+  <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
     <!-- bg -->
     <Transition name="panel-background">
       <img
@@ -402,16 +313,16 @@ function extractCoverColors(event: Event): void {
     >
       <!-- header -->
       <header
-        class="flex h-16 items-center justify-between px-8 text-xs font-semibold tracking-[0.08em] max-[760px]:px-4"
+        class="flex h-16 items-center justify-between px-5 text-xs font-semibold tracking-[0.08em] max-[760px]:px-4"
       >
-        <span>{{ t('playerPanel.nowPlaying') }}</span>
+        <span />
         <button
           class="grid size-9 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105"
           :title="t('playerPanel.close')"
           :aria-label="t('playerPanel.close')"
           @click="close"
         >
-          <SvgIcon name="common-close" class-name="size-5" />
+          <SvgIcon name="common-close" class-name="size-5 text-white" />
         </button>
       </header>
 
@@ -450,7 +361,7 @@ function extractCoverColors(event: Event): void {
             </div>
           </div>
           <!-- title && artist -->
-          <div class="min-w-0 text-center">
+          <div class="min-w-0 text-center cursor-pointer">
             <h2
               class="max-w-[min(440px,72vw)] truncate text-2xl text-white font-bold"
               :title="trackTitle"
@@ -462,7 +373,7 @@ function extractCoverColors(event: Event): void {
           <!-- metadata -->
           <dl
             v-if="audioDetails.length"
-            class="grid w-[min(440px,100%)] grid-cols-5 overflow-hidden rounded-xl bg-white/5 max-[760px]:grid-cols-3"
+            class="grid w-[min(440px,100%)] grid-cols-5 overflow-hidden rounded-xl bg-white/5 max-[760px]:grid-cols-3 cursor-default"
           >
             <div
               v-for="[label, value] in audioDetails"
@@ -611,7 +522,7 @@ function extractCoverColors(event: Event): void {
               class="panel-tool"
               :title="t('playerPanel.lyricManage')"
               :aria-label="t('playerPanel.lyricManage')"
-              @click="openLyricsManager"
+              @click="showLyricsManager = true"
             >
               <span class="w-[16px] h-[16px] flex items-center justify-center">
                 <SvgIcon name="common-lyrics2" class-name="w-[16px] h-[16px]" />
@@ -643,9 +554,9 @@ function extractCoverColors(event: Event): void {
               :aria-label="t('playerPanel.progress')"
               @input="seek"
             />
-            <div class="flex justify-between text-xs tabular-nums text-text-l">
-              <span>{{ player.positionFormatted }}</span
-              ><span>{{ player.durationFormatted }}</span>
+            <div class="flex justify-between text-xs tabular-nums text-white/50">
+              <span>{{ player.positionFormatted }}</span>
+              <span>{{ player.durationFormatted }}</span>
             </div>
           </div>
           <!-- play control -->
@@ -712,114 +623,7 @@ function extractCoverColors(event: Event): void {
       </div>
       <!-- play queue-->
       <BaseDrawer v-model="showQueue" direction="right" width="26rem"><PlayQueue /></BaseDrawer>
-      <!-- lyrics manager -->
-      <BaseDialog
-        v-model="showLyricsManager"
-        :title="t('playerPanel.lyricManage')"
-        width="max-w-4xl"
-      >
-        <div class="grid gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
-          <div class="space-y-4">
-            <div>
-              <p class="mb-2 text-xs text-text-l">{{ t('playerPanel.lyricSource') }}</p>
-              <div class="grid gap-1">
-                <button
-                  v-for="source in lyricSources"
-                  :key="source.value"
-                  class="rounded-lg px-3 py-2 text-left text-sm transition"
-                  :class="
-                    ui.lyricSourceMode === source.value
-                      ? 'bg-primary/25 text-primary'
-                      : 'bg-text/5 hover:bg-text/10'
-                  "
-                  @click="
-                    setLyricSource(source.value as 'auto' | import('@/services/lyrics').LyricSource)
-                  "
-                >
-                  {{ source.label }}
-                </button>
-              </div>
-            </div>
-            <div class="space-y-2 border-t border-border pt-4">
-              <p class="text-xs text-text-l">{{ t('playerPanel.lyricSearch') }}</p>
-              <input
-                v-model="lyricSearchQuery.title"
-                class="lyric-input"
-                :placeholder="t('playerPanel.lyricTitle')"
-              />
-              <input
-                v-model="lyricSearchQuery.artist"
-                class="lyric-input"
-                :placeholder="t('playerPanel.lyricArtist')"
-              />
-              <input
-                v-model="lyricSearchQuery.album"
-                class="lyric-input"
-                :placeholder="t('playerPanel.lyricAlbum')"
-              />
-              <button
-                class="w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
-                :disabled="lyricSearchLoading || !lyricSearchQuery.title.trim()"
-                @click="searchNetworkLyrics"
-              >
-                {{
-                  lyricSearchLoading
-                    ? t('playerPanel.lyricSearching')
-                    : t('playerPanel.lyricSearch')
-                }}
-              </button>
-            </div>
-          </div>
-          <div class="min-w-0 space-y-3">
-            <div v-if="lyricCandidates.length" class="flex flex-wrap gap-2">
-              <button
-                v-for="(candidate, index) in lyricCandidates"
-                :key="candidate.id"
-                class="max-w-full rounded-lg px-2.5 py-1.5 text-left text-xs transition"
-                :class="
-                  selectedLyricCandidate === index
-                    ? 'bg-primary/25 text-primary'
-                    : 'bg-text/5 hover:bg-text/10'
-                "
-                @click="selectLyricCandidate(index)"
-              >
-                {{
-                  t(
-                    candidate.provider === 'netease'
-                      ? 'playerPanel.lyricProviderNetease'
-                      : 'playerPanel.lyricProviderKugou'
-                  )
-                }}
-                · {{ candidate.title }} — {{ candidate.artist }}
-              </button>
-            </div>
-            <p v-if="lyricSearchError" class="text-sm text-red-400">{{ lyricSearchError }}</p>
-            <textarea
-              v-model="lyricDraft"
-              class="lyric-editor"
-              :placeholder="t('playerPanel.lyricEditorPlaceholder')"
-            />
-            <textarea
-              v-model="lyricTranslationDraft"
-              class="lyric-editor lyric-editor--translation"
-              :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
-            />
-          </div>
-        </div>
-        <template #footer>
-          <button class="secondary-button" type="button" @click="showLyricsManager = false">
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            class="rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
-            type="button"
-            :disabled="!lyricDraft.trim()"
-            @click="saveLyrics"
-          >
-            {{ t('common.save') }}
-          </button>
-        </template>
-      </BaseDialog>
+      <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
       <!-- play spectrum-->
       <div
         v-if="showSpectrum"
@@ -851,11 +655,23 @@ function extractCoverColors(event: Event): void {
   border-radius: 0.45rem;
   color: rgb(255 255 255 / 0.72);
   background: rgb(255 255 255 / 0.07);
+  transition:
+    transform 150ms ease,
+    background-color 150ms ease,
+    color 150ms ease,
+    filter 150ms ease;
 }
 .panel-tool:hover,
 .panel-tool.active {
   color: white;
   background: color-mix(in srgb, var(--color-primary) 38%, transparent);
+}
+.panel-tool:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+.panel-tool:active {
+  transform: scale(0.96);
 }
 .panel-tool select {
   background: transparent;

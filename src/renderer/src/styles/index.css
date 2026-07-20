@@ -268,6 +268,10 @@ body {
   @apply transition-all duration-200 ease-out hover:scale-102 active:scale-100 hover:text-primary;
 }
 
+.btn-hover-base {
+  @apply transition-all duration-200 ease-out hover:scale-102 active:scale-100;
+}
+
 .dsp-input {
   @apply mt-1 w-full rounded border border-neutral-700 px-2 py-1 text-xs outline-none focus:border-blue-500;
 }

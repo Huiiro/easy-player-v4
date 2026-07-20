@@ -71,12 +71,12 @@ function createPlaylist(): void {
 async function submitPlaylist(): Promise<void> {
   const name = playlistName.value.trim()
   if (!name) {
-    playlistError.value = '请输入歌单名称'
+    playlistError.value = t('sidebar.playlistNameRequired')
     warning(playlistError.value)
     return
   }
   if (name.length > 64) {
-    playlistError.value = '歌单名称不能超过 64 个字符'
+    playlistError.value = t('sidebar.playlistNameTooLong')
     warning(playlistError.value)
     return
   }
@@ -84,14 +84,14 @@ async function submitPlaylist(): Promise<void> {
   try {
     const response = await window.api.database.command('createPlaylist', { name })
     if (!response.success) {
-      playlistError.value = response.error || '创建失败'
+      playlistError.value = response.error || t('sidebar.playlistCreateFailed')
       showError(playlistError.value)
       return
     }
     playlistDialogOpen.value = false
     await loadPlaylists()
     eventBus.emit('playlistsChanged')
-    success(`歌单“${name}”已创建`)
+    success(t('sidebar.playlistCreated', { name }))
   } finally {
     creatingPlaylist.value = false
   }
@@ -116,9 +116,9 @@ async function dropPlaylist(targetId: number): Promise<void> {
   })
   if (response.success) {
     eventBus.emit('playlistsChanged')
-    success('歌单顺序已更新')
+    success(t('sidebar.playlistReordered'))
   } else {
-    showError(response.error || '歌单排序保存失败')
+    showError(response.error || t('sidebar.playlistReorderFailed'))
     await loadPlaylists()
   }
 }
@@ -316,13 +316,15 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
         class="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 shadow-2xl"
         @submit.prevent="submitPlaylist"
       >
-        <h2 class="text-lg font-semibold text-[var(--color-text)]">新建歌单</h2>
+        <h2 class="text-lg font-semibold text-[var(--color-text)]">
+          {{ t('sidebar.createPlaylist') }}
+        </h2>
         <input
           v-model="playlistName"
           autofocus
           maxlength="64"
           class="input-base mt-4 h-10 w-full"
-          placeholder="歌单名称"
+          :placeholder="t('playlist.name')"
         />
         <p class="mt-2 min-h-5 text-xs text-red-400">{{ playlistError }}</p>
         <div class="mt-3 flex justify-end gap-2">
@@ -331,13 +333,13 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
             class="btn-hover px-3 py-1.5 text-sm"
             @click="playlistDialogOpen = false"
           >
-            取消</button
+            {{ t('common.cancel') }}</button
           ><button
             type="submit"
             class="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white disabled:opacity-50"
             :disabled="creatingPlaylist"
           >
-            创建
+            {{ t('sidebar.createPlaylist') }}
           </button>
         </div>
       </form>

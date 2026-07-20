@@ -485,8 +485,10 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
         @pointermove="handleProgressPointerMove"
         @pointerup="handleProgressPointerUp"
         @pointercancel="
-          isSeeking = false
-          seekPreviewMs = null
+          () => {
+            isSeeking = false
+            seekPreviewMs = null
+          }
         "
       >
         <div class="progress-fill" :style="{ width: displayProgress * 100 + '%' }"></div>

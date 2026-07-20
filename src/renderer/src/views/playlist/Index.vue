@@ -60,9 +60,9 @@ async function selectCustomCover(event: Event): Promise<void> {
   if (response.success) {
     await load()
     eventBus.emit('playlistsChanged')
-    success('自定义封面已设置')
+    success(t('playlist.coverSet'))
   } else {
-    showError(response.error || '设置封面失败')
+    showError(response.error || t('playlist.coverSetFailed'))
   }
   ;(event.target as HTMLInputElement).value = ''
 }
@@ -74,9 +74,9 @@ async function resetCover(): Promise<void> {
   if (response.success) {
     await load()
     eventBus.emit('playlistsChanged')
-    success('已恢复自动封面')
+    success(t('playlist.coverReset'))
   } else {
-    showError(response.error || '恢复自动封面失败')
+    showError(response.error || t('playlist.coverResetFailed'))
   }
 }
 function formatCreatedAt(value: string): string {
@@ -157,25 +157,24 @@ watch(playlistId, () => void load())
 </script>
 
 <template>
-  <section v-if="loading" class="p-8 text-sm text-[var(--color-text-l)]">
+  <section v-if="loading" class="p-8 text-sm text-text-l">
     {{ t('playlist.loading') }}
   </section>
-  <section v-else-if="!playlist" class="p-8 text-sm text-[var(--color-text-l)]">
+  <section v-else-if="!playlist" class="p-8 text-sm text-text-l">
     {{ t('playlist.notFound') }}
   </section>
-  <section v-else class="flex h-full min-h-0 flex-col text-[var(--color-text)]">
-    <header class="flex shrink-0 items-end gap-6 px-8 py-7">
+  <section v-else class="flex h-full min-h-0 flex-col text-text">
+    <header class="flex shrink-0 items-end gap-6 px-6 py-6">
       <button
-        class="group relative grid size-36 shrink-0 place-items-center overflow-hidden rounded-2xl bg-[var(--color-bg-l)] shadow-lg"
+        class="group relative grid size-40 shrink-0 place-items-center overflow-hidden rounded-2xl bg-bg-l shadow-lg"
         :title="t('playlist.setCover')"
         @click="coverInput?.click()"
       >
         <img v-if="coverUrl" :src="coverUrl" class="size-full object-cover" :alt="playlist.name" />
-        <SvgIcon v-else name="common-music" class-name="size-12 text-[var(--color-text-l)]" />
-        <span
-          class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-          >{{ t('playlist.changeCover') }}</span
-        >
+        <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
+        <span class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+          {{ t('playlist.changeCover') }}
+        </span>
       </button>
       <input
         ref="coverInput"
@@ -185,7 +184,7 @@ watch(playlistId, () => void load())
         @change="selectCustomCover"
       />
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-semibold tracking-[.12em] text-[var(--color-text-l)]">
+        <p class="text-xs font-semibold tracking-[.12em] text-text-l ml-1">
           {{ t('playlist.label') }}
         </p>
         <div class="mt-2 flex min-w-0 items-center gap-2">
@@ -201,14 +200,14 @@ watch(playlistId, () => void load())
           />
           <h1 v-else class="truncate text-3xl font-bold">{{ playlist.name }}</h1>
           <button
-            class="btn-hover grid size-7 shrink-0 place-items-center"
+            class="btn-hover grid size-4 shrink-0 place-items-center"
             :title="t('playlist.editName')"
             @click="startEditing('name')"
           >
             <SvgIcon name="common-edit" class-name="size-3.5" />
           </button>
         </div>
-        <div class="mt-2 flex min-w-0 items-start gap-2 text-sm text-[var(--color-text-l)]">
+        <div class="mt-2 flex min-w-0 items-start gap-2 text-sm text-text-l">
           <textarea
             v-if="editingField === 'description'"
             v-model="editDescription"
@@ -223,26 +222,26 @@ watch(playlistId, () => void load())
             {{ playlist.description || t('playlist.descriptionPlaceholder') }}
           </p>
           <button
-            class="btn-hover grid size-7 shrink-0 place-items-center"
+            class="btn-hover grid size-5 shrink-0 place-items-center"
             :title="t('playlist.editDescription')"
             @click="startEditing('description')"
           >
             <SvgIcon name="common-edit" class-name="size-3.5" />
           </button>
         </div>
-        <p class="mt-2 text-xs text-[var(--color-text-l)]">
+        <p class="mt-2 text-xs text-text-l">
           {{ t('playlist.createdAt', { date: formatCreatedAt(playlist.createdAt) }) }}
         </p>
         <div class="mt-3 flex flex-wrap items-center gap-2">
           <button
-            class="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white disabled:opacity-50"
+            class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:text-white disabled:opacity-50"
             :disabled="playing"
             @click="playPlaylist"
           >
             {{ t('playlist.play') }}
           </button>
           <button
-            class="btn-hover rounded-lg px-3 py-1.5 text-sm text-red-400"
+            class="btn-hover-base rounded-lg px-3 py-1.5 text-sm text-red-400"
             @click="deleteDialogOpen = true"
           >
             {{ t('playlist.delete') }}
@@ -256,14 +255,15 @@ watch(playlistId, () => void load())
           </button>
         </div>
       </div>
-      <div class="mb-1 flex shrink-0 items-center gap-2">
-        <button class="btn-hover text-sm" @click="router.back()">{{ t('playlist.back') }}</button>
+      <div class="mb-1 flex shrink-0 items-center gap-1 btn-hover">
+        <SvgIcon name="common-back" class-name="size-3.5" />
+        <button class="text-sm" @click="router.back()">{{ t('playlist.back') }}</button>
       </div>
     </header>
     <SongListView class="min-h-0 flex-1" :source="{ type: 'playlist', id: playlist.id }" />
   </section>
   <BaseDialog v-model="deleteDialogOpen" :title="t('playlist.delete')" width="max-w-sm">
-    <p class="text-sm text-[var(--color-text-l)]">
+    <p class="text-sm text-text-l">
       {{ t('playlist.confirmDelete', { name: playlist?.name ?? '' }) }}
     </p>
     <template #footer>
