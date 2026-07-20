@@ -381,7 +381,7 @@ function extractCoverColors(event: Event): void {
     <div
       class="pointer-events-none absolute inset-0 panel-ambient"
       :class="[
-        ui.playerBgType === PlayerBgType.AMBIENT ? 'opacity-100' : 'opacity-58',
+        (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT ? 'opacity-100' : 'opacity-58',
         shouldAnimate ? 'panel-ambient--animated' : ''
       ]"
       :style="glowStyle"
@@ -452,25 +452,25 @@ function extractCoverColors(event: Event): void {
           <!-- title && artist -->
           <div class="min-w-0 text-center">
             <h2
-              class="max-w-[min(440px,72vw)] truncate text-xl font-bold text-text"
+              class="max-w-[min(440px,72vw)] truncate text-2xl text-white font-bold"
               :title="trackTitle"
             >
               {{ trackTitle }}
             </h2>
-            <p class="mt-1 truncate text-sm text-text-l">{{ trackArtist }}</p>
+            <p class="mt-1 truncate text-white/50">{{ trackArtist }}</p>
           </div>
           <!-- metadata -->
           <dl
             v-if="audioDetails.length"
-            class="grid w-[min(440px,100%)] grid-cols-5 overflow-hidden rounded-xl bg-text/5 max-[760px]:grid-cols-3"
+            class="grid w-[min(440px,100%)] grid-cols-5 overflow-hidden rounded-xl bg-white/5 max-[760px]:grid-cols-3"
           >
             <div
               v-for="[label, value] in audioDetails"
               :key="label"
               class="min-w-0 px-1.5 py-2 text-center"
             >
-              <dt class="truncate text-[0.65rem] text-text-l">{{ label }}</dt>
-              <dd class="mt-1 truncate text-xs font-semibold text-text">{{ value }}</dd>
+              <dt class="truncate text-[0.65rem] text-white/50">{{ label }}</dt>
+              <dd class="mt-1 truncate text-xs font-semibold text-white">{{ value }}</dd>
             </div>
           </dl>
           <!-- args control -->
@@ -651,11 +651,15 @@ function extractCoverColors(event: Event): void {
           <!-- play control -->
           <div class="flex items-center gap-6">
             <!-- play mode -->
-            <button class="grid size-6 place-items-center rounded-full text-text transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35" :title="playModeLabel" @click="cyclePlayMode">
+            <button
+              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              :title="playModeLabel"
+              @click="cyclePlayMode"
+            >
               <SvgIcon :name="playModeIcon" class-name="size-6" />
             </button>
             <button
-              class="grid size-6 place-items-center rounded-full text-text transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :disabled="!player.queue.length"
               :title="t('playerPanel.previous')"
               @click="playPrevious"
@@ -671,7 +675,7 @@ function extractCoverColors(event: Event): void {
               <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-8" />
             </button>
             <button
-              class="grid size-6 place-items-center rounded-full text-text transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :disabled="!player.queue.length"
               :title="t('playerPanel.next')"
               @click="playNext"
@@ -680,7 +684,7 @@ function extractCoverColors(event: Event): void {
             </button>
             <!-- queue -->
             <button
-              class="grid size-6 place-items-center rounded-full text-text transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :title="t('queue.title')"
               :class="showQueue && 'active'"
               @click="showQueue = !showQueue"
@@ -708,6 +712,7 @@ function extractCoverColors(event: Event): void {
       </div>
       <!-- play queue-->
       <BaseDrawer v-model="showQueue" direction="right" width="26rem"><PlayQueue /></BaseDrawer>
+      <!-- lyrics manager -->
       <BaseDialog
         v-model="showLyricsManager"
         :title="t('playerPanel.lyricManage')"
@@ -1012,9 +1017,9 @@ function extractCoverColors(event: Event): void {
 @keyframes player-panel-ambient-drift {
   from {
     background-position:
-      0% 0%,
+      0 0,
       100% 100%,
-      70% 0%;
+      70% 0;
   }
   to {
     background-position:

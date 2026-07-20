@@ -6,6 +6,7 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { useRoute } from 'vue-router'
 import router from '@/router'
 import { useI18n } from 'vue-i18n'
+import { VERSION } from '@/consts'
 
 const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
 const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
@@ -90,7 +91,8 @@ async function uploadLocalFiles(): Promise<void> {
         class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
         >EY</span
       >
-      <span class="text-sm font-semibold tracking-tight">{{ ui.logoText }}</span>
+      <span class="text-[16px] font-semibold tracking-tight">{{ ui.logoText }}</span>
+      <span class="text-[9px] mt-2">V {{ VERSION }}</span>
     </div>
     <button
       v-if="!ui.useCardView"

@@ -114,6 +114,7 @@ function openPlayerPanel(): void {
 
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
+  if (collapsed.value) closeMoreMenu()
 }
 
 function openAudioControls(): void {
@@ -182,7 +183,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div
-    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 max-[700px]:px-3 max-[700px]:pb-3"
+    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 max-[700px]:px-3 max-[700px]:pb-3 select-none"
   >
     <section
       class="pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border border-text/10 bg-bg/75 px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
@@ -320,13 +321,52 @@ onBeforeUnmount(() => {
         >
           <SvgIcon name="common-lyrics2" class-name="size-5" />
         </button>
-        <button
-          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-          :title="t('footer.more')"
-          @click.stop="toggleMoreMenu"
-        >
-          <SvgIcon name="menu-more-vertical" class-name="size-5" />
-        </button>
+        <div class="relative" @click.stop>
+          <button
+            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            :title="t('footer.more')"
+            @click="toggleMoreMenu"
+          >
+            <SvgIcon name="menu-more-vertical" class-name="size-5" />
+          </button>
+          <div
+            v-if="moreVisible && currentSong"
+            class="absolute bottom-full right-0 z-[9999] mb-4 w-48 rounded-xl border border-border bg-bg p-1 shadow-xl"
+          >
+            <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
+              <SvgIcon name="control-playlist" class-name="size-4" />
+              {{ t('songList.addToPlaylist') }}
+            </button>
+            <button class="menu-item flex items-center gap-2" @click="openTags">
+              <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
+            </button>
+            <button
+              class="menu-item flex items-center gap-2"
+              :disabled="!currentSong.artist"
+              @click="openArtist"
+            >
+              <SvgIcon name="common-user" class-name="size-4" />
+              {{ t('footer.goArtist') }}
+            </button>
+            <button
+              class="menu-item flex items-center gap-2"
+              :disabled="!currentSong.album"
+              @click="openAlbum"
+            >
+              <SvgIcon name="common-album" class-name="size-4" />
+              {{ t('footer.goAlbum') }}
+            </button>
+            <button class="menu-item flex items-center gap-2" @click="openDetails">
+              <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
+            </button>
+            <button class="menu-item flex items-center gap-2" @click="openFolder">
+              <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
+            </button>
+            <button class="menu-item flex items-center gap-2" @click="locateSong">
+              <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <button
@@ -335,7 +375,10 @@ onBeforeUnmount(() => {
         :aria-label="collapsed ? t('footer.expand') : t('footer.collapse')"
         @click.stop="toggleCollapsed"
       >
-        <SvgIcon :name="collapsed ? 'arrow-arrow-up' : 'arrow-arrow-down'" class-name="size-4" />
+        <SvgIcon
+          :name="collapsed ? 'arrow-arrow-right-light' : 'arrow-arrow-left-light'"
+          class-name="size-4"
+        />
       </button>
     </section>
     <BaseDrawer
@@ -355,46 +398,6 @@ onBeforeUnmount(() => {
     >
       <AudioControlPanel class="h-[72vh]" />
     </BaseDialog>
-    <Teleport to="body">
-      <div
-        v-if="moreVisible && currentSong"
-        class="fixed bottom-24 right-8 z-[9999] w-44 rounded-xl border border-border bg-bg p-1 shadow-xl"
-        @click.stop
-      >
-        <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
-          <SvgIcon name="control-playlist" class-name="size-4" />
-          {{ t('songList.addToPlaylist') }}
-        </button>
-        <button class="menu-item flex items-center gap-2" @click="openTags">
-          <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
-        </button>
-        <button
-          class="menu-item flex items-center gap-2"
-          :disabled="!currentSong.artist"
-          @click="openArtist"
-        >
-          <SvgIcon name="common-user" class-name="size-4" />
-          {{ t('footer.goArtist') }}
-        </button>
-        <button
-          class="menu-item flex items-center gap-2"
-          :disabled="!currentSong.album"
-          @click="openAlbum"
-        >
-          <SvgIcon name="common-album" class-name="size-4" />
-          {{ t('footer.goAlbum') }}
-        </button>
-        <button class="menu-item flex items-center gap-2" @click="openDetails">
-          <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
-        </button>
-        <button class="menu-item flex items-center gap-2" @click="openFolder">
-          <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
-        </button>
-        <button class="menu-item flex items-center gap-2" @click="locateSong">
-          <SvgIcon name="common-music" class-name="size-4" />{{ t('footer.locateSong') }}
-        </button>
-      </div>
-    </Teleport>
     <SongDetailsDialog v-model="detailsVisible" :song-id="currentSong?.id ?? null" />
     <SongTagDialog v-model="tagVisible" :song-id="currentSong?.id ?? null" />
     <AddSongsToPlaylistDialog

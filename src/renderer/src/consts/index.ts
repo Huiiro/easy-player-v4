@@ -1,3 +1,4 @@
+declare const __APP_VERSION__: string
 export enum PlayMode {
   Sequential = 0,
   List = 1,
@@ -25,3 +26,4 @@ export enum TagStyle {
   Simple = 2,
   Full = 3
 }
+export const VERSION = __APP_VERSION__

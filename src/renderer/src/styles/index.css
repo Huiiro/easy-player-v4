@@ -277,5 +277,5 @@ body {
 }
 
 .menu-item {
-  @apply block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)] disabled:cursor-default disabled:opacity-40;
+  @apply flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)] disabled:cursor-default disabled:opacity-40;
 }

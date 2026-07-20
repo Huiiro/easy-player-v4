@@ -3,6 +3,7 @@ import { resolve } from 'path'
 import { defineConfig } from 'electron-vite'
 import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 import tailwindcss from '@tailwindcss/vite'
+import pkg from './package.json'
 import path from 'path'
 
 export default defineConfig({
@@ -19,6 +20,9 @@ export default defineConfig({
   },
   preload: {},
   renderer: {
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version)
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src'),
