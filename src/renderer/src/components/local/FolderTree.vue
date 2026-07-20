@@ -32,10 +32,10 @@ function toggle(id: number): void {
   <ul class="space-y-0.5">
     <li v-for="node in nodes" :key="node.id">
       <div
-        class="group flex min-w-0 items-center rounded-md pr-2 hover:bg-[var(--color-hover)]"
+        class="group flex min-w-0 items-center rounded-md pr-2 hover:bg-hover"
         :class="
           selectedId === node.id
-            ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]'
+            ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
             : ''
         "
         :style="{ paddingLeft: `${level * 14 + 4}px` }"
@@ -58,7 +58,7 @@ function toggle(id: number): void {
         >
           <SvgIcon name="menu-folder" class-name="size-4 shrink-0" />
           <span class="truncate">{{ node.name }}</span>
-          <span class="ml-auto text-xs text-[var(--color-text-l)]">{{ node.songCount }}</span>
+          <span class="ml-auto text-xs text-text-l">{{ node.songCount }}</span>
         </button>
       </div>
       <FolderTree

@@ -43,4 +43,6 @@ watch(
 onMounted(() => (raf = requestAnimationFrame(render)))
 onBeforeUnmount(() => cancelAnimationFrame(raf))
 </script>
-<template><canvas ref="canvas" class="block h-16 w-full" /></template>
+<template>
+  <canvas ref="canvas" class="block h-16 w-full" />
+</template>

@@ -869,18 +869,20 @@ function refreshOutputDevices(): void {
             </button>
           </div>
           <div v-if="node.enabled" class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-            <template v-if="node.id === 'compressor'"
-              ><label
-                >{{ t('ap.threshold') }}
+            <template v-if="node.id === 'compressor'">
+              <label>
+                {{ t('ap.threshold') }}
                 <input
                   v-model.number="player.compressorConfig.thresholdDb"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="-60"
                   max="0"
-                  @change="updateCompressor" /></label
-              ><label
-                >{{ t('ap.ratio') }}
+                  @change="updateCompressor"
+                />
+              </label>
+              <label>
+                {{ t('ap.ratio') }}
                 <input
                   v-model.number="player.compressorConfig.ratio"
                   class="input-base h-6 mt-1"
@@ -888,9 +890,11 @@ function refreshOutputDevices(): void {
                   min="1"
                   max="20"
                   step=".1"
-                  @change="updateCompressor" /></label
-              ><label
-                >{{ t('ap.attack') }}
+                  @change="updateCompressor"
+                />
+              </label>
+              <label>
+                {{ t('ap.attack') }}
                 <input
                   v-model.number="player.compressorConfig.attackMs"
                   class="input-base h-6 mt-1"
@@ -898,18 +902,22 @@ function refreshOutputDevices(): void {
                   step=".1"
                   min=".1"
                   max="500"
-                  @change="updateCompressor" /></label
-              ><label
-                >{{ t('ap.release') }}
+                  @change="updateCompressor"
+                />
+              </label>
+              <label>
+                {{ t('ap.release') }}
                 <input
                   v-model.number="player.compressorConfig.releaseMs"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="5"
                   max="2000"
-                  @change="updateCompressor" /></label
-              ><label
-                >{{ t('ap.makeupGain') }}
+                  @change="updateCompressor"
+                />
+              </label>
+              <label>
+                {{ t('ap.makeupGain') }}
                 <input
                   v-model.number="player.compressorConfig.makeupDb"
                   class="input-base h-6 mt-1"
@@ -917,20 +925,24 @@ function refreshOutputDevices(): void {
                   step=".1"
                   min="-12"
                   max="24"
-                  @change="updateCompressor" /></label
-            ></template>
-            <template v-else-if="node.id === 'delay'"
-              ><label
-                >{{ t('ap.time') }}
+                  @change="updateCompressor"
+                />
+              </label>
+            </template>
+            <template v-else-if="node.id === 'delay'">
+              <label>
+                {{ t('ap.time') }}
                 <input
                   v-model.number="player.delayConfig.delayMs"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="1"
                   max="2000"
-                  @change="updateDelay" /></label
-              ><label
-                >{{ t('ap.feedback') }}
+                  @change="updateDelay"
+                />
+              </label>
+              <label>
+                {{ t('ap.feedback') }}
                 <input
                   v-model.number="player.delayConfig.feedback"
                   class="input-base h-6 mt-1"
@@ -938,9 +950,11 @@ function refreshOutputDevices(): void {
                   step=".01"
                   min="0"
                   max=".95"
-                  @change="updateDelay" /></label
-              ><label
-                >{{ t('ap.mix') }}
+                  @change="updateDelay"
+                />
+              </label>
+              <label>
+                {{ t('ap.mix') }}
                 <input
                   v-model.number="player.delayConfig.mix"
                   class="input-base h-6 mt-1"
@@ -948,11 +962,13 @@ function refreshOutputDevices(): void {
                   step=".01"
                   min="0"
                   max="1"
-                  @change="updateDelay" /></label
-            ></template>
-            <template v-else-if="node.id === 'reverb'"
-              ><label
-                >{{ t('ap.roomSize') }}
+                  @change="updateDelay"
+                />
+              </label>
+            </template>
+            <template v-else-if="node.id === 'reverb'">
+              <label>
+                {{ t('ap.roomSize') }}
                 <input
                   v-model.number="player.reverbConfig.roomSize"
                   class="input-base h-6 mt-1"
@@ -960,9 +976,11 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="0"
                   max="1"
-                  @change="updateReverb" /></label
-              ><label
-                >{{ t('ap.decay') }}
+                  @change="updateReverb"
+                />
+              </label>
+              <label>
+                {{ t('ap.decay') }}
                 <input
                   v-model.number="player.reverbConfig.decay"
                   class="input-base h-6 mt-1"
@@ -970,9 +988,11 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="0"
                   max="1"
-                  @change="updateReverb" /></label
-              ><label
-                >{{ t('ap.mix') }}
+                  @change="updateReverb"
+                />
+              </label>
+              <label>
+                {{ t('ap.mix') }}
                 <input
                   v-model.number="player.reverbConfig.mix"
                   class="input-base h-6 mt-1"
@@ -980,11 +1000,13 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="0"
                   max="1"
-                  @change="updateReverb" /></label
-            ></template>
-            <template v-else-if="node.id === 'chorus'"
-              ><label
-                >{{ t('ap.rate') }}
+                  @change="updateReverb"
+                />
+              </label>
+            </template>
+            <template v-else-if="node.id === 'chorus'">
+              <label>
+                {{ t('ap.rate') }}
                 <input
                   v-model.number="player.chorusConfig.rateHz"
                   class="input-base h-6 mt-1"
@@ -992,9 +1014,11 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min=".05"
                   max="10"
-                  @change="updateChorus" /></label
-              ><label
-                >{{ t('ap.depth') }}
+                  @change="updateChorus"
+              />
+              </label>
+              <label>
+                {{ t('ap.depth') }}
                 <input
                   v-model.number="player.chorusConfig.depthMs"
                   class="input-base h-6 mt-1"
@@ -1002,9 +1026,11 @@ function refreshOutputDevices(): void {
                   step=".1"
                   min=".1"
                   max="15"
-                  @change="updateChorus" /></label
-              ><label
-                >{{ t('ap.mix') }}
+                  @change="updateChorus"
+                />
+              </label>
+              <label>
+                {{ t('ap.mix') }}
                 <input
                   v-model.number="player.chorusConfig.mix"
                   class="input-base h-6 mt-1"
@@ -1012,20 +1038,24 @@ function refreshOutputDevices(): void {
                   step=".01"
                   min="0"
                   max="1"
-                  @change="updateChorus" /></label
-            ></template>
-            <template v-else-if="node.id === 'noise_gate'"
-              ><label
-                >{{ t('ap.threshold') }}
+                  @change="updateChorus"
+                />
+              </label>
+            </template>
+            <template v-else-if="node.id === 'noise_gate'">
+              <label>
+                {{ t('ap.threshold') }}
                 <input
                   v-model.number="player.noiseGateConfig.thresholdDb"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="-80"
                   max="0"
-                  @change="updateNoiseGate" /></label
-              ><label
-                >{{ t('ap.attack') }}
+                  @change="updateNoiseGate"
+                />
+              </label>
+              <label>
+                {{ t('ap.attack') }}
                 <input
                   v-model.number="player.noiseGateConfig.attackMs"
                   class="input-base h-6 mt-1"
@@ -1033,38 +1063,46 @@ function refreshOutputDevices(): void {
                   step=".1"
                   min=".1"
                   max="200"
-                  @change="updateNoiseGate" /></label
-              ><label
-                >{{ t('ap.hold') }}
+                  @change="updateNoiseGate"
+                />
+              </label>
+              <label>
+                {{ t('ap.hold') }}
                 <input
                   v-model.number="player.noiseGateConfig.holdMs"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="0"
                   max="2000"
-                  @change="updateNoiseGate" /></label
-              ><label
-                >{{ t('ap.release') }}
+                  @change="updateNoiseGate"
+                />
+              </label>
+              <label>
+                {{ t('ap.release') }}
                 <input
                   v-model.number="player.noiseGateConfig.releaseMs"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="5"
                   max="2000"
-                  @change="updateNoiseGate" /></label
-              ><label
-                >{{ t('ap.attenuationRange') }}
+                  @change="updateNoiseGate"
+                />
+              </label>
+              <label>
+                {{ t('ap.attenuationRange') }}
                 <input
                   v-model.number="player.noiseGateConfig.rangeDb"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="-100"
                   max="0"
-                  @change="updateNoiseGate" /></label
-            ></template>
-            <template v-else
-              ><label
-                >{{ t('ap.rate') }}
+                  @change="updateNoiseGate"
+                />
+              </label>
+            </template>
+            <template v-else>
+              <label>
+                {{ t('ap.rate') }}
                 <input
                   v-model.number="player.phaserConfig.rateHz"
                   class="input-base h-6 mt-1"
@@ -1072,9 +1110,11 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min=".05"
                   max="10"
-                  @change="updatePhaser" /></label
-              ><label
-                >{{ t('ap.depth') }}
+                  @change="updatePhaser"
+                />
+              </label>
+              <label>
+                {{ t('ap.depth') }}
                 <input
                   v-model.number="player.phaserConfig.depth"
                   class="input-base h-6 mt-1"
@@ -1082,18 +1122,22 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="0"
                   max="1"
-                  @change="updatePhaser" /></label
-              ><label
-                >{{ t('ap.centerFrequency') }}
+                  @change="updatePhaser"
+                />
+              </label>
+              <label>
+                {{ t('ap.centerFrequency') }}
                 <input
                   v-model.number="player.phaserConfig.centerHz"
                   class="input-base h-6 mt-1"
                   type="number"
                   min="100"
                   max="5000"
-                  @change="updatePhaser" /></label
-              ><label
-                >{{ t('ap.feedback') }}
+                  @change="updatePhaser"
+                />
+              </label>
+              <label>
+                {{ t('ap.feedback') }}
                 <input
                   v-model.number="player.phaserConfig.feedback"
                   class="input-base h-6 mt-1"
@@ -1101,9 +1145,11 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="-.95"
                   max=".95"
-                  @change="updatePhaser" /></label
-              ><label
-                >{{ t('ap.mix') }}
+                  @change="updatePhaser"
+                />
+              </label>
+              <label>
+                {{ t('ap.mix') }}
                 <input
                   v-model.number="player.phaserConfig.mix"
                   class="input-base h-6 mt-1"
@@ -1111,8 +1157,10 @@ function refreshOutputDevices(): void {
                   step=".05"
                   min="0"
                   max="1"
-                  @change="updatePhaser" /></label
-            ></template>
+                  @change="updatePhaser"
+                />
+              </label>
+            </template>
           </div>
         </div>
         <div class="rounded-lg border border-border bg-bg px-2 py-1">
@@ -1139,9 +1187,9 @@ function refreshOutputDevices(): void {
             v-if="player.limiterConfig.enabled"
             class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2"
           >
-            <label
-              >{{ t('ap.ceiling')
-              }}<input
+            <label>
+              {{ t('ap.ceiling') }}
+              <input
                 v-model.number="player.limiterConfig.ceilingDb"
                 class="input-base h-6 mt-1"
                 type="number"
@@ -1149,17 +1197,19 @@ function refreshOutputDevices(): void {
                 min="-12"
                 max="0"
                 @change="updateLimiter"
-            /></label>
-            <label
-              >{{ t('ap.release')
-              }}<input
+              />
+            </label>
+            <label>
+              {{ t('ap.release') }}
+              <input
                 v-model.number="player.limiterConfig.releaseMs"
                 class="input-base h-6 mt-1"
                 type="number"
                 min="5"
                 max="2000"
                 @change="updateLimiter"
-            /></label>
+              />
+            </label>
           </div>
         </div>
       </div>

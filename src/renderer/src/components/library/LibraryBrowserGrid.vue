@@ -183,7 +183,7 @@ onMounted(() => void load())
     </p>
     <div
       v-else
-      class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pr-1"
+      class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pb-20 pr-1"
       :style="gridStyle"
     >
       <div
@@ -192,7 +192,10 @@ onMounted(() => void load())
         class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
         @click="open(item)"
       >
-        <div class="relative aspect-square bg-bg-l">
+        <div
+          class="relative aspect-square bg-bg-l"
+          :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-xl'"
+        >
           <div
             class="size-full overflow-hidden"
             :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-lg'"
@@ -210,7 +213,7 @@ onMounted(() => void load())
           <span
             class="absolute rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white"
             :class="props.kind === 'artist' ? 'bottom-1 right-[9%]' : 'bottom-1 right-1'"
-            >
+          >
             {{ t('library.songCount', { count: item.count }) }}
           </span>
         </div>

@@ -11,7 +11,7 @@ const removeAt = (index: number): void => void player.removeQueueItem(index)
 <template>
   <section class="flex h-full min-h-0 flex-col overflow-hidden">
     <header class="flex items-center justify-between gap-3 pb-3">
-      <p class="text-sm font-semibold text-[var(--color-text)]">{{ t('queue.title') }}</p>
+      <p class="text-sm font-semibold text-text">{{ t('queue.title') }}</p>
       <div>
         <button
           class="btn-hover text-xs"
@@ -22,17 +22,17 @@ const removeAt = (index: number): void => void player.removeQueueItem(index)
         </button>
       </div>
     </header>
-    <p v-if="player.queue.length === 0" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+    <p v-if="player.queue.length === 0" class="py-8 text-center text-sm text-text-l">
       {{ t('queue.empty') }}
     </p>
     <div v-else class="custom-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto pr-2">
       <div
         v-for="(song, index) in player.queue"
         :key="song.id"
-        class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-[var(--color-hover)]"
+        class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm hover:bg-hover]"
         :class="
           index === player.currentQueueIndex
-            ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]'
+            ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
             : ''
         "
         @dblclick="playAt(index)"

@@ -131,15 +131,18 @@ async function save(): Promise<void> {
             v-model="query.title"
             class="lyric-input"
             :placeholder="t('playerPanel.lyricTitle')"
-          /><input
+          />
+          <input
             v-model="query.artist"
             class="lyric-input"
             :placeholder="t('playerPanel.lyricArtist')"
-          /><input
+          />
+          <input
             v-model="query.album"
             class="lyric-input"
             :placeholder="t('playerPanel.lyricAlbum')"
-          /><button
+          />
+          <button
             class="manager-button w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
             :disabled="loading || !query.title.trim()"
             @click="search"
@@ -174,29 +177,31 @@ async function save(): Promise<void> {
           v-model="lyric"
           class="lyric-editor"
           :placeholder="t('playerPanel.lyricEditorPlaceholder')"
-        /><textarea
+        />
+        <textarea
           v-model="translation"
           class="lyric-editor lyric-editor--translation"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
         />
       </div>
     </div>
-    <template #footer
-      ><button
+    <template #footer>
+      <button
         class="secondary-button manager-button"
         type="button"
         @click="emit('update:modelValue', false)"
       >
-        {{ t('common.cancel') }}</button
-      ><button
+        {{ t('common.cancel') }}
+      </button>
+      <button
         class="manager-button rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
         type="button"
         :disabled="!lyric.trim()"
         @click="save"
       >
         {{ t('common.save') }}
-      </button></template
-    >
+      </button>
+    </template>
   </BaseDialog>
 </template>
 
