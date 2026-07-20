@@ -43,7 +43,10 @@ function publish(): void {
     next: next?.text || player.currentQueueSong?.artist || '',
     translation: ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
     isPlaying: player.isPlaying,
-    styles: { ...ui.desktopLyricsStyles }
+    styles: {
+      ...ui.desktopLyricsStyles,
+      fontFamily: ui.desktopLyricsStyles.fontFamily || ui.customFontFamily
+    }
   })
 }
 

@@ -12,7 +12,7 @@ export const constRoutes = [
         path: '/dev',
         name: 'Dev',
         meta: { title: 'DEV' },
-        component: () => import('@/views/dev/Index.vue')
+        component: () => import('@/views/dev/UiTest.vue')
       },
       {
         path: '/song',

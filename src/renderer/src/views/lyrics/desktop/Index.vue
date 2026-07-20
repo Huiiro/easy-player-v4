@@ -17,6 +17,7 @@ interface DesktopState {
     glow: boolean
     showTranslation: boolean
     autoHideBackground: boolean
+    fontFamily: string
   }
 }
 
@@ -49,7 +50,8 @@ const state = ref<DesktopState>({
     fontBold: true,
     glow: true,
     showTranslation: true,
-    autoHideBackground: true
+    autoHideBackground: true,
+    fontFamily: ''
   }
 })
 let hideTimer: ReturnType<typeof setTimeout> | undefined
@@ -71,19 +73,28 @@ const lyricFontSize = computed(() => {
   const maxFittingSize = availableLyricsHeight / (2 * 1.18)
   return Math.max(1, Math.round(Math.min(resizedSize, maxFittingSize)))
 })
+const fontFamilyStyle = computed(() => {
+  const family = state.value.styles.fontFamily
+  if (!family) return undefined
+  return family === 'inherit'
+    ? 'inherit'
+    : `"${family}", Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
+})
 const currentStyle = computed(() => ({
   fontSize: `${lyricFontSize.value}px`,
   lineHeight: 1.18,
   color: state.value.styles.activeColor,
   fontWeight: state.value.styles.fontBold ? 700 : 500,
-  textShadow: state.value.styles.glow ? `0 0 8px ${state.value.styles.activeColor}` : 'none'
+  textShadow: state.value.styles.glow ? `0 0 8px ${state.value.styles.activeColor}` : 'none',
+  fontFamily: fontFamilyStyle.value
 }))
 const inactiveStyle = computed(() => ({
   color: state.value.styles.inactiveColor,
   fontSize: `${lyricFontSize.value}px`,
   lineHeight: 1.18,
   fontWeight: state.value.styles.fontBold ? 700 : 500,
-  textShadow: 'none'
+  textShadow: 'none',
+  fontFamily: fontFamilyStyle.value
 }))
 const firstStyle = computed(() =>
   activeSlot.value === 'first' ? currentStyle.value : inactiveStyle.value
@@ -157,6 +168,9 @@ function toggleLock(): void {
 }
 function action(type: 'previous' | 'toggle' | 'next'): void {
   window.api.desktopLyrics.action(type)
+}
+function closeWindow(): void {
+  window.api.desktopLyrics.close()
 }
 
 const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
@@ -271,7 +285,7 @@ onUnmounted(() => {
           ><button class="desktop-action" @click="action('next')">
             <SvgIcon name="play-next" class-name="size-3.5" /></button
         ></template>
-        <button v-if="!locked" class="desktop-action" @click="window.api.desktopLyrics.close()">
+        <button v-if="!locked" class="desktop-action" @click="closeWindow">
           <SvgIcon name="common-close" class-name="size-3.5" />
         </button>
       </div>

@@ -9,6 +9,7 @@ import BaseDrawer from './BaseDrawer.vue'
 import BaseSwitch from './BaseSwitch.vue'
 import BaseMessage from './BaseMessage.vue'
 import BaseSelect from './BaseSelect.vue'
+import BaseColorPicker from './BaseColorPicker.vue'
 import BaseSkeleton from './BaseSkeleton.vue'
 
 // 统一管理
@@ -22,6 +23,7 @@ const components = [
   BaseSwitch,
   BaseMessage,
   BaseSelect,
+  BaseColorPicker,
   BaseSkeleton
 ]
 

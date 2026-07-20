@@ -76,7 +76,8 @@ export const useUIStore = defineStore(
       fontBold: true,
       glow: true,
       showTranslation: true,
-      autoHideBackground: true
+      autoHideBackground: true,
+      fontFamily: ''
     })
     // ========== 快捷键 ==========
     const useGlobalShortcutKeys = ref(false)

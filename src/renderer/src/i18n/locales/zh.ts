@@ -379,6 +379,8 @@ export default {
     desktopLyricsGlow: '发光效果',
     desktopLyricsTranslation: '显示翻译',
     desktopLyricsAutoHide: '自动隐藏背景',
+    desktopLyricsFontFamily: '字体',
+    desktopLyricsFontInherit: '跟随主窗口',
     desktopLyricsPreviewLine: '正在播放的歌词',
     desktopLyricsPreviewTranslation: 'Lyrics translation preview',
     desktopLyricsPreviewNext: '下一句歌词预览'

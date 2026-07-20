@@ -140,7 +140,7 @@ function onClear(): void {
       leave-to-class="opacity-0 scale-95"
     >
       <ListboxOptions
-        class="absolute z-50 mt-1 w-full min-w-[var(--anchor-width)] rounded-xl border border-border bg-bg shadow-lg p-1 focus:outline-none max-h-60 overflow-y-auto no-scrollbar"
+        class="absolute z-50 mt-1 w-full min-w-(--anchor-width) rounded-xl border border-border bg-bg shadow-lg p-1 focus:outline-none max-h-60 overflow-y-auto no-scrollbar"
       >
         <ListboxOption
           v-for="opt in options"

@@ -385,6 +385,8 @@ export default {
     desktopLyricsGlow: 'Glow effect',
     desktopLyricsTranslation: 'Show translation',
     desktopLyricsAutoHide: 'Auto-hide background',
+    desktopLyricsFontFamily: 'Font',
+    desktopLyricsFontInherit: 'Follow main window',
     desktopLyricsPreviewLine: 'Current lyric preview',
     desktopLyricsPreviewTranslation: 'Lyrics translation preview',
     desktopLyricsPreviewNext: 'Next lyric preview'

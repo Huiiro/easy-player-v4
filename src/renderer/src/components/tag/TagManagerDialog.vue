@@ -5,6 +5,8 @@ import Draggable from 'vuedraggable'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import eventBus from '@/utils/eventBus'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { presetColors } from '@/consts/color'
+import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 
 interface Tag {
   id: number
@@ -93,6 +95,7 @@ watch(
   <BaseDialog
     :model-value="modelValue"
     :title="t('tags.title')"
+    :close-on-overlay="false"
     width="max-w-xl"
     @update:model-value="emit('update:modelValue', $event)"
   >
@@ -104,12 +107,7 @@ watch(
         :placeholder="t('tags.namePlaceholder')"
         @keyup.enter="create"
       />
-      <input
-        v-model="color"
-        class="h-9 w-10 cursor-pointer rounded border border-border bg-transparent p-1"
-        type="color"
-        :aria-label="t('tags.color')"
-      />
+      <BaseColorPicker v-model="color" :presets="presetColors" class="shrink-0" />
       <button class="btn-hover-base rounded-lg bg-primary px-3 text-sm text-white" @click="create">
         {{ t('tags.create') }}
       </button>
@@ -126,7 +124,7 @@ watch(
       item-key="id"
       handle=".tag-drag-handle"
       :animation="150"
-      class="custom-scrollbar max-h-[45vh] space-y-2 overflow-y-auto pr-1"
+      class="space-y-2"
       @end="persistOrder"
     >
       <template #item="{ element: tag }">
@@ -155,11 +153,10 @@ watch(
             :aria-label="t('tags.name')"
             @change="update(tag)"
           />
-          <input
+          <BaseColorPicker
             v-model="tag.color"
-            class="h-8 w-9 cursor-pointer rounded border border-border bg-transparent p-1"
-            type="color"
-            :aria-label="t('tags.color')"
+            :presets="presetColors"
+            class="shrink-0"
             @change="update(tag)"
           />
           <button

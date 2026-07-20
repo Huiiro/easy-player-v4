@@ -6,6 +6,8 @@ import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { PlayerBgType } from '@/consts'
+import { presetColors } from '@/consts/color'
+import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 
 const ui = useUIStore()
 const { locale, t } = useI18n()
@@ -45,6 +47,10 @@ const fontOptions = computed(() => [
   { label: t('settings.fontPingfang'), value: 'PingFang SC' },
   { label: 'Noto Sans SC', value: 'Noto Sans SC' },
   ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
+])
+const desktopLyricsFontOptions = computed(() => [
+  { label: t('settings.desktopLyricsFontInherit'), value: '' },
+  ...fontOptions.value.filter((opt) => opt.value !== '')
 ])
 function moveLyricSource(index: number, direction: -1 | 1): void {
   const target = index + direction
@@ -215,7 +221,7 @@ onMounted(() => void loadRemoteCache())
             <p>{{ t('settings.desktopLyricsDescription') }}</p>
           </div>
         </div>
-        <div class="settings-card">
+        <div class="settings-card font-settings-card">
           <div class="setting-row">
             <div>
               <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
@@ -237,15 +243,21 @@ onMounted(() => void loadRemoteCache())
                 size="sm"
               />
             </div>
-            <div class="flex flex-wrap gap-4">
-              <label class="color-control"
-                >{{ t('settings.desktopLyricsActiveColor')
-                }}<input v-model="ui.desktopLyricsStyles.activeColor" type="color"
-              /></label>
-              <label class="color-control"
-                >{{ t('settings.desktopLyricsInactiveColor')
-                }}<input v-model="ui.desktopLyricsStyles.inactiveColor" type="color"
-              /></label>
+            <div class="flex flex-wrap gap-4 settings-card font-settings-card">
+              <label class="flex items-center gap-2 text-xs text-text-l">
+                <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
+                <BaseColorPicker
+                  v-model="ui.desktopLyricsStyles.activeColor"
+                  :presets="presetColors"
+                />
+              </label>
+              <label class="flex items-center gap-2 text-xs text-text-l">
+                <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
+                <BaseColorPicker
+                  v-model="ui.desktopLyricsStyles.inactiveColor"
+                  :presets="presetColors"
+                />
+              </label>
               <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
                 ><span>{{ t('settings.desktopLyricsBold') }}</span
                 ><BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" size="sm"
@@ -262,6 +274,16 @@ onMounted(() => void loadRemoteCache())
                 ><span>{{ t('settings.desktopLyricsAutoHide') }}</span
                 ><BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" size="sm"
               /></label>
+              <div class="flex items-center gap-2 text-xs text-[var(--color-text-l)]">
+                <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
+                <BaseSelect
+                  v-model="ui.desktopLyricsStyles.fontFamily"
+                  :options="desktopLyricsFontOptions"
+                  :placeholder="t('settings.desktopLyricsFontInherit')"
+                  size="sm"
+                  class="w-40"
+                />
+              </div>
             </div>
             <div
               class="desktop-lyrics-preview"
@@ -492,10 +514,9 @@ onMounted(() => void loadRemoteCache())
               <h3>主题色</h3>
               <p>用于进度、选中状态和主要操作。</p>
             </div>
-            <label class="color-control">
-              <input v-model="ui.customThemeColor" type="color" aria-label="自定义主题色" />
-              <span>{{ ui.customThemeColor || '#24a56a' }}</span>
-            </label>
+            <div>
+              <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" />
+            </div>
           </div>
         </div>
       </section>
