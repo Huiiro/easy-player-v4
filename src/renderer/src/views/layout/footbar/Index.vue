@@ -3,9 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
-import BaseDrawer from '@/components/ui/BaseDrawer.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
-import PlayQueue from '@/components/player/PlayQueue.vue'
+import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import AudioControlPanel from '@/components/player/AudioControlPanel.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -381,15 +380,7 @@ onBeforeUnmount(() => {
         />
       </button>
     </section>
-    <BaseDrawer
-      v-model="queueVisible"
-      class="pointer-events-auto"
-      :title="t('queue.title')"
-      direction="right"
-      width="26rem"
-    >
-      <PlayQueue />
-    </BaseDrawer>
+    <PlayQueueDrawer v-model="queueVisible" class="pointer-events-auto" />
     <BaseDialog
       v-model="audioControlsVisible"
       class="pointer-events-auto"

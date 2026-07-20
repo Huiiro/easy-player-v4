@@ -8,8 +8,7 @@ import { PlayerBgType } from '@/consts'
 import { PlayMode } from '@/consts'
 import PlayerLyrics from '@/components/lyrics/PlayerLyrics.vue'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
-import BaseDrawer from '@/components/ui/BaseDrawer.vue'
-import PlayQueue from '@/components/player/PlayQueue.vue'
+import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 
 const ui = useUIStore()
@@ -622,7 +621,7 @@ function extractCoverColors(event: Event): void {
         </section>
       </div>
       <!-- play queue-->
-      <BaseDrawer v-model="showQueue" direction="right" width="26rem"><PlayQueue /></BaseDrawer>
+      <PlayQueueDrawer v-model="showQueue" />
       <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
       <!-- play spectrum-->
       <div
