@@ -1,11 +1,5 @@
 <script setup lang="ts">
-
+import LibraryBrowserGrid from '@/components/library/LibraryBrowserGrid.vue'
 </script>
 
-<template>
-
-</template>
-
-<style scoped>
-
-</style>
+<template><LibraryBrowserGrid kind="artist" /></template>

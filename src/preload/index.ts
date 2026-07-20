@@ -169,6 +169,11 @@ const databaseAPI = {
 
 const libraryAPI = {
   importLocalFolder: () => ipcRenderer.invoke('library:import-local-folder'),
+  showSongInFolder: (songId: number) =>
+    ipcRenderer.invoke('library:show-song-in-folder', songId) as Promise<{
+      success: boolean
+      error?: string
+    }>,
   onScanProgress: (
     callback: (progress: {
       current: number
@@ -268,6 +273,42 @@ const desktopLyricsAPI = {
   }
 }
 
+const remoteSourceAPI = {
+  testNavidrome: (config: { baseUrl: string; user: string; secret: string }) =>
+    ipcRenderer.invoke('remote-source:test-navidrome', config) as Promise<{
+      success: boolean
+      data?: { version: string }
+      error?: string
+    }>,
+  chooseCacheDirectory: () =>
+    ipcRenderer.invoke('remote-source:choose-cache-directory') as Promise<{
+      success: boolean
+      data?: string
+    }>,
+  defaultCacheDirectory: () =>
+    ipcRenderer.invoke('remote-source:default-cache-directory') as Promise<{
+      success: boolean
+      data?: string
+    }>,
+  cacheSize: (directory: string) =>
+    ipcRenderer.invoke('remote-source:cache-size', directory) as Promise<{
+      success: boolean
+      data?: number
+    }>,
+  sync: (sourceId: number) =>
+    ipcRenderer.invoke('remote-source:sync', sourceId) as Promise<{
+      success: boolean
+      data?: { imported: number; total: number }
+      error?: string
+    }>,
+  cacheSong: (songId: number) =>
+    ipcRenderer.invoke('remote-source:cache-song', songId) as Promise<{
+      success: boolean
+      data?: string
+      error?: string
+    }>
+}
+
 const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
@@ -295,6 +336,7 @@ const api = {
   fonts: fontsAPI,
   miniPlayer: miniPlayerAPI,
   desktopLyrics: desktopLyricsAPI,
+  remoteSource: remoteSourceAPI,
   window: windowAPI
 }
 

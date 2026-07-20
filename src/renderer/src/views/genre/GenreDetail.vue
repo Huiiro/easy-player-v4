@@ -1,11 +1,5 @@
 <script setup lang="ts">
-
+import LibraryDetail from '@/components/library/LibraryDetail.vue'
 </script>
 
-<template>
-
-</template>
-
-<style scoped>
-
-</style>
+<template><LibraryDetail kind="genre" /></template>

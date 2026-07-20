@@ -1,5 +1,5 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
-import { extname, join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
 
@@ -30,6 +30,7 @@ import type {
   DownloadTask,
   DownloadTaskInput,
   Genre,
+  LibraryFolder,
   MusicSource,
   MusicSourceInput,
   OverviewStats,
@@ -127,7 +128,7 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
 export function getSong(id: number): Song | null {
   const row = getDatabase().prepare(`SELECT ${songColumns} FROM song WHERE id = ?`).get(id) as
     SongRow | undefined
-  return row ? mapSong(row) : null
+  return row ? attachTags([mapSong(row)])[0] : null
 }
 export function queryAllSongs(): Song[] {
   return attachTags(
@@ -139,6 +140,38 @@ export function queryAllSongs(): Song[] {
 }
 export function getSongsByAlbum(album: string, artist?: string): Song[] {
   const db = getDatabase()
+  const unknownAlbum = album === '__easy_player_unknown_album__'
+  const unknownArtist = artist === '__easy_player_unknown_artist__'
+  if (unknownAlbum) {
+    const rows = unknownArtist
+      ? db
+          .prepare(
+            `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND (artist IS NULL OR TRIM(artist) = '') ORDER BY title COLLATE NOCASE`
+          )
+          .all()
+      : artist
+        ? db
+            .prepare(
+              `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND artist = ? ORDER BY title COLLATE NOCASE`
+            )
+            .all(artist)
+        : db
+            .prepare(
+              `SELECT ${songColumns} FROM song WHERE album IS NULL OR TRIM(album) = '' ORDER BY title COLLATE NOCASE`
+            )
+            .all()
+    return attachTags(rows.map((row) => mapSong(row as SongRow)))
+  }
+  if (unknownArtist) {
+    return attachTags(
+      db
+        .prepare(
+          `SELECT ${songColumns} FROM song WHERE album = ? AND (artist IS NULL OR TRIM(artist) = '') ORDER BY title COLLATE NOCASE`
+        )
+        .all(album)
+        .map((row) => mapSong(row as SongRow))
+    )
+  }
   const rows = artist
     ? db
         .prepare(
@@ -151,6 +184,16 @@ export function getSongsByAlbum(album: string, artist?: string): Song[] {
   return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
 export function getSongsByGenre(genre: string): Song[] {
+  if (genre === '__easy_player_unknown_genre__') {
+    return attachTags(
+      getDatabase()
+        .prepare(
+          `SELECT ${songColumns} FROM song WHERE genre IS NULL OR TRIM(genre) = '' ORDER BY title COLLATE NOCASE`
+        )
+        .all()
+        .map((row) => mapSong(row as SongRow))
+    )
+  }
   return attachTags(
     getDatabase()
       .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY title COLLATE NOCASE`)
@@ -159,12 +202,54 @@ export function getSongsByGenre(genre: string): Song[] {
   )
 }
 export function getSongsByArtist(artist: string): Song[] {
+  if (artist === '__easy_player_unknown_artist__') {
+    return attachTags(
+      getDatabase()
+        .prepare(
+          `SELECT ${songColumns} FROM song WHERE artist IS NULL OR TRIM(artist) = '' ORDER BY title COLLATE NOCASE`
+        )
+        .all()
+        .map((row) => mapSong(row as SongRow))
+    )
+  }
   return attachTags(
     getDatabase()
       .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY title COLLATE NOCASE`)
       .all(artist)
       .map((row) => mapSong(row as SongRow))
   )
+}
+export function listLocalFolders(): LibraryFolder[] {
+  return getDatabase()
+    .prepare(
+      `SELECT f.id, f.pid, f.name, f.full_path AS fullPath, f.is_root_path AS isRootPath,
+        COUNT(s.id) AS songCount
+       FROM folder f
+       LEFT JOIN song s ON s.folder_id = f.id AND s.source_id IS NULL
+       WHERE f.full_path NOT LIKE 'remote://%'
+       GROUP BY f.id
+       ORDER BY f.is_root_path DESC, f.name COLLATE NOCASE`
+    )
+    .all()
+    .map((row) => ({
+      ...(row as Omit<LibraryFolder, 'isRootPath'>),
+      isRootPath: (row as { isRootPath: number }).isRootPath === 1
+    }))
+}
+export function getLocalFolderSongs(folderId: number): Song[] {
+  const rows = getDatabase()
+    .prepare(
+      `WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM folder WHERE id = ?
+        UNION ALL
+        SELECT f.id FROM folder f JOIN descendants d ON f.pid = d.id
+      )
+      SELECT ${songColumns} FROM song
+      WHERE source_id IS NULL AND folder_id IN (SELECT id FROM descendants)
+      ORDER BY title COLLATE NOCASE`
+    )
+    .all(folderId)
+  return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
 export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
@@ -284,6 +369,9 @@ export function queryRecentPlayedSongs(
   ).count
   return { data, total }
 }
+export function clearRecentPlayedSongs(): void {
+  getDatabase().prepare('DELETE FROM history').run()
+}
 export function savePlayHistoryDetail(input: PlayHistoryInput): void {
   getDatabase()
     .prepare(
@@ -370,7 +458,9 @@ export function updatePlaylist(id: number, input: PlaylistInput): boolean {
     throw new Error('Playlist name already exists')
   }
   const result = getDatabase()
-    .prepare('UPDATE song_list SET name = ?, cover = ?, description = ? WHERE id = ?')
+    .prepare(
+      'UPDATE song_list SET name = ?, cover = COALESCE(?, cover), description = ? WHERE id = ?'
+    )
     .run(name, input.cover ?? null, input.description ?? null, id)
   return result.changes > 0
 }
@@ -408,13 +498,27 @@ export function reorderPlaylists(items: Array<{ id: number; position: number }>)
   const stmt = getDatabase().prepare('UPDATE song_list SET position = @position WHERE id = @id')
   getDatabase().transaction(() => items.forEach((item) => stmt.run(item)))()
 }
-export function addSongsToPlaylist(playlistId: number, songIds: number[]): number {
+export function addSongsToPlaylist(
+  playlistId: number,
+  songIds: number[]
+): { added: number; duplicates: number } {
   const db = getDatabase()
+  const ids = [...new Set(songIds.filter((id) => Number.isInteger(id) && id > 0))]
+  if (!ids.length) return { added: 0, duplicates: 0 }
   const stmt = db.prepare(
     'INSERT OR IGNORE INTO song_list_item (song_list_id, song_id, position) VALUES (@playlistId, @songId, @position)'
   )
-  let added = 0
-  db.transaction(() => {
+  return db.transaction(() => {
+    const existing = new Set(
+      (
+        db
+          .prepare(
+            `SELECT song_id FROM song_list_item WHERE song_list_id = ? AND song_id IN (${ids.map(() => '?').join(',')})`
+          )
+          .all(playlistId, ...ids) as Array<{ song_id: number }>
+      ).map((row) => row.song_id)
+    )
+    const additions = ids.filter((id) => !existing.has(id))
     const start =
       (
         db
@@ -423,12 +527,13 @@ export function addSongsToPlaylist(playlistId: number, songIds: number[]): numbe
           )
           .get(playlistId) as { position: number }
       ).position + 1
-    songIds.forEach((songId, index) => {
+    let added = 0
+    additions.forEach((songId, index) => {
       added += stmt.run({ playlistId, songId, position: start + index }).changes
     })
     refreshPlaylistCover(playlistId)
+    return { added, duplicates: ids.length - added }
   })()
-  return added
 }
 export function removeSongsFromPlaylist(playlistId: number, songIds: number[]): number {
   if (!songIds.length) return 0
@@ -442,6 +547,82 @@ export function removeSongsFromPlaylist(playlistId: number, songIds: number[]): 
     refreshPlaylistCover(playlistId)
     return removed
   })()
+}
+
+export interface DeleteSongsResult {
+  deleted: number
+  deletedFiles: number
+  failedFiles: string[]
+}
+
+/** Removes songs and their FK-cascaded metadata; local files are opt-in. */
+export function deleteSongs(songIds: number[], deleteLocalFiles = false): DeleteSongsResult {
+  const ids = [...new Set(songIds.filter((id) => Number.isInteger(id) && id > 0))]
+  if (!ids.length) return { deleted: 0, deletedFiles: 0, failedFiles: [] }
+
+  const db = getDatabase()
+  const placeholders = ids.map(() => '?').join(',')
+  const songs = db
+    .prepare(
+      `SELECT id, audio, cover, source_id AS sourceId FROM song WHERE id IN (${placeholders})`
+    )
+    .all(...ids) as Array<{
+    id: number
+    audio: string
+    cover: string | null
+    sourceId: number | null
+  }>
+  const affectedPlaylistIds = (
+    db
+      .prepare(
+        `SELECT DISTINCT song_list_id FROM song_list_item WHERE song_id IN (${placeholders})`
+      )
+      .all(...ids) as Array<{ song_list_id: number }>
+  ).map((row) => row.song_list_id)
+  const covers = songs.map((song) => song.cover).filter((cover): cover is string => !!cover)
+
+  const deleted = db.transaction(() => {
+    const count = db.prepare(`DELETE FROM song WHERE id IN (${placeholders})`).run(...ids).changes
+    affectedPlaylistIds.forEach(refreshPlaylistCover)
+    return count
+  })()
+
+  const failedFiles: string[] = []
+  let deletedFiles = 0
+  if (deleteLocalFiles) {
+    for (const song of songs) {
+      if (song.sourceId !== null || !isAbsolute(song.audio) || !existsSync(song.audio)) continue
+      try {
+        if (statSync(song.audio).isFile()) {
+          unlinkSync(song.audio)
+          deletedFiles++
+        }
+      } catch {
+        failedFiles.push(song.audio)
+      }
+    }
+  }
+
+  // Embedded covers created by the local scanner are owned by player_data.
+  // Remove only orphaned assets; shared/custom covers are deliberately kept.
+  const coverDirectory = resolve(join(getDataPath(), 'covers'))
+  for (const cover of new Set(covers)) {
+    const resolvedCover = resolve(cover)
+    const coverRelativePath = relative(coverDirectory, resolvedCover)
+    if (
+      coverRelativePath.startsWith('..') ||
+      isAbsolute(coverRelativePath) ||
+      !existsSync(resolvedCover) ||
+      db.prepare('SELECT 1 FROM song WHERE cover = ? LIMIT 1').get(cover)
+    )
+      continue
+    try {
+      if (statSync(resolvedCover).isFile()) unlinkSync(resolvedCover)
+    } catch {
+      // A stale artwork file must not make the already-completed DB deletion fail.
+    }
+  }
+  return { deleted, deletedFiles, failedFiles }
 }
 
 function refreshPlaylistCover(playlistId: number): void {

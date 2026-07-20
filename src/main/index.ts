@@ -1,4 +1,6 @@
-import { app, shell, BrowserWindow, ipcMain, net, protocol, screen } from 'electron'
+import { app, shell, BrowserWindow, dialog, ipcMain, net, protocol, screen } from 'electron'
+import { createHash, randomBytes } from 'node:crypto'
+import { readdirSync, statSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -7,10 +9,11 @@ import { AudioEngineManager } from './audio-engine'
 import { registerIpcHandlers } from './audio-engine/ipc-handlers'
 import { closeDatabase, initDatabase } from './database'
 import { registerDatabaseIpcHandlers } from './database/ipc-handlers'
-import { getAppSetting, setAppSetting } from './database/repository'
+import { getAppSetting, getSong, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './service/scan-ipc-handlers'
 import { registerLyricsIpcHandlers } from './service/lyrics-ipc-handlers'
 import { registerFontIpcHandlers } from './service/font-ipc-handlers'
+import { cacheRemoteSong, syncNavidromeSource } from './service/remote-source-service'
 import { getDataPath } from './utils/pathUtils'
 
 protocol.registerSchemesAsPrivileged([
@@ -320,6 +323,87 @@ app.whenReady().then(() => {
     if (command === 'close') window.close()
 
     return { maximized: window.isMaximized() }
+  })
+  ipcMain.handle('library:show-song-in-folder', async (_event, songId: unknown) => {
+    if (!Number.isInteger(songId)) return { success: false, error: 'Invalid song id' }
+    const audioPath = getSong(songId as number)?.audio
+    if (!audioPath || !existsSync(audioPath)) {
+      return { success: false, error: 'Song file no longer exists locally' }
+    }
+    shell.showItemInFolder(audioPath)
+    return { success: true }
+  })
+  ipcMain.handle('remote-source:test-navidrome', async (_event, config: unknown) => {
+    const value = config as { baseUrl?: unknown; user?: unknown; secret?: unknown }
+    if (
+      typeof value?.baseUrl !== 'string' ||
+      typeof value.user !== 'string' ||
+      typeof value.secret !== 'string'
+    ) {
+      return { success: false, error: 'Invalid Navidrome configuration' }
+    }
+    try {
+      const salt = randomBytes(8).toString('hex')
+      const token = createHash('md5').update(`${value.secret}${salt}`).digest('hex')
+      const baseUrl = value.baseUrl.replace(/\/$/, '')
+      const query = new URLSearchParams({
+        u: value.user,
+        t: token,
+        s: salt,
+        v: '1.16.1',
+        c: 'EasyPlayer',
+        f: 'json'
+      })
+      const response = await fetch(`${baseUrl}/rest/ping.view?${query}`)
+      const payload = (await response.json()) as {
+        'subsonic-response'?: { status?: string; version?: string; error?: { message?: string } }
+      }
+      const result = payload['subsonic-response']
+      if (!response.ok || result?.status !== 'ok')
+        return { success: false, error: result?.error?.message || 'Connection failed' }
+      return { success: true, data: { version: result.version || '' } }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle('remote-source:choose-cache-directory', async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+    return result.canceled ? { success: false } : { success: true, data: result.filePaths[0] }
+  })
+  ipcMain.handle('remote-source:default-cache-directory', () => ({
+    success: true,
+    data: join(getDataPath(), 'cache')
+  }))
+  ipcMain.handle('remote-source:cache-size', (_event, directory: unknown) => {
+    if (typeof directory !== 'string' || !existsSync(directory)) return { success: true, data: 0 }
+    const sizeOf = (target: string): number =>
+      readdirSync(target, { withFileTypes: true }).reduce((total, entry) => {
+        const child = join(target, entry.name)
+        return (
+          total + (entry.isDirectory() ? sizeOf(child) : entry.isFile() ? statSync(child).size : 0)
+        )
+      }, 0)
+    try {
+      return { success: true, data: sizeOf(directory) }
+    } catch {
+      return { success: true, data: 0 }
+    }
+  })
+  ipcMain.handle('remote-source:sync', async (_event, sourceId: unknown) => {
+    if (!Number.isInteger(sourceId)) return { success: false, error: 'Invalid source id' }
+    try {
+      return { success: true, data: await syncNavidromeSource(sourceId as number) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle('remote-source:cache-song', async (_event, songId: unknown) => {
+    if (!Number.isInteger(songId)) return { success: false, error: 'Invalid song id' }
+    try {
+      return { success: true, data: await cacheRemoteSong(songId as number) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
   ipcMain.handle('mini-player:enter', () => {
     const mini = createMiniPlayerWindow()

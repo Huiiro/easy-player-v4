@@ -32,6 +32,7 @@ const handlers = {
   savePlayHistory: ({ songId }: { songId: number }) => library.savePlayHistory(songId),
   queryRecentPlayedSongs: (params: Parameters<typeof library.queryRecentPlayedSongs>[0]) =>
     library.queryRecentPlayedSongs(params),
+  clearRecentPlayedSongs: () => library.clearRecentPlayedSongs(),
   savePlayHistoryDetail: (params: Parameters<typeof library.savePlayHistoryDetail>[0]) =>
     library.savePlayHistoryDetail(params),
   getPlayHistoryDays: ({ days }: { days?: number } = {}) => library.getPlayHistoryDays(days),
@@ -58,6 +59,8 @@ const handlers = {
     library.addSongsToPlaylist(playlistId, songIds),
   removeSongsFromPlaylist: ({ playlistId, songIds }: { playlistId: number; songIds: number[] }) =>
     library.removeSongsFromPlaylist(playlistId, songIds),
+  deleteSongs: ({ songIds, deleteLocalFiles }: { songIds: number[]; deleteLocalFiles?: boolean }) =>
+    library.deleteSongs(songIds, deleteLocalFiles === true),
   queryPlaylistSongs: ({
     playlistId,
     query
@@ -87,6 +90,9 @@ const handlers = {
     library.toggleSongTag(tagId, songId),
 
   listSources: () => library.listSources(),
+  listLocalFolders: () => library.listLocalFolders(),
+  getLocalFolderSongs: ({ folderId }: { folderId: number }) =>
+    library.getLocalFolderSongs(folderId),
   getSource: ({ id }: { id: number }) => library.getSource(id),
   createSource: (params: Parameters<typeof library.createSource>[0]) =>
     library.createSource(params),

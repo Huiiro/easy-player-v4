@@ -115,6 +115,44 @@ export const usePlayerStore = defineStore('player', () => {
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
+  let historySession:
+    | { songId: number; startedAt: number; accumulatedMs: number; playingSince: number | null }
+    | undefined
+
+  function beginHistory(song: LibrarySong): void {
+    if (historySession?.songId === song.id) {
+      resumeHistory()
+      return
+    }
+    flushHistory(true)
+    const now = Date.now()
+    historySession = { songId: song.id, startedAt: now, accumulatedMs: 0, playingSince: now }
+    void window.api.database.command('savePlayHistory', { songId: song.id })
+  }
+  function resumeHistory(): void {
+    if (historySession && historySession.playingSince === null)
+      historySession.playingSince = Date.now()
+  }
+  function pauseHistory(): void {
+    if (!historySession?.playingSince) return
+    historySession.accumulatedMs += Date.now() - historySession.playingSince
+    historySession.playingSince = null
+  }
+  function flushHistory(finalize = false): void {
+    if (!historySession) return
+    pauseHistory()
+    const seconds = Math.floor(historySession.accumulatedMs / 1000)
+    if (seconds > 0) {
+      void window.api.database.command('savePlayHistoryDetail', {
+        songId: historySession.songId,
+        playedSeconds: seconds,
+        startedAt: historySession.startedAt
+      })
+      historySession.accumulatedMs = 0
+      historySession.startedAt = Date.now()
+    }
+    if (finalize) historySession = undefined
+  }
 
   // ── Computed ──
   const isPlaying = computed(() => state.value === 'playing')
@@ -145,6 +183,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function play(): Promise<boolean> {
     const result = await audioBridge.play()
+    if (result && currentQueueSong.value) beginHistory(currentQueueSong.value)
     schedulePlaybackSessionSave()
     return result
   }
@@ -183,8 +222,13 @@ export const usePlayerStore = defineStore('player', () => {
     if (!song || song.songStatus === 0) return false
     currentQueueIndex.value = index
     savePlaybackSessionSync()
-    const opened = await openFile(song.audio)
-    if (opened) await play()
+    const remoteFile = song.sourceId ? await window.api.remoteSource.cacheSong(song.id) : null
+    if (song.sourceId && (!remoteFile?.success || !remoteFile.data)) {
+      console.warn('[player] Unable to cache remote song:', remoteFile?.error)
+      return false
+    }
+    const opened = await openFile(remoteFile?.data || song.audio)
+    if (opened && (await play())) beginHistory(song)
     return opened
   }
 
@@ -262,12 +306,14 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function pause(): Promise<boolean> {
     const result = await audioBridge.pause()
+    if (result) flushHistory(true)
     schedulePlaybackSessionSave()
     return result
   }
 
   async function stop(): Promise<boolean> {
     const result = await audioBridge.stop()
+    if (result) flushHistory(true)
     schedulePlaybackSessionSave()
     return result
   }
@@ -767,6 +813,7 @@ export const usePlayerStore = defineStore('player', () => {
       timestamp: now
     })
     try {
+      flushHistory(true)
       await playNext()
     } finally {
       autoAdvanceInProgress = false
@@ -782,6 +829,8 @@ export const usePlayerStore = defineStore('player', () => {
     unsubs.push(
       audioBridge.onStateChanged((data) => {
         state.value = data.state as PlaybackState
+        if (data.state === 'playing') resumeHistory()
+        else if (data.state === 'paused') pauseHistory()
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
@@ -823,6 +872,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function unsubscribe(): void {
+    flushHistory(true)
     unsubs.forEach((fn) => fn())
     unsubs = []
     if (analysisTimer) clearInterval(analysisTimer)

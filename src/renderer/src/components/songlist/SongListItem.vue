@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { LibrarySong } from '@/types/library'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { useFriendlyTime } from '@/hooks/useTimeFormatter'
 
 const props = defineProps<{
   song: LibrarySong
@@ -18,6 +21,8 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const router = useRouter()
+const { format: formatPlayTime } = useFriendlyTime()
 const coverFailed = ref(false)
 const coverUrl = computed(() =>
   props.song.cover ? `easy-player-media://cover?path=${encodeURIComponent(props.song.cover)}` : null
@@ -40,6 +45,18 @@ const requestMenu = (event: MouseEvent): void => {
   emit('requestMenu', props.song, {
     left: `${Math.max(8, rect.right - 160)}px`,
     top: `${window.innerHeight - rect.bottom < menuHeight ? Math.max(8, rect.top - menuHeight) : rect.bottom + 6}px`
+  })
+}
+function openArtist(): void {
+  if (props.song.artist?.trim()) {
+    void router.push({ path: '/artist/detail', query: { name: props.song.artist } })
+  }
+}
+function openAlbum(): void {
+  if (!props.song.album?.trim()) return
+  void router.push({
+    path: '/album/detail',
+    query: { name: props.song.album, artist: props.song.artist || '' }
   })
 }
 </script>
@@ -80,11 +97,22 @@ const requestMenu = (event: MouseEvent): void => {
           ><svgIcon name="common-music" class-name="size-5"
         /></span>
         <span class="min-w-0">
-          <span
-            class="block truncate"
-            :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
-            >{{ song.title }}</span
-          >
+          <span class="flex min-w-0 items-center gap-1">
+            <span
+              class="truncate"
+              :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
+              >{{ song.title }}</span
+            >
+            <SvgIcon
+              v-if="song.sourceId !== null"
+              name="menu-remote"
+              class-name="size-3.5 shrink-0 text-[var(--color-primary)]"
+              :title="t('songList.remoteSong')"
+            />
+          </span>
+          <span v-if="song.playTime" class="mt-0.5 block text-xs text-[var(--color-text-l)]">
+            {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
+          </span>
           <span v-if="song.tags?.length" class="mt-0.5 flex gap-1 overflow-hidden">
             <span
               v-for="tag in song.tags"
@@ -96,14 +124,22 @@ const requestMenu = (event: MouseEvent): void => {
           </span>
         </span>
       </span>
-      <span class="truncate text-sm text-[var(--color-text-l)]">{{
-        song.artist || t('songList.unknownArtist')
-      }}</span>
-      <span class="truncate text-sm text-[var(--color-text-l)]">{{
-        song.album || t('songList.unknownAlbum')
-      }}</span>
+      <button
+        class="truncate text-left text-sm text-[var(--color-text-l)] hover:text-[var(--color-primary)] disabled:cursor-default disabled:hover:text-[var(--color-text-l)]"
+        :disabled="!song.artist?.trim()"
+        @click.stop="openArtist"
+      >
+        {{ song.artist || t('songList.unknownArtist') }}
+      </button>
+      <button
+        class="truncate text-left text-sm text-[var(--color-text-l)] hover:text-[var(--color-primary)] disabled:cursor-default disabled:hover:text-[var(--color-text-l)]"
+        :disabled="!song.album?.trim()"
+        @click.stop="openAlbum"
+      >
+        {{ song.album || t('songList.unknownAlbum') }}
+      </button>
       <span class="text-right text-sm text-[var(--color-text-l)]">{{ formatDuration }}</span>
-      <span class="text-right"
+      <span class="text-right flex ml-2"
         ><button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>
           <svgIcon name="menu-more-horizontal" class-name="size-5" /></button
       ></span>

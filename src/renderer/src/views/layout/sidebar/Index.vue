@@ -206,14 +206,44 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
             </button>
           </div>
         </div>
-        <button
-          v-else
-          :class="[navItemClass, 'justify-center px-0']"
-          :title="t('sidebar.createPlaylist')"
-          @click="createPlaylist"
-        >
-          <SvgIcon name="common-plus" class-name="size-5 shrink-0" />
-        </button>
+        <template v-else>
+          <button
+            :class="[navItemClass, 'justify-center px-0']"
+            :title="t('sidebar.createPlaylist')"
+            @click="createPlaylist"
+          >
+            <SvgIcon name="common-plus" class-name="size-5 shrink-0" />
+          </button>
+          <div v-if="playlists.length" class="mt-1 space-y-0.5">
+            <button
+              v-for="playlist in playlists"
+              :key="playlist.id"
+              draggable="true"
+              class="grid h-9 w-full place-items-center rounded-lg transition-colors hover:bg-[var(--color-hover)]"
+              :class="
+                isActive(`/playlist/${playlist.id}`)
+                  ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)]'
+                  : 'text-[var(--color-text-l)]'
+              "
+              :title="playlist.name"
+              @click="openPlaylist(playlist.id)"
+              @dragstart="draggedPlaylistId = playlist.id"
+              @dragover.prevent
+              @drop.prevent="dropPlaylist(playlist.id)"
+            >
+              <img
+                v-if="playlistCover(playlist.cover)"
+                :src="playlistCover(playlist.cover)!"
+                class="size-5 rounded object-cover"
+                :alt="playlist.name"
+              />
+              <span v-else class="grid size-5 place-items-center rounded bg-[var(--color-bg-l)]"
+                ><SvgIcon name="common-music" class-name="size-3"
+              /></span>
+              <span class="sr-only">{{ playlist.name }}</span>
+            </button>
+          </div>
+        </template>
         <div v-if="expanded && playlistsExpanded && playlists.length" class="space-y-0.5">
           <button
             v-for="playlist in playlists"

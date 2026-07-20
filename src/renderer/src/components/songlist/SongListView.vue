@@ -2,23 +2,30 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
 import SongListHeader from './SongListHeader.vue'
 import SongListItem from './SongListItem.vue'
 import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
 import SongTagDialog from '@/components/tag/SongTagDialog.vue'
 import BatchTagDialog from '@/components/tag/BatchTagDialog.vue'
-import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
+import type { LibrarySong, PagedLibrarySongs, SongDetails } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
 
 type SongListSource =
   | { type: 'songs' | 'local' | 'remote' | 'history' }
   | { type: 'playlist'; id: number }
+  | { type: 'folder'; id: number }
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
 type SortField = 'title' | 'artist' | 'album' | 'duration'
 interface PlaylistTarget {
+  id: number
+  name: string
+}
+interface MusicSourceOption {
   id: number
   name: string
 }
@@ -28,8 +35,9 @@ const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
 })
 
 const player = usePlayerStore()
+const uiStore = useUIStore()
 const { t } = useI18n()
-const { success, error: showError } = useMessage()
+const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
 const loading = ref(false)
 const keyword = ref('')
@@ -49,9 +57,40 @@ const songTagDialogOpen = ref(false)
 const batchTagDialogOpen = ref(false)
 const selectedTagIds = ref<number[]>([])
 const tagSongId = ref<number | null>(null)
+const songsPendingDelete = ref<LibrarySong[]>([])
+const deleteLocalFile = ref(false)
+const songDetailsOpen = ref(false)
+const songDetailsLoading = ref(false)
+const songDetails = ref<SongDetails | null>(null)
+const remoteSources = ref<MusicSourceOption[]>([])
 const canFilterByTags = computed(() =>
-  ['songs', 'local', 'remote', 'playlist'].includes(props.source.type)
+  ['songs', 'local', 'remote', 'playlist', 'folder'].includes(props.source.type)
 )
+const sourceOptions = computed(() => [
+  { label: t('songList.sourceAll'), value: 'all' },
+  { label: t('songList.sourceLocal'), value: 'local' },
+  { label: t('songList.sourceRemote'), value: 'remote' },
+  ...remoteSources.value.map((source) => ({
+    label: `${t('songList.sourceRemote')} · ${source.name}`,
+    value: `remote:${source.id}`
+  }))
+])
+const canFilterBySource = computed(() => props.source.type === 'songs')
+const sourceFilter = computed({
+  get: () =>
+    uiStore.musicSource === 'remote' && uiStore.musicSourceId > 0
+      ? `remote:${uiStore.musicSourceId}`
+      : uiStore.musicSource,
+  set: (value: string) => {
+    if (value.startsWith('remote:')) {
+      uiStore.musicSource = 'remote'
+      uiStore.musicSourceId = Number(value.slice('remote:'.length)) || 0
+      return
+    }
+    uiStore.musicSource = value === 'local' || value === 'remote' ? value : 'all'
+    uiStore.musicSourceId = 0
+  }
+})
 
 const filteredSongs = computed(() => {
   const search = keyword.value.trim().toLocaleLowerCase()
@@ -87,23 +126,37 @@ const getSongs = async (): Promise<LibrarySong[]> => {
           playlistId: source.id,
           query: { size: 500, tags: [...selectedTagIds.value] }
         })
-      : source.type === 'album'
-        ? await window.api.database.command('getSongsByAlbum', {
-            album: source.album,
-            artist: source.artist
-          })
-        : source.type === 'artist'
-          ? await window.api.database.command('getSongsByArtist', { artist: source.artist })
-          : source.type === 'genre'
-            ? await window.api.database.command('getSongsByGenre', { genre: source.genre })
-            : source.type === 'history'
-              ? await window.api.database.command('queryRecentPlayedSongs', { size: 500 })
-              : await window.api.database.command('querySongs', {
-                  size: 500,
-                  tags: [...selectedTagIds.value],
-                  source:
-                    source.type === 'local' ? 'local' : source.type === 'remote' ? 'remote' : 'all'
-                })
+      : source.type === 'folder'
+        ? await window.api.database.command('getLocalFolderSongs', { folderId: source.id })
+        : source.type === 'album'
+          ? await window.api.database.command('getSongsByAlbum', {
+              album: source.album,
+              artist: source.artist
+            })
+          : source.type === 'artist'
+            ? await window.api.database.command('getSongsByArtist', { artist: source.artist })
+            : source.type === 'genre'
+              ? await window.api.database.command('getSongsByGenre', { genre: source.genre })
+              : source.type === 'history'
+                ? await window.api.database.command('queryRecentPlayedSongs', { size: 500 })
+                : await window.api.database.command('querySongs', {
+                    size: 500,
+                    tags: [...selectedTagIds.value],
+                    source:
+                      source.type === 'local'
+                        ? 'local'
+                        : source.type === 'remote'
+                          ? 'remote'
+                          : sourceFilter.value === 'local'
+                            ? 'local'
+                            : sourceFilter.value.startsWith('remote:') ||
+                                sourceFilter.value === 'remote'
+                              ? 'remote'
+                              : 'all',
+                    sourceId: sourceFilter.value.startsWith('remote:')
+                      ? Number(sourceFilter.value.slice('remote:'.length))
+                      : undefined
+                  })
   if (!response.success) return []
   const data = response.data as LibrarySong[] | PagedLibrarySongs
   return Array.isArray(data) ? data : data.data
@@ -116,6 +169,10 @@ const load = async (): Promise<void> => {
   } finally {
     loading.value = false
   }
+}
+async function refreshSongs(): Promise<void> {
+  await load()
+  success(t('songList.refreshed'))
 }
 const toggleSort = (field: SortField): void => {
   if (sortBy.value === field) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
@@ -147,6 +204,17 @@ const closeMenu = (): void => {
 }
 const playSong = async (song: LibrarySong): Promise<void> => {
   if (song.songStatus === 0) return
+  // Search is an ad-hoc view, not a new playlist. Insert the selected result
+  // into the current queue (or reuse it when already queued) and play it.
+  if (keyword.value.trim()) {
+    let queueIndex = player.queue.findIndex((queuedSong) => queuedSong.id === song.id)
+    if (queueIndex < 0) {
+      player.addToQueue([song], true)
+      queueIndex = player.queue.findIndex((queuedSong) => queuedSong.id === song.id)
+    }
+    if (queueIndex >= 0) await player.playQueueItem(queueIndex)
+    return
+  }
   await player.playCollection(filteredSongs.value, song.id)
 }
 const playSelected = (): void => {
@@ -154,7 +222,15 @@ const playSelected = (): void => {
   if (selectedSongs[0]) void player.playCollection(selectedSongs, selectedSongs[0].id)
 }
 const addActiveMenuSongToQueue = (): void => {
-  if (activeMenuSong.value) player.addToQueue([activeMenuSong.value], true)
+  const song = activeMenuSong.value
+  if (song) {
+    if (player.queue.some((queuedSong) => queuedSong.id === song.id)) {
+      warning(t('songList.alreadyInQueue'))
+    } else {
+      player.addToQueue([song], true)
+      success(t('songList.addedToQueue'))
+    }
+  }
   closeMenu()
 }
 const playActiveMenuSong = (): void => {
@@ -195,8 +271,15 @@ async function addToPlaylist(playlistId: number): Promise<void> {
       showError(playlistPickerError.value)
       return
     }
-    eventBus.emit('playlistsChanged')
-    success('已添加到歌单')
+    const result = response.data as { added: number; duplicates: number }
+    if (result.added > 0) eventBus.emit('playlistsChanged')
+    if (result.added > 0 && result.duplicates > 0) {
+      success(t('songList.addedToPlaylistWithDuplicates', result))
+    } else if (result.added > 0) {
+      success(t('songList.addedToPlaylist', { count: result.added }))
+    } else {
+      warning(t('songList.alreadyInPlaylist'))
+    }
     playlistPickerOpen.value = false
   } catch (error) {
     playlistPickerError.value = error instanceof Error ? error.message : '添加歌曲失败'
@@ -210,6 +293,7 @@ async function removeSongsFromCurrentPlaylist(songIds: number[]): Promise<void> 
     songIds: [...songIds]
   })
   if (response.success) {
+    await removeDeletedSongsFromQueue(songIds)
     selectedIds.value = new Set()
     await load()
     eventBus.emit('playlistsChanged')
@@ -228,11 +312,96 @@ function removeActiveMenuSong(): void {
   if (activeMenuSong.value) void removeSongsFromCurrentPlaylist([activeMenuSong.value.id])
   closeMenu()
 }
+async function openActiveMenuSongFolder(): Promise<void> {
+  const songId = activeMenuSong.value?.id
+  closeMenu()
+  if (!songId) return
+  const response = await window.api.library.showSongInFolder(songId)
+  if (!response.success) showError(response.error || t('songList.openFolderFailed'))
+}
+function requestDeleteActiveMenuSong(): void {
+  const song = activeMenuSong.value
+  closeMenu()
+  if (!song) return
+  songsPendingDelete.value = [song]
+  deleteLocalFile.value = false
+}
+function requestDeleteSelectedSongs(): void {
+  const selectedSongs = filteredSongs.value.filter((song) => selectedIds.value.has(song.id))
+  if (!selectedSongs.length) return
+  songsPendingDelete.value = selectedSongs
+  deleteLocalFile.value = false
+}
+async function removeDeletedSongsFromQueue(songIds: number[]): Promise<void> {
+  const deleted = new Set(songIds)
+  for (let index = player.queue.length - 1; index >= 0; index--) {
+    if (deleted.has(player.queue[index].id)) await player.removeQueueItem(index)
+  }
+}
+async function confirmDeleteSong(): Promise<void> {
+  const songIds = songsPendingDelete.value.map((song) => song.id)
+  if (!songIds.length) return
+  try {
+    const response = await window.api.database.command('deleteSongs', {
+      songIds,
+      deleteLocalFiles: deleteLocalFile.value
+    })
+    if (!response.success) {
+      showError(response.error || t('songList.deleteFailed'))
+      return
+    }
+    const result = response.data as { deleted: number; failedFiles: string[] }
+    await removeDeletedSongsFromQueue(songIds)
+    selectedIds.value = new Set()
+    await load()
+    eventBus.emit('playlistsChanged')
+    eventBus.emit('tagsChanged')
+    success(t('songList.deleted'))
+    if (result.failedFiles.length) warning(t('songList.deleteLocalFileFailed'))
+    songsPendingDelete.value = []
+  } catch (error) {
+    showError(error instanceof Error ? error.message : t('songList.deleteFailed'))
+  }
+}
 function openSongTags(): void {
   if (!activeMenuSong.value) return
   tagSongId.value = activeMenuSong.value.id
   songTagDialogOpen.value = true
   closeMenu()
+}
+function formatDetailDuration(seconds: number | null): string {
+  if (seconds === null || seconds < 0) return '—'
+  const total = Math.floor(seconds)
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+function formatFileSize(bytes: number | null): string {
+  if (bytes === null || bytes < 0) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+async function openSongDetails(): Promise<void> {
+  const songId = activeMenuSong.value?.id
+  closeMenu()
+  if (!songId) return
+  songDetailsOpen.value = true
+  songDetailsLoading.value = true
+  songDetails.value = null
+  try {
+    const response = await window.api.database.command('getSong', { id: songId })
+    if (!response.success || !response.data) {
+      showError(
+        response.success
+          ? t('songDetails.loadFailed')
+          : response.error || t('songDetails.loadFailed')
+      )
+      songDetailsOpen.value = false
+      return
+    }
+    songDetails.value = response.data as SongDetails
+  } finally {
+    songDetailsLoading.value = false
+  }
 }
 function openBatchTags(): void {
   if (!selectedIds.value.size) return
@@ -240,8 +409,13 @@ function openBatchTags(): void {
 }
 const onScanFinished = (): void => void load()
 const onTagsChanged = (): void => void load()
+async function loadRemoteSources(): Promise<void> {
+  const response = await window.api.database.command('listSources')
+  if (response.success) remoteSources.value = response.data as MusicSourceOption[]
+}
 onMounted(() => {
   void load()
+  void loadRemoteSources()
   eventBus.on('scanFinished', onScanFinished)
   eventBus.on('tagsChanged', onTagsChanged)
   window.addEventListener('click', closeMenu)
@@ -257,6 +431,7 @@ watch(
   { deep: true }
 )
 watch(selectedTagIds, () => canFilterByTags.value && void load())
+watch(sourceFilter, () => canFilterBySource.value && void load())
 </script>
 
 <template>
@@ -269,43 +444,27 @@ watch(selectedTagIds, () => canFilterByTags.value && void load())
       :selection-mode="selectionMode"
       :selected-count="selectedIds.size"
       :all-selected="allSelected"
-      @refresh="load"
+      :show-tag-manager="canFilterByTags"
+      :active-tag-filter-count="canFilterByTags ? selectedTagIds.length : 0"
+      :source-filter="canFilterBySource ? sourceFilter : undefined"
+      :source-options="canFilterBySource ? sourceOptions : []"
+      @refresh="refreshSongs"
       @sort="toggleSort"
       @toggle-selection="toggleSelection"
       @toggle-all="toggleAll"
       @batch-play="playSelected"
       @batch-add-to-playlist="addSelectedToPlaylist"
       @batch-edit-tags="openBatchTags"
-      @batch-delete="removeSongsFromCurrentPlaylist([...selectedIds])"
+      @batch-delete="requestDeleteSelectedSongs"
+      @open-tag-manager="tagManagerOpen = true"
+      @clear-tag-filters="selectedTagIds = []"
+      @update:source-filter="sourceFilter = String($event)"
     />
-    <div
-      v-if="canFilterByTags"
-      class="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-5 py-2"
-    >
-      <button
-        class="btn-hover rounded-lg border border-[var(--color-border)] px-3 py-1 text-sm"
-        @click="tagManagerOpen = true"
-      >
-        {{ t('tags.manageAndFilter') }}
-      </button>
-      <span
-        v-if="selectedTagIds.length"
-        class="rounded-full border border-primary px-2 py-0.5 text-xs text-primary"
-        >{{ t('tags.activeFilterCount', { count: selectedTagIds.length }) }}</span
-      >
-      <button
-        v-if="selectedTagIds.length"
-        class="btn-hover text-xs text-[var(--color-text-l)]"
-        @click="selectedTagIds = []"
-      >
-        {{ t('tags.clearFilter') }}
-      </button>
-    </div>
     <div v-if="loading" class="p-6 text-sm text-[var(--color-text-l)]">
-      {{ $t('songList.loading') }}
+      {{ t('songList.loading') }}
     </div>
     <div v-else-if="filteredSongs.length === 0" class="p-6 text-sm text-[var(--color-text-l)]">
-      {{ $t('songList.empty') }}
+      {{ t('songList.empty') }}
     </div>
     <RecycleScroller
       v-else
@@ -360,13 +519,13 @@ watch(selectedTagIds, () => canFilterByTags.value && void load())
         </button>
         <button
           class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-          @click="closeMenu"
+          @click="openSongDetails"
         >
           {{ t('songList.details') }}
         </button>
         <button
           class="block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)]"
-          @click="closeMenu"
+          @click="openActiveMenuSongFolder"
         >
           {{ t('songList.openFolder') }}
         </button>
@@ -375,13 +534,159 @@ watch(selectedTagIds, () => canFilterByTags.value && void load())
           class="block w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[var(--color-hover)]"
           @click="removeActiveMenuSong"
         >
-          从歌单移除
+          {{ t('songList.removeFromPlaylist') }}
+        </button>
+        <button
+          class="block w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-[var(--color-hover)]"
+          @click="requestDeleteActiveMenuSong"
+        >
+          {{ t('songList.delete') }}
         </button>
       </div>
     </Teleport>
     <TagManagerDialog v-model="tagManagerOpen" v-model:selected-ids="selectedTagIds" />
     <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="load" />
     <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="[...selectedIds]" @changed="load" />
+    <BaseDialog v-model="songDetailsOpen" :title="t('songDetails.title')" width="max-w-3xl">
+      <p v-if="songDetailsLoading" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+        {{ t('songDetails.loading') }}
+      </p>
+      <div v-else-if="songDetails" class="space-y-5">
+        <section>
+          <h3 class="mb-2 text-sm font-semibold">{{ songDetails.title }}</h3>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <p>
+              <span class="detail-label">{{ t('songDetails.artist') }}</span
+              >{{ songDetails.artist || '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.album') }}</span
+              >{{ songDetails.album || '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.genre') }}</span
+              >{{ songDetails.genre || '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.year') }}</span
+              >{{ songDetails.year ?? '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.track') }}</span
+              >{{ songDetails.trackNo ?? '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.disc') }}</span
+              >{{ songDetails.diskNo ?? '—' }}
+            </p>
+          </div>
+        </section>
+        <section>
+          <h3 class="mb-2 text-sm font-semibold">{{ t('songDetails.audio') }}</h3>
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            <p>
+              <span class="detail-label">{{ t('songDetails.format') }}</span
+              >{{ songDetails.format || '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.duration') }}</span
+              >{{ formatDetailDuration(songDetails.duration) }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.fileSize') }}</span
+              >{{ formatFileSize(songDetails.fileSize) }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.bitrate') }}</span
+              >{{ songDetails.bitrate ? `${songDetails.bitrate} kbps` : '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.sampleRate') }}</span
+              >{{ songDetails.sampleRate ? `${songDetails.sampleRate} Hz` : '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.bitDepth') }}</span
+              >{{ songDetails.bitDepth ? `${songDetails.bitDepth} bit` : '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.channels') }}</span
+              >{{ songDetails.channels ?? '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.playTimes') }}</span
+              >{{ songDetails.playTimes }}
+            </p>
+          </div>
+        </section>
+        <section>
+          <h3 class="mb-2 text-sm font-semibold">{{ t('songDetails.source') }}</h3>
+          <div class="space-y-2 text-sm">
+            <p>
+              <span class="detail-label">{{ t('songDetails.filePath') }}</span
+              ><span class="break-all">{{ songDetails.audio }}</span>
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.fileName') }}</span
+              >{{ songDetails.fileName || '—' }}
+            </p>
+            <p>
+              <span class="detail-label">{{ t('songDetails.createdAt') }}</span
+              >{{ songDetails.createdAt }}
+            </p>
+            <p v-if="songDetails.remoteId">
+              <span class="detail-label">{{ t('songDetails.remoteId') }}</span
+              >{{ songDetails.remoteId }}
+            </p>
+          </div>
+        </section>
+        <section v-if="songDetails.tags?.length">
+          <h3 class="mb-2 text-sm font-semibold">{{ t('songDetails.tags') }}</h3>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              v-for="tag in songDetails.tags"
+              :key="tag.id"
+              class="rounded-full px-2 py-0.5 text-xs text-white"
+              :style="{ backgroundColor: tag.color || '#7c3aed' }"
+              >{{ tag.name }}</span
+            >
+          </div>
+        </section>
+      </div>
+    </BaseDialog>
+    <BaseDialog
+      :model-value="songsPendingDelete.length > 0"
+      :title="t('songList.delete')"
+      width="max-w-sm"
+      :close-on-overlay="false"
+      @update:model-value="!$event && (songsPendingDelete = [])"
+    >
+      <p class="text-sm text-[var(--color-text-l)]">
+        <template v-if="songsPendingDelete.length === 1">
+          {{ t('songList.confirmDelete', { title: songsPendingDelete[0]?.title ?? '' }) }}
+        </template>
+        <template v-else>{{
+          t('songList.confirmDeleteBatch', { count: songsPendingDelete.length })
+        }}</template>
+      </p>
+      <label
+        v-if="songsPendingDelete.some((song) => song.sourceId === null)"
+        class="mt-4 flex cursor-pointer items-center gap-2 text-sm"
+      >
+        <input v-model="deleteLocalFile" type="checkbox" class="accent-[var(--color-primary)]" />
+        {{ t('songList.deleteLocalFile') }}
+      </label>
+      <template #footer>
+        <button class="btn-hover rounded-lg px-3 py-1.5 text-sm" @click="songsPendingDelete = []">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          class="btn-hover rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+          @click="confirmDeleteSong"
+        >
+          {{ t('songList.delete') }}
+        </button>
+      </template>
+    </BaseDialog>
     <Teleport to="body">
       <div
         v-if="playlistPickerOpen"
@@ -424,3 +729,12 @@ watch(selectedTagIds, () => canFilterByTags.value && void load())
     </Teleport>
   </section>
 </template>
+
+<style scoped>
+.detail-label {
+  display: block;
+  margin-bottom: 0.125rem;
+  font-size: 0.75rem;
+  color: var(--color-text-l);
+}
+</style>

@@ -204,6 +204,7 @@ declare global {
       }
       library: {
         importLocalFolder(): Promise<ImportLocalMusicResult>
+        showSongInFolder(songId: number): Promise<{ success: boolean; error?: string }>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }
       lyrics: {
@@ -259,6 +260,20 @@ declare global {
         onRequestState(callback: () => void): () => void
         onClosed(callback: () => void): () => void
         onBounds(callback: (bounds: { width: number; height: number }) => void): () => void
+      }
+      remoteSource: {
+        testNavidrome(config: {
+          baseUrl: string
+          user: string
+          secret: string
+        }): Promise<{ success: boolean; data?: { version: string }; error?: string }>
+        chooseCacheDirectory(): Promise<{ success: boolean; data?: string }>
+        defaultCacheDirectory(): Promise<{ success: boolean; data?: string }>
+        cacheSize(directory: string): Promise<{ success: boolean; data?: number }>
+        sync(
+          sourceId: number
+        ): Promise<{ success: boolean; data?: { imported: number; total: number }; error?: string }>
+        cacheSong(songId: number): Promise<{ success: boolean; data?: string; error?: string }>
       }
       window: {
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>

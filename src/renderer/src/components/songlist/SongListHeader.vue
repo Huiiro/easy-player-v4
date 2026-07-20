@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 
 type SortField = 'title' | 'artist' | 'album' | 'duration'
+interface SourceOption {
+  label: string
+  value: string
+}
 
 const props = defineProps<{
   total: number
@@ -12,6 +18,10 @@ const props = defineProps<{
   selectionMode: boolean
   selectedCount: number
   allSelected: boolean
+  showTagManager?: boolean
+  activeTagFilterCount?: number
+  sourceFilter?: string
+  sourceOptions?: SourceOption[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +34,9 @@ const emit = defineEmits<{
   batchAddToPlaylist: []
   batchEditTags: []
   batchDelete: []
+  openTagManager: []
+  clearTagFilters: []
+  'update:sourceFilter': [value: string | number | (string | number)[]]
 }>()
 
 const { t } = useI18n()
@@ -33,19 +46,88 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
 <template>
   <header class="border-b border-[var(--color-border)]">
     <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-      <p class="text-sm text-[var(--color-text-l)]">{{ t('songList.total', { count: total }) }}</p>
       <div class="flex items-center gap-2">
-        <input
-          :value="keyword"
-          class="input-base h-8 w-52"
-          :placeholder="t('songList.search')"
-          @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
-        />
-        <button class="btn-hover text-sm" @click="emit('refresh')">
-          {{ t('songList.refresh') }}
+        <p class="text-sm text-[var(--color-text-l)] text-nowrap">
+          {{ t('songList.total', { count: total }) }}
+        </p>
+        <!-- multi select-->
+        <button
+          class="btn-hover grid size-8 place-items-center"
+          :aria-label="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
+          :title="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
+          @click="emit('toggleSelection')"
+        >
+          <SvgIcon :name="selectionMode ? 'common-back-left' : 'common-task'" class-name="size-5" />
+          <span class="sr-only"
+            >{{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
+          </span>
         </button>
-        <button class="btn-hover text-sm" @click="emit('toggleSelection')">
-          {{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
+        <!-- search-->
+        <div class="relative inline-block">
+          <SvgIcon
+            name="common-search"
+            class="absolute left-2 top-1/2 -translate-y-1/2 text-text-l"
+            class-name="size-4"
+          />
+          <input
+            :value="keyword"
+            class="input-base h-8 w-52 search-input"
+            :placeholder="t('songList.search')"
+            @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
+          />
+          <button
+            v-if="keyword"
+            class="btn-hover absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center"
+            :aria-label="t('songList.clearSearch')"
+            :title="t('songList.clearSearch')"
+            @click="emit('update:keyword', '')"
+          >
+            <SvgIcon name="common-close" class-name="size-3" />
+          </button>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <!-- tag-->
+        <button
+          v-if="showTagManager"
+          class="btn-hover grid size-4 place-items-center"
+          :aria-label="t('tags.manageAndFilter')"
+          :title="t('tags.manageAndFilter')"
+          @click="emit('openTagManager')"
+        >
+          <SvgIcon name="common-tag" class-name="size-4.5" />
+          <span class="sr-only">{{ t('tags.manageAndFilter') }}</span>
+        </button>
+        <span
+          v-if="activeTagFilterCount"
+          class="rounded-full border border-primary px-2 py-0.5 text-xs text-primary"
+        >
+          {{ t('tags.activeFilterCount', { count: activeTagFilterCount }) }}
+        </span>
+        <button
+          v-if="activeTagFilterCount"
+          class="btn-hover text-xs text-[var(--color-text-l)]"
+          @click="emit('clearTagFilters')"
+        >
+          {{ t('tags.clearFilter') }}
+        </button>
+        <BaseSelect
+          v-if="sourceOptions?.length"
+          :model-value="sourceFilter || 'all'"
+          :options="sourceOptions"
+          :aria-label="t('songList.sourceFilter')"
+          size="sm"
+          class="w-32"
+          @update:model-value="emit('update:sourceFilter', $event)"
+        />
+        <button
+          class="btn-hover grid size-4 place-items-center"
+          :aria-label="t('songList.refresh')"
+          :title="t('songList.refresh')"
+          @click="emit('refresh')"
+        >
+          <SvgIcon name="common-refresh" class-name="size-4" />
+          <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
       </div>
     </div>
@@ -107,3 +189,10 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     </div>
   </header>
 </template>
+
+<style scoped>
+.search-input {
+  padding-left: 2rem !important;
+  padding-right: 2rem !important;
+}
+</style>

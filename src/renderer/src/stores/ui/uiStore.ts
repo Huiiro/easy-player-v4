@@ -368,6 +368,7 @@ export const useUIStore = defineStore(
         'isCoverSpin',
         'tagStyle',
         'musicSource',
+        'musicSourceId',
         'useDesktopLyrics',
         'desktopLyricsStyles',
         'useGlobalShortcutKeys',

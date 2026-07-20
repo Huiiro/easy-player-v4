@@ -100,6 +100,14 @@ export interface MusicSourceInput {
   authType?: string | null
   status?: string | null
 }
+export interface LibraryFolder {
+  id: number
+  pid: number | null
+  name: string
+  fullPath: string
+  isRootPath: boolean
+  songCount: number
+}
 export interface DownloadTask {
   id: number
   platform: string | null
