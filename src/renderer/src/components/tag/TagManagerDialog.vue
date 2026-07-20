@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Draggable from 'vuedraggable'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import eventBus from '@/utils/eventBus'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 interface Tag {
   id: number
@@ -109,7 +110,7 @@ watch(
         type="color"
         :aria-label="t('tags.color')"
       />
-      <button class="btn-hover rounded-lg bg-primary px-3 text-sm text-white" @click="create">
+      <button class="btn-hover-base rounded-lg bg-primary px-3 text-sm text-white" @click="create">
         {{ t('tags.create') }}
       </button>
     </div>
@@ -146,7 +147,7 @@ watch(
             :title="t('tags.toggleFilter')"
             @click="toggleFilter(tag.id)"
           >
-            {{ selected.has(tag.id) ? '✓' : '' }}
+            <svg-icon v-if="selected.has(tag.id)" name="common-select" class-name="size-3" />
           </button>
           <input
             v-model="tag.name"
@@ -166,7 +167,7 @@ watch(
             :aria-label="t('tags.delete')"
             @click="tagPendingDelete = tag"
           >
-            ×
+            <svg-icon name="common-close" class-name="size-3" />
           </button>
         </li>
       </template>

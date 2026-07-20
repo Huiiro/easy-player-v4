@@ -65,7 +65,7 @@ async function confirm(): Promise<void> {
         {{ t('common.cancel') }}
       </button>
       <button
-        class="btn-hover rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
         @click="confirm"
       >
         {{ t('songList.delete') }}

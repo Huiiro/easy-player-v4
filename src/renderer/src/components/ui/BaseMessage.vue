@@ -43,7 +43,9 @@ function handleClose(msg: MessageInstance): void {
 
 <template>
   <Teleport to="body">
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none">
+    <div
+      class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none"
+    >
       <TransitionGroup
         enter-active-class="transition-all duration-300 ease-out"
         enter-from-class="opacity-0 -translate-y-4"
@@ -70,14 +72,21 @@ function handleClose(msg: MessageInstance): void {
           />
 
           <!-- 图标 -->
-          <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-               stroke-linecap="round" stroke-linejoin="round"
-               :class="{
-                 'text-success': msg.type === 'success',
-                 'text-warning': msg.type === 'warning',
-                 'text-primary': msg.type === 'info' || !msg.type,
-                 'text-danger': msg.type === 'error'
-               }">
+          <svg
+            class="w-5 h-5 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            :class="{
+              'text-success': msg.type === 'success',
+              'text-warning': msg.type === 'warning',
+              'text-primary': msg.type === 'info' || !msg.type,
+              'text-danger': msg.type === 'error'
+            }"
+          >
             <path :d="getConfig(msg.type ?? 'info').icon" />
           </svg>
 
@@ -90,7 +99,13 @@ function handleClose(msg: MessageInstance): void {
             class="shrink-0 p-0.5 rounded hover:bg-hover-bg transition-colors text-text-l hover:text-text"
             @click="handleClose(msg)"
           >
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg
+              class="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

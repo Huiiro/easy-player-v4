@@ -67,18 +67,54 @@ export interface ResamplerConfig {
   targetSampleRate: number
   quality: 'best' | 'medium' | 'fast'
 }
-export interface TransitionConfig { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }
+export interface TransitionConfig {
+  gaplessEnabled: boolean
+  crossfadeEnabled: boolean
+  crossfadeMs: number
+}
 
 export interface DspNodeConfig {
   id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
   enabled: boolean
 }
-export interface CompressorConfig { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number; makeupDb: number }
-export interface DelayConfig { delayMs: number; feedback: number; mix: number }
-export interface ChorusConfig { rateHz: number; depthMs: number; mix: number }
-export interface NoiseGateConfig { thresholdDb: number; attackMs: number; holdMs: number; releaseMs: number; rangeDb: number }
-export interface PhaserConfig { rateHz: number; depth: number; centerHz: number; feedback: number; mix: number }
-export interface ChannelMatrixConfig { enabled: boolean; balance: number; swapStereo: boolean; monoDownmix: boolean; outputGains: number[] }
+export interface CompressorConfig {
+  thresholdDb: number
+  ratio: number
+  attackMs: number
+  releaseMs: number
+  makeupDb: number
+}
+export interface DelayConfig {
+  delayMs: number
+  feedback: number
+  mix: number
+}
+export interface ChorusConfig {
+  rateHz: number
+  depthMs: number
+  mix: number
+}
+export interface NoiseGateConfig {
+  thresholdDb: number
+  attackMs: number
+  holdMs: number
+  releaseMs: number
+  rangeDb: number
+}
+export interface PhaserConfig {
+  rateHz: number
+  depth: number
+  centerHz: number
+  feedback: number
+  mix: number
+}
+export interface ChannelMatrixConfig {
+  enabled: boolean
+  balance: number
+  swapStereo: boolean
+  monoDownmix: boolean
+  outputGains: number[]
+}
 
 export interface LogEntry {
   level: 'debug' | 'info' | 'warn' | 'error'

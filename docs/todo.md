@@ -7,3 +7,8 @@ song list item:
 搜索匹配词高亮
 
 home Index checked
+
+remote page + refresh button
+取色：自定义组件
+tag，theme
+

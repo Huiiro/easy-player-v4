@@ -69,7 +69,7 @@ watch(
         {{ t('tags.remove') }}
       </button>
       <button
-        class="btn-hover rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-40"
+        class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-40"
         :disabled="!selectedId"
         @click="apply(true)"
       >

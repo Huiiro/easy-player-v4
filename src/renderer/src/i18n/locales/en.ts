@@ -190,6 +190,7 @@ export default {
     back: 'Back'
   },
   remote: {
+    all: 'All',
     title: 'Remote sources',
     supported: 'Navidrome (Subsonic API) is currently supported',
     add: 'Add source',
@@ -416,6 +417,7 @@ export default {
     lyricsHint: 'Lyrics will appear here as playback progresses',
     speed: 'Speed',
     spectrum: 'Spectrum',
+    showTranslation: 'Show Lyrics',
     lyricFontSize: 'Lyric font size',
     lyricSpacing: 'Lyric spacing',
     progressStyle: 'Toggle progress style',

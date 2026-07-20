@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import eventBus from '@/utils/eventBus'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 interface Tag {
   id: number
@@ -61,12 +62,13 @@ watch(
       <button
         v-for="tag in tags"
         :key="tag.id"
-        class="rounded-full border px-3 py-1.5 text-sm transition"
+        class="flex items-center gap-1 rounded-full border px-3 py-1.5 text-sm transition"
         :class="tag.isIncluded ? 'border-transparent text-white' : 'border-border'"
         :style="tag.isIncluded ? { backgroundColor: tag.color || '#7c3aed' } : undefined"
         @click="toggle(tag)"
       >
-        {{ tag.isIncluded ? '✓ ' : '' }}{{ tag.name }}
+        <svg-icon v-if="tag.isIncluded" name="common-select" class-name="size-3" />
+        {{ tag.name }}
       </button>
     </div>
   </BaseDialog>

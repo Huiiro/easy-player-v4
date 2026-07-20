@@ -125,8 +125,8 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col px-7 py-6 text-[var(--color-text)]">
-    <header class="mb-5 flex flex-wrap items-center justify-between gap-3">
+  <section class="flex h-full min-h-0 flex-col py-6 text-text">
+    <header class="mb-5 flex flex-wrap items-center justify-between gap-3 px-6">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">{{ title }}</h1>
         <div
@@ -135,7 +135,7 @@ onMounted(() => void load())
         >
           <SvgIcon
             name="common-search"
-            class-name="pointer-events-none absolute left-2.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-[var(--color-text-l)]"
+            class-name="pointer-events-none absolute left-2.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-text-l"
           />
           <input
             v-model="keyword"
@@ -173,13 +173,12 @@ onMounted(() => void load())
           v-model="cardSize"
           :options="cardSizeOptions"
           :title="t('library.cardSize')"
-          size="sm"
-          class="w-26"
+          class="w-30"
         />
       </div>
     </header>
-    <p v-if="loading" class="py-8 text-sm text-[var(--color-text-l)]">{{ t('library.loading') }}</p>
-    <p v-else-if="!items.length" class="py-8 text-sm text-[var(--color-text-l)]">
+    <p v-if="loading" class="py-8 text-sm text-text-l">{{ t('library.loading') }}</p>
+    <p v-else-if="!items.length" class="py-8 text-sm text-text-l">
       {{ t('library.empty') }}
     </p>
     <div
@@ -187,13 +186,13 @@ onMounted(() => void load())
       class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pr-1"
       :style="gridStyle"
     >
-      <button
+      <div
         v-for="item in items"
         :key="`${item.value}-${item.subtitle || ''}`"
-        class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-[var(--color-hover)]"
+        class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
         @click="open(item)"
       >
-        <div class="relative aspect-square bg-[var(--color-bg-l)]">
+        <div class="relative aspect-square bg-bg-l">
           <div
             class="size-full overflow-hidden"
             :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-lg'"
@@ -204,21 +203,22 @@ onMounted(() => void load())
               class="size-full object-cover transition-transform duration-300 group-hover:scale-105"
               :alt="item.name"
             />
-            <span v-else class="grid size-full place-items-center text-[var(--color-text-l)]"
-              ><SvgIcon :name="icon" class-name="size-12"
-            /></span>
+            <span v-else class="grid size-full place-items-center text-text-l">
+              <SvgIcon :name="icon" class-name="size-12" />
+            </span>
           </div>
           <span
             class="absolute rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white"
             :class="props.kind === 'artist' ? 'bottom-1 right-[9%]' : 'bottom-1 right-1'"
-            >{{ t('library.songCount', { count: item.count }) }}</span
-          >
+            >
+            {{ t('library.songCount', { count: item.count }) }}
+          </span>
         </div>
         <p class="mt-2 truncate text-sm font-medium">{{ item.name }}</p>
-        <p v-if="item.subtitle" class="mt-0.5 truncate text-xs text-[var(--color-text-l)]">
+        <p v-if="item.subtitle" class="mt-0.5 truncate text-xs text-text-l">
           {{ item.subtitle }}
         </p>
-      </button>
+      </div>
     </div>
   </section>
 </template>

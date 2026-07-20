@@ -112,57 +112,64 @@ watch(
     width="max-w-md"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <div class="space-y-2">
-      <button
-        class="flex w-full items-center gap-3 rounded-xl bg-primary/10 px-3 py-3 text-left text-sm font-medium text-primary transition hover:bg-primary/15"
-        :disabled="submitting"
-        @click="creating = !creating"
-      >
-        <span class="grid size-10 place-items-center rounded-lg bg-primary/15">
-          <SvgIcon name="common-plus" class-name="size-5" />
-        </span>
-        {{ t('playlist.createNew') }}
-      </button>
-      <form v-if="creating" class="flex gap-2" @submit.prevent="createAndAdd">
-        <input
-          v-model="name"
-          class="min-w-0 flex-1 rounded-lg bg-hover px-3 py-2 text-sm outline-none ring-primary focus:ring-1"
-          :placeholder="t('playlist.namePlaceholder')"
-          autofocus
-        />
+    <div class="flex flex-col max-h-[60vh]">
+      <!-- 顶部固定：新建播放列表 -->
+      <div class="shrink-0 space-y-2 pb-2">
         <button
-          class="rounded-lg bg-primary px-3 text-sm text-white disabled:opacity-50"
+          class="flex w-full items-center gap-3 rounded-xl bg-primary/10 px-3 py-3 text-left text-sm font-medium text-primary transition hover:bg-primary/15"
           :disabled="submitting"
-          type="submit"
+          @click="creating = !creating"
         >
+          <span class="grid size-10 place-items-center rounded-lg bg-primary/15">
+            <SvgIcon name="common-plus" class-name="size-5" />
+          </span>
           {{ t('playlist.createNew') }}
         </button>
-      </form>
-      <p v-if="loading" class="py-5 text-center text-sm text-text-l">
-        {{ t('songList.playlistLoading') }}
-      </p>
-      <p v-else-if="!playlists.length" class="py-4 text-center text-sm text-text-l">
-        {{ t('songList.playlistEmpty') }}
-      </p>
-      <button
-        v-for="playlist in playlists"
-        :key="playlist.id"
-        class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-hover disabled:opacity-50"
-        :disabled="submitting"
-        @click="addToPlaylist(playlist.id)"
-      >
-        <img
-          v-if="coverUrl(playlist)"
-          :src="coverUrl(playlist) || undefined"
-          class="size-10 rounded-lg object-cover"
-          alt=""
-          @error="($event.target as HTMLImageElement).style.display = 'none'"
-        />
-        <span v-else class="grid size-10 place-items-center rounded-lg bg-hover text-text-l">
-          <SvgIcon name="common-music" class-name="size-5" />
-        </span>
-        <span class="min-w-0 truncate text-sm">{{ playlist.name }}</span>
-      </button>
+        <form v-if="creating" class="flex gap-2" @submit.prevent="createAndAdd">
+          <input
+            v-model="name"
+            class="min-w-0 flex-1 rounded-lg bg-hover px-3 py-2 text-sm outline-none ring-primary focus:ring-1"
+            :placeholder="t('playlist.namePlaceholder')"
+            autofocus
+          />
+          <button
+            class="btn-hover-base rounded-lg bg-primary px-3 text-sm text-white disabled:opacity-50"
+            :disabled="submitting"
+            type="submit"
+          >
+            {{ t('playlist.createNew') }}
+          </button>
+        </form>
+      </div>
+
+      <!-- 底部滚动：播放列表 -->
+      <div class="flex-1 overflow-y-auto custom-scrollbar min-h-0 space-y-1">
+        <p v-if="loading" class="py-5 text-center text-sm text-text-l">
+          {{ t('songList.playlistLoading') }}
+        </p>
+        <p v-else-if="!playlists.length" class="py-4 text-center text-sm text-text-l">
+          {{ t('songList.playlistEmpty') }}
+        </p>
+        <button
+          v-for="playlist in playlists"
+          :key="playlist.id"
+          class="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-hover disabled:opacity-50"
+          :disabled="submitting"
+          @click="addToPlaylist(playlist.id)"
+        >
+          <img
+            v-if="coverUrl(playlist)"
+            :src="coverUrl(playlist) || undefined"
+            class="size-10 rounded-lg object-cover"
+            alt=""
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
+          />
+          <span v-else class="grid size-10 place-items-center rounded-lg bg-hover text-text-l">
+            <SvgIcon name="common-music" class-name="size-5" />
+          </span>
+          <span class="min-w-0 truncate text-sm">{{ playlist.name }}</span>
+        </button>
+      </div>
     </div>
   </BaseDialog>
 </template>

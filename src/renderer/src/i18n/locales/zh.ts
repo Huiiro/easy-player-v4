@@ -189,6 +189,7 @@ export default {
     back: '返回'
   },
   remote: {
+    all: '全部',
     title: '远程音源',
     supported: '当前支持 Navidrome（Subsonic API）',
     add: '新增音源',
@@ -416,6 +417,7 @@ export default {
     alignLeft: '左对齐',
     alignCenter: '居中',
     alignRight: '右对齐',
+    showTranslation: '显示歌词',
     lyricAlignment: '歌词对齐：{alignment}',
     lyricEffect: '歌词效果：{effect}',
     lyricEffectNone: '无',

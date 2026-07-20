@@ -33,7 +33,7 @@ const syncingSourceId = ref<number | null>(null)
 const providerFilter = ref('all')
 const draggedSourceId = ref<number | null>(null)
 const providerOptions = [
-  { label: '全部', value: 'all' },
+  { label: t('remote.all'), value: 'all' },
   { label: 'Navidrome', value: 'navidrome' }
 ]
 const formProviderOptions = [{ label: 'Navidrome', value: 'navidrome' }]
@@ -153,14 +153,14 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <section class="custom-scrollbar h-full overflow-y-auto p-7 text-[var(--color-text)]">
+  <section class="custom-scrollbar h-full overflow-y-auto p-7 text-text">
     <header class="mb-6 flex items-center justify-between">
       <div>
         <h1 class="text-xl font-bold">{{ t('remote.title') }}</h1>
-        <p class="mt-1 text-sm text-[var(--color-text-l)]">{{ t('remote.supported') }}</p>
+        <p class="mt-1 text-sm text-text-l">{{ t('remote.supported') }}</p>
       </div>
       <div class="flex items-center gap-4">
-        <label class="text-sm text-[var(--color-text-l)]">{{ t('remote.provider') }}</label>
+        <label class="text-sm text-text-l">{{ t('remote.provider') }}</label>
         <BaseSelect v-model="providerFilter" :options="providerOptions" class="w-36" />
         <button
           class="btn-hover-base flex items-center rounded-lg bg-primary px-3 py-2 text-sm text-white"
@@ -174,7 +174,7 @@ onMounted(() => void load())
 
     <div
       v-if="!sources.length"
-      class="rounded-xl border border-dashed border-[var(--color-border)] p-10 text-center text-sm text-[var(--color-text-l)]"
+      class="rounded-xl border border-dashed border-border p-10 text-center text-sm text-text-l"
     >
       {{ t('remote.empty') }}
     </div>
@@ -183,7 +183,7 @@ onMounted(() => void load())
         v-for="source in filteredSources"
         :key="source.id"
         draggable="true"
-        class="rounded-xl border border-[var(--color-border)] p-4"
+        class="rounded-xl border border-border p-4"
         @dragstart="draggedSourceId = source.id"
         @dragover.prevent
         @drop.prevent="dropSource(source.id)"
@@ -192,13 +192,12 @@ onMounted(() => void load())
           <div class="min-w-0">
             <div class="flex items-center gap-2">
               <h2 class="font-semibold">{{ source.name }}</h2>
-              <span
-                class="rounded-full bg-[var(--color-primary)]/15 px-2 py-0.5 text-xs text-[var(--color-primary)]"
-                >Navidrome</span
-              >
+              <span class="rounded-full bg-primary/15 px-2 py-0.5 text-xs text-primary">
+                {{ source.type }}
+              </span>
             </div>
-            <p class="mt-1 truncate text-sm text-[var(--color-text-l)]">{{ source.baseUrl }}</p>
-            <p class="mt-2 text-xs text-[var(--color-text-l)]">
+            <p class="mt-1 truncate text-sm text-text-l">{{ source.baseUrl }}</p>
+            <p class="mt-2 text-xs text-text-l">
               {{
                 t('remote.sourceStats', {
                   songs: source.songCount || 0,
@@ -290,7 +289,7 @@ onMounted(() => void load())
     width="max-w-sm"
     @update:model-value="!$event && (deleteTarget = null)"
   >
-    <p class="text-sm text-[var(--color-text-l)]">
+    <p class="text-sm text-text-l">
       {{ t('remote.confirmDelete', { name: deleteTarget?.name || '' }) }}
     </p>
     <template #footer>

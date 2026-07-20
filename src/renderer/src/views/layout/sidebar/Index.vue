@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import CreatePlaylistDialog from '@/components/playlist/CreatePlaylistDialog.vue'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 
@@ -25,11 +26,8 @@ const expanded = ref(true)
 const playlistsExpanded = ref(true)
 const playlists = ref<Playlist[]>([])
 const playlistDialogOpen = ref(false)
-const playlistName = ref('')
-const playlistError = ref('')
-const creatingPlaylist = ref(false)
 const draggedPlaylistId = ref<number | null>(null)
-const { success, error: showError, warning } = useMessage()
+const { success, error: showError } = useMessage()
 
 const libraryItems: NavigationItem[] = [
   { labelKey: 'nav.home', path: '/home', icon: 'menu-home' },
@@ -49,7 +47,7 @@ const utilityItems: NavigationItem[] = [
 
 const activePath = computed(() => route.path)
 const navItemClass =
-  'flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm text-[var(--color-text-l)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]'
+  'flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm text-text-l transition-colors hover:bg-hover hover:text-text'
 
 function isActive(path: string): boolean {
   return activePath.value === path || activePath.value.startsWith(`${path}/`)
@@ -64,37 +62,7 @@ async function loadPlaylists(): Promise<void> {
   if (response.success) playlists.value = response.data as Playlist[]
 }
 function createPlaylist(): void {
-  playlistName.value = ''
-  playlistError.value = ''
   playlistDialogOpen.value = true
-}
-async function submitPlaylist(): Promise<void> {
-  const name = playlistName.value.trim()
-  if (!name) {
-    playlistError.value = t('sidebar.playlistNameRequired')
-    warning(playlistError.value)
-    return
-  }
-  if (name.length > 64) {
-    playlistError.value = t('sidebar.playlistNameTooLong')
-    warning(playlistError.value)
-    return
-  }
-  creatingPlaylist.value = true
-  try {
-    const response = await window.api.database.command('createPlaylist', { name })
-    if (!response.success) {
-      playlistError.value = response.error || t('sidebar.playlistCreateFailed')
-      showError(playlistError.value)
-      return
-    }
-    playlistDialogOpen.value = false
-    await loadPlaylists()
-    eventBus.emit('playlistsChanged')
-    success(t('sidebar.playlistCreated', { name }))
-  } finally {
-    creatingPlaylist.value = false
-  }
 }
 function playlistCover(cover: string | null): string | null {
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
@@ -131,11 +99,11 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
 
 <template>
   <aside
-    class="flex h-full flex-col overflow-hidden border-r border-[var(--color-border)] text-[var(--color-text)] transition-[width] duration-200"
+    class="flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-200"
     :class="expanded ? 'w-54' : 'w-14'"
   >
     <nav
-      class="custom-scrollbar flex-1 overflow-y-auto px-2 py-2"
+      class="no-scrollbar flex-1 overflow-y-auto px-2 py-2"
       :aria-label="t('sidebar.ariaLabel')"
     >
       <section class="pb-3">
@@ -143,14 +111,11 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           class="mb-1 flex h-8 items-center px-2"
           :class="expanded ? 'justify-between' : 'justify-center'"
         >
-          <p
-            v-if="expanded"
-            class="text-[11px] font-semibold tracking-[0.08em] text-[var(--color-text-l)]"
-          >
+          <p v-if="expanded" class="text-[11px] font-semibold tracking-[0.08em] text-text-l">
             {{ t('sidebar.library') }}
           </p>
           <button
-            class="grid size-7 place-items-center rounded-md text-[var(--color-text-l)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+            class="grid size-7 place-items-center rounded-md text-text-l transition-colors hover:bg-hover hover:text-text"
             :title="expanded ? t('sidebar.collapse') : t('sidebar.expand')"
             @click="expanded = !expanded"
           >
@@ -167,7 +132,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           :class="[
             navItemClass,
             isActive(item.path)
-              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-[var(--color-primary)]'
+              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
               : '',
             !expanded ? 'justify-center px-0' : ''
           ]"
@@ -179,14 +144,14 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
         </button>
       </section>
 
-      <section class="border-t border-[var(--color-border)] py-3">
+      <section class="border-t border-border py-3">
         <div v-if="expanded" class="mb-1 flex items-center justify-between px-2">
-          <p class="text-[11px] font-semibold tracking-[0.08em] text-[var(--color-text-l)]">
+          <p class="text-[11px] font-semibold tracking-[0.08em] text-text-l">
             {{ t('sidebar.playlists') }}
           </p>
           <div class="flex items-center gap-1">
             <button
-              class="grid size-6 place-items-center rounded-md text-[var(--color-text-l)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+              class="grid size-6 place-items-center rounded-md text-text-l hover:bg-hover hover:text-text"
               :title="
                 playlistsExpanded ? t('sidebar.collapsePlaylists') : t('sidebar.expandPlaylists')
               "
@@ -198,7 +163,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
               />
             </button>
             <button
-              class="grid size-6 place-items-center rounded-md text-[var(--color-text-l)] hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+              class="grid size-6 place-items-center rounded-md text-text-l hover:bg-hover hover:text-text"
               :title="t('sidebar.createPlaylist')"
               @click="createPlaylist"
             >
@@ -219,11 +184,11 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
               v-for="playlist in playlists"
               :key="playlist.id"
               draggable="true"
-              class="grid h-9 w-full place-items-center rounded-lg transition-colors hover:bg-[var(--color-hover)]"
+              class="grid h-9 w-full place-items-center rounded-lg transition-colors hover:bg-hover"
               :class="
                 isActive(`/playlist/${playlist.id}`)
-                  ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-[var(--color-primary)]'
-                  : 'text-[var(--color-text-l)]'
+                  ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-primary'
+                  : 'text-text-l'
               "
               :title="playlist.name"
               @click="openPlaylist(playlist.id)"
@@ -237,7 +202,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
                 class="size-5 rounded object-cover"
                 :alt="playlist.name"
               />
-              <span v-else class="grid size-5 place-items-center rounded bg-[var(--color-bg-l)]"
+              <span v-else class="grid size-5 place-items-center rounded bg-bg-l"
                 ><SvgIcon name="common-music" class-name="size-3"
               /></span>
               <span class="sr-only">{{ playlist.name }}</span>
@@ -249,10 +214,10 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
             v-for="playlist in playlists"
             :key="playlist.id"
             draggable="true"
-            class="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-[var(--color-text-l)] transition-colors hover:bg-[var(--color-hover)] hover:text-[var(--color-text)]"
+            class="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-text-l transition-colors hover:bg-hover hover:text-text"
             :class="
               isActive(`/playlist/${playlist.id}`)
-                ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-[var(--color-primary)]'
+                ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
                 : ''
             "
             @click="openPlaylist(playlist.id)"
@@ -266,7 +231,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
               class="size-5 rounded object-cover"
               :alt="playlist.name"
             />
-            <span v-else class="grid size-5 place-items-center rounded bg-[var(--color-bg-l)]"
+            <span v-else class="grid size-5 place-items-center rounded bg-bg-l"
               ><SvgIcon name="common-music" class-name="size-3"
             /></span>
             <span class="truncate">{{ playlist.name }}</span>
@@ -274,16 +239,16 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
         </div>
         <p
           v-else-if="expanded && playlistsExpanded"
-          class="px-2 pt-1 text-xs leading-5 text-[var(--color-text-l)]"
+          class="px-2 pt-1 text-xs leading-5 text-text-l"
         >
           {{ t('sidebar.playlistEmpty') }}
         </p>
       </section>
 
-      <section class="border-t border-[var(--color-border)] pt-3">
+      <section class="border-t border-border pt-3">
         <p
           v-if="expanded"
-          class="mb-1 px-2 text-[11px] font-semibold tracking-[0.08em] text-[var(--color-text-l)]"
+          class="mb-1 px-2 text-[11px] font-semibold tracking-[0.08em] text-text-l"
         >
           {{ t('sidebar.more') }}
         </p>
@@ -293,7 +258,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           :class="[
             navItemClass,
             isActive(item.path)
-              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-[var(--color-primary)]'
+              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
               : '',
             !expanded ? 'justify-center px-0' : ''
           ]"
@@ -306,43 +271,5 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
       </section>
     </nav>
   </aside>
-  <Teleport to="body">
-    <div
-      v-if="playlistDialogOpen"
-      class="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4"
-      @click.self="playlistDialogOpen = false"
-    >
-      <form
-        class="w-full max-w-sm rounded-2xl border border-[var(--color-border)] bg-[var(--color-bg)] p-5 shadow-2xl"
-        @submit.prevent="submitPlaylist"
-      >
-        <h2 class="text-lg font-semibold text-[var(--color-text)]">
-          {{ t('sidebar.createPlaylist') }}
-        </h2>
-        <input
-          v-model="playlistName"
-          autofocus
-          maxlength="64"
-          class="input-base mt-4 h-10 w-full"
-          :placeholder="t('playlist.name')"
-        />
-        <p class="mt-2 min-h-5 text-xs text-red-400">{{ playlistError }}</p>
-        <div class="mt-3 flex justify-end gap-2">
-          <button
-            type="button"
-            class="btn-hover px-3 py-1.5 text-sm"
-            @click="playlistDialogOpen = false"
-          >
-            {{ t('common.cancel') }}</button
-          ><button
-            type="submit"
-            class="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm text-white disabled:opacity-50"
-            :disabled="creatingPlaylist"
-          >
-            {{ t('sidebar.createPlaylist') }}
-          </button>
-        </div>
-      </form>
-    </div>
-  </Teleport>
+  <CreatePlaylistDialog v-model="playlistDialogOpen" />
 </template>

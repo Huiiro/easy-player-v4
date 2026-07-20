@@ -367,7 +367,11 @@ function onMarkClick(v: number) {
 
           <span
             class="absolute text-xs text-text-l whitespace-nowrap"
-            :class="vertical ? 'left-full ml-2 -translate-y-1/2' : 'top-full mt-1 left-1/2 -translate-x-1/2'"
+            :class="
+              vertical
+                ? 'left-full ml-2 -translate-y-1/2'
+                : 'top-full mt-1 left-1/2 -translate-x-1/2'
+            "
           >
             {{ m.label }}
           </span>

@@ -37,9 +37,7 @@ const source = computed(() =>
 <template>
   <section class="flex h-full min-h-0 flex-col text-text">
     <header class="flex shrink-0 items-center gap-4 px-7 py-5">
-      <div
-        class="grid size-16 shrink-0 place-items-center rounded-xl bg-bg-l text-text-l"
-      >
+      <div class="grid size-16 shrink-0 place-items-center rounded-xl bg-bg-l text-text-l">
         <SvgIcon :name="icon" class-name="size-8" />
       </div>
       <div class="min-w-0 flex-1">
