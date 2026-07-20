@@ -24,11 +24,11 @@ async function clearHistory(): Promise<void> {
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col text-[var(--color-text)]">
+  <section class="flex h-full min-h-0 flex-col text-text">
     <header class="flex items-center justify-between px-7 py-5">
       <div>
         <h1 class="text-xl font-bold">{{ t('history.title') }}</h1>
-        <p class="mt-1 text-sm text-[var(--color-text-l)]">{{ t('history.description') }}</p>
+        <p class="mt-1 text-sm text-text-l">{{ t('history.description') }}</p>
       </div>
       <button
         class="btn-hover flex items-center gap-1.5 px-2 py-1.5 text-sm text-red-400"
@@ -42,7 +42,7 @@ async function clearHistory(): Promise<void> {
     <SongListView :key="listKey" :source="{ type: 'history' }" />
   </section>
   <BaseDialog v-model="clearDialogOpen" :title="t('history.clear')" width="max-w-sm">
-    <p class="text-sm text-[var(--color-text-l)]">{{ t('history.clearConfirm') }}</p>
+    <p class="text-sm text-text-l">{{ t('history.clearConfirm') }}</p>
     <template #footer>
       <button class="btn-hover px-3 py-1.5 text-sm" @click="clearDialogOpen = false">
         {{ t('common.cancel') }}

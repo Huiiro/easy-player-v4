@@ -44,13 +44,10 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
 </script>
 
 <template>
-  <header class="border-b border-[var(--color-border)]">
+  <header class="border-b border-border">
     <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-      <div class="flex items-center gap-2">
-        <p class="text-sm text-[var(--color-text-l)] text-nowrap">
-          {{ t('songList.total', { count: total }) }}
-        </p>
-        <!-- multi select-->
+      <div class="flex items-center gap-1">
+        <!-- multi select -->
         <button
           class="btn-hover grid size-8 place-items-center"
           :aria-label="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
@@ -62,7 +59,7 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
             >{{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
           </span>
         </button>
-        <!-- search-->
+        <!-- search -->
         <div class="relative inline-block">
           <SvgIcon
             name="common-search"
@@ -85,6 +82,10 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
             <SvgIcon name="common-close" class-name="size-3" />
           </button>
         </div>
+        <!-- count text -->
+        <p class="text-sm text-text-l text-nowrap ml-2 cursor-default btn-hover">
+          {{ t('songList.total', { count: total }) }}
+        </p>
       </div>
       <div class="flex items-center gap-4">
         <!-- tag-->
@@ -106,7 +107,7 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
         </span>
         <button
           v-if="activeTagFilterCount"
-          class="btn-hover text-xs text-[var(--color-text-l)]"
+          class="btn-hover text-xs text-text-l"
           @click="emit('clearTagFilters')"
         >
           {{ t('tags.clearFilter') }}
@@ -138,39 +139,43 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="btn-hover disabled:opacity-40"
+        class="flex gap-1 items-center btn-hover disabled:opacity-40"
         @click="emit('batchPlay')"
       >
+        <SvgIcon name="play-play" class-name="size-4" />
         {{ t('songList.play') }}
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="btn-hover disabled:opacity-40"
+        class="flex gap-1 items-center btn-hover disabled:opacity-40"
         @click="emit('batchAddToPlaylist')"
       >
+        <SvgIcon name="common-plus" class-name="size-4" />
         {{ t('songList.addToPlaylist') }}
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="btn-hover disabled:opacity-40"
+        class="flex gap-1 items-center btn-hover disabled:opacity-40"
         @click="emit('batchEditTags')"
       >
+        <SvgIcon name="common-edit" class-name="size-4" />
         {{ t('songList.editTags') }}
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="btn-hover disabled:opacity-40"
+        class="flex gap-1 items-center btn-hover disabled:opacity-40"
         @click="emit('batchDelete')"
       >
+        <SvgIcon name="common-delete" class-name="size-4" />
         {{ t('songList.delete') }}
       </button>
-      <span class="text-[var(--color-text-l)]">{{
+      <span class="text-text-l cursor-default">{{
         t('songList.selected', { count: selectedCount })
       }}</span>
     </div>
 
     <div
-      class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 py-2 text-xs text-[var(--color-text-l)]"
+      class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
     >
       <span>#</span>
       <button class="text-left" @click="emit('sort', 'title')">

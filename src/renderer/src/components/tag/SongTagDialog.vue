@@ -51,10 +51,10 @@ watch(
     width="max-w-md"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p v-if="loading" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+    <p v-if="loading" class="py-8 text-center text-sm text-text-l">
       {{ t('tags.loading') }}
     </p>
-    <p v-else-if="!tags.length" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+    <p v-else-if="!tags.length" class="py-8 text-center text-sm text-text-l">
       {{ t('tags.empty') }}
     </p>
     <div v-else class="flex flex-wrap gap-2">
@@ -62,7 +62,7 @@ watch(
         v-for="tag in tags"
         :key="tag.id"
         class="rounded-full border px-3 py-1.5 text-sm transition"
-        :class="tag.isIncluded ? 'border-transparent text-white' : 'border-[var(--color-border)]'"
+        :class="tag.isIncluded ? 'border-transparent text-white' : 'border-border'"
         :style="tag.isIncluded ? { backgroundColor: tag.color || '#7c3aed' } : undefined"
         @click="toggle(tag)"
       >

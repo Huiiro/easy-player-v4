@@ -2,4 +2,6 @@
 import LibraryDetail from '@/components/library/LibraryDetail.vue'
 </script>
 
-<template><LibraryDetail kind="genre" /></template>
+<template>
+  <LibraryDetail kind="genre" />
+</template>

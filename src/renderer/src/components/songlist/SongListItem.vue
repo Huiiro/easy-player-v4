@@ -64,19 +64,19 @@ function openAlbum(): void {
 <template>
   <div class="h-16 border-b border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]">
     <div
-      class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 transition-colors hover:bg-[var(--color-hover)]"
+      class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 transition-colors hover:bg-hover"
       :class="
         current
-          ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-[var(--color-primary)]'
+          ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       "
       @dblclick="emit('play', song)"
     >
-      <span class="flex items-center gap-2 text-sm text-[var(--color-text-l)]">
+      <span class="flex items-center gap-2 text-sm text-text-l">
         <input
           v-if="selectionMode"
           type="checkbox"
-          class="accent-[var(--color-primary)]"
+          class="accent-primary"
           :checked="selected"
           @click.stop="emit('toggleSelect', song.id)"
           @dblclick.stop
@@ -91,26 +91,25 @@ function openAlbum(): void {
           :alt="song.title"
           @error="coverFailed = true"
         />
-        <span
-          v-else
-          class="grid size-10 shrink-0 place-items-center rounded-md bg-[var(--color-bg-l)]"
-          ><svgIcon name="common-music" class-name="size-5"
-        /></span>
+        <span v-else class="grid size-10 shrink-0 place-items-center rounded-md bg-bg-l">
+          <svgIcon name="common-music" class-name="size-5" />
+        </span>
         <span class="min-w-0">
           <span class="flex min-w-0 items-center gap-1">
             <span
-              class="truncate"
+              class="truncate cursor-pointer"
               :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
-              >{{ song.title }}</span
             >
+              {{ song.title }}
+            </span>
             <SvgIcon
               v-if="song.sourceId !== null"
               name="menu-remote"
-              class-name="size-3.5 shrink-0 text-[var(--color-primary)]"
+              class-name="size-3.5 shrink-0 text-primary"
               :title="t('songList.remoteSong')"
             />
           </span>
-          <span v-if="song.playTime" class="mt-0.5 block text-xs text-[var(--color-text-l)]">
+          <span v-if="song.playTime" class="mt-0.5 block text-xs text-text-l">
             {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
           </span>
           <span v-if="song.tags?.length" class="mt-0.5 flex gap-1 overflow-hidden">
@@ -119,30 +118,31 @@ function openAlbum(): void {
               :key="tag.id"
               class="max-w-24 truncate rounded-full px-1.5 py-px text-[10px] leading-4 text-white"
               :style="{ backgroundColor: tag.color || '#7c3aed' }"
-              >{{ tag.name }}</span
-            >
+              >{{ tag.name }}
+            </span>
           </span>
         </span>
       </span>
       <button
-        class="truncate text-left text-sm text-[var(--color-text-l)] hover:text-[var(--color-primary)] disabled:cursor-default disabled:hover:text-[var(--color-text-l)]"
+        class="truncate text-left text-sm text-text-l hover:text-primary disabled:cursor-default disabled:hover:text-text-l"
         :disabled="!song.artist?.trim()"
         @click.stop="openArtist"
       >
         {{ song.artist || t('songList.unknownArtist') }}
       </button>
       <button
-        class="truncate text-left text-sm text-[var(--color-text-l)] hover:text-[var(--color-primary)] disabled:cursor-default disabled:hover:text-[var(--color-text-l)]"
+        class="truncate text-left text-sm text-text-l hover:text-primary disabled:cursor-default disabled:hover:text-text-l"
         :disabled="!song.album?.trim()"
         @click.stop="openAlbum"
       >
         {{ song.album || t('songList.unknownAlbum') }}
       </button>
-      <span class="text-right text-sm text-[var(--color-text-l)]">{{ formatDuration }}</span>
-      <span class="text-right flex ml-2"
-        ><button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>
-          <svgIcon name="menu-more-horizontal" class-name="size-5" /></button
-      ></span>
+      <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
+      <span class="text-right flex ml-2">
+        <button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>
+          <svgIcon name="menu-more-horizontal" class-name="size-5" />
+        </button>
+      </span>
     </div>
   </div>
 </template>

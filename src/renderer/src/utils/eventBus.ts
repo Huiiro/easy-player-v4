@@ -5,6 +5,8 @@ type Events = {
   scanFinished: void // 添加歌曲扫描结束
   playlistsChanged: void
   tagsChanged: void
+  songActionsMenuOpened: 'footer' | 'songlist'
+  locateCurrentSong: void
 }
 
 const eventBus = mitt<Events>()

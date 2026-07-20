@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
 import BaseDrawer from '@/components/ui/BaseDrawer.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -9,13 +10,24 @@ import AudioControlPanel from '@/components/player/AudioControlPanel.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import SongDetailsDialog from '@/components/songlist/SongDetailsDialog.vue'
+import SongTagDialog from '@/components/tag/SongTagDialog.vue'
+import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
+import eventBus from '@/utils/eventBus'
+import { useMessage } from '@/components/ui/useMessage'
 
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
+const router = useRouter()
+const { error } = useMessage()
 const collapsed = ref(false)
 const queueVisible = ref(false)
 const audioControlsVisible = ref(false)
+const moreVisible = ref(false)
+const detailsVisible = ref(false)
+const tagVisible = ref(false)
+const playlistVisible = ref(false)
 
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
@@ -111,6 +123,61 @@ function openAudioControls(): void {
 function openDesktopLyrics(): void {
   ui.useDesktopLyrics = !ui.useDesktopLyrics
 }
+const currentSong = computed(() => player.currentQueueSong)
+function openPlaylistPicker(): void {
+  if (!currentSong.value) return
+  playlistVisible.value = true
+  moreVisible.value = false
+}
+function openDetails(): void {
+  detailsVisible.value = true
+  moreVisible.value = false
+}
+function openTags(): void {
+  tagVisible.value = true
+  moreVisible.value = false
+}
+function openArtist(): void {
+  if (currentSong.value?.artist)
+    void router.push({ path: '/artist/detail', query: { name: currentSong.value.artist } })
+  moreVisible.value = false
+}
+function openAlbum(): void {
+  if (currentSong.value?.album)
+    void router.push({
+      path: '/album/detail',
+      query: { name: currentSong.value.album, artist: currentSong.value.artist || '' }
+    })
+  moreVisible.value = false
+}
+async function openFolder(): Promise<void> {
+  if (!currentSong.value) return
+  const response = await window.api.library.showSongInFolder(currentSong.value.id)
+  if (!response.success) error(response.error || t('songList.openFolderFailed'))
+  moreVisible.value = false
+}
+function locateSong(): void {
+  eventBus.emit('locateCurrentSong')
+  moreVisible.value = false
+}
+function toggleMoreMenu(): void {
+  moreVisible.value = !moreVisible.value
+  if (moreVisible.value) eventBus.emit('songActionsMenuOpened', 'footer')
+}
+const closeMoreMenu = (): void => {
+  moreVisible.value = false
+}
+const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
+  if (source !== 'footer') closeMoreMenu()
+}
+onMounted(() => {
+  eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
+  window.addEventListener('click', closeMoreMenu)
+})
+onBeforeUnmount(() => {
+  eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
+  window.removeEventListener('click', closeMoreMenu)
+})
 </script>
 
 <template>
@@ -246,7 +313,6 @@ function openDesktopLyrics(): void {
         >
           <SvgIcon name="common-equalizer" class-name="size-4" />
         </button>
-        <!-- todo -->
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('footer.desktopLyrics')"
@@ -254,11 +320,10 @@ function openDesktopLyrics(): void {
         >
           <SvgIcon name="common-lyrics2" class-name="size-5" />
         </button>
-        <!-- todo -->
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('footer.more')"
-          @click.stop="openMoreMenu"
+          @click.stop="toggleMoreMenu"
         >
           <SvgIcon name="menu-more-vertical" class-name="size-5" />
         </button>
@@ -290,5 +355,51 @@ function openDesktopLyrics(): void {
     >
       <AudioControlPanel class="h-[72vh]" />
     </BaseDialog>
+    <Teleport to="body">
+      <div
+        v-if="moreVisible && currentSong"
+        class="fixed bottom-24 right-8 z-[9999] w-44 rounded-xl border border-border bg-bg p-1 shadow-xl"
+        @click.stop
+      >
+        <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
+          <SvgIcon name="control-playlist" class-name="size-4" />
+          {{ t('songList.addToPlaylist') }}
+        </button>
+        <button class="menu-item flex items-center gap-2" @click="openTags">
+          <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
+        </button>
+        <button
+          class="menu-item flex items-center gap-2"
+          :disabled="!currentSong.artist"
+          @click="openArtist"
+        >
+          <SvgIcon name="common-user" class-name="size-4" />
+          {{ t('footer.goArtist') }}
+        </button>
+        <button
+          class="menu-item flex items-center gap-2"
+          :disabled="!currentSong.album"
+          @click="openAlbum"
+        >
+          <SvgIcon name="common-album" class-name="size-4" />
+          {{ t('footer.goAlbum') }}
+        </button>
+        <button class="menu-item flex items-center gap-2" @click="openDetails">
+          <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
+        </button>
+        <button class="menu-item flex items-center gap-2" @click="openFolder">
+          <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
+        </button>
+        <button class="menu-item flex items-center gap-2" @click="locateSong">
+          <SvgIcon name="common-music" class-name="size-4" />{{ t('footer.locateSong') }}
+        </button>
+      </div>
+    </Teleport>
+    <SongDetailsDialog v-model="detailsVisible" :song-id="currentSong?.id ?? null" />
+    <SongTagDialog v-model="tagVisible" :song-id="currentSong?.id ?? null" />
+    <AddSongsToPlaylistDialog
+      v-model="playlistVisible"
+      :song-ids="currentSong ? [currentSong.id] : []"
+    />
   </div>
 </template>

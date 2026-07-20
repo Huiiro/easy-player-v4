@@ -2,4 +2,6 @@
 import LibraryBrowserGrid from '@/components/library/LibraryBrowserGrid.vue'
 </script>
 
-<template><LibraryBrowserGrid kind="artist" /></template>
+<template>
+  <LibraryBrowserGrid kind="artist" />
+</template>

@@ -275,3 +275,7 @@ body {
 .dsp-label {
   @apply text-xs text-neutral-400;
 }
+
+.menu-item {
+  @apply block w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-[var(--color-hover)] disabled:cursor-default disabled:opacity-40;
+}

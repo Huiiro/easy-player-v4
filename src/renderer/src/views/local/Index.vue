@@ -50,12 +50,10 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 text-[var(--color-text)]">
-    <aside
-      class="custom-scrollbar w-64 shrink-0 overflow-y-auto border-r border-[var(--color-border)] p-3"
-    >
+  <section class="flex h-full min-h-0 text-text">
+    <aside class="custom-scrollbar w-64 shrink-0 overflow-y-auto border-r border-border p-3">
       <h1 class="mb-3 px-1 text-lg font-bold">{{ t('localFiles.title') }}</h1>
-      <p v-if="!tree.length" class="px-1 text-sm text-[var(--color-text-l)]">
+      <p v-if="!tree.length" class="px-1 text-sm text-text-l">
         {{ t('localFiles.empty') }}
       </p>
       <FolderTree
@@ -65,10 +63,10 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
         @select="selectedFolderId = $event"
       />
     </aside>
-    <main class="min-w-0 flex-1">
+    <main class="min-w-0 flex-1 h-full flex flex-col">
       <div
         v-if="selectedFolderName"
-        class="border-b border-[var(--color-border)] px-5 py-2 text-xs text-[var(--color-text-l)] truncate"
+        class="border-b border-border px-5 py-2 text-xs text-text-l truncate flex-shrink-0"
       >
         {{ selectedFolderName }}
       </div>
@@ -76,8 +74,9 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
         v-if="selectedFolderId"
         :key="selectedFolderId"
         :source="{ type: 'folder', id: selectedFolderId }"
+        class="flex-1 min-h-0"
       />
-      <p v-else class="p-6 text-sm text-[var(--color-text-l)]">{{ t('localFiles.empty') }}</p>
+      <p v-else class="p-6 text-sm text-text-l">{{ t('localFiles.empty') }}</p>
     </main>
   </section>
 </template>

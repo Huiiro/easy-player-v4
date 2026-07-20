@@ -3,9 +3,5 @@
 </script>
 
 <template>
-
+  <div class="flex items-center justify-center">Card View</div>
 </template>
-
-<style scoped>
-
-</style>

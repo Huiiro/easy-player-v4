@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
 
 interface OverviewStats {
@@ -24,10 +25,12 @@ interface RankedSong extends LibrarySong {
 }
 
 const { t } = useI18n()
+const { success } = useMessage()
 const router = useRouter()
 const player = usePlayerStore()
 const uiStore = useUIStore()
 const loading = ref(true)
+
 const stats = ref<OverviewStats>({
   songCount: 0,
   albumCount: 0,
@@ -36,6 +39,7 @@ const stats = ref<OverviewStats>({
   totalPlaySeconds: 0,
   todayPlaySeconds: 0
 })
+
 const historyDays = ref<HistoryDay[]>([])
 const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
@@ -43,20 +47,24 @@ const refreshing = ref(false)
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
-  const key =
-    hour < 6
-      ? 'night'
-      : hour < 11
-        ? 'morning'
-        : hour < 14
-          ? 'noon'
-          : hour < 18
-            ? 'afternoon'
-            : 'evening'
+  const key = (() => {
+    switch (true) {
+      case hour < 6:
+        return 'night'
+      case hour < 11:
+        return 'morning'
+      case hour < 14:
+        return 'noon'
+      case hour < 18:
+        return 'afternoon'
+      default:
+        return 'evening'
+    }
+  })()
+
   return t(`home.greeting.${key}`, { name: uiStore.userName })
 })
 const navigation = computed(() => [
-  { label: t('nav.home'), path: '/home', icon: 'menu-home' },
   { label: t('nav.songs'), path: '/song', icon: 'menu-song' },
   { label: t('nav.artists'), path: '/artist', icon: 'menu-artist' },
   { label: t('nav.albums'), path: '/album', icon: 'menu-album' },
@@ -134,15 +142,20 @@ function formatBytes(bytes: number): string {
   return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[index]}`
 }
 function heatClass(seconds: number): string {
-  if (!seconds) return 'bg-[var(--color-hover)]'
+  if (!seconds) return 'bg-hover'
+
   const ratio = seconds / maxHeat.value
-  return ratio > 0.75
-    ? 'bg-primary'
-    : ratio > 0.45
-      ? 'bg-primary/70'
-      : ratio > 0.2
-        ? 'bg-primary/40'
-        : 'bg-primary/20'
+
+  switch (true) {
+    case ratio > 0.75:
+      return 'bg-primary'
+    case ratio > 0.45:
+      return 'bg-primary/70'
+    case ratio > 0.2:
+      return 'bg-primary/40'
+    default:
+      return 'bg-primary/20'
+  }
 }
 function coverUrl(song: RankedSong): string | null {
   return song.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
@@ -174,6 +187,7 @@ async function refresh(): Promise<void> {
   refreshing.value = true
   try {
     await load()
+    success(`${t('home.refreshSuccess')}`)
   } finally {
     refreshing.value = false
   }
@@ -183,27 +197,28 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <main class="custom-scrollbar h-full overflow-y-auto px-7 py-6 text-[var(--color-text)]">
+  <main class="custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text">
+    <!-- text -->
     <section v-if="uiStore.showWelcomeText" class="mb-8">
-      <p class="text-sm text-[var(--color-text-l)]">{{ t('home.welcome') }}</p>
+      <p class="text-sm text-text-l">{{ t('home.welcome') }}</p>
       <h1 class="mt-1 text-3xl font-semibold tracking-tight">{{ greeting }}</h1>
     </section>
-
+    <!-- navigation -->
     <section class="mb-9">
       <h2 class="mb-3 text-lg font-semibold">{{ t('home.quickNavigation') }}</h2>
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
         <button
           v-for="item in navigation"
           :key="item.path"
-          class="group rounded-xl bg-[var(--color-bg-l)] p-3 text-left transition-colors hover:bg-[var(--color-hover)]"
+          class="group rounded-xl bg-bg-l p-3 text-left transition-colors hover:bg-hover"
           @click="router.push(item.path)"
         >
-          <SvgIcon :name="item.icon" class-name="size-5 text-[var(--color-primary)]" />
-          <p class="mt-3 truncate text-sm">{{ item.label }}</p>
+          <SvgIcon :name="item.icon" class-name="size-5 text-primary" />
+          <span class="mt-3 truncate text-sm">{{ item.label }}</span>
         </button>
       </div>
     </section>
-
+    <!-- stats -->
     <section class="mb-9">
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-lg font-semibold">{{ t('home.overview') }}</h2>
@@ -224,28 +239,29 @@ onMounted(() => void load())
         <article
           v-for="item in statCards"
           :key="item.label"
-          class="group flex items-center gap-4 rounded-xl bg-[var(--color-bg-l)] p-4 transition-all duration-200 hover:-translate-y-1 hover:bg-[var(--color-hover)] hover:shadow-lg hover:shadow-black/10"
+          class="group flex items-center gap-4 rounded-xl bg-bg-l p-4 transition-all duration-200 hover:-translate-y-1 hover:bg-hover hover:shadow-lg hover:shadow-black/10"
         >
           <span
             class="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-200 group-hover:scale-110 group-hover:rotate-3"
-            ><SvgIcon :name="item.icon" class-name="size-5"
-          /></span>
+          >
+            <SvgIcon :name="item.icon" class-name="size-5" />
+          </span>
           <div>
-            <p class="text-xs text-[var(--color-text-l)]">{{ item.label }}</p>
+            <p class="text-xs text-text-l">{{ item.label }}</p>
             <p class="mt-1 text-xl font-semibold">{{ loading ? '—' : item.value }}</p>
           </div>
         </article>
       </div>
     </section>
-
-    <section class="mb-9 rounded-xl bg-[var(--color-bg-l)] p-5">
+    <!-- heatMap -->
+    <section class="mb-9 rounded-xl bg-bg-l p-5">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold">{{ t('home.heatmap') }}</h2>
-        <span class="text-xs text-[var(--color-text-l)]">{{ t('home.lastYear') }}</span>
+        <span class="text-xs text-text-l">{{ t('home.lastYear') }}</span>
       </div>
       <div class="overflow-x-auto pb-1">
-        <div class="min-w-[53rem]">
-          <div class="relative mb-1 h-4 text-[10px] text-[var(--color-text-l)]">
+        <div class="w-max min-w-[53rem]">
+          <div class="relative mb-1 h-4 text-[10px] text-text-l">
             <span
               v-for="marker in monthMarkers"
               :key="`${marker.week}-${marker.label}`"
@@ -254,87 +270,91 @@ onMounted(() => void load())
               >{{ marker.label }}</span
             >
           </div>
-          <div class="grid grid-flow-col grid-rows-7 gap-1">
+          <div class="grid grid-flow-col grid-rows-7 gap-1 [grid-auto-columns:0.75rem]">
             <span
               v-for="day in heatmapDays"
               :key="day.date"
               class="size-3 rounded-sm"
               :class="heatClass(day.seconds)"
-              :title="`${day.date} · ${formatDuration(day.seconds)}`"
+              :title="
+                t('home.heatmapValue', { date: day.date, value: formatDuration(day.seconds) })
+              "
             />
           </div>
         </div>
       </div>
-      <p class="mt-3 text-xs text-[var(--color-text-l)]">{{ t('home.heatmapHint') }}</p>
+      <p class="mt-3 text-xs text-text-l">{{ t('home.heatmapHint') }}</p>
     </section>
-
+    <!-- topPlayedData -->
     <section class="grid gap-6 xl:grid-cols-2">
-      <article class="rounded-xl bg-[var(--color-bg-l)] p-5">
+      <article class="rounded-xl bg-bg-l p-5">
         <h2 class="mb-3 text-lg font-semibold">{{ t('home.topPlayed') }}</h2>
         <ol v-if="topPlayed.length" class="space-y-1">
           <li v-for="(song, index) in topPlayed" :key="song.id">
             <button
-              class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--color-hover)]"
+              class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
               @click="playRanked(topPlayed, song)"
             >
-              <span class="w-5 text-center text-sm text-[var(--color-text-l)]">{{ index + 1 }}</span
-              ><img
+              <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
+              <img
                 v-if="coverUrl(song)"
                 :src="coverUrl(song)!"
                 class="size-9 shrink-0 rounded-md object-cover"
                 :alt="song.title"
-              /><span
-                v-else
-                class="grid size-9 shrink-0 place-items-center rounded-md bg-[var(--color-hover)]"
-                ><SvgIcon name="common-music" class-name="size-4" /></span
-              ><span class="min-w-0 flex-1"
-                ><span class="block truncate text-sm">{{ song.title }}</span
-                ><span class="block truncate text-xs text-[var(--color-text-l)]">{{
+              />
+              <span v-else class="grid size-9 shrink-0 place-items-center rounded-md bg-hover">
+                <SvgIcon name="common-music" class-name="size-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm">{{ song.title }}</span>
+                <span class="block truncate text-xs text-text-l">{{
                   song.artist || t('songList.unknownArtist')
-                }}</span></span
-              ><span class="text-xs text-[var(--color-text-l)]">{{
+                }}</span>
+              </span>
+              <span class="text-xs text-text-l">{{
                 t('home.playCount', { count: song.value })
               }}</span>
             </button>
           </li>
         </ol>
-        <p v-else class="py-8 text-center text-sm text-[var(--color-text-l)]">
+        <p v-else class="py-8 text-center text-sm text-text-l">
           {{ t('home.noStats') }}
         </p>
       </article>
-      <article class="rounded-xl bg-[var(--color-bg-l)] p-5">
+      <article class="rounded-xl bg-bg-l p-5">
         <h2 class="mb-3 text-lg font-semibold">{{ t('home.topDuration') }}</h2>
         <ol v-if="topDuration.length" class="space-y-1">
           <li v-for="(song, index) in topDuration" :key="song.id">
             <button
-              class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-[var(--color-hover)]"
+              class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
               @click="playRanked(topDuration, song)"
             >
-              <span class="w-5 text-center text-sm text-[var(--color-text-l)]">{{ index + 1 }}</span
-              ><img
+              <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
+              <img
                 v-if="coverUrl(song)"
                 :src="coverUrl(song)!"
                 class="size-9 shrink-0 rounded-md object-cover"
                 :alt="song.title"
-              /><span
-                v-else
-                class="grid size-9 shrink-0 place-items-center rounded-md bg-[var(--color-hover)]"
-                ><SvgIcon name="common-music" class-name="size-4" /></span
-              ><span class="min-w-0 flex-1"
-                ><span class="block truncate text-sm">{{ song.title }}</span
-                ><span class="block truncate text-xs text-[var(--color-text-l)]">{{
+              />
+              <span v-else class="grid size-9 shrink-0 place-items-center rounded-md bg-hover">
+                <SvgIcon name="common-music" class-name="size-4" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm">{{ song.title }}</span>
+                <span class="block truncate text-xs text-text-l">{{
                   song.artist || t('songList.unknownArtist')
-                }}</span></span
-              ><span class="text-xs text-[var(--color-text-l)]">{{
-                formatDuration(song.value)
-              }}</span>
+                }}</span>
+              </span>
+              <span class="text-xs text-text-l">{{ formatDuration(song.value) }}</span>
             </button>
           </li>
         </ol>
-        <p v-else class="py-8 text-center text-sm text-[var(--color-text-l)]">
+        <p v-else class="py-8 text-center text-sm text-text-l">
           {{ t('home.noStats') }}
         </p>
       </article>
     </section>
+
+    <div class="h-20" />
   </main>
 </template>

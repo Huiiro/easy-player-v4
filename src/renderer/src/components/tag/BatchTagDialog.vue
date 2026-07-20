@@ -45,7 +45,7 @@ watch(
     width="max-w-md"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p class="mb-3 text-sm text-[var(--color-text-l)]">
+    <p class="mb-3 text-sm text-text-l">
       {{ t('tags.batchHint', { count: songIds.length }) }}
     </p>
     <div class="flex flex-wrap gap-2">
@@ -53,11 +53,7 @@ watch(
         v-for="tag in tags"
         :key="tag.id"
         class="rounded-full border px-3 py-1.5 text-sm"
-        :class="
-          selectedId === tag.id
-            ? 'border-primary ring-1 ring-primary'
-            : 'border-[var(--color-border)]'
-        "
+        :class="selectedId === tag.id ? 'border-primary ring-1 ring-primary' : 'border-border'"
         :style="selectedId === tag.id ? { color: tag.color || '#7c3aed' } : undefined"
         @click="selectedId = tag.id"
       >

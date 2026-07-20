@@ -95,7 +95,7 @@ watch(
     width="max-w-xl"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <p class="mb-4 text-sm text-[var(--color-text-l)]">{{ t('tags.filterHint') }}</p>
+    <p class="mb-4 text-sm text-text-l">{{ t('tags.filterHint') }}</p>
     <div class="mb-4 flex gap-2">
       <input
         v-model="name"
@@ -105,7 +105,7 @@ watch(
       />
       <input
         v-model="color"
-        class="h-9 w-10 cursor-pointer rounded border border-[var(--color-border)] bg-transparent p-1"
+        class="h-9 w-10 cursor-pointer rounded border border-border bg-transparent p-1"
         type="color"
         :aria-label="t('tags.color')"
       />
@@ -113,10 +113,10 @@ watch(
         {{ t('tags.create') }}
       </button>
     </div>
-    <p v-if="loading" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+    <p v-if="loading" class="py-8 text-center text-sm text-text-l">
       {{ t('tags.loading') }}
     </p>
-    <p v-else-if="!tags.length" class="py-8 text-center text-sm text-[var(--color-text-l)]">
+    <p v-else-if="!tags.length" class="py-8 text-center text-sm text-text-l">
       {{ t('tags.empty') }}
     </p>
     <Draggable
@@ -131,23 +131,17 @@ watch(
       <template #item="{ element: tag }">
         <li
           class="flex items-center gap-2 rounded-xl border p-2 transition-colors"
-          :class="
-            selected.has(tag.id)
-              ? 'border-primary bg-primary/10 shadow-sm'
-              : 'border-[var(--color-border)]'
-          "
+          :class="selected.has(tag.id) ? 'border-primary bg-primary/10 shadow-sm' : 'border-border'"
         >
           <button
-            class="tag-drag-handle btn-hover cursor-grab px-1 text-[var(--color-text-l)] active:cursor-grabbing"
+            class="tag-drag-handle btn-hover cursor-grab px-1 text-text-l active:cursor-grabbing"
             :aria-label="t('tags.dragSort')"
           >
             ⋮⋮
           </button>
           <button
             class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white ring-2 ring-transparent"
-            :class="
-              selected.has(tag.id) ? 'ring-primary ring-offset-2 ring-offset-[var(--color-bg)]' : ''
-            "
+            :class="selected.has(tag.id) ? 'ring-primary ring-offset-2 ring-offset-bg' : ''"
             :style="{ backgroundColor: tag.color || '#7c3aed' }"
             :title="t('tags.toggleFilter')"
             @click="toggleFilter(tag.id)"
@@ -162,7 +156,7 @@ watch(
           />
           <input
             v-model="tag.color"
-            class="h-8 w-9 cursor-pointer rounded border border-[var(--color-border)] bg-transparent p-1"
+            class="h-8 w-9 cursor-pointer rounded border border-border bg-transparent p-1"
             type="color"
             :aria-label="t('tags.color')"
             @change="update(tag)"
@@ -193,7 +187,7 @@ watch(
     :close-on-overlay="false"
     @update:model-value="!$event && (tagPendingDelete = null)"
   >
-    <p class="text-sm text-[var(--color-text-l)]">
+    <p class="text-sm text-text-l">
       {{ t('tags.confirmDelete', { name: tagPendingDelete?.name ?? '' }) }}
     </p>
     <template #footer>
