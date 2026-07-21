@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
-import { AudioEngineManager } from './index'
-import { EngineState, IPC } from './types'
+import { AudioEngineManager } from '../audioEngine'
+import { EngineState, IPC } from '../audioEngine/types'
 import { getAppSetting, setAppSetting } from '../database/repository'
 
 interface PlaybackCheckpoint {

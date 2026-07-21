@@ -1,7 +1,12 @@
 import { join } from 'path'
 import { app } from 'electron'
 import { AudioChainStatus, DeviceInfo } from './types'
-import { DspSettings, PersistedOutputBackend, loadDspSettings, saveDspSettings } from './dsp-settings'
+import {
+  DspSettings,
+  PersistedOutputBackend,
+  loadDspSettings,
+  saveDspSettings
+} from './dspSettings'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let nativeAddon: any = null
@@ -14,17 +19,21 @@ function loadNativeAddon(): boolean {
     // In production: load from extraResources/native/
     const isDev = !app.isPackaged
 
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     if (isDev) {
       // Development: load from build/native-addon/
-      const addonPath = join(__dirname, '..', '..', 'build', 'native-addon', 'easy_player_native.node')
-      nativeAddon = require(addonPath)
-    } else {
       const addonPath = join(
-        process.resourcesPath,
-        'native',
+        __dirname,
+        '..',
+        '..',
+        'build',
+        'native-addon',
         'easy_player_native.node'
       )
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      nativeAddon = require(addonPath)
+    } else {
+      const addonPath = join(process.resourcesPath, 'native', 'easy_player_native.node')
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       nativeAddon = require(addonPath)
     }
 
@@ -48,7 +57,9 @@ export class AudioEngineManager {
     if (this.isLoaded) {
       this.engine = new nativeAddon.AudioEngine()
       this.restoreDspSettings()
-      console.info(`[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`)
+      console.info(
+        `[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
+      )
     }
   }
 
@@ -98,23 +109,36 @@ export class AudioEngineManager {
   }
   setReplayGain(config: { mode: 'off' | 'track' | 'album'; preventClipping: boolean }): boolean {
     const ok = this.engine?.setReplayGain(config) ?? false
-    if (ok) { this.dspSettings.replayGain = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.replayGain = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getReplayGain() { return this.engine?.getReplayGain() ?? null }
+  getReplayGain() {
+    return this.engine?.getReplayGain() ?? null
+  }
   setPlaybackSpeed(config: { enabled: boolean; speed: number }): boolean {
     const ok = this.engine?.setPlaybackSpeed(config) ?? false
-    if (ok) { this.dspSettings.playbackSpeed = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.playbackSpeed = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getPlaybackSpeed() { return this.engine?.getPlaybackSpeed() ?? null }
+  getPlaybackSpeed() {
+    return this.engine?.getPlaybackSpeed() ?? null
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setEqBands(bands: any[]): boolean {
     const ok = this.engine?.setEqBands(bands) ?? false
     if (ok) {
       this.dspSettings.eqBands = bands.map((band) => ({
-        enabled: band.enabled === true, frequencyHz: band.frequencyHz, gainDb: band.gainDb, q: band.q
+        enabled: band.enabled === true,
+        frequencyHz: band.frequencyHz,
+        gainDb: band.gainDb,
+        q: band.q
       }))
       this.persistDspSettings()
     }
@@ -136,21 +160,43 @@ export class AudioEngineManager {
     return ok
   }
 
-  getResamplerConfig(): { forceOutputRate: boolean; targetSampleRate: number; quality: 'best' | 'medium' | 'fast' } | null {
+  getResamplerConfig(): {
+    forceOutputRate: boolean
+    targetSampleRate: number
+    quality: 'best' | 'medium' | 'fast'
+  } | null {
     return this.engine?.getResamplerConfig() ?? null
   }
   setDopEnabled(enabled: boolean): boolean {
     const ok = this.engine?.setDopEnabled(enabled) ?? false
-    if (ok) { this.dspSettings.dopEnabled = enabled; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.dopEnabled = enabled
+      this.persistDspSettings()
+    }
     return ok
   }
-  getDopEnabled(): boolean { return this.engine?.getDopEnabled() === true }
-  setTransitionConfig(config: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }): boolean {
+  getDopEnabled(): boolean {
+    return this.engine?.getDopEnabled() === true
+  }
+  setTransitionConfig(config: {
+    gaplessEnabled: boolean
+    crossfadeEnabled: boolean
+    crossfadeMs: number
+  }): boolean {
     const ok = this.engine?.setTransitionConfig(config) ?? false
-    if (ok) { this.dspSettings.transition = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.transition = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getTransitionConfig(): { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number } | null { return this.engine?.getTransitionConfig() ?? null }
+  getTransitionConfig(): {
+    gaplessEnabled: boolean
+    crossfadeEnabled: boolean
+    crossfadeMs: number
+  } | null {
+    return this.engine?.getTransitionConfig() ?? null
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setDspNodes(nodes: any[]): boolean {
@@ -162,67 +208,110 @@ export class AudioEngineManager {
     return ok
   }
 
-  getDspNodes(): { id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'; enabled: boolean }[] {
+  getDspNodes(): {
+    id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+    enabled: boolean
+  }[] {
     return this.engine?.getDspNodes() ?? []
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setCompressorConfig(config: any): boolean {
     const ok = this.engine?.setCompressorConfig(config) ?? false
-    if (ok) { this.dspSettings.compressor = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.compressor = config
+      this.persistDspSettings()
+    }
     return ok
   }
 
-  getCompressorConfig() { return this.engine?.getCompressorConfig() ?? null }
+  getCompressorConfig() {
+    return this.engine?.getCompressorConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setDelayConfig(config: any): boolean {
     const ok = this.engine?.setDelayConfig(config) ?? false
-    if (ok) { this.dspSettings.delay = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.delay = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getDelayConfig() { return this.engine?.getDelayConfig() ?? null }
+  getDelayConfig() {
+    return this.engine?.getDelayConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setReverbConfig(config: any): boolean {
     const ok = this.engine?.setReverbConfig(config) ?? false
-    if (ok) { this.dspSettings.reverb = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.reverb = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getReverbConfig() { return this.engine?.getReverbConfig() ?? null }
+  getReverbConfig() {
+    return this.engine?.getReverbConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setChorusConfig(config: any): boolean {
     const ok = this.engine?.setChorusConfig(config) ?? false
-    if (ok) { this.dspSettings.chorus = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.chorus = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getChorusConfig() { return this.engine?.getChorusConfig() ?? null }
+  getChorusConfig() {
+    return this.engine?.getChorusConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setNoiseGateConfig(config: any): boolean {
     const ok = this.engine?.setNoiseGateConfig(config) ?? false
-    if (ok) { this.dspSettings.noiseGate = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.noiseGate = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getNoiseGateConfig() { return this.engine?.getNoiseGateConfig() ?? null }
+  getNoiseGateConfig() {
+    return this.engine?.getNoiseGateConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setPhaserConfig(config: any): boolean {
     const ok = this.engine?.setPhaserConfig(config) ?? false
-    if (ok) { this.dspSettings.phaser = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.phaser = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getPhaserConfig() { return this.engine?.getPhaserConfig() ?? null }
+  getPhaserConfig() {
+    return this.engine?.getPhaserConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setChannelMatrixConfig(config: any): boolean {
     const ok = this.engine?.setChannelMatrixConfig(config) ?? false
-    if (ok) { this.dspSettings.channelMatrix = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.channelMatrix = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getChannelMatrixConfig() { return this.engine?.getChannelMatrixConfig() ?? null }
+  getChannelMatrixConfig() {
+    return this.engine?.getChannelMatrixConfig() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setLimiter(config: any): boolean {
     const ok = this.engine?.setLimiter(config) ?? false
-    if (ok) { this.dspSettings.limiter = config; this.persistDspSettings() }
+    if (ok) {
+      this.dspSettings.limiter = config
+      this.persistDspSettings()
+    }
     return ok
   }
-  getLimiter() { return this.engine?.getLimiter() ?? null }
+  getLimiter() {
+    return this.engine?.getLimiter() ?? null
+  }
 
   // ── Device / Backend ──
 
@@ -244,7 +333,10 @@ export class AudioEngineManager {
     if (!this.engine) return false
     const ok = this.engine.setBackend(backend)
     if (ok) {
-      this.dspSettings.outputDevice = { backend: backend as PersistedOutputBackend, deviceId: 'default' }
+      this.dspSettings.outputDevice = {
+        backend: backend as PersistedOutputBackend,
+        deviceId: 'default'
+      }
       this.persistDspSettings()
     }
     return ok
@@ -260,7 +352,9 @@ export class AudioEngineManager {
     return ok
   }
 
-  getOutputDeviceSettings() { return this.dspSettings.outputDevice }
+  getOutputDeviceSettings() {
+    return this.dspSettings.outputDevice
+  }
   getEngineInfo() {
     return {
       version: this.engine?.getVersion?.() ?? 'unavailable',
@@ -284,16 +378,16 @@ export class AudioEngineManager {
     if (!this.engine) return null
     return this.engine.getAudioChain()
   }
-  getAudioAnalysis() { return this.engine?.getAudioAnalysis() ?? null }
+  getAudioAnalysis() {
+    return this.engine?.getAudioAnalysis() ?? null
+  }
 
   // ── Callbacks ──
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onStateChanged(callback: (state: number) => void): void {
     this.engine?.onStateChanged(callback)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onPositionChanged(callback: (posMs: number, durMs: number) => void): void {
     this.engine?.onPositionChanged(callback)
   }
@@ -302,12 +396,10 @@ export class AudioEngineManager {
     this.engine?.onTrackEnded(callback)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onError(callback: (code: number, msg: string) => void): void {
     this.engine?.onError(callback)
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onLog(callback: (level: number, msg: string) => void): void {
     this.engine?.onLog(callback)
   }
@@ -332,7 +424,9 @@ export class AudioEngineManager {
     this.engine.setTransitionConfig(this.dspSettings.transition)
     const output = this.dspSettings.outputDevice
     if (!this.engine.selectOutputDevice(output.backend, output.deviceId)) {
-      console.warn(`[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`)
+      console.warn(
+        `[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`
+      )
       this.dspSettings.outputDevice = { backend: 'directsound', deviceId: 'default' }
       this.persistDspSettings()
     }

@@ -27,3 +27,4 @@ export enum TagStyle {
   Full = 3
 }
 export const VERSION = __APP_VERSION__
+export const ENGINE_VERSION = '1.0.0'

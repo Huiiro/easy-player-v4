@@ -401,7 +401,10 @@ export default {
     desktopLyricsFontInherit: '跟随主窗口',
     desktopLyricsPreviewLine: '正在播放的歌词',
     desktopLyricsPreviewTranslation: 'Lyrics translation preview',
-    desktopLyricsPreviewNext: '下一句歌词预览'
+    desktopLyricsPreviewNext: '下一句歌词预览',
+    other: '其他',
+    otherDescription: '关于此播放器',
+    version: '版本'
   },
   playerPanel: {
     label: '播放器面板',

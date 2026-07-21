@@ -408,7 +408,10 @@ export default {
     desktopLyricsFontInherit: 'Follow main window',
     desktopLyricsPreviewLine: 'Current lyric preview',
     desktopLyricsPreviewTranslation: 'Lyrics translation preview',
-    desktopLyricsPreviewNext: 'Next lyric preview'
+    desktopLyricsPreviewNext: 'Next lyric preview',
+    other: 'Other',
+    otherDescription: 'About This Player',
+    version: 'Version'
   },
   playerPanel: {
     label: 'Player panel',

@@ -5,9 +5,10 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
-import { PlayerBgType } from '@/consts'
+import { ENGINE_VERSION, PlayerBgType, VERSION } from '@/consts'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const { locale, t } = useI18n()
@@ -593,6 +594,29 @@ onMounted(() => void loadRemoteCache())
               step="0.5"
               @change="saveRemoteCacheLimit"
             />
+          </div>
+        </div>
+      </section>
+      <!-- 其他 -->
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.other') }}</h2>
+            <p>{{ t('settings.otherDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.version') }}</h3>
+            </div>
+            <div class="flex items-center gap-2 cursor-pointer">
+              <span class="text-text">{{ VERSION }}</span>
+              <p>Powered by Easy Player Audio Engine {{ ENGINE_VERSION }}</p>
+              <button>
+                <svg-icon name="common-update" class-name="size-5" class="btn-hover" />
+              </button>
+            </div>
           </div>
         </div>
       </section>

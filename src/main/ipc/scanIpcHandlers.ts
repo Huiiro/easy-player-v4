@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
-import { scanMusicDirectory, type ScanResult } from './scanService'
+import { scanMusicDirectory, type ScanResult } from '../service/scanService'
 
 export const IMPORT_LOCAL_MUSIC_CHANNEL = 'library:import-local-folder'
 export const SCAN_PROGRESS_EVENT = 'library:scan-progress'

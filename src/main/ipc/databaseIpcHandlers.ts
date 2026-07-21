@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import * as library from './repository'
+import * as library from '../database/repository'
 
 export const DATABASE_IPC_CHANNEL = 'database:command'
 
