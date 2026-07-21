@@ -128,60 +128,36 @@ onMounted(() => void loadRemoteCache())
 
 <template>
   <main class="custom-scrollbar h-full overflow-y-auto">
-    <div class="mx-auto w-full max-w-4xl px-6 py-8 pb-28 sm:px-10">
+    <div class="mx-auto w-full max-w-5xl px-6 py-8 pb-28 sm:px-10">
+      <!-- header -->
       <div class="mb-8">
-        <p class="text-xs font-semibold tracking-[0.14em] text-[var(--color-primary)]">
-          PREFERENCES
-        </p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-[var(--color-text)]">
+        <p class="text-xs font-semibold tracking-[0.14em] text-primary">PREFERENCES</p>
+        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-text">
           {{ t('settings.title') }}
         </h1>
-        <p class="mt-2 text-sm text-[var(--color-text-l)]">
+        <p class="mt-2 text-sm text-text-l">
           {{ t('settings.description') }}
         </p>
       </div>
-
+      <!-- playback -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
-            <h2>{{ t('remote.cache') }}</h2>
-            <p>{{ t('remote.cacheDescription') }}</p>
+            <h2>{{ t('settings.playback') }}</h2>
+            <p>{{ t('settings.playbackDescription') }}</p>
           </div>
         </div>
         <div class="settings-card">
           <div class="setting-row">
             <div>
-              <h3>{{ t('remote.cacheDirectory') }}</h3>
-              <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
+              <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
+              <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
             </div>
-            <div class="flex items-center gap-2">
-              <input :value="remoteCacheDirectory" readonly class="input-base h-9 w-64" /><button
-                class="secondary-button"
-                type="button"
-                @click="chooseRemoteCacheDirectory"
-              >
-                {{ t('remote.chooseDirectory') }}
-              </button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('remote.cacheLimit') }}</h3>
-              <p>{{ t('remote.cacheDescription') }}</p>
-            </div>
-            <input
-              v-model.number="remoteCacheLimitGb"
-              class="input-base h-9 w-24"
-              type="number"
-              min="0.5"
-              max="100"
-              step="0.5"
-              @change="saveRemoteCacheLimit"
-            />
+            <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
           </div>
         </div>
       </section>
-
+      <!-- font -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
@@ -189,7 +165,7 @@ onMounted(() => void loadRemoteCache())
             <p>{{ t('settings.fontsDescription') }}</p>
           </div>
         </div>
-        <div class="settings-card font-settings-card">
+        <div class="settings-card">
           <div class="setting-row">
             <div>
               <h3>{{ t('settings.interfaceFont') }}</h3>
@@ -200,113 +176,19 @@ onMounted(() => void loadRemoteCache())
                 v-model="ui.customFontFamily"
                 :options="fontOptions"
                 :placeholder="t('settings.fontSystemDefault')"
-                size="sm"
-                class="w-52"
+                class="w-64"
               />
-              <button class="secondary-button" type="button" @click="refreshFonts">
+              <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
                 {{ t('settings.refreshFonts') }}
               </button>
-              <button class="secondary-button" type="button" @click="openFontDirectory">
+              <button class="secondary-button text-nowrap" type="button" @click="openFontDirectory">
                 {{ t('settings.openFontDirectory') }}
               </button>
             </div>
           </div>
         </div>
       </section>
-
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.desktopLyrics') }}</h2>
-            <p>{{ t('settings.desktopLyricsDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card font-settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
-              <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
-          </div>
-          <div class="setting-row setting-row-stack gap-4">
-            <div class="w-full">
-              <div class="slider-label">
-                <span>{{ t('settings.desktopLyricsFontSize') }}</span
-                ><strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
-              </div>
-              <BaseSlider
-                v-model="ui.desktopLyricsStyles.fontSize"
-                :min="18"
-                :max="64"
-                :step="1"
-                size="sm"
-              />
-            </div>
-            <div class="flex flex-wrap gap-4 settings-card font-settings-card">
-              <label class="flex items-center gap-2 text-xs text-text-l">
-                <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
-                <BaseColorPicker
-                  v-model="ui.desktopLyricsStyles.activeColor"
-                  :presets="presetColors"
-                />
-              </label>
-              <label class="flex items-center gap-2 text-xs text-text-l">
-                <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
-                <BaseColorPicker
-                  v-model="ui.desktopLyricsStyles.inactiveColor"
-                  :presets="presetColors"
-                />
-              </label>
-              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
-                ><span>{{ t('settings.desktopLyricsBold') }}</span
-                ><BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" size="sm"
-              /></label>
-              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
-                ><span>{{ t('settings.desktopLyricsGlow') }}</span
-                ><BaseSwitch v-model="ui.desktopLyricsStyles.glow" size="sm"
-              /></label>
-              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
-                ><span>{{ t('settings.desktopLyricsTranslation') }}</span
-                ><BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" size="sm"
-              /></label>
-              <label class="flex items-center gap-2 text-xs text-[var(--color-text-l)]"
-                ><span>{{ t('settings.desktopLyricsAutoHide') }}</span
-                ><BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" size="sm"
-              /></label>
-              <div class="flex items-center gap-2 text-xs text-[var(--color-text-l)]">
-                <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
-                <BaseSelect
-                  v-model="ui.desktopLyricsStyles.fontFamily"
-                  :options="desktopLyricsFontOptions"
-                  :placeholder="t('settings.desktopLyricsFontInherit')"
-                  size="sm"
-                  class="w-40"
-                />
-              </div>
-            </div>
-            <div
-              class="desktop-lyrics-preview"
-              :style="{
-                '--desktop-active': ui.desktopLyricsStyles.activeColor,
-                '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
-                '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
-              }"
-            >
-              <strong
-                :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
-                :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
-                >{{ t('settings.desktopLyricsPreviewLine') }}</strong
-              >
-              <span v-if="ui.desktopLyricsStyles.showTranslation">{{
-                t('settings.desktopLyricsPreviewTranslation')
-              }}</span>
-              <span>{{ t('settings.desktopLyricsPreviewNext') }}</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <!-- language -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
@@ -314,7 +196,6 @@ onMounted(() => void loadRemoteCache())
             <p>{{ t('settings.languageDescription') }}</p>
           </div>
         </div>
-
         <div class="settings-card">
           <div class="setting-row">
             <div>
@@ -344,75 +225,13 @@ onMounted(() => void loadRemoteCache())
                 role="radio"
                 @click="language = 'en'"
               >
-                English
+                {{ t('settings.languageEnglish') }}
               </button>
             </div>
           </div>
         </div>
       </section>
-
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.lyrics') }}</h2>
-            <p>{{ t('settings.lyricsDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div
-            v-for="(source, index) in ui.lyricSourceOrder"
-            :key="source"
-            class="setting-row !min-h-0 py-3"
-          >
-            <div>
-              <h3>{{ t(`lyrics.source.${source}`) }}</h3>
-              <p>{{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}</p>
-            </div>
-            <div class="flex gap-1">
-              <button
-                class="icon-button"
-                :disabled="index === 0"
-                @click="moveLyricSource(index, -1)"
-              >
-                ↑</button
-              ><button
-                class="icon-button"
-                :disabled="index === ui.lyricSourceOrder.length - 1"
-                @click="moveLyricSource(index, 1)"
-              >
-                ↓
-              </button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
-              <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-          </div>
-        </div>
-      </section>
-
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.playback') }}</h2>
-            <p>{{ t('settings.playbackDescription') }}</p>
-          </div>
-        </div>
-
-        <div class="settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-              <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-          </div>
-        </div>
-      </section>
-
+      <!-- player theme -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
@@ -457,7 +276,7 @@ onMounted(() => void loadRemoteCache())
           </div>
         </div>
       </section>
-
+      <!-- theme -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
@@ -472,10 +291,10 @@ onMounted(() => void loadRemoteCache())
         <div class="settings-card">
           <div class="setting-row setting-row-stack">
             <div>
-              <h3>外观模式</h3>
-              <p>自定义背景默认遵循深色方案，以保证内容清晰易读。</p>
+              <h3>{{ t('settings.appearanceMode') }}</h3>
+              <p>{{ t('settings.appearanceDescription') }}</p>
             </div>
-            <div class="theme-options" role="radiogroup" aria-label="外观模式">
+            <div class="theme-options" role="radiogroup" :aria-label="t('settings.appearanceMode')">
               <button
                 type="button"
                 class="theme-option light-preview"
@@ -484,7 +303,8 @@ onMounted(() => void loadRemoteCache())
                 role="radio"
                 @click="themeMode = 'light'"
               >
-                <span class="preview-window"><i /><b /></span><span>浅色</span>
+                <span class="preview-window"><i /><b /></span>
+                <span>{{ t('settings.appearanceModeLight') }}</span>
               </button>
               <button
                 type="button"
@@ -494,7 +314,8 @@ onMounted(() => void loadRemoteCache())
                 role="radio"
                 @click="themeMode = 'dark'"
               >
-                <span class="preview-window"><i /><b /></span><span>深色</span>
+                <span class="preview-window"><i /><b /></span>
+                <span>{{ t('settings.appearanceModeDark') }}</span>
               </button>
               <button
                 type="button"
@@ -504,15 +325,16 @@ onMounted(() => void loadRemoteCache())
                 role="radio"
                 @click="themeMode = 'custom'"
               >
-                <span class="preview-window"><i /><b /></span><span>自定义</span>
+                <span class="preview-window"><i /><b /></span>
+                <span>{{ t('settings.appearanceModeCustom') }}</span>
               </button>
             </div>
           </div>
 
           <div class="setting-row">
             <div>
-              <h3>主题色</h3>
-              <p>用于进度、选中状态和主要操作。</p>
+              <h3>{{ t('settings.themeColor') }}</h3>
+              <p>{{ t('settings.themeColorDescription') }}</p>
             </div>
             <div>
               <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" />
@@ -520,33 +342,33 @@ onMounted(() => void loadRemoteCache())
           </div>
         </div>
       </section>
-
+      <!-- custom background -->
       <section class="settings-section">
         <div class="section-heading">
           <div>
-            <h2>自定义背景</h2>
-            <p>可使用自己的图片，并在不牺牲可读性的前提下调整效果。</p>
+            <h2>{{ t('settings.customBackground') }}</h2>
+            <p>{{ t('settings.customBackgroundDescription') }}</p>
           </div>
-          <span class="text-xs text-[var(--color-text-l)]">{{
-            ui.useCustomBg ? '已启用' : '未启用'
-          }}</span>
+          <span class="text-xs text-text-l">
+            {{ ui.useCustomBg ? t('enabled') : t('disabled') }}
+          </span>
         </div>
 
         <div class="settings-card" :class="{ muted: !ui.useCustomBg }">
           <div class="setting-row background-row">
             <div>
-              <h3>背景图片</h3>
-              <p>{{ ui.customBg.path || '尚未选择图片' }}</p>
+              <h3>{{ t('settings.backgroundImage') }}</h3>
+              <p>{{ ui.customBg.path || t('noImageSelected') }}</p>
             </div>
             <div class="flex shrink-0 gap-2">
               <button class="secondary-button" type="button" @click="chooseBackground">
-                选择图片
+                {{ t('settings.selectImage') }}
               </button>
               <button
                 v-if="ui.customBg.url"
                 class="icon-button"
                 type="button"
-                title="移除背景"
+                :title="t('removeBackground')"
                 @click="clearBackground"
               >
                 ×
@@ -563,11 +385,12 @@ onMounted(() => void loadRemoteCache())
 
           <div class="slider-row">
             <div class="slider-label">
-              <span>亮度</span><strong>{{ ui.customBg.brightness }}%</strong>
+              <span>{{ t('brightness') }}</span>
+              <strong>{{ ui.customBg.brightness }}%</strong>
             </div>
             <BaseSlider
               v-model="ui.customBg.brightness"
-              :min="45"
+              :min="30"
               :max="130"
               :step="1"
               size="sm"
@@ -576,15 +399,199 @@ onMounted(() => void loadRemoteCache())
           </div>
           <div class="slider-row">
             <div class="slider-label">
-              <span>模糊度</span><strong>{{ ui.customBg.blur }} px</strong>
+              <span>{{ t('blur') }}</span>
+              <strong>{{ ui.customBg.blur }} px</strong>
             </div>
             <BaseSlider
               v-model="ui.customBg.blur"
               :min="0"
-              :max="28"
+              :max="30"
               :step="1"
               size="sm"
               :disabled="!ui.useCustomBg"
+            />
+          </div>
+        </div>
+      </section>
+      <!-- desktop lyrics -->
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.desktopLyrics') }}</h2>
+            <p>{{ t('settings.desktopLyricsDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
+              <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
+            </div>
+            <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
+          </div>
+          <div class="setting-row setting-row-stack gap-4">
+            <div class="w-full">
+              <div class="flex items-center gap-2 my-3 text-xs text-text-l">
+                <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
+                <BaseSelect
+                  v-model="ui.desktopLyricsStyles.fontFamily"
+                  :options="desktopLyricsFontOptions"
+                  :placeholder="t('settings.desktopLyricsFontInherit')"
+                  class="w-full"
+                />
+              </div>
+              <div class="slider-label">
+                <span>{{ t('settings.desktopLyricsFontSize') }}</span>
+                <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+              </div>
+              <BaseSlider
+                v-model="ui.desktopLyricsStyles.fontSize"
+                :min="24"
+                :max="64"
+                :step="1"
+                size="sm"
+              />
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 my-2 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
+                  <BaseColorPicker
+                    v-model="ui.desktopLyricsStyles.activeColor"
+                    :presets="presetColors"
+                  />
+                </label>
+                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
+                  <BaseColorPicker
+                    v-model="ui.desktopLyricsStyles.inactiveColor"
+                    :presets="presetColors"
+                  />
+                </label>
+              </div>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsTranslation') }}</span>
+                  <BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" :size="'sm'" />
+                </label>
+                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsAutoHide') }}</span>
+                  <BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" :size="'sm'" />
+                </label>
+              </div>
+              <div class="flex gap-4">
+                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsBold') }}</span>
+                  <BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" :size="'sm'" />
+                </label>
+                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsGlow') }}</span>
+                  <BaseSwitch v-model="ui.desktopLyricsStyles.glow" :size="'sm'" />
+                </label>
+              </div>
+            </div>
+            <div
+              class="desktop-lyrics-preview"
+              :style="{
+                '--desktop-active': ui.desktopLyricsStyles.activeColor,
+                '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
+                '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
+              }"
+            >
+              <strong
+                :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
+                :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+                >{{ t('settings.desktopLyricsPreviewLine') }}</strong
+              >
+              <span v-if="ui.desktopLyricsStyles.showTranslation">
+                {{ t('settings.desktopLyricsPreviewTranslation') }}
+              </span>
+              <span>
+                {{ t('settings.desktopLyricsPreviewNext') }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- lyrics -->
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('settings.lyrics') }}</h2>
+            <p>{{ t('settings.lyricsDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div
+            v-for="(source, index) in ui.lyricSourceOrder"
+            :key="source"
+            class="setting-row !min-h-0 py-3"
+          >
+            <div>
+              <h3>{{ t(`lyrics.source.${source}`) }}</h3>
+              <p>{{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}</p>
+            </div>
+            <div class="flex gap-1">
+              <button
+                class="icon-button"
+                :disabled="index === 0"
+                @click="moveLyricSource(index, -1)"
+              >
+                ↑</button
+              ><button
+                class="icon-button"
+                :disabled="index === ui.lyricSourceOrder.length - 1"
+                @click="moveLyricSource(index, 1)"
+              >
+                ↓
+              </button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
+              <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
+            </div>
+            <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
+          </div>
+        </div>
+      </section>
+      <!-- remote file local cache-->
+      <section class="settings-section">
+        <div class="section-heading">
+          <div>
+            <h2>{{ t('remote.cache') }}</h2>
+            <p>{{ t('remote.cacheDescription') }}</p>
+          </div>
+        </div>
+        <div class="settings-card">
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('remote.cacheDirectory') }}</h3>
+              <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <input :value="remoteCacheDirectory" readonly class="input-base min-w-136" />
+              <button
+                class="secondary-button text-nowrap"
+                type="button"
+                @click="chooseRemoteCacheDirectory"
+              >
+                {{ t('remote.chooseDirectory') }}
+              </button>
+            </div>
+          </div>
+          <div class="setting-row">
+            <div>
+              <h3>{{ t('remote.cacheLimit') }}</h3>
+              <p>{{ t('remote.cacheDescription') }}</p>
+            </div>
+            <input
+              v-model.number="remoteCacheLimitGb"
+              class="input-base h-9 max-w-18"
+              type="number"
+              min="0.5"
+              max="100"
+              step="0.5"
+              @change="saveRemoteCacheLimit"
             />
           </div>
         </div>
@@ -617,18 +624,14 @@ onMounted(() => void loadRemoteCache())
   line-height: 1.45;
 }
 .settings-card {
-  overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--color-bg-l) 86%, transparent);
+  background: color-mix(in srgb, var(--color-bg-l) 35%, transparent);
   box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
   transition: opacity 0.2s ease;
 }
 .settings-card.muted {
   opacity: 0.58;
-}
-.font-settings-card {
-  overflow: visible;
 }
 .setting-row {
   display: flex;
@@ -637,7 +640,6 @@ onMounted(() => void loadRemoteCache())
   justify-content: space-between;
   gap: 2rem;
   padding: 1.1rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
 }
 .setting-row h3 {
   color: var(--color-text);
@@ -772,27 +774,6 @@ onMounted(() => void loadRemoteCache())
 .default-background-preview b {
   background: #283035;
 }
-.color-control {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  min-width: 122px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.35rem 0.55rem;
-  color: var(--color-text-l);
-  font:
-    500 0.75rem ui-monospace,
-    monospace;
-}
-.color-control input {
-  width: 24px;
-  height: 24px;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  cursor: pointer;
-}
 .desktop-lyrics-preview {
   display: grid;
   min-height: 116px;
@@ -827,7 +808,7 @@ onMounted(() => void loadRemoteCache())
 .slider-label {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.55rem;
+  margin-bottom: 0.45rem;
   color: var(--color-text-l);
   font-size: 0.8125rem;
 }
@@ -862,40 +843,5 @@ onMounted(() => void loadRemoteCache())
 .reset-button {
   padding: 0.35rem 0.5rem;
   color: var(--color-text-l);
-}
-@media (max-width: 580px) {
-  .setting-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.8rem;
-  }
-  .setting-row-stack {
-    gap: 1rem;
-  }
-  .theme-options {
-    width: 100%;
-  }
-  .language-options {
-    width: 100%;
-  }
-  .theme-option {
-    flex: 1;
-  }
-  .language-option {
-    flex: 1;
-  }
-  .color-control {
-    width: 100%;
-  }
-  .background-row {
-    flex-direction: row;
-    align-items: center;
-  }
-  .section-heading {
-    flex-direction: column;
-  }
-  .settings-section {
-    margin-top: 2rem;
-  }
 }
 </style>
