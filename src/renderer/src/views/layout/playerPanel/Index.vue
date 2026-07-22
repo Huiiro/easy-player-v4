@@ -282,65 +282,63 @@ function extractCoverColors(event: Event): void {
 
 <template>
   <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
-    <!-- bg -->
-    <Transition name="panel-background">
-      <img
-        v-if="backgroundSource"
-        :key="backgroundSource"
-        :src="backgroundSource"
-        class="panel-background-item pointer-events-none absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[28px] transition-transform duration-150"
-        :class="[
-          useAlbumArtwork ? 'opacity-100' : 'opacity-0',
-          shouldAnimate ? 'panel-cover--animated' : ''
-        ]"
-        :style="backgroundStyle"
-        alt=""
-        crossorigin="anonymous"
-        @load="extractCoverColors"
-        @error="coverFailed = true"
+    <!-- Visuals live in one isolated full-screen layer. UI elements never create a backdrop above it. -->
+    <div class="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+      <Transition name="panel-background">
+        <img
+          v-if="backgroundSource"
+          :key="backgroundSource"
+          :src="backgroundSource"
+          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[28px] transition-transform duration-150"
+          :class="[
+            useAlbumArtwork ? 'opacity-100' : 'opacity-0',
+            shouldAnimate ? 'panel-cover--animated' : ''
+          ]"
+          :style="backgroundStyle"
+          alt=""
+          crossorigin="anonymous"
+          @load="extractCoverColors"
+          @error="coverFailed = true"
+        />
+      </Transition>
+      <div
+        class="absolute -left-[12%] -top-[16%] size-[58vw] max-h-[76vh] max-w-[76vh] rounded-full panel-orb panel-orb-primary"
+        :class="shouldAnimate ? 'panel-orb--animated' : ''"
+        :style="glowStyle"
       />
-    </Transition>
-    <!-- glow -->
-    <div
-      class="pointer-events-none absolute -left-[12%] -top-[16%] size-[58vw] max-h-[76vh] max-w-[76vh] rounded-full panel-orb panel-orb-primary"
-      :class="shouldAnimate ? 'panel-orb--animated' : ''"
-      :style="glowStyle"
-    />
-    <div
-      class="pointer-events-none absolute -bottom-[22%] -right-[13%] size-[62vw] max-h-[82vh] max-w-[82vh] rounded-full panel-orb panel-orb-secondary"
-      :class="shouldAnimate ? 'panel-orb--animated panel-orb--delayed' : ''"
-      :style="glowStyle"
-    />
-    <!-- rhythm -->
-    <div
-      class="pointer-events-none absolute inset-0 panel-ambient"
-      :class="[
-        (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT ? 'opacity-100' : 'opacity-58',
-        shouldAnimate ? 'panel-ambient--animated' : ''
-      ]"
-      :style="glowStyle"
-    />
-    <!-- beat -->
-    <div
-      v-if="shouldAnimate"
-      ref="beatRingRef"
-      class="pointer-events-none absolute left-1/2 top-1/2 size-[min(78vw,78vh)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 beat-ring"
-      :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
-    />
-    <!-- mask -->
-    <div class="pointer-events-none absolute inset-0 panel-gradient" />
+      <div
+        class="absolute -bottom-[22%] -right-[13%] size-[62vw] max-h-[82vh] max-w-[82vh] rounded-full panel-orb panel-orb-secondary"
+        :class="shouldAnimate ? 'panel-orb--animated panel-orb--delayed' : ''"
+        :style="glowStyle"
+      />
+      <div
+        class="absolute inset-0 panel-ambient"
+        :class="[
+          (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT ? 'opacity-100' : 'opacity-58',
+          shouldAnimate ? 'panel-ambient--animated' : ''
+        ]"
+        :style="glowStyle"
+      />
+      <div
+        v-if="shouldAnimate"
+        ref="beatRingRef"
+        class="absolute left-1/2 top-1/2 size-[min(78vw,78vh)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 beat-ring"
+        :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
+      />
+      <div class="absolute inset-0 panel-gradient" />
+    </div>
     <!-- content -->
     <section
-      class="relative z-10 size-full overflow-hidden bg-transparent shadow-[inset_0_1px_0_rgb(255_255_255_/_18%)]"
+      class="relative z-10 size-full overflow-hidden bg-transparent"
       :aria-label="t('playerPanel.label')"
     >
-      <!-- header -->
+      <!-- Floating controls do not occupy or paint a header band. -->
       <header
-        class="relative z-30 flex h-16 items-center justify-between px-5 text-xs font-semibold tracking-[0.08em] [-webkit-app-region:no-drag] max-[760px]:px-4"
+        class="pointer-events-none absolute inset-x-0 top-0 z-30 flex h-16 items-center justify-between bg-transparent px-5 text-xs font-semibold tracking-[0.08em] max-[760px]:px-4"
       >
         <button
           type="button"
-          class="grid size-10 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105 [-webkit-app-region:no-drag]"
+          class="pointer-events-auto grid size-10 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105 [-webkit-app-region:no-drag]"
           :title="collapsed ? t('playerPanel.expandLyrics') : t('playerPanel.collapseLyrics')"
           :aria-expanded="!collapsed"
           @pointerdown="handleCollapsePointerDown"
@@ -354,7 +352,8 @@ function extractCoverColors(event: Event): void {
           />
         </button>
         <button
-          class="grid size-9 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105"
+          type="button"
+          class="pointer-events-auto grid size-9 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105 [-webkit-app-region:no-drag]"
           :title="t('playerPanel.close')"
           :aria-label="t('playerPanel.close')"
           @click="close"
@@ -364,7 +363,7 @@ function extractCoverColors(event: Event): void {
       </header>
 
       <div
-        class="relative grid h-[calc(100%_-_64px)] overflow-hidden max-[760px]:h-[calc(100%_-_64px)] max-[760px]:overflow-auto"
+        class="relative grid size-full overflow-hidden pt-16 max-[760px]:overflow-auto"
         :class="
           collapsed
             ? 'grid-cols-1'
@@ -816,11 +815,10 @@ function extractCoverColors(event: Event): void {
   transition:
     opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: opacity, transform;
 }
 .panel-side--collapsed {
   position: absolute;
-  inset: 0 auto 0 0;
+  inset: 4rem auto 0 0;
   z-index: 20;
   width: 46%;
   overflow: hidden;
@@ -862,8 +860,8 @@ function extractCoverColors(event: Event): void {
 }
 .panel-gradient {
   background:
-    linear-gradient(112deg, rgb(5 8 13 / 58%), rgb(12 16 23 / 20%) 52%, rgb(4 7 12 / 56%)),
-    linear-gradient(180deg, rgb(9 12 17 / 8%), rgb(7 9 14 / 38%));
+    linear-gradient(112deg, rgb(5 8 13 / 48%), rgb(12 16 23 / 20%) 52%, rgb(4 7 12 / 56%)),
+    linear-gradient(180deg, rgb(9 12 17 / 8%), rgb(7 9 14 / 28%));
 }
 .beat-ring {
   opacity: 0;
