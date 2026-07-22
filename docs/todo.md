@@ -9,8 +9,7 @@ song list item:
 home Index checked
 
 remote page + refresh button
-取色：自定义组件
-tag，theme
+✔ 取色：自定义组件 tag，theme
 
 ✔ 桌面歌词 关闭按钮异常
 ✔ 桌面歌词 字体设置

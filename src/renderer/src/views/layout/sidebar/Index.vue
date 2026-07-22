@@ -269,6 +269,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           <span v-if="expanded" class="truncate">{{ t(item.labelKey) }}</span>
         </button>
       </section>
+      <div class="h-24" />
     </nav>
   </aside>
   <CreatePlaylistDialog v-model="playlistDialogOpen" />

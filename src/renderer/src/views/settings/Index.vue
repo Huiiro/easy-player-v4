@@ -351,7 +351,7 @@ onMounted(() => void loadRemoteCache())
             <p>{{ t('settings.customBackgroundDescription') }}</p>
           </div>
           <span class="text-xs text-text-l">
-            {{ ui.useCustomBg ? t('enabled') : t('disabled') }}
+            {{ ui.useCustomBg ? t('settings.enabled') : t('settings.disabled') }}
           </span>
         </div>
 
@@ -369,7 +369,7 @@ onMounted(() => void loadRemoteCache())
                 v-if="ui.customBg.url"
                 class="icon-button"
                 type="button"
-                :title="t('removeBackground')"
+                :title="t('settings.removeBackground')"
                 @click="clearBackground"
               >
                 ×
@@ -386,7 +386,7 @@ onMounted(() => void loadRemoteCache())
 
           <div class="slider-row">
             <div class="slider-label">
-              <span>{{ t('brightness') }}</span>
+              <span>{{ t('settings.brightness') }}</span>
               <strong>{{ ui.customBg.brightness }}%</strong>
             </div>
             <BaseSlider
@@ -400,7 +400,7 @@ onMounted(() => void loadRemoteCache())
           </div>
           <div class="slider-row">
             <div class="slider-label">
-              <span>{{ t('blur') }}</span>
+              <span>{{ t('settings.blur') }}</span>
               <strong>{{ ui.customBg.blur }} px</strong>
             </div>
             <BaseSlider
