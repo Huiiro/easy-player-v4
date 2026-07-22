@@ -869,8 +869,14 @@ function extractCoverColors(event: Event): void {
 }
 .panel-gradient {
   background:
-    linear-gradient(112deg, rgb(5 8 13 / 48%), rgb(12 16 23 / 10%) 42%, rgb(4 7 12 / 56%)),
-    linear-gradient(180deg, rgb(9 12 17 / 8%), rgb(7 9 14 / 28%));
+    radial-gradient(
+      ellipse at 74% 50%,
+      rgb(10 14 21 / 4%) 0%,
+      rgb(7 10 16 / 13%) 56%,
+      rgb(4 7 12 / 30%) 100%
+    ),
+    linear-gradient(112deg, rgb(5 8 13 / 38%) 0%, rgb(12 16 23 / 6%) 42%, rgb(4 7 12 / 44%) 100%),
+    linear-gradient(180deg, rgb(9 12 17 / 3%) 0%, rgb(7 9 14 / 22%) 100%);
 }
 .beat-ring {
   opacity: 0;
