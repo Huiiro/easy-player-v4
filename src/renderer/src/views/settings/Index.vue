@@ -9,8 +9,9 @@ import { ENGINE_VERSION, PlayerBgType, VERSION } from '@/consts'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import ShortcutInput from '@/components/settings/ShortcutInput.vue'
-import SleepTimerSettings from '@/components/settings/SleepTimerSettings.vue'
+import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
+import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
+import SystemSettings from '@/components/settings/SystemSettings.vue'
 import Draggable from 'vuedraggable'
 
 const ui = useUIStore()
@@ -35,22 +36,9 @@ const navigationSections = computed(() => [
   { id: 'lyrics', label: t('settings.lyrics') },
   { id: 'shortcuts', label: t('settings.shortcuts') },
   { id: 'remote-cache', label: t('remote.cache') },
+  { id: 'system', label: t('settings.system') },
   { id: 'other', label: t('settings.other') }
 ])
-const shortcutActions = [
-  { key: 'previous', label: 'settings.shortcutPrevious' },
-  { key: 'toggle', label: 'settings.shortcutToggle' },
-  { key: 'next', label: 'settings.shortcutNext' },
-  { key: 'volumeUp', label: 'settings.shortcutVolumeUp' },
-  { key: 'volumeDown', label: 'settings.shortcutVolumeDown' }
-] as const
-const defaultLocalShortcuts = {
-  previous: 'left',
-  toggle: 'space',
-  next: 'right',
-  volumeUp: 'up',
-  volumeDown: 'down'
-}
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
   set: (value) => {
@@ -171,17 +159,6 @@ async function saveRemoteCacheLimit(): Promise<void> {
     value: remoteCacheLimitGb.value
   })
 }
-function resetShortcuts(): void {
-  Object.assign(ui.shortcutKeys, defaultLocalShortcuts)
-  Object.assign(ui.globalShortcutKeys, {
-    previous: '',
-    toggle: '',
-    next: '',
-    volumeUp: '',
-    volumeDown: ''
-  })
-  ui.useGlobalShortcutKeys = false
-}
 onMounted(() => {
   void loadRemoteCache()
   sectionObserver = new IntersectionObserver(
@@ -246,16 +223,7 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.playbackDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card">
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-                <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-              </div>
-              <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-            </div>
-            <SleepTimerSettings />
-          </div>
+          <PlaybackSettings />
         </section>
         <!-- font -->
         <section id="fonts" class="settings-section">
@@ -666,34 +634,7 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.shortcutsDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card shortcut-card">
-            <div class="shortcut-toolbar">
-              <div>
-                <h3>{{ t('settings.globalShortcuts') }}</h3>
-                <p>{{ t('settings.globalShortcutsDescription') }}</p>
-              </div>
-              <div class="flex items-center gap-3">
-                <button class="secondary-button text-nowrap" @click="resetShortcuts">
-                  {{ t('settings.resetShortcutDefaults') }}
-                </button>
-                <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
-              </div>
-            </div>
-            <div class="shortcut-grid">
-              <span>.</span>
-              <span>{{ t('settings.localShortcuts') }}</span>
-              <span>{{ t('settings.globalShortcuts') }}</span>
-              <template v-for="item in shortcutActions" :key="item.key">
-                <span class="shortcut-action">{{ t(item.label) }}</span>
-                <ShortcutInput :action="item.key" scope="local" />
-                <ShortcutInput
-                  :action="item.key"
-                  scope="global"
-                  :disabled="!ui.useGlobalShortcutKeys"
-                />
-              </template>
-            </div>
-          </div>
+          <ShortcutSettings />
         </section>
         <!-- remote file local cache-->
         <section id="remote-cache" class="settings-section">
@@ -736,6 +677,16 @@ onBeforeUnmount(() => {
               />
             </div>
           </div>
+        </section>
+        <!-- 其他 -->
+        <section id="system" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.system') }}</h2>
+              <p>{{ t('settings.systemDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card"><SystemSettings /></div>
         </section>
         <!-- 其他 -->
         <section id="other" class="settings-section">

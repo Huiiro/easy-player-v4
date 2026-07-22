@@ -366,6 +366,20 @@ const shortcutsAPI = {
     return () => ipcRenderer.removeListener('shortcuts:action', listener)
   }
 }
+const systemAPI = {
+  setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
+  setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),
+  updateTray: (data: { title: string; artist: string; isPlaying: boolean }) =>
+    ipcRenderer.send('tray:update', data),
+  onTrayAction: (callback: (action: 'previous' | 'toggle' | 'next') => void): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      action: 'previous' | 'toggle' | 'next'
+    ): void => callback(action)
+    ipcRenderer.on('tray:action', listener)
+    return () => ipcRenderer.removeListener('tray:action', listener)
+  }
+}
 
 // Custom APIs for renderer
 const api = {
@@ -376,6 +390,7 @@ const api = {
   fonts: fontsAPI,
   metadata: metadataAPI,
   shortcuts: shortcutsAPI,
+  system: systemAPI,
   miniPlayer: miniPlayerAPI,
   desktopLyrics: desktopLyricsAPI,
   remoteSource: remoteSourceAPI,

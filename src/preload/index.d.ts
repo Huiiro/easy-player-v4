@@ -259,6 +259,12 @@ declare global {
         unregisterGlobal(): Promise<{ success: boolean }>
         onAction(callback: (action: string) => void): () => void
       }
+      system: {
+        setCloseToTray(enabled: boolean): Promise<{ success: boolean }>
+        setAutoStart(enabled: boolean): Promise<{ success: boolean }>
+        updateTray(data: { title: string; artist: string; isPlaying: boolean }): void
+        onTrayAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
+      }
       miniPlayer: {
         enter(): Promise<{ success: boolean }>
         restore(): Promise<{ success: boolean }>

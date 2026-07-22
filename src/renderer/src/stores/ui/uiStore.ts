@@ -24,6 +24,8 @@ export const useUIStore = defineStore(
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const autoPlayOnRestore = ref(false)
+    const closeToTray = ref(false)
+    const autoStart = ref(false)
     const showWelcomeText = ref(true)
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
@@ -62,6 +64,7 @@ export const useUIStore = defineStore(
     const showLyricsSettings = ref(false)
     const showDisplaySettings = ref(false)
     const showPlayer = ref(false)
+    const footerOpenMode = ref<'all' | 'cover'>('all')
     // ========== 标签与来源 ==========
     const tagStyle = ref(TagStyle.Full)
     const tagSelected = ref<number[]>([])
@@ -273,6 +276,8 @@ export const useUIStore = defineStore(
       useCardView,
       useCustomBg,
       autoPlayOnRestore,
+      closeToTray,
+      autoStart,
       useDynamicBg,
       useLocalFileName,
       useFullProgress,
@@ -302,6 +307,7 @@ export const useUIStore = defineStore(
       showLyricsSettings,
       showDisplaySettings,
       showPlayer,
+      footerOpenMode,
       tagStyle,
       tagSelected,
       musicSource,
@@ -341,6 +347,8 @@ export const useUIStore = defineStore(
         'useLocalFileName',
         'useFullProgress',
         'autoPlayOnRestore',
+        'closeToTray',
+        'autoStart',
         'showWelcomeText',
         'customFontFamily',
         'customThemeColor',
@@ -358,6 +366,7 @@ export const useUIStore = defineStore(
         'lyricSourceOrder',
         'playerBgType',
         'playerDisplayMode',
+        'footerOpenMode',
         'allowSwitchCoverStyle',
         'isCircularCover',
         'isCoverSpin',

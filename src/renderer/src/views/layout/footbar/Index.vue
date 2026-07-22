@@ -108,6 +108,10 @@ function changeVolume(event: WheelEvent): void {
 }
 
 function openPlayerPanel(): void {
+  if (ui.footerOpenMode === 'cover') return
+  ui.showPlayer = true
+}
+function openPlayerPanelFromCover(): void {
   ui.showPlayer = true
 }
 
@@ -188,15 +192,17 @@ onBeforeUnmount(() => {
       class="pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border border-text/10 bg-bg/75 px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
       :class="
         collapsed
-          ? 'grid-cols-[minmax(0,1fr)_auto] min-h-[62px] max-w-md gap-3'
+          ? 'grid-cols-[minmax(0,1fr)_auto_auto] min-h-[62px] max-w-md gap-3'
           : 'grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
       "
       :aria-label="t('footer.playerControls')"
       @click="openPlayerPanel"
     >
       <div class="flex min-w-0 items-center gap-3">
-        <div
+        <button
           class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+          :title="t('footer.openPlayer')"
+          @click.stop="openPlayerPanelFromCover"
         >
           <img
             v-if="coverUrl && !coverFailed"
@@ -206,7 +212,7 @@ onBeforeUnmount(() => {
             @error="coverFailed = true"
           />
           <SvgIcon v-else name="common-music" class-name="size-6" />
-        </div>
+        </button>
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-text">{{ trackTitle }}</p>
           <p class="truncate text-xs text-text-l">{{ trackArtist }}</p>
@@ -366,6 +372,18 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+      </div>
+
+      <div v-if="collapsed" class="flex items-center gap-2 text-[11px] tabular-nums text-text-l">
+        <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
+        <button
+          class="grid size-7 place-items-center rounded-full bg-primary text-white"
+          :disabled="!player.currentFile"
+          :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
+          @click.stop="togglePlayback"
+        >
+          <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-3.5" />
+        </button>
       </div>
 
       <button

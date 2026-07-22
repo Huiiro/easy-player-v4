@@ -846,6 +846,7 @@ export const usePlayerStore = defineStore('player', () => {
       })
     )
     unsubs.push(window.api.miniPlayer.onAction(handleMiniPlayerAction))
+    unsubs.push(window.api.system.onTrayAction(handleMiniPlayerAction))
     unsubs.push(window.api.miniPlayer.onRequestState(publishMiniPlayerState))
 
     unsubs.push(
@@ -895,6 +896,11 @@ export const usePlayerStore = defineStore('player', () => {
     const metadata = trackInfo.value?.metadata
     window.api.miniPlayer.update({
       cover: song?.cover || null,
+      title: metadata?.title || song?.title || '',
+      artist: metadata?.artist || song?.artist || '',
+      isPlaying: isPlaying.value
+    })
+    window.api.system.updateTray({
       title: metadata?.title || song?.title || '',
       artist: metadata?.artist || song?.artist || '',
       isPlaying: isPlaying.value

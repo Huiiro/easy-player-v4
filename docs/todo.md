@@ -9,21 +9,23 @@ song list header:
 ✔ 桌面歌词 字体设置
 ✔ 设置组
 ✔ 快捷键
-定时播放
+✔ 定时播放
 ai 翻译
 
-开机启动
-tray
-最小化设置
-显示名称
+✔ tray
+✔ 显示名称
+✔ 开机启动
+✔ 最小化设置
+✔ 动态更新歌曲metadata
+✔ 手动写入metadata
 
 文件导入导出
 丢失恢复
-动态更新歌曲metadata
-✔ 手动写入metadata
-
 插件
 footer隐藏？
 footer打开panel 行为定义 封面/整个footer
 footer缩放状态显示进度 和基础控制行为
 panel 左侧面板可收起
+
+
+行为定义

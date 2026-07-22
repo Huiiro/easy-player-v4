@@ -30,6 +30,8 @@ const showQueue = ref(false)
 const showLyricsManager = ref(false)
 const lyricReloadToken = ref(0)
 const progressStyle = ref<'thin' | 'thick'>('thin')
+const collapsed = ref(false)
+let collapseTriggeredByPointer = false
 const playModeIcon = computed(
   () => ['control-order', 'control-loop', 'control-single', 'control-shuffle'][player.playMode]
 )
@@ -170,6 +172,28 @@ watch(coverUrl, () => {
 
 function close(): void {
   ui.showPlayer = false
+}
+function toggleCollapsed(): void {
+  collapsed.value = !collapsed.value
+}
+function handleCollapsePointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return
+  event.preventDefault()
+  collapseTriggeredByPointer = true
+  toggleCollapsed()
+}
+function handleCollapseClick(): void {
+  // Pointer input toggles on press; keyboard activation has no pointer event.
+  if (collapseTriggeredByPointer) {
+    collapseTriggeredByPointer = false
+    return
+  }
+  toggleCollapsed()
+}
+function clearCollapsePointerTrigger(): void {
+  requestAnimationFrame(() => {
+    collapseTriggeredByPointer = false
+  })
 }
 function togglePlayback(): void {
   if (player.isPlaying) void player.pause()
@@ -312,9 +336,23 @@ function extractCoverColors(event: Event): void {
     >
       <!-- header -->
       <header
-        class="flex h-16 items-center justify-between px-5 text-xs font-semibold tracking-[0.08em] max-[760px]:px-4"
+        class="relative z-30 flex h-16 items-center justify-between px-5 text-xs font-semibold tracking-[0.08em] [-webkit-app-region:no-drag] max-[760px]:px-4"
       >
-        <span />
+        <button
+          type="button"
+          class="grid size-10 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105 [-webkit-app-region:no-drag]"
+          :title="collapsed ? t('playerPanel.expandLyrics') : t('playerPanel.collapseLyrics')"
+          :aria-expanded="!collapsed"
+          @pointerdown="handleCollapsePointerDown"
+          @pointerup="clearCollapsePointerTrigger"
+          @pointercancel="clearCollapsePointerTrigger"
+          @click="handleCollapseClick"
+        >
+          <SvgIcon
+            :name="collapsed ? 'arrow-arrow-right-light' : 'arrow-arrow-left-light'"
+            class-name="size-5 text-white"
+          />
+        </button>
         <button
           class="grid size-9 place-items-center rounded-full bg-text/[0.08] text-text transition hover:scale-105"
           :title="t('playerPanel.close')"
@@ -326,11 +364,17 @@ function extractCoverColors(event: Event): void {
       </header>
 
       <div
-        class="grid h-[calc(100%_-_64px)] grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] max-[760px]:h-[calc(100%_-_64px)] max-[760px]:grid-cols-1 max-[760px]:overflow-auto"
+        class="relative grid h-[calc(100%_-_64px)] overflow-hidden max-[760px]:h-[calc(100%_-_64px)] max-[760px]:overflow-auto"
+        :class="
+          collapsed
+            ? 'grid-cols-1'
+            : 'grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] max-[760px]:grid-cols-1'
+        "
       >
         <!-- metadata & control -->
         <section
-          class="flex flex-col items-center justify-center gap-5 px-[clamp(2rem,6vw,7rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
+          class="panel-side flex flex-col items-center justify-center gap-5 px-[clamp(2rem,6vw,7rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
+          :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
           <div
@@ -606,16 +650,19 @@ function extractCoverColors(event: Event): void {
         <!-- lyrics -->
         <section
           class="flex min-w-0 flex-col py-8 max-[760px]:min-h-[250px] max-[760px]:border-t max-[760px]:border-text/10 max-[760px]:px-6 max-[760px]:py-6"
+          :class="collapsed ? 'px-8' : ''"
           :aria-label="t('playerPanel.lyrics')"
         >
           <PlayerLyrics
+            class="size-full flex-1"
             :song="player.currentQueueSong"
             :current-time="player.positionMs"
             :source-order="ui.lyricSourceOrder"
-            :align-mode="ui.lyricsAlignment"
+            :align-mode="collapsed ? 'center' : ui.lyricsAlignment"
             :forced-source="ui.lyricSourceMode"
             :auto-search-network="ui.autoSearchNetworkLyrics"
             :reload-token="lyricReloadToken"
+            :layout-token="collapsed ? 1 : 0"
             @seek="seekTo"
           />
         </section>
@@ -764,6 +811,22 @@ function extractCoverColors(event: Event): void {
 .cover-frame {
   transform-origin: center;
   will-change: transform, filter;
+}
+.panel-side {
+  transition:
+    opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform;
+}
+.panel-side--collapsed {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  width: 46%;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateX(-110%);
 }
 .cover-card {
   transition: box-shadow 100ms ease-out;

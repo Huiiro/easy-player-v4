@@ -4,10 +4,12 @@ import {
   BrowserWindow,
   dialog,
   globalShortcut,
+  Menu,
   ipcMain,
   net,
   protocol,
-  screen
+  screen,
+  Tray
 } from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
 import { readdirSync, statSync } from 'node:fs'
@@ -39,6 +41,53 @@ let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
+let tray: Tray | null = null
+let isQuitting = false
+let trayTrack = { title: '', artist: '', isPlaying: false }
+
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.show()
+  mainWindow.focus()
+}
+function updateTrayMenu(): void {
+  if (!tray) return
+  const label = trayTrack.title
+    ? `${trayTrack.title}${trayTrack.artist ? ` — ${trayTrack.artist}` : ''}`
+    : 'Easy Player'
+  tray.setToolTip(label)
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label, enabled: false },
+      { type: 'separator' },
+      { label: 'Previous', click: () => mainWindow?.webContents.send('tray:action', 'previous') },
+      {
+        label: trayTrack.isPlaying ? 'Pause' : 'Play',
+        click: () => mainWindow?.webContents.send('tray:action', 'toggle')
+      },
+      { label: 'Next', click: () => mainWindow?.webContents.send('tray:action', 'next') },
+      { type: 'separator' },
+      {
+        label: 'Show / Hide window',
+        click: () => (mainWindow?.isVisible() ? mainWindow.hide() : showMainWindow())
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        click: () => {
+          isQuitting = true
+          app.quit()
+        }
+      }
+    ])
+  )
+}
+function createTray(): void {
+  if (tray) return
+  tray = new Tray(icon)
+  tray.on('double-click', showMainWindow)
+  updateTrayMenu()
+}
 const shortcutActions = ['previous', 'toggle', 'next', 'volumeUp', 'volumeDown'] as const
 type ShortcutAction = (typeof shortcutActions)[number]
 
@@ -172,7 +221,13 @@ function createWindow(): void {
   }
   mainWindow.on('resize', scheduleWindowStateSave)
   mainWindow.on('move', scheduleWindowStateSave)
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
+    if (!isQuitting && getAppSetting('system.close-to-tray') === true) {
+      event.preventDefault()
+      mainWindow?.hide()
+      updateTrayMenu()
+      return
+    }
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
     saveWindowState(mainWindow!)
     // The desktop lyric window is independent, so it would otherwise keep
@@ -308,6 +363,27 @@ app.whenReady().then(() => {
   registerLyricsIpcHandlers()
   registerFontIpcHandlers()
   registerMetadataIpcHandlers()
+  createTray()
+  ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
+    setAppSetting('system.close-to-tray', enabled === true)
+    return { success: true }
+  })
+  ipcMain.handle('system:set-auto-start', (_event, enabled: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: enabled === true })
+    setAppSetting('system.auto-start', enabled === true)
+    return { success: true }
+  })
+  ipcMain.on(
+    'tray:update',
+    (_event, data: { title?: string; artist?: string; isPlaying?: boolean }) => {
+      trayTrack = {
+        title: data.title || '',
+        artist: data.artist || '',
+        isPlaying: data.isPlaying === true
+      }
+      updateTrayMenu()
+    }
+  )
   ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
     const failed = registerGlobalShortcuts(
       shortcuts && typeof shortcuts === 'object'
@@ -543,6 +619,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  isQuitting = true
   globalShortcut.unregisterAll()
   closeDatabase()
 })

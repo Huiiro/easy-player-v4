@@ -18,6 +18,7 @@ const props = withDefaults(
     forcedSource?: LyricSource | 'auto'
     autoSearchNetwork?: boolean
     reloadToken?: number
+    layoutToken?: number
     alignMode?: 'left' | 'center' | 'right'
     allowTransform?: boolean
   }>(),
@@ -26,7 +27,8 @@ const props = withDefaults(
     allowTransform: true,
     forcedSource: 'auto',
     autoSearchNetwork: true,
-    reloadToken: 0
+    reloadToken: 0,
+    layoutToken: 0
   }
 )
 const emit = defineEmits<{ seek: [positionMs: number] }>()
@@ -297,6 +299,15 @@ watch(
 watch([() => ui.lyricsFontSize, () => ui.lyricsFontPadding, () => ui.showLyricsTranslation], () => {
   scheduleSnapToCurrent()
 })
+
+watch(
+  () => props.alignMode,
+  () => scheduleSnapToCurrent()
+)
+watch(
+  () => props.layoutToken,
+  () => scheduleSnapToCurrent()
+)
 
 onMounted(() => {
   snapToCurrent()

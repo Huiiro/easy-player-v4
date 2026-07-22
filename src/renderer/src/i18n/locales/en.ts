@@ -409,6 +409,12 @@ export default {
     blur: 'Blur',
     playback: 'Playback',
     playbackDescription: 'Control how the previous playback session is restored at startup.',
+    system: 'System',
+    systemDescription: 'Control application closing and startup behavior.',
+    closeToTray: 'Minimize to tray on close',
+    closeToTrayDescription: 'Keep the app running in the system tray when the window is closed.',
+    autoStart: 'Launch at startup',
+    autoStartDescription: 'Launch Easy Player automatically after signing in.',
     shortcuts: 'Keyboard shortcuts',
     shortcutsDescription:
       'Local shortcuts work when the player window is focused; global shortcuts work in other apps.',
@@ -429,6 +435,11 @@ export default {
     autoPlayOnRestore: 'Autoplay on startup',
     autoPlayOnRestoreDescription:
       'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.',
+    footerOpenMode: 'Footer open mode',
+    footerOpenAnywhere: 'Open from anywhere in the footer',
+    footerOpenModeDescription: 'Choose which part of the footer opens the player panel.',
+    footerOpenAll: 'Anywhere',
+    footerOpenCover: 'Cover only',
     sleepTimer: 'Sleep timer',
     sleepTimerDescription: 'Pause playback automatically after the selected time.',
     minutes: 'minutes',
@@ -476,6 +487,8 @@ export default {
     version: 'Version'
   },
   playerPanel: {
+    collapseLyrics: 'Collapse to lyrics view',
+    expandLyrics: 'Expand player',
     label: 'Player panel',
     nowPlaying: 'Now playing',
     close: 'Close player',
@@ -540,6 +553,7 @@ export default {
   },
   footer: {
     playerControls: 'Player controls, click to open the player panel',
+    openPlayer: 'Open player panel',
     noTrack: 'No track selected',
     defaultArtist: 'Easy Player',
     previous: 'Previous track',

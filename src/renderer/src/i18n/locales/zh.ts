@@ -405,6 +405,12 @@ export default {
     blur: '模糊度',
     playback: '播放设置',
     playbackDescription: '控制启动后恢复上次播放会话的方式。',
+    system: '系统设置',
+    systemDescription: '控制应用关闭和启动行为。',
+    closeToTray: '关闭时最小化到托盘',
+    closeToTrayDescription: '点击窗口关闭按钮后，应用继续在系统托盘中运行。',
+    autoStart: '开机自动启动',
+    autoStartDescription: '登录系统后自动启动 Easy Player。',
     shortcuts: '快捷键',
     shortcutsDescription: '局内快捷键仅在播放器窗口聚焦时生效；全局快捷键可在其他应用中使用。',
     localShortcuts: '局内快捷键',
@@ -423,6 +429,11 @@ export default {
     autoPlayOnRestore: '启动后自动播放',
     autoPlayOnRestoreDescription:
       '开启后，仅当上次退出前正在播放时自动继续播放；关闭时只恢复歌曲和位置。',
+    footerOpenMode: 'Footer 打开方式',
+    footerOpenAnywhere: '点击 Footer 任意位置打开',
+    footerOpenModeDescription: '选择打开播放器面板的点击区域。',
+    footerOpenAll: '任意位置',
+    footerOpenCover: '仅封面',
     sleepTimer: '定时关闭',
     sleepTimerDescription: '到达设定时间后自动暂停播放。',
     minutes: '分钟',
@@ -466,6 +477,8 @@ export default {
     version: '版本'
   },
   playerPanel: {
+    collapseLyrics: '收起为歌词视图',
+    expandLyrics: '展开播放器',
     label: '播放器面板',
     nowPlaying: '正在播放',
     close: '关闭播放器',
@@ -525,6 +538,7 @@ export default {
   },
   footer: {
     playerControls: '播放器控制栏，点击打开播放器面板',
+    openPlayer: '打开播放器面板',
     noTrack: '未选择音乐',
     defaultArtist: 'Easy Player',
     previous: '上一首',
