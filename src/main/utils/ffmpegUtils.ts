@@ -1,15 +1,34 @@
 import path from 'path'
 
 export function getFfmpegPath(): string {
-  if (process.env.NODE_ENV === 'development') {
-    return path.join(__dirname, '..', 'ffmpeg-master-latest-win64-gpl-shared', 'bin')
+  const execName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+
+  if (process.env.NODE_ENV !== 'production') {
+    // Dev mode: ffmpeg lives inside the native addon deps directory.
+    // process.cwd() is the project root during electron-vite dev.
+    return path.join(
+      process.cwd(),
+      'src',
+      'main',
+      'native',
+      'deps',
+      'ffmpeg',
+      'ffmpeg-master-latest-win64-gpl-shared',
+      'bin',
+      execName
+    )
   }
 
-  // 生产环境 - Electron 应用
+  // Production: ffmpeg should be bundled alongside the app resources.
   if (process.resourcesPath) {
-    return path.join(process.resourcesPath, 'ffmpeg-master-latest-win64-gpl-shared', 'bin')
+    return path.join(process.resourcesPath, 'bin', execName)
   }
 
-  // 生产环境 - Node.js 应用
-  return path.join(__dirname, 'ffmpeg-master-latest-win64-gpl-shared', 'bin')
+  // Fallback: plain Node.js production (unlikely for Electron).
+  return path.join(
+    __dirname,
+    'ffmpeg-master-latest-win64-gpl-shared',
+    'bin',
+    execName
+  )
 }

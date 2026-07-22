@@ -1,5 +1,6 @@
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
 import { parseFile } from 'music-metadata'
 import { execFile } from 'node:child_process'
 import { writeFlacMetadata } from './flacMetadataService'
@@ -70,15 +71,35 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
     Logger.error('MetadataService: parse Metadata fail: ', err)
     const ext = filePath.split('.').pop()?.toLowerCase()
     if (ext === 'm4a' || ext === 'aac') {
-      const tmpFile = filePath + '.tmp.m4a'
-      await new Promise<void>((resolve, reject) => {
-        execFile(getFfmpegPath(), ['-i', filePath, '-c', 'copy', tmpFile], (err) => {
-          if (err) return reject(err)
-          fs.renameSync(tmpFile, filePath)
-          resolve()
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'easy-player-repair-'))
+      const tmpFile = path.join(tmpDir, 'repaired.m4a')
+      try {
+        await new Promise<void>((resolve, reject) => {
+          execFile(
+            getFfmpegPath(),
+            ['-i', filePath, '-c', 'copy', '-y', tmpFile],
+            { timeout: 120_000 },
+            (err) => {
+              if (err) return reject(err)
+              if (!fs.existsSync(tmpFile)) return reject(new Error('ffmpeg produced no output'))
+              // Copy to original location; avoid rename across devices
+              const backup = filePath + '.bak'
+              fs.renameSync(filePath, backup)
+              try {
+                fs.copyFileSync(tmpFile, filePath)
+                fs.unlinkSync(backup)
+              } catch (copyErr) {
+                try { fs.renameSync(backup, filePath) } catch { /* ignore */ }
+                throw copyErr
+              }
+              resolve()
+            }
+          )
         })
-      })
-      metadata = await parseFile(filePath)
+        metadata = await parseFile(filePath)
+      } finally {
+        try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch { /* ignore */ }
+      }
     } else {
       Logger.error('MetadataService: parse Metadata fail: Unsupported file extension.')
       throw err
@@ -113,7 +134,7 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
     codec: metadata.format.codec,
     container: metadata.format.container,
 
-    cover: metadata.common.picture?.[0],
+    cover: picture?.data ?? null,
     coverMimeType: picture?.format
   }
 }

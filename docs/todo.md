@@ -27,7 +27,7 @@ tray
 文件导入导出
 丢失恢复
 动态更新歌曲metadata
-手动写入metadata
+✔ 手动写入metadata
 
 插件
 footer隐藏？

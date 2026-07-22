@@ -327,6 +327,26 @@ const fontsAPI = {
   openDirectory: () => ipcRenderer.invoke('fonts:open-directory')
 }
 
+const metadataAPI = {
+  read: (songId: number) =>
+    ipcRenderer.invoke('metadata:read', songId) as Promise<{
+      success: boolean
+      data?: unknown
+      error?: string
+    }>,
+  write: (songId: number, metadata: unknown) =>
+    ipcRenderer.invoke('metadata:write', { songId, metadata }) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  chooseCover: () =>
+    ipcRenderer.invoke('metadata:choose-cover') as Promise<{
+      success: boolean
+      data?: { filePath: string; dataUrl: string }
+      error?: string
+    }>
+}
+
 // Custom APIs for renderer
 const api = {
   audio: audioAPI,
@@ -334,6 +354,7 @@ const api = {
   library: libraryAPI,
   lyrics: lyricsAPI,
   fonts: fontsAPI,
+  metadata: metadataAPI,
   miniPlayer: miniPlayerAPI,
   desktopLyrics: desktopLyricsAPI,
   remoteSource: remoteSourceAPI,

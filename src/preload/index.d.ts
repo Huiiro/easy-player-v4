@@ -237,6 +237,18 @@ declare global {
         }>
         openDirectory(): Promise<{ success: boolean; error?: string }>
       }
+      metadata: {
+        read(songId: number): Promise<{ success: boolean; data?: unknown; error?: string }>
+        write(
+          songId: number,
+          metadata: unknown
+        ): Promise<{ success: boolean; error?: string }>
+        chooseCover(): Promise<{
+          success: boolean
+          data?: { filePath: string; dataUrl: string }
+          error?: string
+        }>
+      }
       miniPlayer: {
         enter(): Promise<{ success: boolean }>
         restore(): Promise<{ success: boolean }>

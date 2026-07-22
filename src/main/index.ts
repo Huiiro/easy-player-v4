@@ -13,8 +13,10 @@ import { getAppSetting, getSong, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
+import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { cacheRemoteSong, syncNavidromeSource } from './service/remoteSourceService'
 import { getDataPath } from './utils/pathUtils'
+import { createDir } from './utils/pathUtils'
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -22,7 +24,6 @@ protocol.registerSchemesAsPrivileged([
     privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
   }
 ])
-import { createDir } from './utils/pathUtils'
 
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
@@ -276,6 +277,7 @@ app.whenReady().then(() => {
   registerScanIpcHandlers()
   registerLyricsIpcHandlers()
   registerFontIpcHandlers()
+  registerMetadataIpcHandlers()
   registerMediaProtocol()
 
   // IPC test

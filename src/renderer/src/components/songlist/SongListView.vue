@@ -14,6 +14,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import SongDetailsDialog from './SongDetailsDialog.vue'
 import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
+import MetadataEditDialog from './MetadataEditDialog.vue'
 
 type SongListSource =
   | { type: 'songs' | 'local' | 'remote' | 'history' }
@@ -56,6 +57,9 @@ const tagSongId = ref<number | null>(null)
 const songsPendingDelete = ref<LibrarySong[]>([])
 const songDetailsOpen = ref(false)
 const songDetailsId = ref<number | null>(null)
+const metadataEditOpen = ref(false)
+const metadataEditSongId = ref<number | null>(null)
+const metadataEditCoverUrl = ref<string | null>(null)
 const remoteSources = ref<MusicSourceOption[]>([])
 const canFilterByTags = computed(() =>
   ['songs', 'local', 'remote', 'playlist', 'folder'].includes(props.source.type)
@@ -342,6 +346,23 @@ async function openSongDetails(): Promise<void> {
   songDetailsId.value = songId
   songDetailsOpen.value = true
 }
+function openMetadataEdit(): void {
+  const song = activeMenuSong.value
+  closeMenu()
+  if (!song) return
+  if (song.sourceId) {
+    warning(t('metadataEdit.remoteNotSupported'))
+    return
+  }
+  metadataEditSongId.value = song.id
+  metadataEditCoverUrl.value = song.cover
+    ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}`
+    : null
+  metadataEditOpen.value = true
+}
+function onMetadataSaved(): void {
+  void load()
+}
 function openBatchTags(): void {
   if (!selectedIds.value.size) return
   batchTagDialogOpen.value = true
@@ -478,6 +499,13 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         </button>
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="openMetadataEdit"
+        >
+          <svgIcon name="common-edit" class-name="size-4" />
+          {{ t('songList.editMetadata') }}
+        </button>
+        <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
           @click="openSongDetails"
         >
           <svgIcon name="common-detail" class-name="size-4" />
@@ -511,6 +539,12 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
     <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="load" />
     <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="[...selectedIds]" @changed="load" />
     <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
+    <MetadataEditDialog
+      v-model="metadataEditOpen"
+      :song-id="metadataEditSongId"
+      :cover-url="metadataEditCoverUrl"
+      @saved="onMetadataSaved"
+    />
     <DeleteSongsDialog
       :model-value="songsPendingDelete.length > 0"
       :songs="songsPendingDelete"
