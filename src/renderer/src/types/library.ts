@@ -7,6 +7,8 @@ export interface LibrarySong {
   cover: string | null
   audio: string
   isNewest: boolean
+  fileName: string | null
+  createdAt: string
   songStatus: number
   sourceId: number | null
   playTime?: string

@@ -1,4 +1,14 @@
-import { app, shell, BrowserWindow, dialog, ipcMain, net, protocol, screen } from 'electron'
+import {
+  app,
+  shell,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  net,
+  protocol,
+  screen
+} from 'electron'
 import { createHash, randomBytes } from 'node:crypto'
 import { readdirSync, statSync } from 'node:fs'
 import { existsSync } from 'node:fs'
@@ -29,6 +39,26 @@ let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
+const shortcutActions = ['previous', 'toggle', 'next', 'volumeUp', 'volumeDown'] as const
+type ShortcutAction = (typeof shortcutActions)[number]
+
+function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, string>>): string[] {
+  globalShortcut.unregisterAll()
+  const failed: string[] = []
+  for (const action of shortcutActions) {
+    const accelerator = shortcuts[action]?.trim()
+    if (!accelerator) continue
+    const electronAccelerator = accelerator.replace(
+      /(^|\+)meta(?=\+|$)/i,
+      `$1${process.platform === 'darwin' ? 'Command' : 'Super'}`
+    )
+    const registered = globalShortcut.register(electronAccelerator, () => {
+      mainWindow?.webContents.send('shortcuts:action', action)
+    })
+    if (!registered) failed.push(accelerator)
+  }
+  return failed
+}
 
 interface WindowState {
   x: number
@@ -278,6 +308,18 @@ app.whenReady().then(() => {
   registerLyricsIpcHandlers()
   registerFontIpcHandlers()
   registerMetadataIpcHandlers()
+  ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
+    const failed = registerGlobalShortcuts(
+      shortcuts && typeof shortcuts === 'object'
+        ? (shortcuts as Partial<Record<ShortcutAction, string>>)
+        : {}
+    )
+    return { success: true, data: { failed } }
+  })
+  ipcMain.handle('shortcuts:unregister-global', () => {
+    globalShortcut.unregisterAll()
+    return { success: true }
+  })
   registerMediaProtocol()
 
   // IPC test
@@ -501,5 +543,6 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  globalShortcut.unregisterAll()
   closeDatabase()
 })

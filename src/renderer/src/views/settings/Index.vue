@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
@@ -9,6 +9,9 @@ import { ENGINE_VERSION, PlayerBgType, VERSION } from '@/consts'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import ShortcutInput from '@/components/settings/ShortcutInput.vue'
+import SleepTimerSettings from '@/components/settings/SleepTimerSettings.vue'
+import Draggable from 'vuedraggable'
 
 const ui = useUIStore()
 const { locale, t } = useI18n()
@@ -16,6 +19,38 @@ const backgroundInput = ref<HTMLInputElement | null>(null)
 const remoteCacheDirectory = ref('')
 const remoteCacheLimitGb = ref(2)
 const remoteCacheUsed = ref(0)
+const activeSection = ref('playback')
+const settingsScroller = ref<HTMLElement | null>(null)
+let sectionObserver: IntersectionObserver | undefined
+let navigatingBySidebar = false
+let sidebarScrollTimer: number | undefined
+const navigationSections = computed(() => [
+  { id: 'playback', label: t('settings.playback') },
+  { id: 'fonts', label: t('settings.fonts') },
+  { id: 'language', label: t('settings.language') },
+  { id: 'background', label: t('settings.playerBackground') },
+  { id: 'theme', label: t('settings.theme') },
+  { id: 'customBackground', label: t('settings.customBackground') },
+  { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
+  { id: 'lyrics', label: t('settings.lyrics') },
+  { id: 'shortcuts', label: t('settings.shortcuts') },
+  { id: 'remote-cache', label: t('remote.cache') },
+  { id: 'other', label: t('settings.other') }
+])
+const shortcutActions = [
+  { key: 'previous', label: 'settings.shortcutPrevious' },
+  { key: 'toggle', label: 'settings.shortcutToggle' },
+  { key: 'next', label: 'settings.shortcutNext' },
+  { key: 'volumeUp', label: 'settings.shortcutVolumeUp' },
+  { key: 'volumeDown', label: 'settings.shortcutVolumeDown' }
+] as const
+const defaultLocalShortcuts = {
+  previous: 'left',
+  toggle: 'space',
+  next: 'right',
+  volumeUp: 'up',
+  volumeDown: 'down'
+}
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
   set: (value) => {
@@ -53,13 +88,25 @@ const desktopLyricsFontOptions = computed(() => [
   { label: t('settings.desktopLyricsFontInherit'), value: '' },
   ...fontOptions.value.filter((opt) => opt.value !== '')
 ])
-function moveLyricSource(index: number, direction: -1 | 1): void {
-  const target = index + direction
-  if (target < 0 || target >= ui.lyricSourceOrder.length) return
-  const next = [...ui.lyricSourceOrder]
-  ;[next[index], next[target]] = [next[target], next[index]]
-  ui.lyricSourceOrder = next
+function navigateTo(sectionId: string): void {
+  activeSection.value = sectionId
+  const container = settingsScroller.value
+  const section = document.getElementById(sectionId)
+  if (!container || !section) return
+  const top = section.getBoundingClientRect().top - container.getBoundingClientRect().top
+  navigatingBySidebar = true
+  container.scrollTo({ top: container.scrollTop + top - 24, behavior: 'smooth' })
+  onSettingsScroll()
 }
+function onSettingsScroll(): void {
+  if (!navigatingBySidebar) return
+  if (sidebarScrollTimer) window.clearTimeout(sidebarScrollTimer)
+  sidebarScrollTimer = window.setTimeout(() => {
+    navigatingBySidebar = false
+    sidebarScrollTimer = undefined
+  }, 120)
+}
+const lyricSourceKey = (source: string): string => source
 
 function chooseBackground(): void {
   backgroundInput.value?.click()
@@ -124,502 +171,596 @@ async function saveRemoteCacheLimit(): Promise<void> {
     value: remoteCacheLimitGb.value
   })
 }
-onMounted(() => void loadRemoteCache())
+function resetShortcuts(): void {
+  Object.assign(ui.shortcutKeys, defaultLocalShortcuts)
+  Object.assign(ui.globalShortcutKeys, {
+    previous: '',
+    toggle: '',
+    next: '',
+    volumeUp: '',
+    volumeDown: ''
+  })
+  ui.useGlobalShortcutKeys = false
+}
+onMounted(() => {
+  void loadRemoteCache()
+  sectionObserver = new IntersectionObserver(
+    (entries) => {
+      if (navigatingBySidebar) return
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((left, right) => left.boundingClientRect.top - right.boundingClientRect.top)
+      const section = visible.find((entry) => entry.boundingClientRect.top >= 0) || visible[0]
+      if (section?.target.id) activeSection.value = section.target.id
+    },
+    { root: settingsScroller.value, rootMargin: '-18% 0px -68% 0px', threshold: 0 }
+  )
+  for (const section of navigationSections.value) {
+    const element = document.getElementById(section.id)
+    if (element) sectionObserver.observe(element)
+  }
+})
+onBeforeUnmount(() => {
+  sectionObserver?.disconnect()
+  if (sidebarScrollTimer) window.clearTimeout(sidebarScrollTimer)
+})
 </script>
 
 <template>
-  <main class="custom-scrollbar h-full overflow-y-auto">
-    <div class="mx-auto w-full max-w-5xl px-6 py-8 pb-28 sm:px-10">
-      <!-- header -->
-      <div class="mb-8">
-        <p class="text-xs font-semibold tracking-[0.14em] text-primary">PREFERENCES</p>
-        <h1 class="mt-2 text-2xl font-semibold tracking-tight text-text">
-          {{ t('settings.title') }}
-        </h1>
-        <p class="mt-2 text-sm text-text-l">
-          {{ t('settings.description') }}
-        </p>
-      </div>
-      <!-- playback -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.playback') }}</h2>
-            <p>{{ t('settings.playbackDescription') }}</p>
-          </div>
+  <main
+    ref="settingsScroller"
+    class="custom-scrollbar h-full overflow-y-auto"
+    @scroll="onSettingsScroll"
+  >
+    <div
+      class="mx-auto grid w-full max-w-7xl grid-cols-[10rem_minmax(0,1fr)] gap-10 px-6 py-8 pb-28 sm:px-10"
+    >
+      <aside class="settings-nav">
+        <p class="settings-nav-title">{{ t('settings.navigation') }}</p>
+        <button
+          v-for="section in navigationSections"
+          :key="section.id"
+          class="settings-nav-item"
+          :class="activeSection === section.id && 'active'"
+          @click="navigateTo(section.id)"
+        >
+          {{ section.label }}
+        </button>
+      </aside>
+      <div class="min-w-0 flex-1">
+        <!-- header -->
+        <div class="mb-8">
+          <p class="text-xs font-semibold tracking-[0.14em] text-primary">PREFERENCES</p>
+          <h1 class="mt-2 text-2xl font-semibold tracking-tight text-text">
+            {{ t('settings.title') }}
+          </h1>
+          <p class="mt-2 text-sm text-text-l">
+            {{ t('settings.description') }}
+          </p>
         </div>
-        <div class="settings-card">
-          <div class="setting-row">
+        <!-- playback -->
+        <section id="playback" class="settings-section">
+          <div class="section-heading">
             <div>
-              <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-              <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-          </div>
-        </div>
-      </section>
-      <!-- font -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.fonts') }}</h2>
-            <p>{{ t('settings.fontsDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.interfaceFont') }}</h3>
-              <p>{{ t('settings.interfaceFontDescription') }}</p>
-            </div>
-            <div class="flex items-center gap-2">
-              <BaseSelect
-                v-model="ui.customFontFamily"
-                :options="fontOptions"
-                :placeholder="t('settings.fontSystemDefault')"
-                class="w-64"
-              />
-              <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
-                {{ t('settings.refreshFonts') }}
-              </button>
-              <button class="secondary-button text-nowrap" type="button" @click="openFontDirectory">
-                {{ t('settings.openFontDirectory') }}
-              </button>
+              <h2>{{ t('settings.playback') }}</h2>
+              <p>{{ t('settings.playbackDescription') }}</p>
             </div>
           </div>
-        </div>
-      </section>
-      <!-- language -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.language') }}</h2>
-            <p>{{ t('settings.languageDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.interfaceLanguage') }}</h3>
-              <p>{{ t('settings.interfaceLanguageDescription') }}</p>
-            </div>
-            <div
-              class="language-options"
-              role="radiogroup"
-              :aria-label="t('settings.interfaceLanguage')"
-            >
-              <button
-                type="button"
-                class="language-option"
-                :class="{ selected: language === 'zh' }"
-                :aria-checked="language === 'zh'"
-                role="radio"
-                @click="language = 'zh'"
-              >
-                {{ t('settings.languageChinese') }}
-              </button>
-              <button
-                type="button"
-                class="language-option"
-                :class="{ selected: language === 'en' }"
-                :aria-checked="language === 'en'"
-                role="radio"
-                @click="language = 'en'"
-              >
-                {{ t('settings.languageEnglish') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-      <!-- player theme -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.playerBackground') }}</h2>
-            <p>{{ t('settings.playerBackgroundDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row setting-row-stack">
-            <div>
-              <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
-              <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
-            </div>
-            <div
-              class="theme-options"
-              role="radiogroup"
-              :aria-label="t('settings.playerBackgroundStyle')"
-            >
-              <button
-                type="button"
-                class="theme-option album-background-preview"
-                :class="{ selected: playerBackground === PlayerBgType.ALBUM }"
-                :aria-checked="playerBackground === PlayerBgType.ALBUM"
-                role="radio"
-                @click="playerBackground = PlayerBgType.ALBUM"
-              >
-                <span class="preview-window"><i /><b /></span>
-                <span>{{ t('settings.playerBackgroundAlbum') }}</span>
-              </button>
-              <button
-                type="button"
-                class="theme-option ambient-background-preview"
-                :class="{ selected: playerBackground === PlayerBgType.AMBIENT }"
-                :aria-checked="playerBackground === PlayerBgType.AMBIENT"
-                role="radio"
-                @click="playerBackground = PlayerBgType.AMBIENT"
-              >
-                <span class="preview-window"><i /><b /></span>
-                <span>{{ t('settings.playerBackgroundAmbient') }}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-      <!-- theme -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.theme') }}</h2>
-            <p>{{ t('settings.themeDescription') }}</p>
-          </div>
-          <button class="reset-button" type="button" @click="ui.resetTheme">
-            {{ t('settings.restoreDefault') }}
-          </button>
-        </div>
-
-        <div class="settings-card">
-          <div class="setting-row setting-row-stack">
-            <div>
-              <h3>{{ t('settings.appearanceMode') }}</h3>
-              <p>{{ t('settings.appearanceDescription') }}</p>
-            </div>
-            <div class="theme-options" role="radiogroup" :aria-label="t('settings.appearanceMode')">
-              <button
-                type="button"
-                class="theme-option light-preview"
-                :class="{ selected: themeMode === 'light' }"
-                :aria-checked="themeMode === 'light'"
-                role="radio"
-                @click="themeMode = 'light'"
-              >
-                <span class="preview-window"><i /><b /></span>
-                <span>{{ t('settings.appearanceModeLight') }}</span>
-              </button>
-              <button
-                type="button"
-                class="theme-option dark-preview"
-                :class="{ selected: themeMode === 'dark' }"
-                :aria-checked="themeMode === 'dark'"
-                role="radio"
-                @click="themeMode = 'dark'"
-              >
-                <span class="preview-window"><i /><b /></span>
-                <span>{{ t('settings.appearanceModeDark') }}</span>
-              </button>
-              <button
-                type="button"
-                class="theme-option custom-preview"
-                :class="{ selected: themeMode === 'custom' }"
-                :aria-checked="themeMode === 'custom'"
-                role="radio"
-                @click="themeMode = 'custom'"
-              >
-                <span class="preview-window"><i /><b /></span>
-                <span>{{ t('settings.appearanceModeCustom') }}</span>
-              </button>
-            </div>
-          </div>
-
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.themeColor') }}</h3>
-              <p>{{ t('settings.themeColorDescription') }}</p>
-            </div>
-            <div>
-              <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" />
-            </div>
-          </div>
-        </div>
-      </section>
-      <!-- custom background -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.customBackground') }}</h2>
-            <p>{{ t('settings.customBackgroundDescription') }}</p>
-          </div>
-          <span class="text-xs text-text-l">
-            {{ ui.useCustomBg ? t('settings.enabled') : t('settings.disabled') }}
-          </span>
-        </div>
-
-        <div class="settings-card" :class="{ muted: !ui.useCustomBg }">
-          <div class="setting-row background-row">
-            <div>
-              <h3>{{ t('settings.backgroundImage') }}</h3>
-              <p>{{ ui.customBg.path || t('noImageSelected') }}</p>
-            </div>
-            <div class="flex shrink-0 gap-2">
-              <button class="secondary-button" type="button" @click="chooseBackground">
-                {{ t('settings.selectImage') }}
-              </button>
-              <button
-                v-if="ui.customBg.url"
-                class="icon-button"
-                type="button"
-                :title="t('settings.removeBackground')"
-                @click="clearBackground"
-              >
-                ×
-              </button>
-            </div>
-            <input
-              ref="backgroundInput"
-              class="hidden"
-              type="file"
-              accept="image/*"
-              @change="updateBackground"
-            />
-          </div>
-
-          <div class="slider-row">
-            <div class="slider-label">
-              <span>{{ t('settings.brightness') }}</span>
-              <strong>{{ ui.customBg.brightness }}%</strong>
-            </div>
-            <BaseSlider
-              v-model="ui.customBg.brightness"
-              :min="30"
-              :max="130"
-              :step="1"
-              size="sm"
-              :disabled="!ui.useCustomBg"
-            />
-          </div>
-          <div class="slider-row">
-            <div class="slider-label">
-              <span>{{ t('settings.blur') }}</span>
-              <strong>{{ ui.customBg.blur }} px</strong>
-            </div>
-            <BaseSlider
-              v-model="ui.customBg.blur"
-              :min="0"
-              :max="30"
-              :step="1"
-              size="sm"
-              :disabled="!ui.useCustomBg"
-            />
-          </div>
-        </div>
-      </section>
-      <!-- desktop lyrics -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.desktopLyrics') }}</h2>
-            <p>{{ t('settings.desktopLyricsDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
-              <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
-          </div>
-          <div class="setting-row setting-row-stack gap-4">
-            <div class="w-full">
-              <div class="flex items-center gap-2 my-3 text-xs text-text-l">
-                <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
-                <BaseSelect
-                  v-model="ui.desktopLyricsStyles.fontFamily"
-                  :options="desktopLyricsFontOptions"
-                  :placeholder="t('settings.desktopLyricsFontInherit')"
-                  class="w-full"
-                />
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
+                <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
               </div>
+              <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
+            </div>
+            <SleepTimerSettings />
+          </div>
+        </section>
+        <!-- font -->
+        <section id="fonts" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.fonts') }}</h2>
+              <p>{{ t('settings.fontsDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.interfaceFont') }}</h3>
+                <p>{{ t('settings.interfaceFontDescription') }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <BaseSelect
+                  v-model="ui.customFontFamily"
+                  :options="fontOptions"
+                  :placeholder="t('settings.fontSystemDefault')"
+                  class="w-64"
+                />
+                <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
+                  {{ t('settings.refreshFonts') }}
+                </button>
+                <button
+                  class="secondary-button text-nowrap"
+                  type="button"
+                  @click="openFontDirectory"
+                >
+                  {{ t('settings.openFontDirectory') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- language -->
+        <section id="language" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.language') }}</h2>
+              <p>{{ t('settings.languageDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.interfaceLanguage') }}</h3>
+                <p>{{ t('settings.interfaceLanguageDescription') }}</p>
+              </div>
+              <div
+                class="language-options"
+                role="radiogroup"
+                :aria-label="t('settings.interfaceLanguage')"
+              >
+                <button
+                  type="button"
+                  class="language-option"
+                  :class="{ selected: language === 'zh' }"
+                  :aria-checked="language === 'zh'"
+                  role="radio"
+                  @click="language = 'zh'"
+                >
+                  {{ t('settings.languageChinese') }}
+                </button>
+                <button
+                  type="button"
+                  class="language-option"
+                  :class="{ selected: language === 'en' }"
+                  :aria-checked="language === 'en'"
+                  role="radio"
+                  @click="language = 'en'"
+                >
+                  {{ t('settings.languageEnglish') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- player theme -->
+        <section id="background" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.playerBackground') }}</h2>
+              <p>{{ t('settings.playerBackgroundDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row setting-row-stack">
+              <div>
+                <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
+                <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
+              </div>
+              <div
+                class="theme-options"
+                role="radiogroup"
+                :aria-label="t('settings.playerBackgroundStyle')"
+              >
+                <button
+                  type="button"
+                  class="theme-option album-background-preview"
+                  :class="{ selected: playerBackground === PlayerBgType.ALBUM }"
+                  :aria-checked="playerBackground === PlayerBgType.ALBUM"
+                  role="radio"
+                  @click="playerBackground = PlayerBgType.ALBUM"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ t('settings.playerBackgroundAlbum') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="theme-option ambient-background-preview"
+                  :class="{ selected: playerBackground === PlayerBgType.AMBIENT }"
+                  :aria-checked="playerBackground === PlayerBgType.AMBIENT"
+                  role="radio"
+                  @click="playerBackground = PlayerBgType.AMBIENT"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ t('settings.playerBackgroundAmbient') }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- theme -->
+        <section id="theme" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.theme') }}</h2>
+              <p>{{ t('settings.themeDescription') }}</p>
+            </div>
+            <button class="reset-button" type="button" @click="ui.resetTheme">
+              {{ t('settings.restoreDefault') }}
+            </button>
+          </div>
+
+          <div class="settings-card">
+            <div class="setting-row setting-row-stack">
+              <div>
+                <h3>{{ t('settings.appearanceMode') }}</h3>
+                <p>{{ t('settings.appearanceDescription') }}</p>
+              </div>
+              <div
+                class="theme-options"
+                role="radiogroup"
+                :aria-label="t('settings.appearanceMode')"
+              >
+                <button
+                  type="button"
+                  class="theme-option light-preview"
+                  :class="{ selected: themeMode === 'light' }"
+                  :aria-checked="themeMode === 'light'"
+                  role="radio"
+                  @click="themeMode = 'light'"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ t('settings.appearanceModeLight') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="theme-option dark-preview"
+                  :class="{ selected: themeMode === 'dark' }"
+                  :aria-checked="themeMode === 'dark'"
+                  role="radio"
+                  @click="themeMode = 'dark'"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ t('settings.appearanceModeDark') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="theme-option custom-preview"
+                  :class="{ selected: themeMode === 'custom' }"
+                  :aria-checked="themeMode === 'custom'"
+                  role="radio"
+                  @click="themeMode = 'custom'"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ t('settings.appearanceModeCustom') }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.themeColor') }}</h3>
+                <p>{{ t('settings.themeColorDescription') }}</p>
+              </div>
+              <div>
+                <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" />
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- custom background -->
+        <section id="customBackground" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.customBackground') }}</h2>
+              <p>{{ t('settings.customBackgroundDescription') }}</p>
+            </div>
+            <span class="text-xs text-text-l">
+              {{ ui.useCustomBg ? t('settings.enabled') : t('settings.disabled') }}
+            </span>
+          </div>
+
+          <div class="settings-card" :class="{ muted: !ui.useCustomBg }">
+            <div class="setting-row background-row">
+              <div>
+                <h3>{{ t('settings.backgroundImage') }}</h3>
+                <p>{{ ui.customBg.path || t('noImageSelected') }}</p>
+              </div>
+              <div class="flex shrink-0 gap-2">
+                <button class="secondary-button" type="button" @click="chooseBackground">
+                  {{ t('settings.selectImage') }}
+                </button>
+                <button
+                  v-if="ui.customBg.url"
+                  class="icon-button"
+                  type="button"
+                  :title="t('settings.removeBackground')"
+                  @click="clearBackground"
+                >
+                  ×
+                </button>
+              </div>
+              <input
+                ref="backgroundInput"
+                class="hidden"
+                type="file"
+                accept="image/*"
+                @change="updateBackground"
+              />
+            </div>
+
+            <div class="slider-row">
               <div class="slider-label">
-                <span>{{ t('settings.desktopLyricsFontSize') }}</span>
-                <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+                <span>{{ t('settings.brightness') }}</span>
+                <strong>{{ ui.customBg.brightness }}%</strong>
               </div>
               <BaseSlider
-                v-model="ui.desktopLyricsStyles.fontSize"
-                :min="24"
-                :max="64"
+                v-model="ui.customBg.brightness"
+                :min="30"
+                :max="130"
                 :step="1"
                 size="sm"
+                :disabled="!ui.useCustomBg"
               />
-              <div class="flex gap-4">
-                <label class="flex items-center gap-2 my-2 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
-                  <BaseColorPicker
-                    v-model="ui.desktopLyricsStyles.activeColor"
-                    :presets="presetColors"
-                  />
-                </label>
-                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
-                  <BaseColorPicker
-                    v-model="ui.desktopLyricsStyles.inactiveColor"
-                    :presets="presetColors"
-                  />
-                </label>
+            </div>
+            <div class="slider-row">
+              <div class="slider-label">
+                <span>{{ t('settings.blur') }}</span>
+                <strong>{{ ui.customBg.blur }} px</strong>
               </div>
-              <div class="flex gap-4">
-                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsTranslation') }}</span>
-                  <BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" :size="'sm'" />
-                </label>
-                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsAutoHide') }}</span>
-                  <BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" :size="'sm'" />
-                </label>
+              <BaseSlider
+                v-model="ui.customBg.blur"
+                :min="0"
+                :max="30"
+                :step="1"
+                size="sm"
+                :disabled="!ui.useCustomBg"
+              />
+            </div>
+          </div>
+        </section>
+        <!-- desktop lyrics -->
+        <section id="desktop-lyrics" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.desktopLyrics') }}</h2>
+              <p>{{ t('settings.desktopLyricsDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
+                <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
               </div>
-              <div class="flex gap-4">
-                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsBold') }}</span>
-                  <BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" :size="'sm'" />
-                </label>
-                <label class="flex items-center gap-2 my-3 text-xs text-text-l">
-                  <span>{{ t('settings.desktopLyricsGlow') }}</span>
-                  <BaseSwitch v-model="ui.desktopLyricsStyles.glow" :size="'sm'" />
-                </label>
+              <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
+            </div>
+            <div class="setting-row setting-row-stack gap-4">
+              <div class="w-full">
+                <div class="flex items-center gap-2 my-3 text-xs text-text-l">
+                  <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
+                  <BaseSelect
+                    v-model="ui.desktopLyricsStyles.fontFamily"
+                    :options="desktopLyricsFontOptions"
+                    :placeholder="t('settings.desktopLyricsFontInherit')"
+                    class="w-full"
+                  />
+                </div>
+                <div class="slider-label">
+                  <span>{{ t('settings.desktopLyricsFontSize') }}</span>
+                  <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+                </div>
+                <BaseSlider
+                  v-model="ui.desktopLyricsStyles.fontSize"
+                  :min="24"
+                  :max="64"
+                  :step="1"
+                  size="sm"
+                />
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 my-2 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
+                    <BaseColorPicker
+                      v-model="ui.desktopLyricsStyles.activeColor"
+                      :presets="presetColors"
+                    />
+                  </label>
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
+                    <BaseColorPicker
+                      v-model="ui.desktopLyricsStyles.inactiveColor"
+                      :presets="presetColors"
+                    />
+                  </label>
+                </div>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsTranslation') }}</span>
+                    <BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" :size="'sm'" />
+                  </label>
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsAutoHide') }}</span>
+                    <BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" :size="'sm'" />
+                  </label>
+                </div>
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsBold') }}</span>
+                    <BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" :size="'sm'" />
+                  </label>
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsGlow') }}</span>
+                    <BaseSwitch v-model="ui.desktopLyricsStyles.glow" :size="'sm'" />
+                  </label>
+                </div>
+              </div>
+              <div
+                class="desktop-lyrics-preview"
+                :style="{
+                  '--desktop-active': ui.desktopLyricsStyles.activeColor,
+                  '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
+                  '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
+                }"
+              >
+                <strong
+                  :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
+                  :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+                  >{{ t('settings.desktopLyricsPreviewLine') }}</strong
+                >
+                <span v-if="ui.desktopLyricsStyles.showTranslation">
+                  {{ t('settings.desktopLyricsPreviewTranslation') }}
+                </span>
+                <span>
+                  {{ t('settings.desktopLyricsPreviewNext') }}
+                </span>
               </div>
             </div>
-            <div
-              class="desktop-lyrics-preview"
-              :style="{
-                '--desktop-active': ui.desktopLyricsStyles.activeColor,
-                '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
-                '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
-              }"
+          </div>
+        </section>
+        <!-- lyrics -->
+        <section id="lyrics" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.lyrics') }}</h2>
+              <p>{{ t('settings.lyricsDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <Draggable
+              v-model="ui.lyricSourceOrder"
+              :item-key="lyricSourceKey"
+              handle=".lyric-drag-handle"
             >
-              <strong
-                :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
-                :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
-                >{{ t('settings.desktopLyricsPreviewLine') }}</strong
-              >
-              <span v-if="ui.desktopLyricsStyles.showTranslation">
-                {{ t('settings.desktopLyricsPreviewTranslation') }}
-              </span>
-              <span>
-                {{ t('settings.desktopLyricsPreviewNext') }}
-              </span>
+              <template #item="{ element: source, index }">
+                <div class="setting-row lyric-source-row">
+                  <div class="flex items-center gap-3">
+                    <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
+                      <SvgIcon name="common-drag" class-name="size-4" />
+                    </button>
+                    <div>
+                      <h3>{{ t(`lyrics.source.${source}`) }}</h3>
+                      <p>
+                        {{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </Draggable>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
+                <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
             </div>
           </div>
-        </div>
-      </section>
-      <!-- lyrics -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.lyrics') }}</h2>
-            <p>{{ t('settings.lyricsDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div
-            v-for="(source, index) in ui.lyricSourceOrder"
-            :key="source"
-            class="setting-row !min-h-0 py-3"
-          >
+        </section>
+        <!-- shortcuts -->
+        <section id="shortcuts" class="settings-section">
+          <div class="section-heading">
             <div>
-              <h3>{{ t(`lyrics.source.${source}`) }}</h3>
-              <p>{{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}</p>
-            </div>
-            <div class="flex gap-1">
-              <button
-                class="icon-button"
-                :disabled="index === 0"
-                @click="moveLyricSource(index, -1)"
-              >
-                ↑</button
-              ><button
-                class="icon-button"
-                :disabled="index === ui.lyricSourceOrder.length - 1"
-                @click="moveLyricSource(index, 1)"
-              >
-                ↓
-              </button>
+              <h2>{{ t('settings.shortcuts') }}</h2>
+              <p>{{ t('settings.shortcutsDescription') }}</p>
             </div>
           </div>
-          <div class="setting-row">
+          <div class="settings-card shortcut-card">
+            <div class="shortcut-toolbar">
+              <div>
+                <h3>{{ t('settings.globalShortcuts') }}</h3>
+                <p>{{ t('settings.globalShortcutsDescription') }}</p>
+              </div>
+              <div class="flex items-center gap-3">
+                <button class="secondary-button text-nowrap" @click="resetShortcuts">
+                  {{ t('settings.resetShortcutDefaults') }}
+                </button>
+                <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
+              </div>
+            </div>
+            <div class="shortcut-grid">
+              <span>.</span>
+              <span>{{ t('settings.localShortcuts') }}</span>
+              <span>{{ t('settings.globalShortcuts') }}</span>
+              <template v-for="item in shortcutActions" :key="item.key">
+                <span class="shortcut-action">{{ t(item.label) }}</span>
+                <ShortcutInput :action="item.key" scope="local" />
+                <ShortcutInput
+                  :action="item.key"
+                  scope="global"
+                  :disabled="!ui.useGlobalShortcutKeys"
+                />
+              </template>
+            </div>
+          </div>
+        </section>
+        <!-- remote file local cache-->
+        <section id="remote-cache" class="settings-section">
+          <div class="section-heading">
             <div>
-              <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
-              <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
-            </div>
-            <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-          </div>
-        </div>
-      </section>
-      <!-- remote file local cache-->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('remote.cache') }}</h2>
-            <p>{{ t('remote.cacheDescription') }}</p>
-          </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('remote.cacheDirectory') }}</h3>
-              <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
-            </div>
-            <div class="flex items-center gap-2">
-              <input :value="remoteCacheDirectory" readonly class="input-base min-w-136" />
-              <button
-                class="secondary-button text-nowrap"
-                type="button"
-                @click="chooseRemoteCacheDirectory"
-              >
-                {{ t('remote.chooseDirectory') }}
-              </button>
-            </div>
-          </div>
-          <div class="setting-row">
-            <div>
-              <h3>{{ t('remote.cacheLimit') }}</h3>
+              <h2>{{ t('remote.cache') }}</h2>
               <p>{{ t('remote.cacheDescription') }}</p>
             </div>
-            <input
-              v-model.number="remoteCacheLimitGb"
-              class="input-base h-9 max-w-18"
-              type="number"
-              min="0.5"
-              max="100"
-              step="0.5"
-              @change="saveRemoteCacheLimit"
-            />
           </div>
-        </div>
-      </section>
-      <!-- 其他 -->
-      <section class="settings-section">
-        <div class="section-heading">
-          <div>
-            <h2>{{ t('settings.other') }}</h2>
-            <p>{{ t('settings.otherDescription') }}</p>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('remote.cacheDirectory') }}</h3>
+                <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input :value="remoteCacheDirectory" readonly class="input-base min-w-136" />
+                <button
+                  class="secondary-button text-nowrap"
+                  type="button"
+                  @click="chooseRemoteCacheDirectory"
+                >
+                  {{ t('remote.chooseDirectory') }}
+                </button>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('remote.cacheLimit') }}</h3>
+                <p>{{ t('remote.cacheDescription') }}</p>
+              </div>
+              <input
+                v-model.number="remoteCacheLimitGb"
+                class="input-base h-9 max-w-18"
+                type="number"
+                min="0.5"
+                max="100"
+                step="0.5"
+                @change="saveRemoteCacheLimit"
+              />
+            </div>
           </div>
-        </div>
-        <div class="settings-card">
-          <div class="setting-row">
+        </section>
+        <!-- 其他 -->
+        <section id="other" class="settings-section">
+          <div class="section-heading">
             <div>
-              <h3>{{ t('settings.version') }}</h3>
-            </div>
-            <div class="flex items-center gap-2 cursor-pointer">
-              <span class="text-text">{{ VERSION }}</span>
-              <p>Powered by Easy Player Audio Engine {{ ENGINE_VERSION }}</p>
-              <button>
-                <svg-icon name="common-update" class-name="size-5" class="btn-hover" />
-              </button>
+              <h2>{{ t('settings.other') }}</h2>
+              <p>{{ t('settings.otherDescription') }}</p>
             </div>
           </div>
-        </div>
-      </section>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.version') }}</h3>
+              </div>
+              <div class="flex items-center gap-2 cursor-pointer">
+                <span class="text-text">{{ VERSION }}</span>
+                <p>Powered by Easy Player Audio Engine {{ ENGINE_VERSION }}</p>
+                <button>
+                  <svg-icon name="common-update" class-name="size-5" class="btn-hover" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   </main>
 </template>
@@ -627,6 +768,52 @@ onMounted(() => void loadRemoteCache())
 <style scoped>
 .settings-section {
   margin-top: 2.5rem;
+  scroll-margin-top: 1.5rem;
+}
+.settings-nav {
+  position: sticky;
+  top: 1.5rem;
+  display: flex;
+  flex: 0 0 10rem;
+  align-self: flex-start;
+  flex-direction: column;
+  gap: 0.2rem;
+  border-left: 1px solid var(--color-border);
+  padding-left: 0.65rem;
+}
+.settings-nav-title {
+  margin: 0 0 0.45rem 0.35rem;
+  color: var(--color-text-l);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+}
+.settings-nav-item {
+  border-radius: 7px;
+  padding: 0.45rem 0.55rem;
+  color: var(--color-text-l);
+  font-size: 0.8rem;
+  text-align: left;
+}
+.settings-nav-item:hover,
+.settings-nav-item.active {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  color: var(--color-primary);
+}
+.lyric-drag-handle {
+  display: grid;
+  cursor: grab;
+  place-items: center;
+  border-radius: 6px;
+  padding: 0.4rem;
+  color: var(--color-text-l);
+}
+.lyric-drag-handle:active {
+  cursor: grabbing;
+}
+.lyric-drag-handle:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
 }
 .section-heading {
   display: flex;
@@ -672,6 +859,75 @@ onMounted(() => void loadRemoteCache())
 }
 .setting-row-stack {
   align-items: flex-start;
+}
+.shortcut-card {
+  overflow: hidden;
+}
+.shortcut-toolbar {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  border-bottom: 1px solid var(--color-border);
+  padding: 1.1rem 1.25rem;
+}
+.shortcut-toolbar h3,
+.shortcut-action {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+.shortcut-toolbar p,
+.shortcut-hint {
+  margin-top: 0.25rem;
+  color: var(--color-text-l);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(9rem, 0.8fr) minmax(9rem, 0.8fr);
+  align-items: center;
+  gap: 0;
+}
+.shortcut-grid > span {
+  padding: 0.65rem 1.25rem;
+  color: var(--color-text-l);
+  font-size: 0.75rem;
+  text-align: center;
+}
+.shortcut-grid > span:first-child,
+.shortcut-grid > .shortcut-action {
+  text-align: left;
+}
+.shortcut-grid > .shortcut-action {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+.shortcut-grid > :nth-child(-n + 3) {
+  border-bottom: 1px solid var(--color-border);
+}
+.shortcut-grid > :nth-child(n + 4) {
+  min-height: 54px;
+  border-bottom: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  padding: 0.65rem 1.25rem;
+}
+.shortcut-grid > :nth-last-child(-n + 3) {
+  border-bottom: 0;
+}
+.shortcut-grid > :is(div) {
+  padding-right: 1.25rem;
+}
+.shortcut-grid > :nth-child(3n + 2),
+.shortcut-grid > :nth-child(3n) {
+  padding-left: 0.25rem;
+}
+.shortcut-hint {
+  border-top: 1px solid var(--color-border);
+  margin: 0;
+  padding: 0.85rem 1.25rem;
 }
 .theme-options {
   display: flex;

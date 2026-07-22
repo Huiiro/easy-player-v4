@@ -23,7 +23,7 @@ type SongListSource =
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
-type SortField = 'title' | 'artist' | 'album' | 'duration'
+type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt'
 interface MusicSourceOption {
   id: number
   name: string
@@ -43,6 +43,7 @@ const loading = ref(false)
 const keyword = ref('')
 const sortBy = ref<SortField>('title')
 const sortOrder = ref<'asc' | 'desc'>('asc')
+const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
 const activeMenuSong = ref<LibrarySong | null>(null)
@@ -69,7 +70,7 @@ const sourceOptions = computed(() => [
   { label: t('songList.sourceLocal'), value: 'local' },
   { label: t('songList.sourceRemote'), value: 'remote' },
   ...remoteSources.value.map((source) => ({
-    label: `${t('songList.sourceRemote')} · ${source.name}`,
+    label: `${source.name}`,
     value: `remote:${source.id}`
   }))
 ])
@@ -97,7 +98,7 @@ const filteredSongs = computed(() => {
     .filter(
       (song) =>
         !search ||
-        [song.title, song.artist, song.album].some((value) =>
+        [song.title, song.artist, song.album, song.fileName].some((value) =>
           value?.toLocaleLowerCase().includes(search)
         )
     )
@@ -225,6 +226,11 @@ const toggleAll = (): void => {
   selectedIds.value = allSelected.value
     ? new Set()
     : new Set(filteredSongs.value.map((song) => song.id))
+}
+const selectNewest = (): void => {
+  selectedIds.value = new Set(
+    filteredSongs.value.filter((song) => song.isNewest).map((song) => song.id)
+  )
 }
 const openMenu = (song: LibrarySong, position: { left: string; top: string }): void => {
   activeMenuSong.value = activeMenuSong.value?.id === song.id ? null : song
@@ -367,6 +373,34 @@ function openBatchTags(): void {
   if (!selectedIds.value.size) return
   batchTagDialogOpen.value = true
 }
+async function reloadSongsFromDisk(songIds: number[]): Promise<void> {
+  if (!songIds.length) return
+  const response = await window.api.metadata.reload(songIds)
+  if (!response.success) {
+    showError(response.error || t('songList.reloadFromDiskFailed'))
+    return
+  }
+  await load()
+  const result = response.data
+  success(t('songList.reloadedFromDisk', { count: result?.reloaded || 0 }))
+  if (result?.failed) warning(t('songList.reloadFromDiskPartial', { count: result.failed }))
+}
+function reloadActiveMenuSongFromDisk(): void {
+  const song = activeMenuSong.value
+  closeMenu()
+  if (!song) return
+  void reloadSongsFromDisk([song.id])
+}
+function reloadSelectedSongsFromDisk(): void {
+  const localIds = filteredSongs.value
+    .filter((song) => selectedIds.value.has(song.id) && song.sourceId === null)
+    .map((song) => song.id)
+  if (!localIds.length) {
+    warning(t('songList.remoteReloadNotSupported'))
+    return
+  }
+  void reloadSongsFromDisk(localIds)
+}
 const onScanFinished = (): void => void load()
 const onTagsChanged = (): void => void load()
 const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
@@ -417,6 +451,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       :selection-mode="selectionMode"
       :selected-count="selectedIds.size"
       :all-selected="allSelected"
+      :show-file-name="showFileName"
       :show-tag-manager="canFilterByTags"
       :active-tag-filter-count="canFilterByTags ? selectedTagIds.length : 0"
       :source-filter="canFilterBySource ? sourceFilter : undefined"
@@ -425,9 +460,12 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       @sort="toggleSort"
       @toggle-selection="toggleSelection"
       @toggle-all="toggleAll"
+      @select-newest="selectNewest"
+      @toggle-file-name="showFileName = !showFileName"
       @batch-play="playSelected"
       @batch-add-to-playlist="addSelectedToPlaylist"
       @batch-edit-tags="openBatchTags"
+      @batch-reload-from-disk="reloadSelectedSongsFromDisk"
       @batch-delete="requestDeleteSelectedSongs"
       @open-tag-manager="tagManagerOpen = true"
       @clear-tag-filters="selectedTagIds = []"
@@ -454,6 +492,8 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         :selection-mode="selectionMode"
         :selected="selectedIds.has(item.id)"
         :current="player.currentQueueSong?.id === item.id"
+        :keyword="keyword"
+        :show-file-name="showFileName"
         @play="playSong"
         @toggle-select="toggleSelect"
         @request-menu="openMenu"
@@ -517,6 +557,14 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         >
           <svgIcon name="common-folder" class-name="size-4" />
           {{ t('songList.openFolder') }}
+        </button>
+        <button
+          v-if="activeMenuSong.sourceId === null"
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="reloadActiveMenuSongFromDisk"
+        >
+          <svgIcon name="common-refresh" class-name="size-4" />
+          {{ t('songList.reloadFromDisk') }}
         </button>
         <button
           v-if="source.type === 'playlist'"

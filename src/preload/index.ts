@@ -339,12 +339,32 @@ const metadataAPI = {
       success: boolean
       error?: string
     }>,
+  reload: (songIds: number[]) =>
+    ipcRenderer.invoke('metadata:reload', songIds) as Promise<{
+      success: boolean
+      data?: { reloaded: number; failed: number }
+      error?: string
+    }>,
   chooseCover: () =>
     ipcRenderer.invoke('metadata:choose-cover') as Promise<{
       success: boolean
       data?: { filePath: string; dataUrl: string }
       error?: string
     }>
+}
+const shortcutsAPI = {
+  registerGlobal: (shortcuts: Record<string, string>) =>
+    ipcRenderer.invoke('shortcuts:register-global', shortcuts) as Promise<{
+      success: boolean
+      data?: { failed: string[] }
+    }>,
+  unregisterGlobal: () =>
+    ipcRenderer.invoke('shortcuts:unregister-global') as Promise<{ success: boolean }>,
+  onAction: (callback: (action: string) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, action: string): void => callback(action)
+    ipcRenderer.on('shortcuts:action', listener)
+    return () => ipcRenderer.removeListener('shortcuts:action', listener)
+  }
 }
 
 // Custom APIs for renderer
@@ -355,6 +375,7 @@ const api = {
   lyrics: lyricsAPI,
   fonts: fontsAPI,
   metadata: metadataAPI,
+  shortcuts: shortcutsAPI,
   miniPlayer: miniPlayerAPI,
   desktopLyrics: desktopLyricsAPI,
   remoteSource: remoteSourceAPI,

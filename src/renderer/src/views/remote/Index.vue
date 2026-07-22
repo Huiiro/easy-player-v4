@@ -48,6 +48,10 @@ async function load(): Promise<void> {
   const sourceResult = await window.api.database.command('listSources')
   if (sourceResult.success) sources.value = sourceResult.data as MusicSource[]
 }
+async function refreshSources(): Promise<void> {
+  await load()
+  success(t('remote.refreshed'))
+}
 function openCreate(): void {
   editing.value = null
   form.value = { provider: 'navidrome', name: '', baseUrl: '', user: '', secret: '' }
@@ -163,6 +167,15 @@ onMounted(() => void load())
         <label class="text-sm text-text-l">{{ t('remote.provider') }}</label>
         <BaseSelect v-model="providerFilter" :options="providerOptions" class="w-36" />
         <button
+          class="btn-hover grid size-8 place-items-center"
+          :aria-label="t('remote.refresh')"
+          :title="t('remote.refresh')"
+          @click="refreshSources"
+        >
+          <SvgIcon name="common-refresh" class-name="size-4" />
+          <span class="sr-only">{{ t('remote.refresh') }}</span>
+        </button>
+        <button
           class="btn-hover-base flex items-center rounded-lg bg-primary px-3 py-2 text-sm text-white"
           @click="openCreate"
         >
@@ -208,11 +221,18 @@ onMounted(() => void load())
             </p>
           </div>
           <div class="flex gap-2">
-            <button class="btn-hover flex items-center gap-1 px-2 py-1 text-sm" @click="openEdit(source)">
+            <button
+              class="btn-hover flex items-center gap-1 px-2 py-1 text-sm"
+              @click="openEdit(source)"
+            >
               <svg-icon name="common-edit" class-name="w-[12px] h-[12px]" />
               {{ t('remote.edit') }}
             </button>
-            <button class="btn-hover flex items-center gap-1 px-2 py-1 text-sm" :disabled="testing" @click="test(source)">
+            <button
+              class="btn-hover flex items-center gap-1 px-2 py-1 text-sm"
+              :disabled="testing"
+              @click="test(source)"
+            >
               <svg-icon name="common-connect" class-name="w-[12px] h-[12px]" />
               {{ t('remote.testConnection') }}
             </button>
@@ -224,7 +244,10 @@ onMounted(() => void load())
               <svg-icon name="common-refresh" class-name="w-[12px] h-[12px]" />
               {{ syncingSourceId === source.id ? t('remote.syncing') : t('remote.sync') }}
             </button>
-            <button class="btn-hover flex items-center gap-1 px-2 py-1 text-sm text-red-400" @click="deleteTarget = source">
+            <button
+              class="btn-hover flex items-center gap-1 px-2 py-1 text-sm text-red-400"
+              @click="deleteTarget = source"
+            >
               <svg-icon name="common-delete" class-name="w-[12px] h-[12px]" />
               {{ t('remote.delete') }}
             </button>
@@ -296,7 +319,10 @@ onMounted(() => void load())
       <button class="btn-hover px-3 py-1.5 text-sm" @click="deleteTarget = null">
         {{ t('common.cancel') }}
       </button>
-      <button class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white" @click="remove">
+      <button
+        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        @click="remove"
+      >
         {{ t('remote.delete') }}
       </button>
     </template>

@@ -10,9 +10,11 @@ import CardView from '@/views/layout/card/Index.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import i18n from '@/i18n'
+import { useShortcuts } from '@/hooks/useShortcuts'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+useShortcuts()
 
 watch(
   () => ui.locale,

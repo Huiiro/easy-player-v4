@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
-type SortField = 'title' | 'artist' | 'album' | 'duration'
+type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt'
 interface SourceOption {
   label: string
   value: string
@@ -18,6 +18,7 @@ const props = defineProps<{
   selectionMode: boolean
   selectedCount: number
   allSelected: boolean
+  showFileName: boolean
   showTagManager?: boolean
   activeTagFilterCount?: number
   sourceFilter?: string
@@ -30,9 +31,12 @@ const emit = defineEmits<{
   refresh: []
   toggleSelection: []
   toggleAll: []
+  selectNewest: []
+  toggleFileName: []
   batchPlay: []
   batchAddToPlaylist: []
   batchEditTags: []
+  batchReloadFromDisk: []
   batchDelete: []
   openTagManager: []
   clearTagFilters: []
@@ -88,7 +92,29 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
         </p>
       </div>
       <div class="flex items-center gap-4">
-        <!-- tag-->
+        <!-- fileName -->
+        <button
+          class="btn-hover px-2 text-xs"
+          :aria-label="showFileName ? t('songList.showTitle') : t('songList.showFileName')"
+          :title="showFileName ? t('songList.showTitle') : t('songList.showFileName')"
+          @click="emit('toggleFileName')"
+        >
+          {{ showFileName ? t('songList.fileName') : t('songList.title') }}
+          <span class="sr-only">
+            {{showFileName ? t('songList.showTitle') : t('songList.showFileName')}}
+          </span>
+        </button>
+        <!-- source -->
+        <BaseSelect
+          v-if="sourceOptions?.length"
+          :model-value="sourceFilter || 'all'"
+          :options="sourceOptions"
+          :aria-label="t('songList.sourceFilter')"
+          size="sm"
+          class="w-40"
+          @update:model-value="emit('update:sourceFilter', $event)"
+        />
+        <!-- tag -->
         <button
           v-if="showTagManager"
           class="btn-hover grid size-4 place-items-center"
@@ -112,15 +138,7 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
         >
           {{ t('tags.clearFilter') }}
         </button>
-        <BaseSelect
-          v-if="sourceOptions?.length"
-          :model-value="sourceFilter || 'all'"
-          :options="sourceOptions"
-          :aria-label="t('songList.sourceFilter')"
-          size="sm"
-          class="w-32"
-          @update:model-value="emit('update:sourceFilter', $event)"
-        />
+        <!-- refresh -->
         <button
           class="btn-hover grid size-4 place-items-center"
           :aria-label="t('songList.refresh')"
@@ -136,6 +154,9 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     <div v-if="selectionMode" class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 pb-3 text-sm">
       <button class="btn-hover" @click="emit('toggleAll')">
         {{ allSelected ? t('songList.clearSelection') : t('songList.selectAll') }}
+      </button>
+      <button class="btn-hover" @click="emit('selectNewest')">
+        {{ t('songList.selectNewest') }}
       </button>
       <button
         :disabled="selectedCount === 0"
@@ -164,6 +185,14 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
       <button
         :disabled="selectedCount === 0"
         class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        @click="emit('batchReloadFromDisk')"
+      >
+        <SvgIcon name="common-refresh" class-name="size-4" />
+        {{ t('songList.reloadFromDisk') }}
+      </button>
+      <button
+        :disabled="selectedCount === 0"
+        class="flex gap-1 items-center btn-hover disabled:opacity-40"
         @click="emit('batchDelete')"
       >
         <SvgIcon name="common-delete" class-name="size-4" />
@@ -177,9 +206,12 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     <div
       class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
     >
-      <span>#</span>
+      <button class="text-left" @click="emit('sort', 'createdAt')">
+        # <span v-if="sortBy === 'createdAt'">{{ direction }}</span>
+      </button>
       <button class="text-left" @click="emit('sort', 'title')">
-        {{ t('songList.title') }} <span v-if="sortBy === 'title'">{{ direction }}</span>
+        {{ showFileName ? t('songList.fileName') : t('songList.title') }}
+        <span v-if="sortBy === 'title'">{{ direction }}</span>
       </button>
       <button class="text-left" @click="emit('sort', 'artist')">
         {{ t('songList.artist') }} <span v-if="sortBy === 'artist'">{{ direction }}</span>

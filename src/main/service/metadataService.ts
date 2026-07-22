@@ -45,6 +45,7 @@ export interface SongMetadata {
   bitrate?: number
   sampleRate?: number
   bitsPerSample?: number
+  channels?: number
   codec?: string
   container?: string
 }
@@ -89,7 +90,11 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
                 fs.copyFileSync(tmpFile, filePath)
                 fs.unlinkSync(backup)
               } catch (copyErr) {
-                try { fs.renameSync(backup, filePath) } catch { /* ignore */ }
+                try {
+                  fs.renameSync(backup, filePath)
+                } catch {
+                  /* ignore */
+                }
                 throw copyErr
               }
               resolve()
@@ -98,7 +103,11 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
         })
         metadata = await parseFile(filePath)
       } finally {
-        try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch { /* ignore */ }
+        try {
+          fs.rmSync(tmpDir, { recursive: true, force: true })
+        } catch {
+          /* ignore */
+        }
       }
     } else {
       Logger.error('MetadataService: parse Metadata fail: Unsupported file extension.')
@@ -131,6 +140,7 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
     bitrate: metadata.format.bitrate,
     sampleRate: metadata.format.sampleRate,
     bitsPerSample: metadata.format.bitsPerSample,
+    channels: metadata.format.numberOfChannels,
     codec: metadata.format.codec,
     container: metadata.format.container,
 

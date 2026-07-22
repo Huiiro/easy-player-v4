@@ -82,24 +82,18 @@ export const useUIStore = defineStore(
     // ========== 快捷键 ==========
     const useGlobalShortcutKeys = ref(false)
     const shortcutKeys = reactive({
-      play: '',
-      prev: '',
-      next: '',
-      iv: '',
-      dv: '',
-      it: '',
-      dt: '',
-      tp: ''
+      previous: 'ctrl+left',
+      toggle: 'space',
+      next: 'ctrl+right',
+      volumeUp: 'ctrl+up',
+      volumeDown: 'ctrl+down'
     })
     const globalShortcutKeys = reactive({
-      play: '',
-      prev: '',
+      previous: '',
+      toggle: '',
       next: '',
-      iv: '',
-      dv: '',
-      it: '',
-      dt: '',
-      tp: ''
+      volumeUp: '',
+      volumeDown: ''
     })
     const fontStack = computed(() =>
       customFontFamily.value

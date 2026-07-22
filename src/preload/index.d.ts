@@ -239,15 +239,25 @@ declare global {
       }
       metadata: {
         read(songId: number): Promise<{ success: boolean; data?: unknown; error?: string }>
-        write(
-          songId: number,
-          metadata: unknown
-        ): Promise<{ success: boolean; error?: string }>
+        write(songId: number, metadata: unknown): Promise<{ success: boolean; error?: string }>
+        reload(songIds: number[]): Promise<{
+          success: boolean
+          data?: { reloaded: number; failed: number }
+          error?: string
+        }>
         chooseCover(): Promise<{
           success: boolean
           data?: { filePath: string; dataUrl: string }
           error?: string
         }>
+      }
+      shortcuts: {
+        registerGlobal(shortcuts: Record<string, string>): Promise<{
+          success: boolean
+          data?: { failed: string[] }
+        }>
+        unregisterGlobal(): Promise<{ success: boolean }>
+        onAction(callback: (action: string) => void): () => void
       }
       miniPlayer: {
         enter(): Promise<{ success: boolean }>

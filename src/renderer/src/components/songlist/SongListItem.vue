@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import type { LibrarySong } from '@/types/library'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useFriendlyTime } from '@/hooks/useTimeFormatter'
+import { getHighlightParts } from '@/utils/highlight'
 
 const props = defineProps<{
   song: LibrarySong
@@ -12,6 +13,8 @@ const props = defineProps<{
   selectionMode: boolean
   selected: boolean
   current: boolean
+  keyword: string
+  showFileName: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +34,16 @@ const formatDuration = computed(() => {
   const seconds = Math.max(0, Math.floor(props.song.duration ?? 0))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 })
+const displayedTitle = computed(() =>
+  props.showFileName ? props.song.fileName || props.song.title : props.song.title
+)
+const highlightedTitle = computed(() => getHighlightParts(displayedTitle.value, props.keyword))
+const highlightedArtist = computed(() =>
+  getHighlightParts(props.song.artist || t('songList.unknownArtist'), props.keyword)
+)
+const highlightedAlbum = computed(() =>
+  getHighlightParts(props.song.album || t('songList.unknownAlbum'), props.keyword)
+)
 
 watch(
   () => props.song.cover,
@@ -100,7 +113,12 @@ function openAlbum(): void {
               class="truncate cursor-pointer"
               :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
             >
-              {{ song.title }}
+              <template v-for="(part, partIndex) in highlightedTitle" :key="partIndex">
+                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{
+                  part.text
+                }}</mark>
+                <template v-else>{{ part.text }}</template>
+              </template>
             </span>
             <SvgIcon
               v-if="song.sourceId !== null"
@@ -123,20 +141,32 @@ function openAlbum(): void {
           </span>
         </span>
       </span>
-      <button
-        class="truncate text-left text-sm text-text-l hover:text-primary disabled:cursor-default disabled:hover:text-text-l"
-        :disabled="!song.artist?.trim()"
-        @click.stop="openArtist"
-      >
-        {{ song.artist || t('songList.unknownArtist') }}
-      </button>
-      <button
-        class="truncate text-left text-sm text-text-l hover:text-primary disabled:cursor-default disabled:hover:text-text-l"
-        :disabled="!song.album?.trim()"
-        @click.stop="openAlbum"
-      >
-        {{ song.album || t('songList.unknownAlbum') }}
-      </button>
+      <span class="min-w-0 truncate text-sm text-text-l">
+        <button
+          v-if="song.artist?.trim()"
+          class="max-w-full truncate text-left hover:text-primary"
+          @click.stop="openArtist"
+        >
+          <template v-for="(part, partIndex) in highlightedArtist" :key="partIndex">
+            <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{ part.text }}</mark>
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </button>
+        <template v-else>{{ t('songList.unknownArtist') }}</template>
+      </span>
+      <span class="min-w-0 truncate text-sm text-text-l">
+        <button
+          v-if="song.album?.trim()"
+          class="max-w-full truncate text-left hover:text-primary"
+          @click.stop="openAlbum"
+        >
+          <template v-for="(part, partIndex) in highlightedAlbum" :key="partIndex">
+            <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{ part.text }}</mark>
+            <template v-else>{{ part.text }}</template>
+          </template>
+        </button>
+        <template v-else>{{ t('songList.unknownAlbum') }}</template>
+      </span>
       <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
       <span class="text-right flex ml-2">
         <button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>

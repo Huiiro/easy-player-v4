@@ -114,6 +114,7 @@ export const usePlayerStore = defineStore('player', () => {
   const queue = ref<LibrarySong[]>([])
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
+  const stopAfterCurrent = ref(false)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let historySession:
     | { songId: number; startedAt: number; accumulatedMs: number; playingSince: number | null }
@@ -316,6 +317,9 @@ export const usePlayerStore = defineStore('player', () => {
     if (result) flushHistory(true)
     schedulePlaybackSessionSave()
     return result
+  }
+  function setStopAfterCurrent(enabled: boolean): void {
+    stopAfterCurrent.value = enabled
   }
 
   async function seek(ms: number): Promise<boolean> {
@@ -814,7 +818,11 @@ export const usePlayerStore = defineStore('player', () => {
     })
     try {
       flushHistory(true)
-      await playNext()
+      if (stopAfterCurrent.value) {
+        stopAfterCurrent.value = false
+      } else {
+        await playNext()
+      }
     } finally {
       autoAdvanceInProgress = false
     }
@@ -944,6 +952,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentQueueIndex,
     currentQueueSong,
     playMode,
+    stopAfterCurrent,
     // Computed
     isPlaying,
     isPaused,
@@ -965,6 +974,7 @@ export const usePlayerStore = defineStore('player', () => {
     playPrevious,
     pause,
     stop,
+    setStopAfterCurrent,
     seek,
     setVolume,
     setPreamp,

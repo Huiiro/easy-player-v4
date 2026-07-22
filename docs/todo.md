@@ -1,21 +1,14 @@
 song list header:
-多选模式，支持筛选最近添加歌曲
-默认排序模式 asc，desc修改
-显示歌曲名称，本地文件名优先级调整
-
-song list item:
-搜索匹配词高亮
-
-home Index checked
-
-remote page + refresh button
+✔ 多选模式，支持筛选最近添加歌曲
+✔ 默认排序模式 asc，desc修改
+✔ 显示歌曲名称，本地文件名优先级调整
+✔ song list item: 搜索匹配词高亮
+✔ remote page + refresh button
 ✔ 取色：自定义组件 tag，theme
-
 ✔ 桌面歌词 关闭按钮异常
 ✔ 桌面歌词 字体设置
-
-设置组
-快捷键
+✔ 设置组
+✔ 快捷键
 定时播放
 ai 翻译
 
