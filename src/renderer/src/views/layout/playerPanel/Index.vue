@@ -363,16 +363,12 @@ function extractCoverColors(event: Event): void {
       </header>
 
       <div
-        class="relative grid size-full overflow-hidden pt-16 max-[760px]:overflow-auto"
-        :class="
-          collapsed
-            ? 'grid-cols-1'
-            : 'grid-cols-[minmax(360px,0.85fr)_minmax(0,1.15fr)] max-[760px]:grid-cols-1'
-        "
+        class="player-panel-layout relative grid size-full overflow-hidden pt-16"
+        :class="collapsed && 'player-panel-layout--collapsed'"
       >
         <!-- metadata & control -->
         <section
-          class="panel-side flex flex-col items-center justify-center gap-5 px-[clamp(2rem,6vw,7rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
+          class="panel-side flex min-w-0 flex-col items-center justify-center gap-5 px-[clamp(2rem,6vw,7rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
           :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
@@ -648,8 +644,8 @@ function extractCoverColors(event: Event): void {
         </section>
         <!-- lyrics -->
         <section
-          class="flex min-w-0 flex-col py-8 max-[760px]:min-h-[250px] max-[760px]:border-t max-[760px]:border-text/10 max-[760px]:px-6 max-[760px]:py-6"
-          :class="collapsed ? 'px-8' : ''"
+          class="panel-lyrics flex min-w-0 flex-col py-8 max-[760px]:min-h-[250px] max-[760px]:border-t max-[760px]:border-text/10 max-[760px]:py-6"
+          :class="collapsed && 'panel-lyrics--collapsed'"
           :aria-label="t('playerPanel.lyrics')"
         >
           <PlayerLyrics
@@ -811,20 +807,33 @@ function extractCoverColors(event: Event): void {
   transform-origin: center;
   will-change: transform, filter;
 }
+.player-panel-layout {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  transition: grid-template-columns 520ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.player-panel-layout--collapsed {
+  grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
+}
 .panel-side {
   transition:
     opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .panel-side--collapsed {
-  position: absolute;
-  inset: 4rem auto 0 0;
-  z-index: 20;
-  width: 46%;
-  overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  transform: translateX(-110%);
+  transform: translateX(-45vw);
+}
+.panel-lyrics {
+  padding-right: 0;
+  padding-left: 0;
+  transition:
+    padding 520ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 320ms ease;
+}
+.panel-lyrics--collapsed {
+  padding-right: 2rem;
+  padding-left: 2rem;
 }
 .cover-card {
   transition: box-shadow 100ms ease-out;
@@ -860,7 +869,7 @@ function extractCoverColors(event: Event): void {
 }
 .panel-gradient {
   background:
-    linear-gradient(112deg, rgb(5 8 13 / 48%), rgb(12 16 23 / 20%) 52%, rgb(4 7 12 / 56%)),
+    linear-gradient(112deg, rgb(5 8 13 / 48%), rgb(12 16 23 / 10%) 42%, rgb(4 7 12 / 56%)),
     linear-gradient(180deg, rgb(9 12 17 / 8%), rgb(7 9 14 / 28%));
 }
 .beat-ring {
