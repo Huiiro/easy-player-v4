@@ -114,6 +114,7 @@ export const usePlayerStore = defineStore('player', () => {
   const queue = ref<LibrarySong[]>([])
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
+  const shufflePlayedSongIds = new Set<number>()
   const stopAfterCurrent = ref(false)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let historySession:
@@ -191,6 +192,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   function setPlayMode(mode: PlayMode): void {
     playMode.value = mode
+    shufflePlayedSongIds.clear()
+    if (mode === PlayMode.Random && currentQueueSong.value) {
+      shufflePlayedSongIds.add(currentQueueSong.value.id)
+    }
     schedulePlaybackSessionSave()
   }
 
@@ -215,6 +220,7 @@ export const usePlayerStore = defineStore('player', () => {
       return true
     })
     currentQueueIndex.value = -1
+    shufflePlayedSongIds.clear()
     savePlaybackSessionSync()
   }
 
@@ -229,7 +235,10 @@ export const usePlayerStore = defineStore('player', () => {
       return false
     }
     const opened = await openFile(remoteFile?.data || song.audio)
-    if (opened && (await play())) beginHistory(song)
+    if (opened && (await play())) {
+      if (playMode.value === PlayMode.Random) shufflePlayedSongIds.add(song.id)
+      beginHistory(song)
+    }
     return opened
   }
 
@@ -255,7 +264,8 @@ export const usePlayerStore = defineStore('player', () => {
   async function removeQueueItem(index: number): Promise<void> {
     if (index < 0 || index >= queue.value.length) return
     const isCurrent = index === currentQueueIndex.value
-    queue.value.splice(index, 1)
+    const [removed] = queue.value.splice(index, 1)
+    if (removed) shufflePlayedSongIds.delete(removed.id)
     if (index < currentQueueIndex.value) currentQueueIndex.value--
     if (!isCurrent) return
     if (!queue.value.length) {
@@ -271,6 +281,7 @@ export const usePlayerStore = defineStore('player', () => {
   function clearQueue(): void {
     queue.value = []
     currentQueueIndex.value = -1
+    shufflePlayedSongIds.clear()
     schedulePlaybackSessionSave()
   }
 
@@ -280,9 +291,21 @@ export const usePlayerStore = defineStore('player', () => {
     if (playMode.value === PlayMode.Single) return currentQueueIndex.value
     if (playMode.value === PlayMode.Random) {
       if (length === 1) return 0
-      let index = currentQueueIndex.value
-      while (index === currentQueueIndex.value) index = Math.floor(Math.random() * length)
-      return index
+      const currentId = queue.value[currentQueueIndex.value]?.id
+      let candidates = queue.value
+        .map((song, index) => ({ song, index }))
+        .filter(
+          ({ song, index }) =>
+            index !== currentQueueIndex.value && !shufflePlayedSongIds.has(song.id)
+        )
+      if (!candidates.length) {
+        shufflePlayedSongIds.clear()
+        if (currentId !== undefined) shufflePlayedSongIds.add(currentId)
+        candidates = queue.value
+          .map((song, index) => ({ song, index }))
+          .filter(({ index }) => index !== currentQueueIndex.value)
+      }
+      return candidates[Math.floor(Math.random() * candidates.length)]?.index ?? -1
     }
     const next = currentQueueIndex.value + 1
     if (next < length) return next
@@ -779,10 +802,19 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function saveRhythmVisualConfig(): Promise<void> {
-    await window.api.database.command('setSetting', {
-      key: 'player.rhythm-visual-config',
-      value: rhythmVisualConfig.value
-    })
+    const config = rhythmVisualConfig.value
+    try {
+      await window.api.database.command('setSetting', {
+        key: 'player.rhythm-visual-config',
+        value: {
+          enabled: config.enabled,
+          intensity: config.intensity,
+          reducedMotion: config.reducedMotion
+        }
+      })
+    } catch (error) {
+      console.warn('[player] Failed to persist rhythm visual config:', error)
+    }
   }
 
   watch(

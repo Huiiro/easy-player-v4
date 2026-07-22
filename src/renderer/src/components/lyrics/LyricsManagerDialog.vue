@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -42,18 +42,28 @@ async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
   const response = await window.api.lyrics.loadSource(song.audio, source)
   lyric.value = response.success ? response.data || '' : ''
 }
-async function updateVisible(value: boolean): Promise<void> {
-  emit('update:modelValue', value)
-  if (!value) return
+async function initializeDraft(): Promise<void> {
+  const metadata = player.trackInfo?.metadata
+  const song = player.currentQueueSong
   query.value = {
-    title: player.currentQueueSong?.title || player.trackInfo?.metadata?.title || '',
-    artist: player.currentQueueSong?.artist || player.trackInfo?.metadata?.artist || '',
-    album: player.currentQueueSong?.album || player.trackInfo?.metadata?.album || ''
+    title: metadata?.title?.trim() || song?.title || '',
+    artist: metadata?.artist?.trim() || song?.artist || '',
+    album: metadata?.album?.trim() || song?.album || ''
   }
   candidates.value = []
+  selected.value = 0
   error.value = ''
   await loadDraft()
 }
+function updateVisible(value: boolean): void {
+  emit('update:modelValue', value)
+}
+watch(
+  () => props.modelValue,
+  (visible) => {
+    if (visible) void initializeDraft()
+  }
+)
 async function selectSource(source: 'auto' | LyricSource): Promise<void> {
   ui.lyricSourceMode = source
   await loadDraft(source)

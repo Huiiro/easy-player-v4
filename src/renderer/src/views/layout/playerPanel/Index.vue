@@ -25,7 +25,6 @@ const trackArtist = computed(
     t('playerPanel.defaultArtist')
 )
 const coverFailed = ref(false)
-const showSpectrum = ref(false)
 const showQueue = ref(false)
 const showLyricsManager = ref(false)
 const lyricReloadToken = ref(0)
@@ -289,7 +288,7 @@ function extractCoverColors(event: Event): void {
           v-if="backgroundSource"
           :key="backgroundSource"
           :src="backgroundSource"
-          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[28px] transition-transform duration-150"
+          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[24px] transition-transform duration-150"
           :class="[
             useAlbumArtwork ? 'opacity-100' : 'opacity-0',
             shouldAnimate ? 'panel-cover--animated' : ''
@@ -470,8 +469,8 @@ function extractCoverColors(event: Event): void {
             <button
               class="panel-tool"
               :title="t('playerPanel.spectrum')"
-              :class="showSpectrum && 'active'"
-              @click="showSpectrum = !showSpectrum"
+              :class="ui.showPlayerSpectrum && 'active'"
+              @click="ui.showPlayerSpectrum = !ui.showPlayerSpectrum"
             >
               <svg-icon name="common-rhythm" class-name="w-[16px] h-[16px]" />
             </button>
@@ -667,7 +666,7 @@ function extractCoverColors(event: Event): void {
       <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
       <!-- play spectrum-->
       <div
-        v-if="showSpectrum"
+        v-if="ui.showPlayerSpectrum"
         class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-80"
       >
         <PlayerSpectrum :spectrum="player.audioAnalysis.spectrum" :color="coverColors.primary" />
@@ -871,12 +870,12 @@ function extractCoverColors(event: Event): void {
   background:
     radial-gradient(
       ellipse at 74% 50%,
-      rgb(10 14 21 / 4%) 0%,
-      rgb(7 10 16 / 13%) 56%,
-      rgb(4 7 12 / 30%) 100%
+      rgb(10 14 21 / 6%) 0%,
+      rgb(7 10 16 / 16%) 56%,
+      rgb(4 7 12 / 34%) 100%
     ),
-    linear-gradient(112deg, rgb(5 8 13 / 38%) 0%, rgb(12 16 23 / 6%) 42%, rgb(4 7 12 / 44%) 100%),
-    linear-gradient(180deg, rgb(9 12 17 / 3%) 0%, rgb(7 9 14 / 22%) 100%);
+    linear-gradient(112deg, rgb(5 8 13 / 42%) 0%, rgb(12 16 23 / 9%) 42%, rgb(4 7 12 / 48%) 100%),
+    linear-gradient(180deg, rgb(9 12 17 / 4%) 0%, rgb(7 9 14 / 25%) 100%);
 }
 .beat-ring {
   opacity: 0;

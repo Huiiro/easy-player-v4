@@ -63,6 +63,7 @@ export const useUIStore = defineStore(
     const isCoverSpin = ref(true)
     const showLyricsSettings = ref(false)
     const showDisplaySettings = ref(false)
+    const showPlayerSpectrum = ref(false)
     const showPlayer = ref(false)
     const footerOpenMode = ref<'all' | 'cover'>('all')
     // ========== 标签与来源 ==========
@@ -306,6 +307,7 @@ export const useUIStore = defineStore(
       isCoverSpin,
       showLyricsSettings,
       showDisplaySettings,
+      showPlayerSpectrum,
       showPlayer,
       footerOpenMode,
       tagStyle,
@@ -366,6 +368,7 @@ export const useUIStore = defineStore(
         'lyricSourceOrder',
         'playerBgType',
         'playerDisplayMode',
+        'showPlayerSpectrum',
         'footerOpenMode',
         'allowSwitchCoverStyle',
         'isCircularCover',
