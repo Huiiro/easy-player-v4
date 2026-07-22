@@ -435,8 +435,8 @@ export default {
     autoPlayOnRestore: 'Autoplay on startup',
     autoPlayOnRestoreDescription:
       'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.',
-    footerOpenMode: 'Footer open mode',
-    footerOpenAnywhere: 'Open from anywhere in the footer',
+    footerOpenMode: 'Player Open Mode',
+    footerOpenAnywhere: 'Click anywhere on the player controls to open',
     footerOpenModeDescription: 'Choose which part of the footer opens the player panel.',
     footerOpenAll: 'Anywhere',
     footerOpenCover: 'Cover only',

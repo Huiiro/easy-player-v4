@@ -30,6 +30,7 @@ const openFooterAnywhere = computed({
     </div>
   </div>
 </template>
+
 <style scoped>
 .settings-card {
   border: 1px solid var(--color-border);

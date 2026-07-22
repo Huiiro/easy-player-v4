@@ -507,7 +507,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="setting-row setting-row-stack gap-4">
               <div class="w-full">
-                <div class="flex items-center gap-2 my-3 text-xs text-text-l">
+                <div class="flex items-center gap-2 my-3 text-xs text-text-l text-nowrap">
                   <span>{{ t('settings.desktopLyricsFontFamily') }}</span>
                   <BaseSelect
                     v-model="ui.desktopLyricsStyles.fontFamily"

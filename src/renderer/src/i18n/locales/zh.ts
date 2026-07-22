@@ -429,8 +429,8 @@ export default {
     autoPlayOnRestore: '启动后自动播放',
     autoPlayOnRestoreDescription:
       '开启后，仅当上次退出前正在播放时自动继续播放；关闭时只恢复歌曲和位置。',
-    footerOpenMode: 'Footer 打开方式',
-    footerOpenAnywhere: '点击 Footer 任意位置打开',
+    footerOpenMode: '播放器打开方式',
+    footerOpenAnywhere: '点击播放控制器任意位置打开',
     footerOpenModeDescription: '选择打开播放器面板的点击区域。',
     footerOpenAll: '任意位置',
     footerOpenCover: '仅封面',

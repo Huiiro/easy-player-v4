@@ -39,24 +39,25 @@ function reset(): void {
       </div>
       <div class="flex items-center gap-3">
         <button class="secondary-button" @click="reset">
-          {{ t('settings.resetShortcutDefaults') }}</button
-        ><BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
+          {{ t('settings.resetShortcutDefaults') }}
+        </button>
+        <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
       </div>
     </div>
     <div class="shortcut-grid">
-      <span /><span>{{ t('settings.localShortcuts') }}</span
-      ><span>{{ t('settings.globalShortcuts') }}</span
-      ><template v-for="item in actions" :key="item.key"
-        ><span class="action">{{ t(item.label) }}</span
-        ><ShortcutInput :action="item.key" scope="local" /><ShortcutInput
-          :action="item.key"
-          scope="global"
-          :disabled="!ui.useGlobalShortcutKeys"
-      /></template>
+      <span>-</span>
+      <span>{{ t('settings.localShortcuts') }}</span>
+      <span>{{ t('settings.globalShortcuts') }}</span>
+      <template v-for="item in actions" :key="item.key">
+        <span class="action">{{ t(item.label) }}</span>
+        <ShortcutInput :action="item.key" scope="local" />
+        <ShortcutInput :action="item.key" scope="global" :disabled="!ui.useGlobalShortcutKeys" />
+      </template>
     </div>
-    <p class="hint">{{ t('settings.shortcutSpecialKeys') }}</p>
+    <!--    <p class="hint">{{ t('settings.shortcutSpecialKeys') }}</p>-->
   </div>
 </template>
+
 <style scoped>
 .settings-card {
   overflow: hidden;

@@ -55,7 +55,7 @@ onBeforeUnmount(clearTimer)
       <h3>{{ t('settings.sleepTimer') }}</h3>
       <p>{{ t('settings.sleepTimerDescription') }}</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex items-center gap-2 text-nowrap">
       <span v-if="deadline" class="tabular-nums text-sm text-primary">{{ remainingLabel }}</span>
       <input
         v-model.number="minutes"
