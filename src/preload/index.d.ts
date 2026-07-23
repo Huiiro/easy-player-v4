@@ -207,6 +207,29 @@ declare global {
         showSongInFolder(songId: number): Promise<{ success: boolean; error?: string }>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }
+      files: {
+        exportLibrary(parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>): Promise<{
+          success: boolean
+          cancelled?: boolean
+          data?: { filePath: string }
+          error?: string
+        }>
+        importLibrary(): Promise<{
+          success: boolean
+          cancelled?: boolean
+          data?: { added: number; skipped: number }
+          error?: string
+        }>
+        recoverMovedSongs(): Promise<{
+          success: boolean
+          cancelled?: boolean
+          data?: { total: number; recovered: number }
+          error?: string
+        }>
+        onImportProgress(
+          callback: (progress: { current: number; total: number }) => void
+        ): () => void
+      }
       lyrics: {
         loadSource(
           audioPath: string,

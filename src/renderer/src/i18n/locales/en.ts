@@ -16,6 +16,8 @@ export default {
     settings: 'Settings'
   },
   localFiles: {
+    rebuild: 'Rebuild folder hierarchy',
+    rebuildDone: 'Folder hierarchy updated for {count} local tracks',
     title: 'Local files',
     empty: 'No imported local folders',
     expand: 'Expand folder',
@@ -484,6 +486,19 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    localFileManagement: 'Local File Management',
+    localFileManagementDescription:
+      'Manage remote cache, library backups, and moved-file recovery.',
+    libraryBackup: 'Library Backup',
+    libraryBackupDescription: 'Export or import songs, playlists, tags, and settings.',
+    exportLibrary: 'Export Backup',
+    importLibrary: 'Import Backup',
+    recoverMovedFiles: 'Recover Moved Files',
+    recoverMovedFilesDescription: 'Choose the new music folder to rematch missing tracks.',
+    recover: 'Recover',
+    fileOperationDone: 'Operation completed',
+    fileOperationFailed: 'Operation failed',
+    filesRecovered: 'Recovered {recovered} / {total} tracks',
     version: 'Version'
   },
   playerPanel: {

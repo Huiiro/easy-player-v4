@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
-import { extname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
 
@@ -235,6 +235,37 @@ export function listLocalFolders(): LibraryFolder[] {
       ...(row as Omit<LibraryFolder, 'isRootPath'>),
       isRootPath: (row as { isRootPath: number }).isRootPath === 1
     }))
+}
+
+export function rebuildLocalFolders(): number {
+  const db = getDatabase()
+  const songs = db.prepare('SELECT id, audio FROM song WHERE source_id IS NULL').all() as Array<{
+    id: number
+    audio: string
+  }>
+  const findFolder = db.prepare('SELECT id FROM folder WHERE full_path = ?')
+  const insertFolder = db.prepare(
+    'INSERT INTO folder (pid, name, full_path, is_root_path, import_time) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)'
+  )
+  const updateSong = db.prepare('UPDATE song SET folder_id = ? WHERE id = ?')
+  const getFolder = (fullPath: string): number => {
+    const existing = findFolder.get(fullPath) as { id: number } | undefined
+    if (existing) return existing.id
+    const parentPath = dirname(fullPath)
+    const parentId = parentPath === fullPath ? null : getFolder(parentPath)
+    return Number(
+      insertFolder.run(
+        parentId,
+        basename(fullPath) || fullPath,
+        fullPath,
+        parentId === null ? 1 : 0
+      ).lastInsertRowid
+    )
+  }
+  db.transaction(() => {
+    for (const song of songs) updateSong.run(getFolder(dirname(song.audio)), song.id)
+  })()
+  return songs.length
 }
 export function getLocalFolderSongs(folderId: number): Song[] {
   const rows = getDatabase()

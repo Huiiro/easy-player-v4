@@ -193,6 +193,23 @@ const libraryAPI = {
   }
 }
 
+const filesAPI = {
+  exportLibrary: (parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>) =>
+    ipcRenderer.invoke('files:export-library', parts),
+  importLibrary: () => ipcRenderer.invoke('files:import-library'),
+  recoverMovedSongs: () => ipcRenderer.invoke('files:recover-moved-songs'),
+  onImportProgress: (
+    callback: (progress: { current: number; total: number }) => void
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: { current: number; total: number }
+    ): void => callback(progress)
+    ipcRenderer.on('files:import-progress', handler)
+    return () => ipcRenderer.removeListener('files:import-progress', handler)
+  }
+}
+
 const windowAPI = {
   command: (command: 'minimize' | 'toggle-maximize' | 'close') =>
     ipcRenderer.invoke('window:command', command) as Promise<{ maximized: boolean }>,
@@ -386,6 +403,7 @@ const api = {
   audio: audioAPI,
   database: databaseAPI,
   library: libraryAPI,
+  files: filesAPI,
   lyrics: lyricsAPI,
   fonts: fontsAPI,
   metadata: metadataAPI,

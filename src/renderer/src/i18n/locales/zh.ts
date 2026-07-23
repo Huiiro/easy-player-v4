@@ -16,6 +16,8 @@ export default {
     settings: '设置'
   },
   localFiles: {
+    rebuild: '重新检测目录层级',
+    rebuildDone: '目录层级已更新，共检测 {count} 首本地歌曲',
     title: '本地文件',
     empty: '暂无已导入的本地文件夹',
     expand: '展开目录',
@@ -474,6 +476,18 @@ export default {
     desktopLyricsPreviewNext: '下一句歌词预览',
     other: '其他',
     otherDescription: '关于此播放器',
+    localFileManagement: '本地文件管理',
+    localFileManagementDescription: '管理远程缓存、音乐库备份以及移动文件后的路径恢复。',
+    libraryBackup: '音乐库备份',
+    libraryBackupDescription: '导出或导入歌曲、歌单、标签和设置。',
+    exportLibrary: '导出备份',
+    importLibrary: '导入备份',
+    recoverMovedFiles: '恢复移动后的文件',
+    recoverMovedFilesDescription: '选择新的音乐目录，自动重新匹配丢失歌曲。',
+    recover: '开始恢复',
+    fileOperationDone: '操作完成',
+    fileOperationFailed: '操作失败',
+    filesRecovered: '已恢复 {recovered} / {total} 首歌曲',
     version: '版本'
   },
   playerPanel: {

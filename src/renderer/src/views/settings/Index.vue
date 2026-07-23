@@ -12,14 +12,12 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
 import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
+import LocalFileManagement from '@/components/settings/LocalFileManagement.vue'
 import Draggable from 'vuedraggable'
 
 const ui = useUIStore()
 const { locale, t } = useI18n()
 const backgroundInput = ref<HTMLInputElement | null>(null)
-const remoteCacheDirectory = ref('')
-const remoteCacheLimitGb = ref(2)
-const remoteCacheUsed = ref(0)
 const activeSection = ref('playback')
 const settingsScroller = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | undefined
@@ -35,7 +33,7 @@ const navigationSections = computed(() => [
   { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
   { id: 'lyrics', label: t('settings.lyrics') },
   { id: 'shortcuts', label: t('settings.shortcuts') },
-  { id: 'remote-cache', label: t('remote.cache') },
+  { id: 'local-files', label: t('settings.localFileManagement') },
   { id: 'system', label: t('settings.system') },
   { id: 'other', label: t('settings.other') }
 ])
@@ -129,38 +127,7 @@ async function refreshFonts(): Promise<void> {
 async function openFontDirectory(): Promise<void> {
   await window.api.fonts.openDirectory()
 }
-const formatBytes = (bytes: number): string =>
-  bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
-async function loadRemoteCache(): Promise<void> {
-  const [directory, limit, fallback] = await Promise.all([
-    window.api.database.command('getSetting', { key: 'remote.cache-directory' }),
-    window.api.database.command('getSetting', { key: 'remote.cache-limit-gb' }),
-    window.api.remoteSource.defaultCacheDirectory()
-  ])
-  remoteCacheDirectory.value =
-    directory.success && typeof directory.data === 'string' ? directory.data : fallback.data || ''
-  remoteCacheLimitGb.value = limit.success && typeof limit.data === 'number' ? limit.data : 2
-  const size = await window.api.remoteSource.cacheSize(remoteCacheDirectory.value)
-  remoteCacheUsed.value = size.data || 0
-}
-async function chooseRemoteCacheDirectory(): Promise<void> {
-  const response = await window.api.remoteSource.chooseCacheDirectory()
-  if (!response.success || !response.data) return
-  await window.api.database.command('setSetting', {
-    key: 'remote.cache-directory',
-    value: response.data
-  })
-  await loadRemoteCache()
-}
-async function saveRemoteCacheLimit(): Promise<void> {
-  remoteCacheLimitGb.value = Math.max(0.5, Math.min(100, Number(remoteCacheLimitGb.value) || 2))
-  await window.api.database.command('setSetting', {
-    key: 'remote.cache-limit-gb',
-    value: remoteCacheLimitGb.value
-  })
-}
 onMounted(() => {
-  void loadRemoteCache()
   sectionObserver = new IntersectionObserver(
     (entries) => {
       if (navigatingBySidebar) return
@@ -636,47 +603,14 @@ onBeforeUnmount(() => {
           </div>
           <ShortcutSettings />
         </section>
-        <!-- remote file local cache-->
-        <section id="remote-cache" class="settings-section">
+        <section id="local-files" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('remote.cache') }}</h2>
-              <p>{{ t('remote.cacheDescription') }}</p>
+              <h2>{{ t('settings.localFileManagement') }}</h2>
+              <p>{{ t('settings.localFileManagementDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card">
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('remote.cacheDirectory') }}</h3>
-                <p>{{ t('remote.cacheUsed', { size: formatBytes(remoteCacheUsed) }) }}</p>
-              </div>
-              <div class="flex items-center gap-2">
-                <input :value="remoteCacheDirectory" readonly class="input-base min-w-136" />
-                <button
-                  class="secondary-button text-nowrap"
-                  type="button"
-                  @click="chooseRemoteCacheDirectory"
-                >
-                  {{ t('remote.chooseDirectory') }}
-                </button>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('remote.cacheLimit') }}</h3>
-                <p>{{ t('remote.cacheDescription') }}</p>
-              </div>
-              <input
-                v-model.number="remoteCacheLimitGb"
-                class="input-base h-9 max-w-18"
-                type="number"
-                min="0.5"
-                max="100"
-                step="0.5"
-                @change="saveRemoteCacheLimit"
-              />
-            </div>
-          </div>
+          <div class="settings-card"><LocalFileManagement /></div>
         </section>
         <!-- 其他 -->
         <section id="system" class="settings-section">

@@ -26,6 +26,7 @@ import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
+import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
 import { cacheRemoteSong, syncNavidromeSource } from './service/remoteSourceService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
@@ -363,6 +364,7 @@ app.whenReady().then(() => {
   registerLyricsIpcHandlers()
   registerFontIpcHandlers()
   registerMetadataIpcHandlers()
+  registerFileIpcHandlers()
   createTray()
   ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
     setAppSetting('system.close-to-tray', enabled === true)

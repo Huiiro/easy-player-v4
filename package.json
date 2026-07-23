@@ -28,6 +28,8 @@
     "@headlessui/vue": "^1.7.23",
     "@neteasecloudmusicapienhanced/api": "^4.29.17",
     "@tailwindcss/vite": "^4.3.3",
+    "@types/adm-zip": "^0.5.8",
+    "adm-zip": "^0.6.0",
     "better-sqlite3": "^12.4.1",
     "gsap": "^3.15.0",
     "kugoumusicapi": "github:MakcRe/KuGouMusicApi",

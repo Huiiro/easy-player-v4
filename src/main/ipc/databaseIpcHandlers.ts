@@ -91,6 +91,7 @@ const handlers = {
 
   listSources: () => library.listSources(),
   listLocalFolders: () => library.listLocalFolders(),
+  rebuildLocalFolders: () => library.rebuildLocalFolders(),
   getLocalFolderSongs: ({ folderId }: { folderId: number }) =>
     library.getLocalFolderSongs(folderId),
   getSource: ({ id }: { id: number }) => library.getSource(id),
