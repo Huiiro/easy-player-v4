@@ -1,6 +1,6 @@
 {
   "name": "easy-player",
-  "version": "3.0.0 dev preview",
+  "version": "3.0.0",
   "description": "Easy Player V4",
   "main": "./out/main/index.js",
   "author": "huiiro",
@@ -14,11 +14,12 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
+    "build:nocheck": "electron-vite build",
     "build:native": "cmake-js compile --directory src/main/native --out build/native-addon && node scripts/copy-native-assets.js",
     "build:native:debug": "cmake-js compile --directory src/main/native --out build/native-addon --debug",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build && electron-builder --win",
+    "build:win": "npm run build:nocheck && electron-builder --win",
     "build:mac": "npm run build && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux"
   },

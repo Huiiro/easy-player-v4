@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { SongMetadata } from './metadataService'
 import fs from 'fs'
 import sharp from 'sharp'
+import { app } from 'electron'
 
 const execFileAsync = promisify(execFile)
 
@@ -88,20 +89,20 @@ export async function normalizeCover(coverPath: string): Promise<string> {
 }
 
 function getMetaflacPath(): string {
-  if (process.env.NODE_ENV !== 'production') {
-    return path.join(process.cwd(), 'resources/bin/win/Win64/metaflac.exe')
+  if (!app.isPackaged) {
+    return path.join(process.cwd(), 'resources/bin/Win64/metaflac.exe')
   }
 
   if (process.platform === 'win32') {
     if (process.arch === 'x64') {
-      return path.join(process.resourcesPath, 'bin/win/Win64/metaflac.exe')
+      return path.join(process.resourcesPath, 'tools/flac/Win64/metaflac.exe')
     } else {
-      return path.join(process.resourcesPath, 'bin/win/Win32/metaflac.exe')
+      return path.join(process.resourcesPath, 'tools/flac/Win32/metaflac.exe')
     }
   }
 
   if (process.platform === 'darwin') {
-    return path.join(process.resourcesPath, 'bin/mac/metaflac')
+    return path.join(process.resourcesPath, 'tools/flac/Mac/metaflac')
   }
 
   throw new Error('Read Metaflac fail, Unsupported platform.')

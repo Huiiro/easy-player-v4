@@ -3,6 +3,7 @@ productName: Easy Player
 directories:
   buildResources: build
 files:
+  - '!resources/bin{,/**/*}'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -10,6 +11,13 @@ files:
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 extraResources:
+  - from: 'resources/'
+    to: 'resources/'
+    filter:
+      - '**/*'
+      - '!bin{,/**/*}'
+  - from: 'resources/bin/'
+    to: 'tools/flac/'
   - from: 'build/native-addon/'
     to: 'native/'
     filter:
@@ -21,8 +29,11 @@ asarUnpack:
   - 'build/native-addon/**/*.node'
 win:
   executableName: easy-player
+  icon: resources/easy-player.ico
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
+  installerIcon: resources/easy-player.ico
+  uninstallerIcon: resources/easy-player.ico
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -37,6 +48,7 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  icon: resources/easy-player.ico
   target:
     - AppImage
     - snap

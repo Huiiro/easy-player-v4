@@ -16,7 +16,7 @@ import { readdirSync, statSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import icon from '../../resources/icon.png?asset'
+import icon from '../../resources/easy-player.ico?asset'
 import { AudioEngineManager } from './audioEngine'
 import { registerIpcHandlers } from './ipc/audioIpcHandlers'
 import { closeDatabase, initDatabase } from './database'
@@ -43,8 +43,8 @@ let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
 let tray: Tray | null = null
-let isQuitting = false
 let trayTrack = { title: '', artist: '', isPlaying: false }
+let isQuitting = false
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
