@@ -18,10 +18,13 @@ import type {
 } from '../types/audio'
 import { audioBridge } from '@/services/audioBridge'
 import { useLogStore } from '@/stores/log/logStore'
+import { useMessage } from '@/components/ui/useMessage'
+import { t } from '@/i18n'
 import { PlayMode } from '@/consts'
 import type { LibrarySong } from '@/types/library'
 
 export const usePlayerStore = defineStore('player', () => {
+  const { warning } = useMessage()
   // ── State ──
   const state = ref<PlaybackState>('idle')
   const positionMs = ref(0)
@@ -224,22 +227,73 @@ export const usePlayerStore = defineStore('player', () => {
     savePlaybackSessionSync()
   }
 
-  async function playQueueItem(index: number): Promise<boolean> {
+  function displaySongName(song: LibrarySong): string {
+    return (
+      song.title?.trim() ||
+      song.fileName?.trim() ||
+      song.audio.split(/[\\/]/).pop()?.trim() ||
+      t('queue.unknownTrack')
+    )
+  }
+
+  async function tryPlayQueueItem(index: number): Promise<boolean> {
     const song = queue.value[index]
-    if (!song || song.songStatus === 0) return false
+    if (!song) return false
+    const songName = displaySongName(song)
+    if (song.songStatus === 0) {
+      warning(t('queue.trackSkipped', { title: songName }))
+      return false
+    }
     currentQueueIndex.value = index
     savePlaybackSessionSync()
     const remoteFile = song.sourceId ? await window.api.remoteSource.cacheSong(song.id) : null
     if (song.sourceId && (!remoteFile?.success || !remoteFile.data)) {
       console.warn('[player] Unable to cache remote song:', remoteFile?.error)
+      warning(t('queue.trackSkipped', { title: songName }))
+      useLogStore().addEntry({
+        level: 'warning',
+        message: `Skipping unavailable remote track “${songName}”: ${remoteFile?.error || 'cache failed'}`,
+        timestamp: Date.now()
+      })
       return false
     }
     const opened = await openFile(remoteFile?.data || song.audio)
-    if (opened && (await play())) {
+    const started = opened && (await play())
+    if (started) {
       if (playMode.value === PlayMode.Random) shufflePlayedSongIds.add(song.id)
       beginHistory(song)
+      return true
     }
-    return opened
+    warning(t('queue.trackSkipped', { title: songName }))
+    useLogStore().addEntry({
+      level: 'warning',
+      message: `Skipping unplayable track “${songName}”`,
+      timestamp: Date.now()
+    })
+    return false
+  }
+
+  /**
+   * Starts the requested queue item, then keeps advancing through distinct candidates
+   * when a local file is missing or a remote source cannot provide its cached stream.
+   */
+  async function playQueueItem(index: number): Promise<boolean> {
+    if (index < 0 || index >= queue.value.length) return false
+    await stop()
+    const attempted = new Set<number>()
+    let candidate = index
+    while (candidate >= 0 && !attempted.has(candidate) && attempted.size < queue.value.length) {
+      attempted.add(candidate)
+      if (await tryPlayQueueItem(candidate)) return true
+      candidate = nextIndex()
+    }
+    currentFile.value = null
+    trackInfo.value = null
+    positionMs.value = 0
+    durationMs.value = 0
+    state.value = 'stopped'
+    savePlaybackSessionSync()
+    return false
   }
 
   async function playCollection(songs: LibrarySong[], songId: number): Promise<boolean> {

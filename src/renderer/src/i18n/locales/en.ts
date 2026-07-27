@@ -346,7 +346,9 @@ export default {
     sequential: 'Sequential',
     list: 'Repeat all',
     single: 'Repeat one',
-    random: 'Shuffle'
+    random: 'Shuffle',
+    unknownTrack: 'Unknown track',
+    trackSkipped: 'Unable to play “{title}”; skipped automatically.'
   },
   header: {
     back: 'Back',
@@ -544,7 +546,7 @@ export default {
     lyricsHint: 'Lyrics will appear here as playback progresses',
     speed: 'Speed',
     spectrum: 'Spectrum',
-    showTranslation: 'Show Lyrics',
+    showTranslation: 'Show Translation',
     lyricFontSize: 'Lyric font size',
     lyricSpacing: 'Lyric spacing',
     progressStyle: 'Toggle progress style',

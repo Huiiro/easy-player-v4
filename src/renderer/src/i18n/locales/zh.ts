@@ -344,7 +344,9 @@ export default {
     sequential: '顺序播放',
     list: '列表循环',
     single: '单曲循环',
-    random: '随机播放'
+    random: '随机播放',
+    unknownTrack: '未知歌曲',
+    trackSkipped: '无法播放“{title}”，已自动跳过。'
   },
   header: {
     back: '返回',
@@ -538,7 +540,7 @@ export default {
     alignLeft: '左对齐',
     alignCenter: '居中',
     alignRight: '右对齐',
-    showTranslation: '显示歌词',
+    showTranslation: '显示翻译',
     lyricAlignment: '歌词对齐：{alignment}',
     lyricEffect: '歌词效果：{effect}',
     lyricEffectNone: '无',
