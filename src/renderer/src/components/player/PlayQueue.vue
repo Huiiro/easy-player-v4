@@ -1,26 +1,39 @@
 <script setup lang="ts">
+import { nextTick, ref } from 'vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const { t } = useI18n()
 const player = usePlayerStore()
+const queueRef = ref<HTMLElement | null>(null)
 const playAt = (index: number): void => void player.playQueueItem(index)
 const removeAt = (index: number): void => void player.removeQueueItem(index)
 
 function coverUrl(cover: string | null): string | null {
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
 }
+
+async function scrollToCurrent(): Promise<void> {
+  await nextTick()
+  const currentIndex = player.currentQueueIndex
+  if (currentIndex < 0) return
+  const item = queueRef.value?.querySelector<HTMLElement>(`[data-queue-index="${currentIndex}"]`)
+  item?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+defineExpose({ scrollToCurrent })
 </script>
 
 <template>
   <p v-if="player.queue.length === 0" class="py-8 text-center text-sm text-text-l">
     {{ t('queue.empty') }}
   </p>
-  <div v-else class="space-y-1">
+  <div v-else ref="queueRef" class="space-y-1">
     <div
       v-for="(song, index) in player.queue"
       :key="song.id"
+      :data-queue-index="index"
       class="flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-hover select-none"
       :class="
         index === player.currentQueueIndex
