@@ -1,7 +1,9 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import { normalizeShortcut } from '@/utils/shortcut'
+import { useMessage } from '@/components/ui/useMessage'
+import { formatShortcut, normalizeShortcut } from '@/utils/shortcut'
+import { useI18n } from 'vue-i18n'
 
 type ShortcutAction = 'previous' | 'toggle' | 'next' | 'volumeUp' | 'volumeDown'
 const actions: ShortcutAction[] = ['previous', 'toggle', 'next', 'volumeUp', 'volumeDown']
@@ -9,6 +11,8 @@ const actions: ShortcutAction[] = ['previous', 'toggle', 'next', 'volumeUp', 'vo
 export function useShortcuts(): void {
   const ui = useUIStore()
   const player = usePlayerStore()
+  const { warning } = useMessage()
+  const { t } = useI18n()
   const run = (action: ShortcutAction): void => {
     if (action === 'previous') void player.playPrevious()
     else if (action === 'next') void player.playNext()
@@ -37,7 +41,20 @@ export function useShortcuts(): void {
       await window.api.shortcuts.unregisterGlobal()
       return
     }
-    await window.api.shortcuts.registerGlobal({ ...ui.globalShortcutKeys })
+    const result = await window.api.shortcuts.registerGlobal({ ...ui.globalShortcutKeys })
+    if (!result.success) {
+      warning(result.error || t('settings.globalShortcutFailed', { shortcuts: '' }), 5000)
+      return
+    }
+    const failed = result.data?.failed || []
+    if (failed.length) {
+      warning(
+        t('settings.globalShortcutFailed', {
+          shortcuts: failed.map((shortcut) => formatShortcut(shortcut)).join(', ')
+        }),
+        5000
+      )
+    }
   }
   let offGlobal: (() => void) | undefined
   onMounted(() => {

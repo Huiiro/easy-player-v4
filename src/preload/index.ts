@@ -391,6 +391,7 @@ const shortcutsAPI = {
     ipcRenderer.invoke('shortcuts:register-global', shortcuts) as Promise<{
       success: boolean
       data?: { failed: string[] }
+      error?: string
     }>,
   unregisterGlobal: () =>
     ipcRenderer.invoke('shortcuts:unregister-global') as Promise<{ success: boolean }>,

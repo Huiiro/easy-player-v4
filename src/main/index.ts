@@ -54,9 +54,18 @@ let isQuitting = false
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()
 }
+
+// Keep one process and one main window active. A second launch simply restores the first.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+} else {
+  app.on('second-instance', () => showMainWindow())
+}
+
 function updateTrayMenu(): void {
   if (!tray) return
   const label = trayTrack.title
@@ -101,6 +110,7 @@ type ShortcutAction = (typeof shortcutActions)[number]
 function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, string>>): string[] {
   globalShortcut.unregisterAll()
   const failed: string[] = []
+  const registeredAccelerators = new Set<string>()
   for (const action of shortcutActions) {
     const accelerator = shortcuts[action]?.trim()
     if (!accelerator) continue
@@ -108,10 +118,16 @@ function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, strin
       /(^|\+)meta(?=\+|$)/i,
       `$1${process.platform === 'darwin' ? 'Command' : 'Super'}`
     )
+    const normalizedAccelerator = electronAccelerator.toLowerCase()
+    if (registeredAccelerators.has(normalizedAccelerator)) {
+      failed.push(accelerator)
+      continue
+    }
     const registered = globalShortcut.register(electronAccelerator, () => {
       mainWindow?.webContents.send('shortcuts:action', action)
     })
     if (!registered) failed.push(accelerator)
+    else registeredAccelerators.add(normalizedAccelerator)
   }
   return failed
 }
@@ -393,12 +409,16 @@ app.whenReady().then(() => {
     }
   )
   ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
-    const failed = registerGlobalShortcuts(
-      shortcuts && typeof shortcuts === 'object'
-        ? (shortcuts as Partial<Record<ShortcutAction, string>>)
-        : {}
-    )
-    return { success: true, data: { failed } }
+    try {
+      const failed = registerGlobalShortcuts(
+        shortcuts && typeof shortcuts === 'object'
+          ? (shortcuts as Partial<Record<ShortcutAction, string>>)
+          : {}
+      )
+      return { success: true, data: { failed } }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
   ipcMain.handle('shortcuts:unregister-global', () => {
     globalShortcut.unregisterAll()

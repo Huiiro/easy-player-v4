@@ -26,11 +26,21 @@ function keydown(event: KeyboardEvent): void {
   const shortcut = normalizeShortcut(event)
   if (!shortcut) return
   const duplicate = [
-    ...Object.entries(ui.shortcutKeys),
-    ...Object.entries(ui.globalShortcutKeys)
+    ...Object.entries(ui.shortcutKeys).map(([action, value]) => ({
+      scope: 'local',
+      action,
+      value
+    })),
+    ...Object.entries(ui.globalShortcutKeys).map(([action, value]) => ({
+      scope: 'global',
+      action,
+      value
+    }))
   ].some(
-    ([action, value]) =>
-      action !== props.action && typeof value === 'string' && value.toLowerCase() === shortcut
+    (entry) =>
+      (entry.scope !== props.scope || entry.action !== props.action) &&
+      typeof entry.value === 'string' &&
+      entry.value.toLowerCase() === shortcut.toLowerCase()
   )
   if (duplicate) {
     warning(t('settings.shortcutDuplicate', { shortcut: formatShortcut(shortcut) }))

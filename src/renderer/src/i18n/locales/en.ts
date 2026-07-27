@@ -439,6 +439,8 @@ export default {
     clearShortcut: 'Clear shortcut',
     resetShortcutDefaults: 'Restore defaults',
     shortcutDuplicate: '“{shortcut}” is already assigned to another action',
+    globalShortcutFailed:
+      'Global shortcut “{shortcuts}” could not be registered; it may be in use by the system or another app.',
     shortcutSpecialKeys: 'Special keys: SPACE, META (Windows / Command), ESC, ↑ ↓ ← →.',
     shortcutPrevious: 'Previous track',
     shortcutToggle: 'Play / pause',

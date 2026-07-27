@@ -433,6 +433,7 @@ export default {
     clearShortcut: '清除快捷键',
     resetShortcutDefaults: '恢复默认',
     shortcutDuplicate: '快捷键“{shortcut}”已用于其他操作',
+    globalShortcutFailed: '全局快捷键“{shortcuts}”注册失败，可能已被系统或其他应用占用。',
     shortcutSpecialKeys: '特殊键：SPACE（空格）、META（Windows / Command）、ESC、↑ ↓ ← →。',
     shortcutPrevious: '上一首',
     shortcutToggle: '播放 / 暂停',

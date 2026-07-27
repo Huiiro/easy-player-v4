@@ -278,6 +278,7 @@ declare global {
         registerGlobal(shortcuts: Record<string, string>): Promise<{
           success: boolean
           data?: { failed: string[] }
+          error?: string
         }>
         unregisterGlobal(): Promise<{ success: boolean }>
         onAction(callback: (action: string) => void): () => void
