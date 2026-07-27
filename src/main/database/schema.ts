@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 3
+export const DATABASE_SCHEMA_VERSION = 1
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -64,6 +64,7 @@ export const schemaV1 = `
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cover TEXT,
+    custom_cover TEXT,
     description TEXT,
     position INTEGER DEFAULT 0,
     created_at DATETIME DEFAULT (datetime('now', 'localtime'))
@@ -130,6 +131,12 @@ export const schemaV1 = `
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS app_setting (
+    key TEXT PRIMARY KEY,
+    value_json TEXT NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE INDEX IF NOT EXISTS idx_song_title ON song(title);
   CREATE INDEX IF NOT EXISTS idx_song_artist ON song(artist);
   CREATE INDEX IF NOT EXISTS idx_song_album ON song(album);
@@ -140,16 +147,4 @@ export const schemaV1 = `
   CREATE INDEX IF NOT EXISTS idx_play_history_song_id ON play_history(song_id);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_task
     ON download_task (platform, resource_id, sub_id, quality);
-`
-
-export const schemaV2 = `
-  ALTER TABLE song_list ADD COLUMN custom_cover TEXT;
-`
-
-export const schemaV3 = `
-  CREATE TABLE IF NOT EXISTS app_setting (
-    key TEXT PRIMARY KEY,
-    value_json TEXT NOT NULL,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-  );
 `
