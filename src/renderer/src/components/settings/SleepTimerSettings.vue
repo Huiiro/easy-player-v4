@@ -64,7 +64,7 @@ onBeforeUnmount(clearTimer)
         min="1"
         max="720"
       />
-      <span class="text-xs text-text-l">{{ t('settings.minutes') }}</span>
+      <span class="text-xs text-text-l mx-1">{{ t('settings.minutes') }}</span>
       <button class="secondary-button" @click="deadline ? clearTimer() : startTimer()">
         {{ deadline ? t('settings.cancelSleepTimer') : t('settings.startSleepTimer') }}
       </button>

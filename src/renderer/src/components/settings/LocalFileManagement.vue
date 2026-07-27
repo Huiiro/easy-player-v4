@@ -75,8 +75,9 @@ onBeforeUnmount(() => offProgress?.())
         <p>{{ t('remote.cacheUsed', { size: formatBytes(cacheUsed) }) }}</p>
       </div>
       <div class="file-path-control">
-        <input :value="cacheDirectory" readonly class="input-base" /><button
-          class="secondary-button text-nowrap"
+        <input :value="cacheDirectory" readonly class="input-base" />
+        <button
+          class="btn-hover-base text-sm text-nowrap"
           type="button"
           @click="chooseCacheDirectory"
         >
@@ -89,15 +90,18 @@ onBeforeUnmount(() => offProgress?.())
         <h3>{{ t('remote.cacheLimit') }}</h3>
         <p>{{ t('remote.cacheDescription') }}</p>
       </div>
-      <input
-        v-model.number="cacheLimitGb"
-        class="input-base h-9 max-w-18"
-        type="number"
-        min="0.5"
-        max="100"
-        step="0.5"
-        @change="saveCacheLimit"
-      />
+      <div class="flex items-center gap-2">
+        <input
+          v-model.number="cacheLimitGb"
+          class="input-base h-7 max-w-18"
+          type="number"
+          min="0.5"
+          max="20"
+          step="0.5"
+          @change="saveCacheLimit"
+        />
+        <span>G</span>
+      </div>
     </div>
     <div class="file-row">
       <div>
@@ -105,9 +109,10 @@ onBeforeUnmount(() => offProgress?.())
         <p>{{ t('settings.libraryBackupDescription') }}</p>
       </div>
       <div class="file-actions">
-        <button class="secondary-button" type="button" @click="run('exportLibrary')">
-          {{ t('settings.exportLibrary') }}</button
-        ><button class="secondary-button" type="button" @click="run('importLibrary')">
+        <button class="btn-hover-base text-sm" type="button" @click="run('exportLibrary')">
+          {{ t('settings.exportLibrary') }}
+        </button>
+        <button class="btn-hover-base text-sm" type="button" @click="run('importLibrary')">
           {{ t('settings.importLibrary') }}
         </button>
       </div>
@@ -117,16 +122,16 @@ onBeforeUnmount(() => offProgress?.())
         <h3>{{ t('settings.recoverMovedFiles') }}</h3>
         <p>{{ t('settings.recoverMovedFilesDescription') }}</p>
       </div>
-      <button class="secondary-button" type="button" @click="run('recoverMovedSongs')">
+      <button class="btn-hover-base text-sm" type="button" @click="run('recoverMovedSongs')">
         {{ t('settings.recover') }}
       </button>
     </div>
     <div v-if="importProgress" class="file-progress">
       <div class="file-progress-head">
-        <span>{{ t('library.loading') }}</span
-        ><span>{{
-          importProgress.total ? `${importProgress.current} / ${importProgress.total}` : '—'
-        }}</span>
+        <span>{{ t('library.loading') }}</span>
+        <span>
+          {{ importProgress.total ? `${importProgress.current} / ${importProgress.total}` : '—' }}
+        </span>
       </div>
       <div class="file-progress-track">
         <span

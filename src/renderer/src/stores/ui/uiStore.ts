@@ -30,7 +30,7 @@ export const useUIStore = defineStore(
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
-    const customThemeColor = ref('')
+    const customThemeColor = ref('oklch(0.691 0.198 148.262)')
     const customBg = reactive({
       url: '',
       path: '',

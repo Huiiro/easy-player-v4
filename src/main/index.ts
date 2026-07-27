@@ -27,6 +27,13 @@ import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
 import { cacheRemoteSong, syncRemoteSource, testRemoteSource } from './service/remoteSourceService'
+import {
+  checkForUpdates,
+  downloadUpdate,
+  getUpdateStatus,
+  initializeUpdater,
+  quitAndInstallUpdate
+} from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
 
@@ -398,6 +405,30 @@ app.whenReady().then(() => {
     return { success: true }
   })
   registerMediaProtocol()
+  initializeUpdater()
+  ipcMain.handle('app-update:status', () => ({ success: true, data: getUpdateStatus() }))
+  ipcMain.handle('app-update:check', async () => {
+    try {
+      return { success: true, data: await checkForUpdates() }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle('app-update:download', async () => {
+    try {
+      return { success: true, data: await downloadUpdate() }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
+  ipcMain.handle('app-update:install', () => {
+    try {
+      quitAndInstallUpdate()
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  })
 
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))

@@ -331,6 +331,18 @@ const remoteSourceAPI = {
     }>
 }
 
+const appUpdateAPI = {
+  status: () => ipcRenderer.invoke('app-update:status'),
+  check: () => ipcRenderer.invoke('app-update:check'),
+  download: () => ipcRenderer.invoke('app-update:download'),
+  install: () => ipcRenderer.invoke('app-update:install'),
+  onStatus: (callback: (status: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: unknown): void => callback(status)
+    ipcRenderer.on('app-update:status', handler)
+    return () => ipcRenderer.removeListener('app-update:status', handler)
+  }
+}
+
 const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
@@ -417,6 +429,7 @@ const api = {
   miniPlayer: miniPlayerAPI,
   desktopLyrics: desktopLyricsAPI,
   remoteSource: remoteSourceAPI,
+  appUpdate: appUpdateAPI,
   window: windowAPI
 }
 

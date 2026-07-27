@@ -5,6 +5,10 @@
   "main": "./out/main/index.js",
   "author": "huiiro",
   "homepage": "https://github.com/Huiiro",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Huiiro/easy-player-v4.git"
+  },
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
@@ -32,6 +36,7 @@
     "@types/adm-zip": "^0.5.8",
     "adm-zip": "^0.6.0",
     "better-sqlite3": "^12.4.1",
+    "electron-updater": "^6.6.2",
     "gsap": "^3.15.0",
     "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
     "music-metadata": "^11.14.0",

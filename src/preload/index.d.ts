@@ -327,6 +327,13 @@ declare global {
         ): Promise<{ success: boolean; data?: { imported: number; total: number }; error?: string }>
         cacheSong(songId: number): Promise<{ success: boolean; data?: string; error?: string }>
       }
+      appUpdate: {
+        status(): Promise<{ success: boolean; data?: unknown }>
+        check(): Promise<{ success: boolean; data?: unknown; error?: string }>
+        download(): Promise<{ success: boolean; data?: unknown; error?: string }>
+        install(): Promise<{ success: boolean; error?: string }>
+        onStatus(callback: (status: unknown) => void): () => void
+      }
       window: {
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>
         onState(callback: (state: { maximized: boolean }) => void): () => void

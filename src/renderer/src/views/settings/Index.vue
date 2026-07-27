@@ -245,7 +245,7 @@ onBeforeUnmount(() => {
                 <h3>{{ t('settings.interfaceLanguage') }}</h3>
                 <p>{{ t('settings.interfaceLanguageDescription') }}</p>
               </div>
-              <BaseSelect v-model="language" :options="languageOptions" class="w-40" />
+              <BaseSelect v-model="language" :options="languageOptions" class="w-64" />
             </div>
           </div>
         </section>
@@ -548,7 +548,7 @@ onBeforeUnmount(() => {
               handle=".lyric-drag-handle"
             >
               <template #item="{ element: source, index }">
-                <div class="setting-row lyric-source-row">
+                <div class="setting-row border-border border-b">
                   <div class="flex items-center gap-3">
                     <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
                       <SvgIcon name="common-drag" class-name="size-4" />
@@ -582,6 +582,7 @@ onBeforeUnmount(() => {
           </div>
           <ShortcutSettings />
         </section>
+        <!-- local file -->
         <section id="local-files" class="settings-section">
           <div class="section-heading">
             <div>
@@ -591,7 +592,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="settings-card"><LocalFileManagement /></div>
         </section>
-        <!-- 其他 -->
+        <!-- system -->
         <section id="system" class="settings-section">
           <div class="section-heading">
             <div>
@@ -601,7 +602,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="settings-card"><SystemSettings /></div>
         </section>
-        <!-- 其他 -->
+        <!-- other -->
         <section id="other" class="settings-section">
           <div class="section-heading">
             <div>
@@ -617,9 +618,6 @@ onBeforeUnmount(() => {
               <div class="flex items-center gap-2 cursor-pointer">
                 <span class="text-text">v{{ VERSION }}</span>
                 <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
-                <button>
-                  <svg-icon name="common-update" class-name="size-5" class="btn-hover" />
-                </button>
               </div>
             </div>
           </div>
