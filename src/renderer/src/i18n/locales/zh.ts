@@ -1,6 +1,7 @@
 export default {
   common: {
     cancel: '取消',
+    close: '关闭',
     save: '保存'
   },
   nav: {
@@ -328,6 +329,7 @@ export default {
     add: '添加标签',
     loading: '正在加载标签…',
     empty: '还没有标签，请先新建一个。',
+    duplicateName: '标签名称已存在，请使用其他名称。',
     confirmDelete: '确定删除标签“{name}”吗？该标签将从所有歌曲中移除。',
     moveUp: '上移',
     moveDown: '下移',

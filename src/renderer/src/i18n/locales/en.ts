@@ -1,6 +1,7 @@
 export default {
   common: {
     cancel: 'Cancel',
+    close: 'Close',
     save: 'Save'
   },
   nav: {
@@ -330,6 +331,7 @@ export default {
     add: 'Add tag',
     loading: 'Loading tags…',
     empty: 'No tags yet. Create one to get started.',
+    duplicateName: 'A tag with this name already exists. Choose another name.',
     confirmDelete: 'Delete the tag “{name}”? It will be removed from all songs.',
     moveUp: 'Move up',
     moveDown: 'Move down',

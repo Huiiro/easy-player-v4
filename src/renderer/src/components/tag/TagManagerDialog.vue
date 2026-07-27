@@ -7,6 +7,7 @@ import eventBus from '@/utils/eventBus'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
+import { useMessage } from '@/components/ui/useMessage'
 
 interface Tag {
   id: number
@@ -22,6 +23,7 @@ const emit = defineEmits<{
   'update:selectedIds': [value: number[]]
 }>()
 const { t } = useI18n()
+const { warning, error: showError } = useMessage()
 const tags = ref<Tag[]>([])
 const loading = ref(false)
 const name = ref('')
@@ -29,6 +31,12 @@ const color = ref('#7c3aed')
 const tagPendingDelete = ref<Tag | null>(null)
 
 const selected = computed(() => new Set(props.selectedIds))
+function hasDuplicateName(value: string, excludeId?: number): boolean {
+  const normalized = value.trim().toLocaleLowerCase()
+  return tags.value.some(
+    (tag) => tag.id !== excludeId && tag.name.trim().toLocaleLowerCase() === normalized
+  )
+}
 async function load(): Promise<void> {
   loading.value = true
   try {
@@ -41,23 +49,39 @@ async function load(): Promise<void> {
 async function create(): Promise<void> {
   const value = name.value.trim()
   if (!value) return
+  if (hasDuplicateName(value)) {
+    warning(t('tags.duplicateName'))
+    return
+  }
   const result = await window.api.database.command('createTag', { name: value, color: color.value })
   if (result.success) {
     name.value = ''
     await load()
     eventBus.emit('tagsChanged')
+  } else {
+    showError(result.error || t('tags.duplicateName'))
   }
 }
 async function update(tag: Tag): Promise<void> {
-  if (!tag.name.trim()) {
+  const value = tag.name.trim()
+  if (!value) {
+    await load()
+    return
+  }
+  if (hasDuplicateName(value, tag.id)) {
+    warning(t('tags.duplicateName'))
     await load()
     return
   }
   const result = await window.api.database.command('updateTag', {
     id: tag.id,
-    input: { name: tag.name.trim(), color: tag.color }
+    input: { name: value, color: tag.color }
   })
   if (result.success) eventBus.emit('tagsChanged')
+  else {
+    showError(result.error || t('tags.duplicateName'))
+    await load()
+  }
 }
 async function confirmRemove(): Promise<void> {
   const tag = tagPendingDelete.value
@@ -118,57 +142,61 @@ watch(
     <p v-else-if="!tags.length" class="py-8 text-center text-sm text-text-l">
       {{ t('tags.empty') }}
     </p>
-    <Draggable
-      v-else
-      v-model="tags"
-      item-key="id"
-      handle=".tag-drag-handle"
-      :animation="150"
-      class="space-y-2"
-      @end="persistOrder"
-    >
-      <template #item="{ element: tag }">
-        <li
-          class="flex items-center gap-2 rounded-xl border p-2 transition-colors"
-          :class="selected.has(tag.id) ? 'border-primary bg-primary/10 shadow-sm' : 'border-border'"
-        >
-          <button
-            class="tag-drag-handle btn-hover cursor-grab px-1 text-text-l active:cursor-grabbing"
-            :aria-label="t('tags.dragSort')"
+    <div v-else class="custom-scrollbar max-h-[50vh] overflow-y-auto pr-1">
+      <Draggable
+        v-model="tags"
+        item-key="id"
+        handle=".tag-drag-handle"
+        :animation="150"
+        class="space-y-2"
+        @end="persistOrder"
+      >
+        <template #item="{ element: tag }">
+          <li
+            class="flex items-center gap-2 rounded-xl border p-2 transition-colors"
+            :class="
+              selected.has(tag.id) ? 'border-primary bg-primary/10 shadow-sm' : 'border-border'
+            "
           >
-            ⋮⋮
-          </button>
-          <button
-            class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white ring-2 ring-transparent"
-            :class="selected.has(tag.id) ? 'ring-primary ring-offset-2 ring-offset-bg' : ''"
-            :style="{ backgroundColor: tag.color || '#7c3aed' }"
-            :title="t('tags.toggleFilter')"
-            @click="toggleFilter(tag.id)"
-          >
-            <svg-icon v-if="selected.has(tag.id)" name="common-select" class-name="size-3" />
-          </button>
-          <input
-            v-model="tag.name"
-            class="input-base h-8 min-w-0 flex-1"
-            :aria-label="t('tags.name')"
-            @change="update(tag)"
-          />
-          <BaseColorPicker
-            v-model="tag.color"
-            :presets="presetColors"
-            class="shrink-0"
-            @change="update(tag)"
-          />
-          <button
-            class="btn-hover px-1 text-sm text-red-400"
-            :aria-label="t('tags.delete')"
-            @click="tagPendingDelete = tag"
-          >
-            <svg-icon name="common-close" class-name="size-3" />
-          </button>
-        </li>
-      </template>
-    </Draggable>
+            <button
+              class="tag-drag-handle btn-hover cursor-grab px-1 text-text-l active:cursor-grabbing"
+              :aria-label="t('tags.dragSort')"
+            >
+              ⋮⋮
+            </button>
+            <button
+              class="grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs text-white ring-2 ring-transparent"
+              :class="selected.has(tag.id) ? 'ring-primary ring-offset-2 ring-offset-bg' : ''"
+              :style="{ backgroundColor: tag.color || '#7c3aed' }"
+              :title="t('tags.toggleFilter')"
+              @click="toggleFilter(tag.id)"
+            >
+              <svg-icon v-if="selected.has(tag.id)" name="common-select" class-name="size-3" />
+            </button>
+            <input
+              v-model="tag.name"
+              class="input-base h-8 min-w-0 flex-1"
+              :aria-label="t('tags.name')"
+              @change="update(tag)"
+            />
+            <BaseColorPicker
+              v-model="tag.color"
+              :presets="presetColors"
+              teleport
+              class="shrink-0"
+              @change="update(tag)"
+            />
+            <button
+              class="btn-hover px-1 text-sm text-red-400"
+              :aria-label="t('tags.delete')"
+              @click="tagPendingDelete = tag"
+            >
+              <svg-icon name="common-close" class-name="size-3" />
+            </button>
+          </li>
+        </template>
+      </Draggable>
+    </div>
     <template #footer>
       <button
         class="btn-hover rounded-lg px-3 py-1.5 text-sm"
@@ -176,13 +204,18 @@ watch(
       >
         {{ t('tags.clearFilter') }}
       </button>
+      <button
+        class="btn-hover rounded-lg px-3 py-1.5 text-sm"
+        @click="emit('update:modelValue', false)"
+      >
+        {{ t('common.close') }}
+      </button>
     </template>
   </BaseDialog>
   <BaseDialog
     :model-value="Boolean(tagPendingDelete)"
     :title="t('tags.delete')"
     width="max-w-sm"
-    :close-on-overlay="false"
     @update:model-value="!$event && (tagPendingDelete = null)"
   >
     <p class="text-sm text-text-l">
@@ -193,7 +226,7 @@ watch(
         {{ t('tags.cancel') }}
       </button>
       <button
-        class="btn-hover rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
         @click="confirmRemove"
       >
         {{ t('tags.delete') }}
