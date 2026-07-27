@@ -44,6 +44,10 @@ const language = computed<'zh' | 'en'>({
     ui.locale = value
   }
 })
+const languageOptions = computed(() => [
+  { label: t('settings.languageChinese'), value: 'zh' },
+  { label: t('settings.languageEnglish'), value: 'en' }
+])
 const themeMode = computed({
   get: () => (ui.useCustomBg ? 'custom' : ui.useDarkMode ? 'dark' : 'light'),
   set: (value: 'light' | 'dark' | 'custom') => {
@@ -241,32 +245,7 @@ onBeforeUnmount(() => {
                 <h3>{{ t('settings.interfaceLanguage') }}</h3>
                 <p>{{ t('settings.interfaceLanguageDescription') }}</p>
               </div>
-              <div
-                class="language-options"
-                role="radiogroup"
-                :aria-label="t('settings.interfaceLanguage')"
-              >
-                <button
-                  type="button"
-                  class="language-option"
-                  :class="{ selected: language === 'zh' }"
-                  :aria-checked="language === 'zh'"
-                  role="radio"
-                  @click="language = 'zh'"
-                >
-                  {{ t('settings.languageChinese') }}
-                </button>
-                <button
-                  type="button"
-                  class="language-option"
-                  :class="{ selected: language === 'en' }"
-                  :aria-checked="language === 'en'"
-                  role="radio"
-                  @click="language = 'en'"
-                >
-                  {{ t('settings.languageEnglish') }}
-                </button>
-              </div>
+              <BaseSelect v-model="language" :options="languageOptions" class="w-40" />
             </div>
           </div>
         </section>
@@ -817,31 +796,6 @@ onBeforeUnmount(() => {
 .theme-options {
   display: flex;
   gap: 0.65rem;
-}
-.language-options {
-  display: flex;
-  gap: 0.5rem;
-}
-.language-option {
-  min-width: 92px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0.45rem 0.7rem;
-  color: var(--color-text-l);
-  font-size: 0.78rem;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s,
-    color 0.2s;
-}
-.language-option:hover {
-  border-color: var(--color-primary);
-  color: var(--color-text);
-}
-.language-option.selected {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  color: var(--color-primary);
 }
 .theme-option {
   display: grid;

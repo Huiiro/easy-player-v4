@@ -8,12 +8,16 @@ export const constRoutes = [
     name: 'layout',
     component: () => import('@/views/layout/Index.vue'),
     children: [
-      {
-        path: '/dev',
-        name: 'Dev',
-        meta: { title: 'DEV' },
-        component: () => import('@/views/dev/Index.vue')
-      },
+      ...(import.meta.env.DEV
+        ? [
+            {
+              path: '/dev',
+              name: 'Dev',
+              meta: { title: 'DEV' },
+              component: () => import('@/views/dev/Index.vue')
+            }
+          ]
+        : []),
       {
         path: '/song',
         name: 'Song',

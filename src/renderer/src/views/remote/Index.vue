@@ -34,9 +34,13 @@ const providerFilter = ref('all')
 const draggedSourceId = ref<number | null>(null)
 const providerOptions = [
   { label: t('remote.all'), value: 'all' },
-  { label: 'Navidrome', value: 'navidrome' }
+  { label: 'Navidrome', value: 'navidrome' },
+  { label: 'Jellyfin', value: 'jellyfin' }
 ]
-const formProviderOptions = [{ label: 'Navidrome', value: 'navidrome' }]
+const formProviderOptions = [
+  { label: 'Navidrome', value: 'navidrome' },
+  { label: 'Jellyfin', value: 'jellyfin' }
+]
 const form = ref({ provider: 'navidrome', name: '', baseUrl: '', user: '', secret: '' })
 const filteredSources = computed(() =>
   providerFilter.value === 'all'
@@ -92,12 +96,23 @@ async function saveSource(): Promise<void> {
   success(t('remote.saved'))
 }
 async function test(source: MusicSource | null = editing.value): Promise<void> {
-  const config = source
-    ? { baseUrl: source.baseUrl || '', user: source.user || '', secret: source.secret || '' }
-    : form.value
+  const config: { type: 'navidrome' | 'jellyfin'; baseUrl: string; user: string; secret: string } =
+    source
+      ? {
+          type: source.type === 'jellyfin' ? 'jellyfin' : 'navidrome',
+          baseUrl: source.baseUrl || '',
+          user: source.user || '',
+          secret: source.secret || ''
+        }
+      : {
+          type: form.value.provider as 'navidrome' | 'jellyfin',
+          baseUrl: form.value.baseUrl,
+          user: form.value.user,
+          secret: form.value.secret
+        }
   testing.value = true
   try {
-    const response = await window.api.remoteSource.testNavidrome(config)
+    const response = await window.api.remoteSource.test(config)
     if (!response.success) {
       error(response.error || t('remote.connectionFailed'))
       return

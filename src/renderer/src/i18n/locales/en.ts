@@ -206,7 +206,7 @@ export default {
     title: 'Remote sources',
     refresh: 'Refresh sources',
     refreshed: 'Source list refreshed',
-    supported: 'Navidrome (Subsonic API) is currently supported',
+    supported: 'Navidrome (Subsonic API) and Jellyfin are supported; more services can be added.',
     add: 'Add source',
     edit: 'Edit remote source',
     delete: 'Delete',
@@ -216,7 +216,7 @@ export default {
     serverUrl: 'Server URL',
     username: 'Username',
     password: 'Password',
-    connectionRequired: 'Complete the Navidrome connection details',
+    connectionRequired: 'Complete the remote source connection details',
     saveFailed: 'Unable to save source',
     saved: 'Source saved',
     connectionFailed: 'Connection failed',
@@ -239,7 +239,7 @@ export default {
     cacheDefault: 'Default: player_data/cache',
     chooseDirectory: 'Choose directory',
     cacheSaved: 'Cache settings saved',
-    empty: 'No remote sources yet. Add a Navidrome server to begin.',
+    empty: 'No remote sources yet. Add a Navidrome or Jellyfin server to begin.',
     sourceStats: '{songs} songs · {imported} imported · Last connected {lastConnect}'
   },
   library: {

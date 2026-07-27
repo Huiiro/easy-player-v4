@@ -11,7 +11,6 @@ import {
   screen,
   Tray
 } from 'electron'
-import { createHash, randomBytes } from 'node:crypto'
 import { readdirSync, statSync } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -27,7 +26,7 @@ import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
-import { cacheRemoteSong, syncNavidromeSource } from './service/remoteSourceService'
+import { cacheRemoteSong, syncRemoteSource, testRemoteSource } from './service/remoteSourceService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
 
@@ -455,35 +454,23 @@ app.whenReady().then(() => {
     shell.showItemInFolder(audioPath)
     return { success: true }
   })
-  ipcMain.handle('remote-source:test-navidrome', async (_event, config: unknown) => {
-    const value = config as { baseUrl?: unknown; user?: unknown; secret?: unknown }
+  ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
+    const value = config as { type?: unknown; baseUrl?: unknown; user?: unknown; secret?: unknown }
     if (
+      (value?.type !== 'navidrome' && value?.type !== 'jellyfin') ||
       typeof value?.baseUrl !== 'string' ||
       typeof value.user !== 'string' ||
       typeof value.secret !== 'string'
     ) {
-      return { success: false, error: 'Invalid Navidrome configuration' }
+      return { success: false, error: 'Invalid remote source configuration' }
     }
     try {
-      const salt = randomBytes(8).toString('hex')
-      const token = createHash('md5').update(`${value.secret}${salt}`).digest('hex')
-      const baseUrl = value.baseUrl.replace(/\/$/, '')
-      const query = new URLSearchParams({
-        u: value.user,
-        t: token,
-        s: salt,
-        v: '1.16.1',
-        c: 'EasyPlayer',
-        f: 'json'
-      })
-      const response = await fetch(`${baseUrl}/rest/ping.view?${query}`)
-      const payload = (await response.json()) as {
-        'subsonic-response'?: { status?: string; version?: string; error?: { message?: string } }
+      return {
+        success: true,
+        data: await testRemoteSource(
+          value as { type: 'navidrome' | 'jellyfin'; baseUrl: string; user: string; secret: string }
+        )
       }
-      const result = payload['subsonic-response']
-      if (!response.ok || result?.status !== 'ok')
-        return { success: false, error: result?.error?.message || 'Connection failed' }
-      return { success: true, data: { version: result.version || '' } }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -514,7 +501,7 @@ app.whenReady().then(() => {
   ipcMain.handle('remote-source:sync', async (_event, sourceId: unknown) => {
     if (!Number.isInteger(sourceId)) return { success: false, error: 'Invalid source id' }
     try {
-      return { success: true, data: await syncNavidromeSource(sourceId as number) }
+      return { success: true, data: await syncRemoteSource(sourceId as number) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

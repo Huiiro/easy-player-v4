@@ -291,8 +291,13 @@ const desktopLyricsAPI = {
 }
 
 const remoteSourceAPI = {
-  testNavidrome: (config: { baseUrl: string; user: string; secret: string }) =>
-    ipcRenderer.invoke('remote-source:test-navidrome', config) as Promise<{
+  test: (config: {
+    type: 'navidrome' | 'jellyfin'
+    baseUrl: string
+    user: string
+    secret: string
+  }) =>
+    ipcRenderer.invoke('remote-source:test', config) as Promise<{
       success: boolean
       data?: { version: string }
       error?: string

@@ -205,7 +205,7 @@ export default {
     title: '远程音源',
     refresh: '刷新音源',
     refreshed: '音源列表已刷新',
-    supported: '当前支持 Navidrome（Subsonic API）',
+    supported: '支持 Navidrome（Subsonic API）和 Jellyfin，可继续扩展更多服务。',
     add: '新增音源',
     edit: '编辑远程音源',
     delete: '删除',
@@ -215,7 +215,7 @@ export default {
     serverUrl: '服务器地址',
     username: '用户名',
     password: '密码',
-    connectionRequired: '请完整填写 Navidrome 连接信息',
+    connectionRequired: '请完整填写远程音源连接信息',
     saveFailed: '保存音源失败',
     saved: '音源已保存',
     connectionFailed: '连接失败',
@@ -238,7 +238,7 @@ export default {
     cacheDefault: '默认 player_data/cache',
     chooseDirectory: '选择目录',
     cacheSaved: '缓存设置已保存',
-    empty: '还没有远程音源，添加一个 Navidrome 服务器开始使用。',
+    empty: '还没有远程音源，添加 Navidrome 或 Jellyfin 服务器开始使用。',
     sourceStats: '歌曲 {songs} · 已导入 {imported} · 最近连接 {lastConnect}'
   },
   library: {

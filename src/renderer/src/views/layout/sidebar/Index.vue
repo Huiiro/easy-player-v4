@@ -41,7 +41,7 @@ const libraryItems: NavigationItem[] = [
 
 const utilityItems: NavigationItem[] = [
   { labelKey: 'nav.history', path: '/history', icon: 'menu-history' },
-  { labelKey: 'nav.developer', path: '/dev', icon: 'menu-dev' },
+  ...(import.meta.env.DEV ? [{ labelKey: 'nav.developer', path: '/dev', icon: 'menu-dev' }] : []),
   { labelKey: 'nav.settings', path: '/settings', icon: 'menu-settings' }
 ]
 
@@ -102,10 +102,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
     class="flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-200"
     :class="expanded ? 'w-54' : 'w-14'"
   >
-    <nav
-      class="no-scrollbar flex-1 overflow-y-auto px-2 py-2"
-      :aria-label="t('sidebar.ariaLabel')"
-    >
+    <nav class="no-scrollbar flex-1 overflow-y-auto px-2 py-2" :aria-label="t('sidebar.ariaLabel')">
       <section class="pb-3">
         <div
           class="mb-1 flex h-8 items-center px-2"

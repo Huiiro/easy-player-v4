@@ -313,7 +313,8 @@ declare global {
         onBounds(callback: (bounds: { width: number; height: number }) => void): () => void
       }
       remoteSource: {
-        testNavidrome(config: {
+        test(config: {
+          type: 'navidrome' | 'jellyfin'
           baseUrl: string
           user: string
           secret: string
