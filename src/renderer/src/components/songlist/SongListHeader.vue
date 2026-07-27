@@ -101,7 +101,7 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
         >
           {{ showFileName ? t('songList.fileName') : t('songList.title') }}
           <span class="sr-only">
-            {{showFileName ? t('songList.showTitle') : t('songList.showFileName')}}
+            {{ showFileName ? t('songList.showTitle') : t('songList.showFileName') }}
           </span>
         </button>
         <!-- source -->

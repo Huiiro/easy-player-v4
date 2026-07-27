@@ -172,7 +172,9 @@ watch(playlistId, () => void load())
       >
         <img v-if="coverUrl" :src="coverUrl" class="size-full object-cover" :alt="playlist.name" />
         <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
-        <span class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100">
+        <span
+          class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
+        >
           {{ t('playlist.changeCover') }}
         </span>
       </button>

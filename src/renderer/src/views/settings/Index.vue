@@ -615,8 +615,8 @@ onBeforeUnmount(() => {
                 <h3>{{ t('settings.version') }}</h3>
               </div>
               <div class="flex items-center gap-2 cursor-pointer">
-                <span class="text-text">{{ VERSION }}</span>
-                <p>Powered by Easy Player Audio Engine {{ ENGINE_VERSION }}</p>
+                <span class="text-text">v{{ VERSION }}</span>
+                <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
                 <button>
                   <svg-icon name="common-update" class-name="size-5" class="btn-hover" />
                 </button>

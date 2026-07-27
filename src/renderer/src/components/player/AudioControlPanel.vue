@@ -1015,7 +1015,7 @@ function refreshOutputDevices(): void {
                   min=".05"
                   max="10"
                   @change="updateChorus"
-              />
+                />
               </label>
               <label>
                 {{ t('ap.depth') }}
