@@ -155,7 +155,13 @@ bool AudioEngine::open(const std::string& file_path) {
     played_frames_.store(0, std::memory_order_release);
     dop_carrier_frames_.store(0, std::memory_order_release);
     track_ended_fired_.store(false, std::memory_order_release);
+    decoder_failed_.store(false, std::memory_order_release);
     track_end_pending_.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(track_end_mutex_);
+        ended_track_reason_.clear();
+        decoder_error_message_.clear();
+    }
     dop_transport_active_.store(false, std::memory_order_release);
     dop_ring_buffer_.reset();
     dop_output_marker_ = 0x05;
@@ -468,6 +474,7 @@ bool AudioEngine::stop() {
     played_frames_.store(0, std::memory_order_release);
     dop_carrier_frames_.store(0, std::memory_order_release);
     track_ended_fired_.store(false, std::memory_order_release);
+    decoder_failed_.store(false, std::memory_order_release);
     track_end_pending_.store(false, std::memory_order_release);
     set_state(EngineState::Stopped);
     LOG_INFO("Playback stopped");
@@ -515,6 +522,7 @@ bool AudioEngine::seek(double position_ms) {
 
         played_frames_.store(sample_pos, std::memory_order_release);
         track_ended_fired_.store(false, std::memory_order_release);
+        decoder_failed_.store(false, std::memory_order_release);
         track_end_pending_.store(false, std::memory_order_release);
 
         if (ring_buffer_) {
@@ -853,6 +861,14 @@ void AudioEngine::decoder_thread_func() {
             }
 
             if (decoded <= 0) {
+                if (decoded < 0) {
+                    decoder_failed_.store(true, std::memory_order_release);
+                    std::lock_guard<std::mutex> end_lock(track_end_mutex_);
+                    decoder_error_message_ = decoder_.last_error();
+                    LOG_ERROR("Decoder stopped after an unrecoverable error: " + decoder_error_message_);
+                    decoder_running_ = false;
+                    break;
+                }
                 if (transition.gapless_enabled && !track_info_.is_dsd && switch_to_next_decoder_locked()) {
                     transition_active_.store(false, std::memory_order_release);
                     continue;
@@ -884,6 +900,7 @@ void AudioEngine::mark_track_ended_pending() {
     {
         std::lock_guard<std::mutex> lock(track_end_mutex_);
         ended_track_path_ = track_info_.file_path;
+        ended_track_reason_ = decoder_failed_.load(std::memory_order_acquire) ? "decode_error" : "eof";
     }
     track_end_pending_.store(true, std::memory_order_release);
 }
@@ -896,13 +913,22 @@ void AudioEngine::position_timer_func() {
             // ThreadSafeFunction and logging may lock or allocate, so this
             // transition is deliberately deferred out of audio_callback().
             set_state(EngineState::Stopped);
-            LOG_INFO("Track ended (EOF reached)");
+            std::string ended_track_reason;
+            std::string decoder_error;
             std::string ended_track_path;
             {
                 std::lock_guard<std::mutex> lock(track_end_mutex_);
                 ended_track_path = ended_track_path_;
+                ended_track_reason = ended_track_reason_;
+                decoder_error = decoder_error_message_;
             }
-            if (track_ended_cb_) track_ended_cb_("eof", ended_track_path);
+            if (ended_track_reason == "decode_error") {
+                LOG_ERROR("Track ended because decoding could not continue: " + decoder_error);
+                if (error_cb_) error_cb_(-1, decoder_error.empty() ? "Audio decoding failed" : decoder_error);
+            } else {
+                LOG_INFO("Track ended (EOF reached)");
+            }
+            if (track_ended_cb_) track_ended_cb_(ended_track_reason, ended_track_path);
             // Do not leave an inactive callback pumping silence forever.
             // This thread never joins itself; stop() will join the finished
             // timer later when the user opens another track or stops.

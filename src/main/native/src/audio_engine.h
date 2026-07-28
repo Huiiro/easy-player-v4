@@ -48,7 +48,7 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.0";
+    static constexpr const char* kVersion = "1.0.1";
     AudioEngine();
     ~AudioEngine();
     const char* version() const { return kVersion; }
@@ -240,7 +240,10 @@ private:
     // are dispatched by the position timer, never from the real-time thread.
     std::atomic<bool> track_ended_fired_{false};
     std::atomic<bool> track_end_pending_{false};
+    std::atomic<bool> decoder_failed_{false};
     // Preserve the source of an asynchronous EOF notification.
     std::mutex track_end_mutex_;
     std::string ended_track_path_;
+    std::string ended_track_reason_;
+    std::string decoder_error_message_;
 };

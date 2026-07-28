@@ -123,6 +123,9 @@ struct Decoder::Impl {
     bool dop_mode = false;
     bool eof = false;
     bool swr_flushed = false;
+    std::string last_error;
+    int consecutive_bad_frames = 0;
+    bool fatal_error = false;
 };
 
 Decoder::Decoder() : impl_(std::make_unique<Impl>()) {
@@ -285,6 +288,9 @@ bool Decoder::open(const std::string& file_path) {
     impl_->total_samples_ = (int64_t)(track_info_.duration_ms / 1000.0 *
                                       track_info_.sample_rate);
     impl_->eof = false;
+    impl_->last_error.clear();
+    impl_->consecutive_bad_frames = 0;
+    impl_->fatal_error = false;
     impl_->current_pts = 0;
     impl_->pending_seek_sample = -1;
     impl_->pending_pcm.clear();
@@ -333,6 +339,9 @@ void Decoder::close() {
     impl_->stream_index = -1;
     impl_->eof = false;
     impl_->swr_flushed = false;
+    impl_->last_error.clear();
+    impl_->consecutive_bad_frames = 0;
+    impl_->fatal_error = false;
     impl_->pending_seek_sample = -1;
     impl_->pending_pcm.clear();
     impl_->pending_pcm_offset_frames = 0;
@@ -414,6 +423,7 @@ int Decoder::read_dop(uint8_t* output, int max_frames) {
 }
 
 int Decoder::decode(float* output, int max_frames) {
+    if (impl_->fatal_error) return -1;
     if (!impl_->codec_ctx || !output || max_frames <= 0 || (impl_->eof && impl_->swr_flushed)) return 0;
 
     int frames_decoded = 0;
@@ -448,12 +458,20 @@ int Decoder::decode(float* output, int max_frames) {
             while (true) {
                 ret = av_read_frame(impl_->fmt_ctx, impl_->packet);
                 if (ret == AVERROR_EOF) {
-                    avcodec_send_packet(impl_->codec_ctx, nullptr);
+                    const int flush_ret = avcodec_send_packet(impl_->codec_ctx, nullptr);
+                    if (flush_ret < 0 && flush_ret != AVERROR_EOF) {
+                        impl_->last_error = "avcodec_send_packet(flush) failed: " + av_err_str(flush_ret);
+                        LOG_ERROR(impl_->last_error);
+                        impl_->fatal_error = true;
+                        return frames_decoded > 0 ? frames_decoded : -1;
+                    }
                     impl_->eof = true;
                     break;
                 }
                 if (ret < 0) {
-                    LOG_WARN("av_read_frame error");
+                    impl_->last_error = "av_read_frame failed: " + av_err_str(ret);
+                    LOG_ERROR(impl_->last_error);
+                    impl_->fatal_error = true;
                     return frames_decoded > 0 ? frames_decoded : -1;
                 }
 
@@ -461,6 +479,16 @@ int Decoder::decode(float* output, int max_frames) {
                     ret = avcodec_send_packet(impl_->codec_ctx, impl_->packet);
                     av_packet_unref(impl_->packet);
                     if (ret >= 0) break;
+                    if (ret == AVERROR_INVALIDDATA) {
+                        if (impl_->consecutive_bad_frames++ < 32) {
+                            LOG_WARN("Discarding malformed audio packet: " + av_err_str(ret));
+                            continue;
+                        }
+                    }
+                    impl_->last_error = "avcodec_send_packet failed: " + av_err_str(ret);
+                    LOG_ERROR(impl_->last_error);
+                    impl_->fatal_error = true;
+                    return frames_decoded > 0 ? frames_decoded : -1;
                 } else {
                     av_packet_unref(impl_->packet);
                 }
@@ -497,9 +525,20 @@ int Decoder::decode(float* output, int max_frames) {
             break;
         }
         if (ret < 0) {
-            LOG_ERROR("avcodec_receive_frame error: " + std::to_string(ret));
+            // Some codecs (notably FLAC) can report one corrupt frame and
+            // resume from a later packet.  Do not turn a single bad frame
+            // into a false end-of-track notification.
+            if (ret == AVERROR_INVALIDDATA && impl_->consecutive_bad_frames++ < 32) {
+                LOG_WARN("Discarding malformed decoded frame: " + av_err_str(ret));
+                av_frame_unref(impl_->frame);
+                continue;
+            }
+            impl_->last_error = "avcodec_receive_frame failed: " + av_err_str(ret);
+            LOG_ERROR(impl_->last_error);
+            impl_->fatal_error = true;
             return frames_decoded > 0 ? frames_decoded : -1;
         }
+        impl_->consecutive_bad_frames = 0;
 
         AVStream* stream = impl_->fmt_ctx->streams[impl_->stream_index];
         const int64_t input_fallback = av_rescale_q(impl_->current_pts,
@@ -636,12 +675,19 @@ bool Decoder::seek(int64_t sample_position) {
     impl_->dop_marker = 0x05;
     impl_->eof = false;
     impl_->swr_flushed = false;
+    impl_->last_error.clear();
+    impl_->consecutive_bad_frames = 0;
+    impl_->fatal_error = false;
 
     return true;
 }
 
 int64_t Decoder::position() const {
     return impl_->current_pts;
+}
+
+const std::string& Decoder::last_error() const {
+    return impl_->last_error;
 }
 
 int64_t Decoder::total_samples() const {

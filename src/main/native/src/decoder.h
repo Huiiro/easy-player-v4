@@ -43,8 +43,12 @@ public:
     void close();
 
     // Decode frames of interleaved f32 PCM at the source sample rate.
-    // Returns actual frames decoded (0 = EOF, <0 = error).
+    // Returns actual frames decoded (0 = EOF, <0 = unrecoverable error).
     int decode(float* output, int max_frames);
+
+    // Description of the most recent unrecoverable decode/read error.
+    // Empty after open() or seek().
+    const std::string& last_error() const;
 
     // Switch the demuxer to raw DSD packet reading for a future DoP path.
     // Each output frame is 24-bit PCM-shaped DoP data (3 * channels bytes).
