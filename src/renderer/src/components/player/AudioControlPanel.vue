@@ -772,7 +772,7 @@ function refreshOutputDevices(): void {
             {{ t('ap.eqActive') }} · ±12 dB · Q 1.0
           </small>
           <button
-            class="px-2 py-0.5 rounded text-[11px] bg-primary border border-primary cursor-pointer hover:opacity-90 transition-opacity"
+            class="px-2 py-0.5 rounded text-[11px] bg-bg border border-primary cursor-pointer hover:opacity-90 transition-opacity"
             @click="commitEqBands"
           >
             {{ t('ap.applyEq') }}

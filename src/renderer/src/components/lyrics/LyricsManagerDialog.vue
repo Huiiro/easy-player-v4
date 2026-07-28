@@ -95,7 +95,7 @@ async function search(): Promise<void> {
 }
 async function save(): Promise<void> {
   const song = player.currentQueueSong
-  if (!song || !lyric.value.trim()) return
+  if (!song) return
   const response = await window.api.database.command('updateSongLyrics', {
     id: song.id,
     lrc: lyric.value,
@@ -112,6 +112,7 @@ async function save(): Promise<void> {
   <BaseDialog
     :model-value="props.modelValue"
     :title="t('playerPanel.lyricManage')"
+    :close-on-overlay="false"
     width="max-w-4xl"
     @update:model-value="updateVisible"
   >
@@ -197,16 +198,15 @@ async function save(): Promise<void> {
     </div>
     <template #footer>
       <button
-        class="secondary-button manager-button"
+        class="manager-button text-sm pr-4"
         type="button"
         @click="emit('update:modelValue', false)"
       >
         {{ t('common.cancel') }}
       </button>
       <button
-        class="manager-button rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
+        class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
         type="button"
-        :disabled="!lyric.trim()"
         @click="save"
       >
         {{ t('common.save') }}
