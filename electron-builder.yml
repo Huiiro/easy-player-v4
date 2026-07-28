@@ -37,6 +37,10 @@ nsis:
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  # Use the assisted installer so users can choose where to install and whether to launch.
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
   extendInfo:
