@@ -114,9 +114,10 @@ function open(item: GridItem): void {
     props.kind === 'album'
       ? {
           name: item.value,
-          artist: item.subtitleValue || ''
+          artist: item.subtitleValue || '',
+          cover: item.cover || ''
         }
-      : { name: item.value }
+      : { name: item.value, cover: item.cover || '' }
   void router.push({ path: `/${props.kind}/detail`, query })
 }
 

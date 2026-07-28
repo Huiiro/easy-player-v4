@@ -549,6 +549,8 @@ export default {
     showTranslation: 'Show Translation',
     lyricFontSize: 'Lyric font size',
     lyricSpacing: 'Lyric spacing',
+    lyricTiming: 'Lyric timing offset (±5 seconds)',
+    lyricTimingReset: 'Reset lyric timing offset',
     progressStyle: 'Toggle progress style',
     alignLeft: 'Left',
     alignCenter: 'Center',

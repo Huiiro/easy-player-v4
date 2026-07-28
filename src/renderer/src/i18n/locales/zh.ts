@@ -536,6 +536,8 @@ export default {
     spectrum: '频谱',
     lyricFontSize: '歌词字体大小',
     lyricSpacing: '歌词间距',
+    lyricTiming: '歌词时间偏移（±5 秒）',
+    lyricTimingReset: '重置歌词时间偏移',
     progressStyle: '切换进度条样式',
     alignLeft: '左对齐',
     alignCenter: '居中',

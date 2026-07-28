@@ -9,12 +9,14 @@ const props = withDefaults(
     modelValue: string
     disabled?: boolean
     showAlpha?: boolean
+    showValue?: boolean
     presets?: string[]
     teleport?: boolean
   }>(),
   {
     disabled: false,
     showAlpha: false,
+    showValue: true,
     teleport: false,
     presets: () => [
       '#D0021B',
@@ -53,6 +55,27 @@ interface Hsva {
   s: number
   v: number
   a: number
+}
+
+function linearToSrgb(value: number): number {
+  const clamped = Math.max(0, Math.min(1, value))
+  return clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055
+}
+
+function parseOklch(lightness: number, chroma: number, hue: number, alpha: number): Rgba {
+  const hueRadians = (hue * Math.PI) / 180
+  const a = chroma * Math.cos(hueRadians)
+  const b = chroma * Math.sin(hueRadians)
+  const l = Math.pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3)
+  const m = Math.pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3)
+  const s = Math.pow(lightness - 0.0894841775 * a - 1.291485548 * b, 3)
+
+  return {
+    r: Math.round(linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) * 255),
+    g: Math.round(linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) * 255),
+    b: Math.round(linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s) * 255),
+    a: Math.max(0, Math.min(1, alpha))
+  }
 }
 
 function parseAnyColor(val: string): Rgba {
@@ -131,6 +154,20 @@ function parseAnyColor(val: string): Rgba {
       b: Math.round((b + m) * 255),
       a: 1
     }
+  }
+  // oklch(L C H / A)
+  const oklchMatch = s.match(
+    /^oklch\(\s*([\d.]+%?)\s+([\d.]+%?)\s+([+-]?[\d.]+)(?:deg)?(?:\s*\/\s*([\d.]+%?))?\s*\)$/i
+  )
+  if (oklchMatch) {
+    const parsePercentage = (value: string, scale = 1): number =>
+      value.endsWith('%') ? (parseFloat(value) / 100) * scale : parseFloat(value)
+    return parseOklch(
+      parsePercentage(oklchMatch[1]),
+      parsePercentage(oklchMatch[2], 0.4),
+      parseFloat(oklchMatch[3]),
+      oklchMatch[4] ? parsePercentage(oklchMatch[4]) : 1
+    )
   }
   // hex
   const hx = s.replace('#', '')
@@ -362,17 +399,29 @@ function selectPreset(color: string): void {
 // ==================== 方向判断 ====================
 const anchorRef = ref<HTMLElement | null>(null)
 const panelAbove = ref(false)
+const panelLeft = ref(false)
 const panelPosition = ref<Record<string, string>>({})
+const panelWidth = 256
+const panelHeight = 370
+const panelGap = 8
 
 function onOpenChange(open: boolean): void {
   if (!open || !anchorRef.value) return
   const r = anchorRef.value.getBoundingClientRect()
-  // 预估面板高度 ~360px，下方放不下且上方够就翻上去
-  panelAbove.value = r.bottom + 370 > window.innerHeight && r.top > 370
+  const rightSpace = window.innerWidth - r.left
+  const leftSpace = r.right
+  // 下方放不下且上方空间更充足时向上展开。
+  panelAbove.value = r.bottom + panelHeight + panelGap > window.innerHeight && r.top > panelHeight
+  // 右侧空间不足时，优先向左展开。
+  panelLeft.value = rightSpace < panelWidth + panelGap && leftSpace > rightSpace
   if (props.teleport) {
+    const desiredLeft = panelLeft.value ? r.right - panelWidth : r.left
     panelPosition.value = {
-      left: `${Math.max(8, Math.min(r.left, window.innerWidth - 256))}px`,
-      top: `${panelAbove.value ? Math.max(8, r.top - 370) : r.bottom + 8}px`
+      left: `${Math.max(
+        panelGap,
+        Math.min(desiredLeft, Math.max(panelGap, window.innerWidth - panelWidth - panelGap))
+      )}px`,
+      top: `${panelAbove.value ? Math.max(panelGap, r.top - panelHeight) : r.bottom + panelGap}px`
     }
   }
 }
@@ -395,7 +444,9 @@ function onOpenChange(open: boolean): void {
           class="size-5 shrink-0 rounded-sm border border-black/15"
           :style="{ backgroundColor: colorStr }"
         />
-        <span class="text-xs text-text-l tabular-nums font-mono">{{ hexDisplay }}</span>
+        <span v-if="showValue" class="text-xs text-text-l tabular-nums font-mono">
+          {{ hexDisplay }}
+        </span>
       </PopoverButton>
 
       <Teleport to="body" :disabled="!teleport">
@@ -408,9 +459,15 @@ function onOpenChange(open: boolean): void {
           leave-to-class="opacity-0 scale-95"
         >
           <PopoverPanel
-            class="left-0 z-50 rounded-xl border border-border bg-bg p-3 shadow-xl"
+            class="z-50 rounded-xl border border-border bg-bg p-3 shadow-xl"
             :class="
-              teleport ? 'fixed' : ['absolute', panelAbove ? 'bottom-full mb-2' : 'top-full mt-2']
+              teleport
+                ? 'fixed'
+                : [
+                    'absolute',
+                    panelAbove ? 'bottom-full mb-2' : 'top-full mt-2',
+                    panelLeft ? 'right-0' : 'left-0'
+                  ]
             "
             :style="teleport ? panelPosition : undefined"
             @click.stop

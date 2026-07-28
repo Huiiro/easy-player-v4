@@ -40,6 +40,12 @@ const playModeLabel = computed(() =>
 const lyricsStyleLabel = computed(() =>
   t(`playerPanel.lyricEffect${ui.lyricsStyle[0].toUpperCase()}${ui.lyricsStyle.slice(1)}`)
 )
+const lyricsFontScale = computed(() => ui.lyricsFontSize / 2.4)
+const lyricsFontSpacingScale = computed(() => ui.lyricsFontPadding / 30)
+const lyricsOffsetLabel = computed(() => {
+  const seconds = ui.lyricsOffsetMs / 1000
+  return `${seconds > 0 ? '+' : ''}${seconds.toFixed(1)}s`
+})
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
@@ -78,6 +84,9 @@ watch(
 const useAlbumArtwork = computed(
   () => ui.playerBgType === PlayerBgType.ALBUM || ui.playerBgType === PlayerBgType.DEFAULT
 )
+const useAmbientBackground = computed(
+  () => (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT
+)
 const backgroundSource = computed(() => {
   if (useAlbumArtwork.value && coverUrl.value && !coverFailed.value) return coverUrl.value
   if (ui.playerBgType === PlayerBgType.CUSTOM && ui.customBg.url) return ui.customBg.url
@@ -99,7 +108,6 @@ const coverGlowStyle = computed(() => ({
   '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
   '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
 }))
-
 const coverFrameStyle = computed(() => ({
   transform: `scale(${1 + rhythmAmount.value * 0.085})`,
   filter: `brightness(${1 + rhythmAmount.value * 0.12})`
@@ -214,9 +222,16 @@ function cyclePlayMode(): void {
   player.setPlayMode(((player.playMode + 1) % 4) as PlayMode)
 }
 function setSpeed(event: Event): void {
-  player.playbackSpeedConfig.speed = Number((event.target as HTMLSelectElement).value)
+  setPlaybackSpeed(Number((event.target as HTMLInputElement).value))
+}
+function setPlaybackSpeed(speed: number): void {
+  player.playbackSpeedConfig.speed = Math.round(Math.max(0.5, Math.min(2, speed)) * 10) / 10
   player.playbackSpeedConfig.enabled = player.playbackSpeedConfig.speed !== 1
   void player.setPlaybackSpeed()
+}
+function changeSpeed(event: WheelEvent): void {
+  event.preventDefault()
+  setPlaybackSpeed(player.playbackSpeedConfig.speed + (event.deltaY < 0 ? 0.1 : -0.1))
 }
 function changeVolume(event: WheelEvent): void {
   event.preventDefault()
@@ -225,14 +240,18 @@ function changeVolume(event: WheelEvent): void {
 function changeLyricSize(event: WheelEvent): void {
   event.preventDefault()
   ui.setLyricsFontSize(
-    Math.max(1.4, Math.min(4, ui.lyricsFontSize + (event.deltaY < 0 ? 0.1 : -0.1)))
+    Math.max(1.44, Math.min(4.8, ui.lyricsFontSize + (event.deltaY < 0 ? 0.24 : -0.24)))
   )
 }
 function changeLyricPadding(event: WheelEvent): void {
   event.preventDefault()
   ui.setLyricsFontPadding(
-    Math.max(2, Math.min(80, ui.lyricsFontPadding + (event.deltaY < 0 ? 2 : -2)))
+    Math.max(4, Math.min(78, ui.lyricsFontPadding + (event.deltaY < 0 ? 4 : -4)))
   )
+}
+function changeLyricsOffset(event: WheelEvent): void {
+  event.preventDefault()
+  ui.setLyricsOffset(ui.lyricsOffsetMs + (event.deltaY < 0 ? 100 : -100))
 }
 function averageColor(
   data: Uint8ClampedArray,
@@ -313,16 +332,10 @@ function extractCoverColors(event: Event): void {
       <div
         class="absolute inset-0 panel-ambient"
         :class="[
-          (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT ? 'opacity-100' : 'opacity-58',
+          useAmbientBackground ? 'opacity-100' : 'opacity-58',
           shouldAnimate ? 'panel-ambient--animated' : ''
         ]"
         :style="glowStyle"
-      />
-      <div
-        v-if="shouldAnimate"
-        ref="beatRingRef"
-        class="absolute left-1/2 top-1/2 size-[min(78vw,78vh)] -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 beat-ring"
-        :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
       />
       <div class="absolute inset-0 panel-gradient" />
     </div>
@@ -380,8 +393,15 @@ function extractCoverColors(event: Event): void {
               :class="shouldAnimate ? 'cover-aura--breathing' : ''"
               :style="coverGlowStyle"
             />
+            <div v-if="shouldAnimate" class="cover-ring-anchor">
+              <div
+                ref="beatRingRef"
+                class="beat-ring"
+                :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
+              />
+            </div>
             <div
-              class="cover-card relative grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
+              class="cover-card relative z-10 grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
               :class="shouldAnimate ? 'cover-card--breathing' : ''"
               :style="coverCardStyle"
             >
@@ -441,16 +461,21 @@ function extractCoverColors(event: Event): void {
               </span>
             </label>
             <!-- speed -->
-            <label class="panel-tool vertical-tool" :title="t('playerPanel.speed')">
+            <label
+              class="panel-tool vertical-tool"
+              :class="player.playbackSpeedConfig.speed !== 1 && 'active'"
+              :title="t('playerPanel.speed')"
+              @wheel="changeSpeed"
+            >
               <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
               <span class="vertical-popup">
-                <b>{{ player.playbackSpeedConfig.speed.toFixed(2) }}×</b>
+                <b>{{ player.playbackSpeedConfig.speed.toFixed(1) }}×</b>
                 <input
                   type="range"
                   class="accent-primary"
-                  min="0.75"
+                  min="0.5"
                   max="2"
-                  step="0.25"
+                  step="0.1"
                   :value="player.playbackSpeedConfig.speed"
                   @input="setSpeed($event)"
                 />
@@ -484,16 +509,47 @@ function extractCoverColors(event: Event): void {
                 <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
               </span>
               <span class="vertical-popup">
-                <b>{{ ui.lyricsFontSize.toFixed(1) }}rem</b>
+                <b>{{ lyricsFontScale.toFixed(1) }}×</b>
                 <input
                   class="accent-primary"
                   type="range"
-                  min="1.4"
-                  max="4"
+                  min="0.6"
+                  max="2"
                   step="0.1"
-                  :value="ui.lyricsFontSize"
-                  @input="ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value))"
+                  :value="lyricsFontScale"
+                  @input="
+                    ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value) * 2.4)
+                  "
                 />
+              </span>
+            </label>
+            <!-- lyrics timing -->
+            <label
+              class="panel-tool vertical-tool"
+              :class="ui.lyricsOffsetMs !== 0 && 'active'"
+              :title="t('playerPanel.lyricTiming')"
+              @wheel="changeLyricsOffset"
+            >
+              <svg-icon name="common-time" class-name="w-[16px] h-[16px]" />
+              <span class="vertical-popup lyric-timing-popup">
+                <b>{{ lyricsOffsetLabel }}</b>
+                <input
+                  class="accent-primary"
+                  type="range"
+                  min="-5000"
+                  max="5000"
+                  step="100"
+                  :value="ui.lyricsOffsetMs"
+                  @input="ui.setLyricsOffset(Number(($event.target as HTMLInputElement).value))"
+                />
+                <button
+                  type="button"
+                  class="lyric-timing-reset"
+                  :title="t('playerPanel.lyricTimingReset')"
+                  @click.prevent="ui.resetLyricsOffset()"
+                >
+                  <SvgIcon name="common-refresh" class-name="size-3" />
+                </button>
               </span>
             </label>
             <!-- font padding -->
@@ -506,13 +562,13 @@ function extractCoverColors(event: Event): void {
                 <svg-icon name="arrow-arrow-up-down" class-name="w-[12px] h-[12px]" />
               </span>
               <span class="vertical-popup">
-                <b>{{ ui.lyricsFontPadding }}px</b>
+                <b>{{ lyricsFontSpacingScale.toFixed(1) }}×</b>
                 <input
                   class="accent-primary"
                   type="range"
-                  min="2"
-                  max="80"
-                  step="2"
+                  min="4"
+                  max="78"
+                  step="4"
                   :value="ui.lyricsFontPadding"
                   @input="
                     ui.setLyricsFontPadding(Number(($event.target as HTMLInputElement).value))
@@ -650,7 +706,7 @@ function extractCoverColors(event: Event): void {
           <PlayerLyrics
             class="size-full flex-1"
             :song="player.currentQueueSong"
-            :current-time="player.positionMs"
+            :current-time="player.positionMs + ui.lyricsOffsetMs"
             :source-order="ui.lyricSourceOrder"
             :align-mode="collapsed ? 'center' : ui.lyricsAlignment"
             :forced-source="ui.lyricSourceMode"
@@ -783,6 +839,29 @@ function extractCoverColors(event: Event): void {
   opacity: 1;
   pointer-events: auto;
 }
+.lyric-timing-popup {
+  height: 12rem;
+}
+.lyric-timing-reset {
+  position: absolute;
+  bottom: 0.5rem;
+  display: grid;
+  place-items: center;
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  color: rgb(255 255 255 / 0.72);
+  background: rgb(255 255 255 / 0.09);
+  transition:
+    color 150ms ease,
+    background-color 150ms ease,
+    transform 150ms ease;
+}
+.lyric-timing-reset:hover {
+  color: white;
+  background: color-mix(in srgb, var(--color-primary) 38%, transparent);
+  transform: rotate(-35deg);
+}
 .panel-orb {
   filter: blur(42px) saturate(1.35);
   mix-blend-mode: screen;
@@ -803,8 +882,15 @@ function extractCoverColors(event: Event): void {
   animation-delay: -3.4s;
 }
 .cover-frame {
+  isolation: isolate;
   transform-origin: center;
   will-change: transform, filter;
+}
+.cover-ring-anchor {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
 }
 .player-panel-layout {
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
@@ -878,6 +964,13 @@ function extractCoverColors(event: Event): void {
     linear-gradient(180deg, rgb(9 12 17 / 4%) 0%, rgb(7 9 14 / 25%) 100%);
 }
 .beat-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 170%;
+  aspect-ratio: 1;
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 50%;
   opacity: 0;
   box-shadow:
     0 0 80px rgb(255 255 255 / 18%),

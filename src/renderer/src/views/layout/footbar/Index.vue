@@ -143,14 +143,21 @@ function openTags(): void {
 }
 function openArtist(): void {
   if (currentSong.value?.artist)
-    void router.push({ path: '/artist/detail', query: { name: currentSong.value.artist } })
+    void router.push({
+      path: '/artist/detail',
+      query: { name: currentSong.value.artist, cover: currentSong.value.cover || '' }
+    })
   moreVisible.value = false
 }
 function openAlbum(): void {
   if (currentSong.value?.album)
     void router.push({
       path: '/album/detail',
-      query: { name: currentSong.value.album, artist: currentSong.value.artist || '' }
+      query: {
+        name: currentSong.value.album,
+        artist: currentSong.value.artist || '',
+        cover: currentSong.value.cover || ''
+      }
     })
   moreVisible.value = false
 }

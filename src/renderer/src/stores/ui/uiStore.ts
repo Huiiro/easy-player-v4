@@ -48,6 +48,7 @@ export const useUIStore = defineStore(
     const autoSearchNetworkLyrics = ref(true)
     const lyricsFontSize = ref(2.4)
     const lyricsFontPadding = ref(30)
+    const lyricsOffsetMs = ref(0)
     const lyricsStyle = ref<'none' | 'glow' | 'follow'>('none')
     const lyricsFontSizeIndex = ref(1)
     const showLyricsSizeSlider = ref(false)
@@ -241,6 +242,12 @@ export const useUIStore = defineStore(
       const root = document.documentElement
       root.style.setProperty('--lrc-padding', lyricsFontPadding.value + 'px')
     }
+    function setLyricsOffset(offsetMs: number): void {
+      lyricsOffsetMs.value = Math.max(-5000, Math.min(5000, Math.round(offsetMs / 100) * 100))
+    }
+    function resetLyricsOffset(): void {
+      lyricsOffsetMs.value = 0
+    }
     function handleClickStyle(): void {
       if (lyricsStyle.value === 'none') {
         lyricsStyle.value = 'glow'
@@ -293,6 +300,7 @@ export const useUIStore = defineStore(
       autoSearchNetworkLyrics,
       lyricsFontSize,
       lyricsFontPadding,
+      lyricsOffsetMs,
       lyricsStyle,
       lyricsFontSizeIndex,
       showLyricsSizeSlider,
@@ -329,6 +337,8 @@ export const useUIStore = defineStore(
       setCardStyle,
       setLyricsFontSize,
       setLyricsFontPadding,
+      setLyricsOffset,
+      resetLyricsOffset,
       handleClickStyle,
       toggleTranslation
     }
@@ -361,6 +371,7 @@ export const useUIStore = defineStore(
         'autoSearchNetworkLyrics',
         'lyricsFontSize',
         'lyricsFontPadding',
+        'lyricsOffsetMs',
         'lyricsStyle',
         'lyricsFontSizeIndex',
         'showLyricsTranslation',

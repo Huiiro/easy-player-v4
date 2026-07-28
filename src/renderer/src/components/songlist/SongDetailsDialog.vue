@@ -151,3 +151,14 @@ watch(
     </div>
   </BaseDialog>
 </template>
+
+<style scoped>
+.detail-label {
+  margin-right: 0.35rem;
+  color: var(--color-text-l);
+  font-weight: 500;
+}
+.detail-label::after {
+  content: '：';
+}
+</style>

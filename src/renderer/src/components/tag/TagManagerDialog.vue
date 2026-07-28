@@ -131,7 +131,12 @@ watch(
         :placeholder="t('tags.namePlaceholder')"
         @keyup.enter="create"
       />
-      <BaseColorPicker v-model="color" :presets="presetColors" class="shrink-0" />
+      <BaseColorPicker
+        v-model="color"
+        :show-value="false"
+        :presets="presetColors"
+        class="shrink-0"
+      />
       <button class="btn-hover-base rounded-lg bg-primary px-3 text-sm text-white" @click="create">
         {{ t('tags.create') }}
       </button>
@@ -182,6 +187,7 @@ watch(
             <BaseColorPicker
               v-model="tag.color"
               :presets="presetColors"
+              :show-value="false"
               teleport
               class="shrink-0"
               @change="update(tag)"

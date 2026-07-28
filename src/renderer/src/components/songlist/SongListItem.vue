@@ -62,14 +62,21 @@ const requestMenu = (event: MouseEvent): void => {
 }
 function openArtist(): void {
   if (props.song.artist?.trim()) {
-    void router.push({ path: '/artist/detail', query: { name: props.song.artist } })
+    void router.push({
+      path: '/artist/detail',
+      query: { name: props.song.artist, cover: props.song.cover || '' }
+    })
   }
 }
 function openAlbum(): void {
   if (!props.song.album?.trim()) return
   void router.push({
     path: '/album/detail',
-    query: { name: props.song.album, artist: props.song.artist || '' }
+    query: {
+      name: props.song.album,
+      artist: props.song.artist || '',
+      cover: props.song.cover || ''
+    }
   })
 }
 </script>
