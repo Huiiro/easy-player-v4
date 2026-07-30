@@ -13,13 +13,6 @@ const openFooterAnywhere = computed({
 </script>
 <template>
   <div class="settings-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-        <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-      </div>
-      <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-    </div>
     <SleepTimerSettings />
     <div class="setting-row">
       <div>
@@ -27,6 +20,21 @@ const openFooterAnywhere = computed({
         <p>{{ t('settings.footerOpenModeDescription') }}</p>
       </div>
       <BaseSwitch v-model="openFooterAnywhere" size="md" />
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
+        <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
+      </div>
+      <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
+    </div>
+
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.reduceMotion') }}</h3>
+        <p>{{ t('settings.reduceMotionDescription') }}</p>
+      </div>
+      <BaseSwitch v-model="ui.reduceMotion" size="md" />
     </div>
   </div>
 </template>

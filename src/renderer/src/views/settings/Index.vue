@@ -5,6 +5,10 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import {
+  systemBackgroundThemes,
+  type SystemBackground
+} from '@/components/background/systemBackgroundRegistry'
 import { ENGINE_VERSION, PlayerBgType, VERSION } from '@/consts'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
@@ -52,6 +56,7 @@ const themeMode = computed({
   get: () => (ui.useCustomBg ? 'custom' : ui.useDarkMode ? 'dark' : 'light'),
   set: (value: 'light' | 'dark' | 'custom') => {
     if (value === 'custom') {
+      ui.systemBackground = 'none'
       ui.useCustomBg = true
       ui.setTheme('dark')
       return
@@ -66,6 +71,19 @@ const playerBackground = computed<PlayerBgType>({
     ui.playerBgType = value
   }
 })
+const systemBackground = computed<SystemBackground>({
+  get: () => ui.systemBackground,
+  set: (value) => {
+    ui.systemBackground = value
+    ui.useCustomBg = false
+  }
+})
+const systemBackgroundOptions = computed(() =>
+  systemBackgroundThemes.map((background) => ({
+    ...background,
+    label: t(background.labelKey)
+  }))
+)
 const fontOptions = computed(() => [
   { label: t('settings.fontSystemDefault'), value: '' },
   { label: t('settings.fontSystemUi'), value: 'system-ui' },
@@ -349,6 +367,35 @@ onBeforeUnmount(() => {
                 >
                   <span class="preview-window"><i /><b /></span>
                   <span>{{ t('settings.appearanceModeCustom') }}</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="setting-row setting-row-stack">
+              <div>
+                <h3>{{ t('settings.systemBackground') }}</h3>
+                <p>{{ t('settings.systemBackgroundDescription') }}</p>
+              </div>
+              <div
+                class="theme-options system-background-options"
+                role="radiogroup"
+                :aria-label="t('settings.systemBackground')"
+              >
+                <button
+                  v-for="background in systemBackgroundOptions"
+                  :key="background.id"
+                  type="button"
+                  class="theme-option system-background-preview"
+                  :class="[
+                    `system-background-preview--${background.id}`,
+                    { selected: systemBackground === background.id }
+                  ]"
+                  :aria-checked="systemBackground === background.id"
+                  role="radio"
+                  @click="systemBackground = background.id"
+                >
+                  <span class="preview-window"><i /><b /></span>
+                  <span>{{ background.label }}</span>
                 </button>
               </div>
             </div>
@@ -697,10 +744,11 @@ onBeforeUnmount(() => {
   line-height: 1.45;
 }
 .settings-card {
-  border: 1px solid var(--color-border);
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--color-bg-l) 35%, transparent);
+  background: color-mix(in srgb, var(--color-bg-l) 24%, transparent);
   box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
+  backdrop-filter: blur(8px);
   transition: opacity 0.2s ease;
 }
 .settings-card.muted {
@@ -861,6 +909,48 @@ onBeforeUnmount(() => {
 }
 .custom-preview b {
   background: rgb(255 255 255 / 10%);
+}
+.system-background-options {
+  flex-wrap: wrap;
+}
+.system-background-preview--none .preview-window {
+  background: var(--color-bg);
+}
+.system-background-preview--none i {
+  background: var(--color-bg-l);
+}
+.system-background-preview--none b {
+  background: var(--color-hover);
+}
+.system-background-preview--aurora .preview-window {
+  background:
+    radial-gradient(circle at 12% 14%, #56debc, transparent 37%),
+    radial-gradient(circle at 84% 22%, #5b74ff, transparent 42%), #172345;
+}
+.system-background-preview--ocean .preview-window {
+  background:
+    radial-gradient(circle at 78% 15%, #5bd3ff, transparent 36%),
+    radial-gradient(circle at 18% 82%, #2370c9, transparent 43%), #0d3c5e;
+}
+.system-background-preview--sunset .preview-window {
+  background:
+    radial-gradient(circle at 18% 20%, #ffbc70, transparent 35%),
+    radial-gradient(circle at 82% 72%, #d3539e, transparent 42%), #73394c;
+}
+.system-background-preview--forest .preview-window {
+  background:
+    radial-gradient(circle at 22% 22%, #86cf69, transparent 35%),
+    radial-gradient(circle at 83% 70%, #2c9183, transparent 40%), #1b4a35;
+}
+.system-background-preview--matrix .preview-window {
+  background:
+    linear-gradient(rgb(104 255 168 / 0.16) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(104 255 168 / 0.16) 1px, transparent 1px), #06150e;
+  background-size: 9px 9px;
+}
+.system-background-preview:not(.system-background-preview--none) i,
+.system-background-preview:not(.system-background-preview--none) b {
+  background: rgb(255 255 255 / 16%);
 }
 .album-background-preview .preview-window {
   background: linear-gradient(135deg, #6e4467, #171524);

@@ -196,11 +196,11 @@ onBeforeUnmount(() => {
     class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 max-[700px]:px-3 max-[700px]:pb-3 select-none"
   >
     <section
-      class="pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border border-text/10 bg-bg/75 px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
+      class="app-footer pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
       :class="
         collapsed
-          ? 'grid-cols-[minmax(0,1fr)_auto_auto] min-h-[62px] max-w-md gap-3'
-          : 'grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
+          ? 'app-footer--collapsed grid-cols-[minmax(0,1fr)_auto_auto] max-w-md gap-3'
+          : 'app-footer--expanded grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
       "
       :aria-label="t('footer.playerControls')"
       @click="openPlayerPanel"
@@ -422,3 +422,39 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
+
+<style scoped>
+.app-footer {
+  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-text) 10%, transparent));
+  background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));
+  will-change: max-width, grid-template-columns;
+  transition:
+    max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    gap 0.32s cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 0.3s ease,
+    border-color 0.3s ease;
+}
+.app-footer--collapsed {
+  animation: footer-collapse-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.app-footer--expanded {
+  animation: footer-expand-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+@keyframes footer-collapse-settle {
+  0% {
+    transform: scaleX(1.008);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+@keyframes footer-expand-settle {
+  0% {
+    transform: scaleX(0.986);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+</style>

@@ -6,6 +6,7 @@ import FootBar from '@/views/layout/footbar/Index.vue'
 import PlayerPanel from '@/views/layout/playerPanel/Index.vue'
 import DesktopLyricsSync from '@/components/lyrics/DesktopLyricsSync.vue'
 import CardView from '@/views/layout/card/Index.vue'
+import AppBackground from '@/components/background/AppBackground.vue'
 
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -43,21 +44,19 @@ onBeforeUnmount(() => {
   <DesktopLyricsSync />
   <div
     class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
-    :class="ui.useCustomBg ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
+    :class="ui.hasBackground ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
-    <!-- 背景层 -->
+    <AppBackground />
     <div
-      class="pointer-events-none absolute -inset-6 z-0 bg-cover bg-center transition-[filter,opacity] duration-300"
-      :style="ui.useCustomBg ? ui.getCustomBgStyle : undefined"
+      v-if="ui.hasBackground"
+      class="pointer-events-none absolute inset-0 z-[1]"
+      :class="
+        ui.useCustomBg
+          ? 'bg-[color:color-mix(in_srgb,var(--color-bg)_76%,transparent)]'
+          : 'bg-[color:color-mix(in_srgb,var(--color-bg)_62%,transparent)]'
+      "
     />
-    <div
-      v-if="ui.useCustomBg"
-      class="pointer-events-none absolute inset-0 z-[1] bg-[color:color-mix(in_srgb,var(--color-bg)_76%,transparent)]"
-    />
-    <!-- 动态背景 -->
-    <!--<DynamicBackground />-->
-
     <!-- 主容器 -->
     <div class="relative z-[2] flex flex-col w-full h-full">
       <!-- 顶栏 -->

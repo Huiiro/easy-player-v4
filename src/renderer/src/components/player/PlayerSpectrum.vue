@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useUIStore } from '@/stores/ui/uiStore'
 const props = defineProps<{ spectrum: number[]; color?: string }>()
+const ui = useUIStore()
 const canvas = ref<HTMLCanvasElement>()
 let raf = 0
 let target: number[] = []
@@ -33,7 +35,7 @@ function render(): void {
     c.fillStyle = g
     c.fillRect(i * bw + (bw - barWidth) / 2, h - bh, barWidth, bh)
   })
-  raf = requestAnimationFrame(render)
+  if (!ui.reduceMotion) raf = requestAnimationFrame(render)
 }
 watch(
   () => props.spectrum,
@@ -42,6 +44,15 @@ watch(
 )
 onMounted(() => (raf = requestAnimationFrame(render)))
 onBeforeUnmount(() => cancelAnimationFrame(raf))
+watch(
+  () => ui.reduceMotion,
+  (reduced) => {
+    cancelAnimationFrame(raf)
+    raf = 0
+    if (reduced) render()
+    else raf = requestAnimationFrame(render)
+  }
+)
 </script>
 <template>
   <canvas ref="canvas" class="block h-16 w-full" />

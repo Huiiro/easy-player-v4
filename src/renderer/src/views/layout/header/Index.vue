@@ -71,7 +71,7 @@ async function uploadLocalFiles(): Promise<void> {
 
 <template>
   <header
-    class="flex h-[42px] items-center border-b border-border/80 bg-bg/80 transition-opacity [-webkit-app-region:drag]"
+    class="app-header flex h-[42px] items-center border-b transition-opacity [-webkit-app-region:drag]"
     :class="visible ? '' : 'pointer-events-none opacity-0'"
   >
     <ScanProgress
@@ -176,3 +176,15 @@ async function uploadLocalFiles(): Promise<void> {
     </div>
   </header>
 </template>
+
+<style scoped>
+.app-header {
+  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-border) 82%, transparent));
+  background: var(--app-header-bg, color-mix(in srgb, var(--color-bg) 82%, transparent));
+  backdrop-filter: blur(18px);
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease,
+    opacity 0.2s ease;
+}
+</style>

@@ -127,7 +127,7 @@ const snapToCurrent = (): void => {
 
   gsap.to(viewport, {
     scrollTop: target,
-    duration: 0.85,
+    duration: ui.reduceMotion ? 0 : 0.85,
     ease: 'power4.out',
     overwrite: true
   })

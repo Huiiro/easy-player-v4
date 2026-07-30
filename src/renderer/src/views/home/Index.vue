@@ -210,7 +210,7 @@ onMounted(() => void load())
         <button
           v-for="item in navigation"
           :key="item.path"
-          class="group rounded-xl bg-bg-l p-3 text-left transition-colors hover:bg-hover"
+          class="home-surface home-nav group rounded-xl p-3 text-left transition-colors"
           @click="router.push(item.path)"
         >
           <SvgIcon :name="item.icon" class-name="size-5 text-primary" />
@@ -239,7 +239,7 @@ onMounted(() => void load())
         <article
           v-for="item in statCards"
           :key="item.label"
-          class="group flex items-center gap-4 rounded-xl bg-bg-l p-4 transition-all duration-200 hover:-translate-y-1 hover:bg-hover hover:shadow-lg hover:shadow-black/10"
+          class="home-surface home-stat group flex items-center gap-4 rounded-xl p-4 transition-all duration-200 hover:-translate-y-1"
         >
           <span
             class="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-200 group-hover:scale-110 group-hover:rotate-3"
@@ -254,7 +254,7 @@ onMounted(() => void load())
       </div>
     </section>
     <!-- heatMap -->
-    <section class="mb-9 rounded-xl bg-bg-l p-5">
+    <section class="home-surface mb-9 rounded-xl p-5">
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-lg font-semibold">{{ t('home.heatmap') }}</h2>
         <span class="text-xs text-text-l">{{ t('home.lastYear') }}</span>
@@ -287,7 +287,7 @@ onMounted(() => void load())
     </section>
     <!-- topPlayedData -->
     <section class="grid gap-6 xl:grid-cols-2">
-      <article class="rounded-xl bg-bg-l p-5">
+      <article class="home-surface rounded-xl p-5">
         <h2 class="mb-3 text-lg font-semibold">{{ t('home.topPlayed') }}</h2>
         <ol v-if="topPlayed.length" class="space-y-1">
           <li v-for="(song, index) in topPlayed" :key="song.id">
@@ -321,7 +321,7 @@ onMounted(() => void load())
           {{ t('home.noStats') }}
         </p>
       </article>
-      <article class="rounded-xl bg-bg-l p-5">
+      <article class="home-surface rounded-xl p-5">
         <h2 class="mb-3 text-lg font-semibold">{{ t('home.topDuration') }}</h2>
         <ol v-if="topDuration.length" class="space-y-1">
           <li v-for="(song, index) in topDuration" :key="song.id">
@@ -358,3 +358,21 @@ onMounted(() => void load())
     <div class="h-20" />
   </main>
 </template>
+
+<style scoped>
+.home-surface {
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  background: color-mix(in srgb, var(--color-bg-l) 24%, transparent);
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
+  backdrop-filter: blur(8px);
+}
+.home-nav:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 42%, transparent);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.home-stat:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
+  background: color-mix(in srgb, var(--color-bg-l) 34%, transparent);
+  box-shadow: 0 12px 26px color-mix(in srgb, var(--color-black-20) 48%, transparent);
+}
+</style>

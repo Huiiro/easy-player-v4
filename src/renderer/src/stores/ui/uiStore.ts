@@ -3,6 +3,13 @@ import { computed, reactive, ref, watch } from 'vue'
 import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
 import type { LyricSource } from '@/services/lyrics'
 import { hasPersistedStore, playerDataStorage } from '@/stores/persistence'
+import {
+  getSystemBackgroundTheme,
+  isSystemBackground,
+  type SystemBackground
+} from '@/components/background/systemBackgroundRegistry'
+
+export type { SystemBackground } from '@/components/background/systemBackgroundRegistry'
 
 export const useUIStore = defineStore(
   'ui',
@@ -21,6 +28,7 @@ export const useUIStore = defineStore(
     const useCardView = ref(false)
     const useCustomBg = ref(false)
     const useDynamicBg = ref(false)
+    const reduceMotion = ref(false)
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const autoPlayOnRestore = ref(false)
@@ -31,6 +39,7 @@ export const useUIStore = defineStore(
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
     const customThemeColor = ref('oklch(0.691 0.198 148.262)')
+    const systemBackground = ref<SystemBackground>('none')
     const customBg = reactive({
       url: '',
       path: '',
@@ -106,7 +115,7 @@ export const useUIStore = defineStore(
         : 'inherit'
     )
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
-    const getCustomBgStyle = computed(() => {
+    const getBackgroundStyle = computed(() => {
       const brightness = customBg.brightness / 100
       const blur = customBg.blur ?? 0
       return {
@@ -118,6 +127,7 @@ export const useUIStore = defineStore(
         transition: 'filter 0.3s ease'
       }
     })
+    const hasBackground = computed(() => useCustomBg.value || systemBackground.value !== 'none')
     function toggleCardStyle(): void {
       useCardView.value = !useCardView.value
     }
@@ -128,12 +138,21 @@ export const useUIStore = defineStore(
     function applyTheme(): void {
       const root = document.documentElement
       root.classList.toggle('dark', useDarkMode.value)
+      root.classList.toggle('reduce-motion', reduceMotion.value)
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
       if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
       else root.style.removeProperty('--color-primary')
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
       root.style.setProperty('--lrc-padding', `${lyricsFontPadding.value}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
+    }
+    function syncSystemBackgroundThemeColor(): void {
+      const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
+      if (!useCustomBg.value) customThemeColor.value = theme.accentColor
+      const root = document.documentElement
+      root.style.setProperty('--app-header-bg', theme.headerBackground)
+      root.style.setProperty('--app-footer-bg', theme.footerBackground)
+      root.style.setProperty('--app-chrome-border', theme.chromeBorder)
     }
 
     async function loadCustomFonts(): Promise<void> {
@@ -175,6 +194,7 @@ export const useUIStore = defineStore(
       // plugin. Keep this one-time reader solely for migration from the former
       // partial theme snapshot.
       if (hasPersistedStore(persistedSettingsKey)) {
+        syncSystemBackgroundThemeColor()
         applyTheme()
         return
       }
@@ -199,6 +219,10 @@ export const useUIStore = defineStore(
       if (typeof saved.customThemeColor === 'string')
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
+      if (typeof saved.reduceMotion === 'boolean') reduceMotion.value = saved.reduceMotion
+      if (isSystemBackground(saved.systemBackground)) {
+        systemBackground.value = saved.systemBackground as SystemBackground
+      }
       if (typeof saved.autoPlayOnRestore === 'boolean')
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       if (Object.values(PlayerBgType).includes(saved.playerBgType as PlayerBgType))
@@ -217,6 +241,7 @@ export const useUIStore = defineStore(
         customBg.blur = Number(background.blur) || 0
         customBg.brightness = Number(background.brightness) || 100
       }
+      syncSystemBackgroundThemeColor()
       applyTheme()
       if (migratedLegacyTheme) localStorage.removeItem('easy-player.theme-settings')
     }
@@ -229,6 +254,7 @@ export const useUIStore = defineStore(
       useDarkMode.value = true
       customThemeColor.value = ''
       useCustomBg.value = false
+      systemBackground.value = 'none'
       playerBgType.value = PlayerBgType.ALBUM
       Object.assign(customBg, { url: '', path: '', blur: 0, brightness: 100 })
     }
@@ -266,6 +292,7 @@ export const useUIStore = defineStore(
         customFontFamily,
         customThemeColor,
         useCustomBg,
+        reduceMotion,
         () => customBg.url,
         () => customBg.blur,
         () => customBg.brightness,
@@ -274,6 +301,7 @@ export const useUIStore = defineStore(
       ],
       applyTheme
     )
+    watch([systemBackground, useCustomBg], syncSystemBackgroundThemeColor)
     return {
       locale,
       platform,
@@ -293,6 +321,7 @@ export const useUIStore = defineStore(
       customFontFamily,
       customFonts,
       customThemeColor,
+      systemBackground,
       customBg,
       currentDynamicBg,
       lyricsAlignment,
@@ -328,7 +357,8 @@ export const useUIStore = defineStore(
       shortcutKeys,
       globalShortcutKeys,
       getCustomFontStyle,
-      getCustomBgStyle,
+      hasBackground,
+      getBackgroundStyle,
       initializeTheme,
       loadCustomFonts,
       setTheme,
@@ -355,6 +385,7 @@ export const useUIStore = defineStore(
         'useDarkMode',
         'useCardView',
         'useCustomBg',
+        'reduceMotion',
         'useDynamicBg',
         'useLocalFileName',
         'useFullProgress',
@@ -364,6 +395,7 @@ export const useUIStore = defineStore(
         'showWelcomeText',
         'customFontFamily',
         'customThemeColor',
+        'systemBackground',
         'customBg',
         'currentDynamicBg',
         'lyricsAlignment',

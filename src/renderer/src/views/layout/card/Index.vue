@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 
@@ -14,6 +15,7 @@ interface Playlist {
 
 const { t } = useI18n()
 const player = usePlayerStore()
+const ui = useUIStore()
 const songs = ref<LibrarySong[]>([])
 const playlists = ref<Playlist[]>([])
 const activePlaylistId = ref<number | null>(null)
@@ -92,6 +94,10 @@ function stopInertia(): void {
 }
 function startInertia(): void {
   stopInertia()
+  if (ui.reduceMotion) {
+    centerIndex.value = Math.round(centerIndex.value)
+    return
+  }
   const step = (): void => {
     if (Math.abs(velocity) < 0.01) {
       centerIndex.value = Math.round(centerIndex.value)

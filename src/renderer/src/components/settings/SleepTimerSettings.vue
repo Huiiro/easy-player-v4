@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 
 const player = usePlayerStore()
 const { t } = useI18n()
@@ -41,11 +42,9 @@ function startTimer(): void {
     }
   }, 1000)
 }
-function toggleStopAfterCurrent(): void {
-  finishCurrentTrack.value = !finishCurrentTrack.value
-  if (!finishCurrentTrack.value) player.setStopAfterCurrent(false)
-}
-
+watch(finishCurrentTrack, (enabled) => {
+  if (!enabled) player.setStopAfterCurrent(false)
+})
 onBeforeUnmount(clearTimer)
 </script>
 
@@ -75,13 +74,7 @@ onBeforeUnmount(clearTimer)
       <h3>{{ t('settings.stopAfterCurrent') }}</h3>
       <p>{{ t('settings.stopAfterCurrentDescription') }}</p>
     </div>
-    <button
-      class="secondary-button"
-      :class="finishCurrentTrack && 'sleep-timer-active'"
-      @click="toggleStopAfterCurrent"
-    >
-      {{ finishCurrentTrack ? t('settings.enabled') : t('settings.disabled') }}
-    </button>
+    <BaseSwitch v-model="finishCurrentTrack" size="md" />
   </div>
 </template>
 
@@ -117,9 +110,5 @@ onBeforeUnmount(clearTimer)
 }
 .secondary-button:hover {
   background: var(--color-hover);
-}
-.sleep-timer-active {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
 }
 </style>
