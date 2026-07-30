@@ -52,38 +52,49 @@ const languageOptions = computed(() => [
   { label: t('settings.languageChinese'), value: 'zh' },
   { label: t('settings.languageEnglish'), value: 'en' }
 ])
-const themeMode = computed({
-  get: () => (ui.useCustomBg ? 'custom' : ui.useDarkMode ? 'dark' : 'light'),
-  set: (value: 'light' | 'dark' | 'custom') => {
-    if (value === 'custom') {
-      ui.systemBackground = 'none'
-      ui.useCustomBg = true
-      ui.setTheme('dark')
-      return
-    }
-    ui.useCustomBg = false
-    ui.setTheme(value)
-  }
-})
+type ThemeBackgroundChoice = SystemBackground | 'light' | 'dark' | 'custom'
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
   set: (value) => {
     ui.playerBgType = value
   }
 })
-const systemBackground = computed<SystemBackground>({
-  get: () => ui.systemBackground,
-  set: (value) => {
-    ui.systemBackground = value
-    ui.useCustomBg = false
+const themeBackgroundOptions = computed(() => [
+  { id: 'light' as const, label: t('settings.appearanceModeLight') },
+  { id: 'dark' as const, label: t('settings.appearanceModeDark') },
+  { id: 'custom' as const, label: t('settings.appearanceModeCustom') },
+  ...systemBackgroundThemes
+    .filter((background) => background.id !== 'none')
+    .map((background) => ({
+      ...background,
+      label: t(background.labelKey)
+    }))
+])
+function isThemeBackgroundSelected(value: ThemeBackgroundChoice): boolean {
+  if (value === 'custom') return ui.useCustomBg
+  if (ui.useCustomBg) return false
+  if (value === 'light' || value === 'dark')
+    return ui.systemBackground === 'none' && ui.useDarkMode === (value === 'dark')
+  return ui.systemBackground === value
+}
+function selectThemeBackground(value: ThemeBackgroundChoice): void {
+  ui.useCustomBg = false
+  if (value === 'custom') {
+    ui.systemBackground = 'none'
+    ui.useCustomBg = true
+    ui.setTheme('dark')
+    navigateTo('customBackground')
+    return
   }
-})
-const systemBackgroundOptions = computed(() =>
-  systemBackgroundThemes.map((background) => ({
-    ...background,
-    label: t(background.labelKey)
-  }))
-)
+  if (value === 'light' || value === 'dark') {
+    ui.systemBackground = 'none'
+    ui.setTheme(value)
+    return
+  }
+  const background = systemBackgroundThemes.find((item) => item.id === value)
+  ui.systemBackground = value
+  ui.setTheme(background?.colorMode ?? 'dark')
+}
 const fontOptions = computed(() => [
   { label: t('settings.fontSystemDefault'), value: '' },
   { label: t('settings.fontSystemUi'), value: 'system-ui' },
@@ -128,7 +139,9 @@ function updateBackground(event: Event): void {
   reader.onload = () => {
     ui.customBg.url = typeof reader.result === 'string' ? reader.result : ''
     ui.customBg.path = file.name
-    themeMode.value = 'custom'
+    ui.systemBackground = 'none'
+    ui.useCustomBg = true
+    ui.setTheme('dark')
   }
   reader.readAsDataURL(file)
 }
@@ -233,6 +246,7 @@ onBeforeUnmount(() => {
                   v-model="ui.customFontFamily"
                   :options="fontOptions"
                   :placeholder="t('settings.fontSystemDefault')"
+                  teleport
                   class="w-64"
                 />
                 <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
@@ -263,7 +277,7 @@ onBeforeUnmount(() => {
                 <h3>{{ t('settings.interfaceLanguage') }}</h3>
                 <p>{{ t('settings.interfaceLanguageDescription') }}</p>
               </div>
-              <BaseSelect v-model="language" :options="languageOptions" class="w-64" />
+              <BaseSelect v-model="language" :options="languageOptions" teleport class="w-64" />
             </div>
           </div>
         </section>
@@ -327,72 +341,32 @@ onBeforeUnmount(() => {
           <div class="settings-card">
             <div class="setting-row setting-row-stack">
               <div>
-                <h3>{{ t('settings.appearanceMode') }}</h3>
-                <p>{{ t('settings.appearanceDescription') }}</p>
-              </div>
-              <div
-                class="theme-options"
-                role="radiogroup"
-                :aria-label="t('settings.appearanceMode')"
-              >
-                <button
-                  type="button"
-                  class="theme-option light-preview"
-                  :class="{ selected: themeMode === 'light' }"
-                  :aria-checked="themeMode === 'light'"
-                  role="radio"
-                  @click="themeMode = 'light'"
-                >
-                  <span class="preview-window"><i /><b /></span>
-                  <span>{{ t('settings.appearanceModeLight') }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="theme-option dark-preview"
-                  :class="{ selected: themeMode === 'dark' }"
-                  :aria-checked="themeMode === 'dark'"
-                  role="radio"
-                  @click="themeMode = 'dark'"
-                >
-                  <span class="preview-window"><i /><b /></span>
-                  <span>{{ t('settings.appearanceModeDark') }}</span>
-                </button>
-                <button
-                  type="button"
-                  class="theme-option custom-preview"
-                  :class="{ selected: themeMode === 'custom' }"
-                  :aria-checked="themeMode === 'custom'"
-                  role="radio"
-                  @click="themeMode = 'custom'"
-                >
-                  <span class="preview-window"><i /><b /></span>
-                  <span>{{ t('settings.appearanceModeCustom') }}</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="setting-row setting-row-stack">
-              <div>
-                <h3>{{ t('settings.systemBackground') }}</h3>
-                <p>{{ t('settings.systemBackgroundDescription') }}</p>
+                <h3>{{ t('settings.themeBackground') }}</h3>
+                <p>{{ t('settings.themeBackgroundDescription') }}</p>
               </div>
               <div
                 class="theme-options system-background-options"
                 role="radiogroup"
-                :aria-label="t('settings.systemBackground')"
+                :aria-label="t('settings.themeBackground')"
               >
                 <button
-                  v-for="background in systemBackgroundOptions"
+                  v-for="background in themeBackgroundOptions"
                   :key="background.id"
                   type="button"
                   class="theme-option system-background-preview"
                   :class="[
-                    `system-background-preview--${background.id}`,
-                    { selected: systemBackground === background.id }
+                    background.id === 'light'
+                      ? 'light-preview'
+                      : background.id === 'dark'
+                        ? 'dark-preview'
+                        : background.id === 'custom'
+                          ? 'custom-preview'
+                          : `system-background-preview--${background.id}`,
+                    { selected: isThemeBackgroundSelected(background.id) }
                   ]"
-                  :aria-checked="systemBackground === background.id"
+                  :aria-checked="isThemeBackgroundSelected(background.id)"
                   role="radio"
-                  @click="systemBackground = background.id"
+                  @click="selectThemeBackground(background.id)"
                 >
                   <span class="preview-window"><i /><b /></span>
                   <span>{{ background.label }}</span>
@@ -406,7 +380,7 @@ onBeforeUnmount(() => {
                 <p>{{ t('settings.themeColorDescription') }}</p>
               </div>
               <div>
-                <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" />
+                <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
               </div>
             </div>
           </div>
@@ -480,6 +454,44 @@ onBeforeUnmount(() => {
                 :disabled="!ui.useCustomBg"
               />
             </div>
+            <div class="custom-background-chrome">
+              <div class="custom-background-chrome-heading">
+                <h3>{{ t('settings.backgroundChrome') }}</h3>
+                <p>{{ t('settings.backgroundChromeDescription') }}</p>
+              </div>
+              <div class="custom-background-color-grid">
+                <label class="custom-background-color-control">
+                  <span>{{ t('settings.headerBackground') }}</span>
+                  <BaseColorPicker
+                    v-model="ui.customBg.headerBackground"
+                    :presets="presetColors"
+                    show-alpha
+                    teleport
+                    :disabled="!ui.useCustomBg"
+                  />
+                </label>
+                <label class="custom-background-color-control">
+                  <span>{{ t('settings.footerBackground') }}</span>
+                  <BaseColorPicker
+                    v-model="ui.customBg.footerBackground"
+                    :presets="presetColors"
+                    show-alpha
+                    teleport
+                    :disabled="!ui.useCustomBg"
+                  />
+                </label>
+                <label class="custom-background-color-control">
+                  <span>{{ t('settings.globalBorder') }}</span>
+                  <BaseColorPicker
+                    v-model="ui.customBg.chromeBorder"
+                    :presets="presetColors"
+                    show-alpha
+                    teleport
+                    :disabled="!ui.useCustomBg"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </section>
         <!-- desktop lyrics -->
@@ -506,6 +518,7 @@ onBeforeUnmount(() => {
                     v-model="ui.desktopLyricsStyles.fontFamily"
                     :options="desktopLyricsFontOptions"
                     :placeholder="t('settings.desktopLyricsFontInherit')"
+                    teleport
                     class="w-full"
                   />
                 </div>
@@ -526,6 +539,7 @@ onBeforeUnmount(() => {
                     <BaseColorPicker
                       v-model="ui.desktopLyricsStyles.activeColor"
                       :presets="presetColors"
+                      teleport
                     />
                   </label>
                   <label class="flex items-center gap-2 my-3 text-xs text-text-l">
@@ -533,6 +547,7 @@ onBeforeUnmount(() => {
                     <BaseColorPicker
                       v-model="ui.desktopLyricsStyles.inactiveColor"
                       :presets="presetColors"
+                      teleport
                     />
                   </label>
                 </div>
@@ -754,6 +769,37 @@ onBeforeUnmount(() => {
 .settings-card.muted {
   opacity: 0.58;
 }
+.custom-background-chrome {
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  padding: 1.1rem 1.25rem 1.25rem;
+}
+.custom-background-chrome-heading h3 {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+.custom-background-chrome-heading p {
+  margin-top: 0.25rem;
+  color: var(--color-text-l);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+.custom-background-color-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(8.5rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+}
+.custom-background-color-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.45rem;
+  color: var(--color-text-l);
+  font-size: 0.75rem;
+}
 .setting-row {
   display: flex;
   min-height: 76px;
@@ -884,13 +930,13 @@ onBeforeUnmount(() => {
   border-radius: 3px;
 }
 .light-preview .preview-window {
-  background: #f8faf9;
+  background: rgba(248, 250, 249, 0.6);
 }
 .light-preview i {
-  background: #e5e9e7;
+  background: rgba(229, 233, 231, 0.6);
 }
 .light-preview b {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.6);
 }
 .dark-preview .preview-window {
   background: #151a18;
@@ -948,8 +994,16 @@ onBeforeUnmount(() => {
     linear-gradient(90deg, rgb(104 255 168 / 0.16) 1px, transparent 1px), #06150e;
   background-size: 9px 9px;
 }
-.system-background-preview:not(.system-background-preview--none) i,
-.system-background-preview:not(.system-background-preview--none) b {
+.system-background-preview--aurora i,
+.system-background-preview--aurora b,
+.system-background-preview--ocean i,
+.system-background-preview--ocean b,
+.system-background-preview--sunset i,
+.system-background-preview--sunset b,
+.system-background-preview--forest i,
+.system-background-preview--forest b,
+.system-background-preview--matrix i,
+.system-background-preview--matrix b {
   background: rgb(255 255 255 / 16%);
 }
 .album-background-preview .preview-window {

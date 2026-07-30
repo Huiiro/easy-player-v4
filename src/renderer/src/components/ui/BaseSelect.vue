@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headlessui/vue'
-import { computed } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 defineOptions({
   name: 'BaseSelect'
@@ -21,13 +21,15 @@ const props = withDefaults(
     clearable?: boolean
     multiple?: boolean
     size?: 'xs' | 'sm' | 'md'
+    teleport?: boolean
   }>(),
   {
     placeholder: '请选择',
     disabled: false,
     clearable: false,
     multiple: false,
-    size: 'md'
+    size: 'md',
+    teleport: false
   }
 )
 
@@ -64,7 +66,7 @@ const displayText = computed(() => {
 
 const isPlaceholder = computed(() => {
   if (props.multiple) return Array.isArray(selected.value) && selected.value.length === 0
-  return selected.value === '' || selected.value === undefined || selected.value === null
+  return !props.options.some((option) => option.value === selected.value)
 })
 
 // ==================== 尺寸 ====================
@@ -80,6 +82,22 @@ const buttonSizeClass = computed(() => {
 // ==================== 清除 ====================
 function onClear(): void {
   selected.value = props.multiple ? [] : ''
+}
+
+const panelPosition = ref<Record<string, string>>({})
+
+function updatePanelPosition(event: MouseEvent): void {
+  if (!props.teleport) return
+  void nextTick(() => {
+    const target = event.currentTarget
+    if (!(target instanceof HTMLElement)) return
+    const rect = target.getBoundingClientRect()
+    panelPosition.value = {
+      top: `${rect.bottom + 4}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`
+    }
+  })
 }
 </script>
 
@@ -100,6 +118,7 @@ function onClear(): void {
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
         buttonSizeClass
       ]"
+      @click="updatePanelPosition"
     >
       <span class="flex-1 text-left truncate" :class="isPlaceholder ? 'text-text-l2' : ''">
         {{ displayText }}
@@ -131,54 +150,64 @@ function onClear(): void {
     </ListboxButton>
 
     <!-- dropdown -->
-    <transition
-      enter-active-class="transition duration-150 ease-out"
-      enter-from-class="opacity-0 scale-95"
-      enter-to-class="opacity-100 scale-100"
-      leave-active-class="transition duration-100 ease-in"
-      leave-from-class="opacity-100 scale-100"
-      leave-to-class="opacity-0 scale-95"
-    >
-      <ListboxOptions
-        class="absolute z-50 mt-1 w-full min-w-(--anchor-width) rounded-xl border border-border bg-bg shadow-lg p-1 focus:outline-none max-h-60 overflow-y-auto no-scrollbar"
+    <Teleport to="body" :disabled="!teleport">
+      <transition
+        enter-active-class="transition duration-150 ease-out"
+        enter-from-class="opacity-0 scale-95"
+        enter-to-class="opacity-100 scale-100"
+        leave-active-class="transition duration-100 ease-in"
+        leave-from-class="opacity-100 scale-100"
+        leave-to-class="opacity-0 scale-95"
       >
-        <ListboxOption
-          v-for="opt in options"
-          :key="opt.value"
-          v-slot="{ active, selected: isSelected }"
-          :value="opt.value"
-          :disabled="opt.disabled"
-          as="template"
+        <ListboxOptions
+          :class="[
+            'z-50 mt-1 min-w-(--anchor-width) max-h-60 overflow-y-auto no-scrollbar rounded-xl border border-border bg-bg p-1 shadow-lg focus:outline-none',
+            teleport ? 'fixed' : 'absolute w-full'
+          ]"
+          :style="teleport ? panelPosition : undefined"
         >
-          <li
-            :class="[
-              'flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors select-none',
-              opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
-              isSelected ? 'bg-primary/30 font-medium text-primary' : active ? 'bg-primary/20' : ''
-            ]"
+          <ListboxOption
+            v-for="opt in options"
+            :key="opt.value"
+            v-slot="{ active, selected: isSelected }"
+            :value="opt.value"
+            :disabled="opt.disabled"
+            as="template"
           >
-            <!-- checkmark -->
-            <svg
-              v-if="isSelected"
-              class="w-4 h-4 shrink-0 text-primary"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
+            <li
+              :class="[
+                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors select-none',
+                opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
+                isSelected
+                  ? 'bg-primary/30 font-medium text-primary'
+                  : active
+                    ? 'bg-primary/20'
+                    : ''
+              ]"
             >
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-            <span v-else class="w-4 shrink-0" />
+              <!-- checkmark -->
+              <svg
+                v-if="isSelected"
+                class="w-4 h-4 shrink-0 text-primary"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span v-else class="w-4 shrink-0" />
 
-            <span class="flex-1 truncate">{{ opt.label }}</span>
-          </li>
-        </ListboxOption>
+              <span class="flex-1 truncate">{{ opt.label }}</span>
+            </li>
+          </ListboxOption>
 
-        <!-- empty -->
-        <div v-if="options.length === 0" class="px-3 py-2 text-sm text-text-l2 text-center">
-          暂无数据
-        </div>
-      </ListboxOptions>
-    </transition>
+          <!-- empty -->
+          <div v-if="options.length === 0" class="px-3 py-2 text-sm text-text-l2 text-center">
+            暂无数据
+          </div>
+        </ListboxOptions>
+      </transition>
+    </Teleport>
   </Listbox>
 </template>

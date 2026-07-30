@@ -10,6 +10,7 @@ export type SystemBackground = 'none' | 'aurora' | 'ocean' | 'sunset' | 'forest'
 export interface SystemBackgroundTheme {
   id: SystemBackground
   labelKey: string
+  colorMode: 'light' | 'dark'
   accentColor: string
   headerBackground: string
   footerBackground: string
@@ -21,6 +22,7 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'none',
     labelKey: 'settings.systemBackgroundNone',
+    colorMode: 'light',
     accentColor: 'oklch(0.691 0.198 148.262)',
     headerBackground: 'color-mix(in srgb, var(--color-bg) 82%, transparent)',
     footerBackground: 'color-mix(in srgb, var(--color-bg) 78%, transparent)',
@@ -29,6 +31,7 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'aurora',
     labelKey: 'settings.systemBackgroundAurora',
+    colorMode: 'dark',
     accentColor: 'oklch(0.79 0.16 164)',
     headerBackground: 'rgb(10 39 42 / 0.84)',
     footerBackground: 'rgb(13 45 48 / 0.86)',
@@ -38,6 +41,7 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'ocean',
     labelKey: 'settings.systemBackgroundOcean',
+    colorMode: 'dark',
     accentColor: 'oklch(0.72 0.15 232)',
     headerBackground: 'rgb(5 25 48 / 0.85)',
     footerBackground: 'rgb(8 39 66 / 0.87)',
@@ -47,6 +51,7 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'sunset',
     labelKey: 'settings.systemBackgroundSunset',
+    colorMode: 'dark',
     accentColor: 'oklch(0.7 0.23 340)',
     headerBackground: 'rgb(56 20 54 / 0.86)',
     footerBackground: 'rgb(52 24 70 / 0.88)',
@@ -56,7 +61,8 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'forest',
     labelKey: 'settings.systemBackgroundForest',
-    accentColor: 'oklch(0.75 0.17 137)',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.68 0.12 142)',
     headerBackground: 'rgb(10 40 30 / 0.86)',
     footerBackground: 'rgb(13 52 36 / 0.88)',
     chromeBorder: 'rgb(150 226 108 / 0.26)',
@@ -65,7 +71,8 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
   {
     id: 'matrix',
     labelKey: 'settings.systemBackgroundMatrix',
-    accentColor: 'oklch(0.78 0.18 151)',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.69 0.13 151)',
     headerBackground: 'rgb(2 18 11 / 0.9)',
     footerBackground: 'rgb(4 28 17 / 0.9)',
     chromeBorder: 'rgb(103 255 169 / 0.28)',

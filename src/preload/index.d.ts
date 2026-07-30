@@ -202,6 +202,73 @@ declare global {
         saveSync(key: string, value: unknown): { success: boolean; error?: string }
         getSync(key: string): { success: boolean; data?: unknown; error?: string }
       }
+      downloads: {
+        chooseDirectory(): Promise<string | null>
+        history(): Promise<
+          Array<{
+            id: number
+            platform: 'youtube' | 'bili'
+            resourceId: string
+            title: string | null
+            filePath: string | null
+            quality: string | null
+            status: 'downloading' | 'done' | 'error'
+            progress: number
+            createdAt: string
+          }>
+        >
+        thumbnail(url: string): Promise<string>
+        showInFolder(filePath: string): Promise<{ success: boolean; error?: string }>
+        search(
+          platform: 'youtube' | 'bili',
+          query: string
+        ): Promise<
+          Array<{
+            platform: 'youtube' | 'bili'
+            selected?: boolean
+            id: string
+            title: string
+            url: string
+            thumbnail: string | null
+            thumbnailUrl?: string | null
+            duration: number | null
+            uploader: string | null
+          }>
+        >
+        parse(url: string): Promise<
+          Array<{
+            platform: 'youtube' | 'bili'
+            selected?: boolean
+            id: string
+            title: string
+            url: string
+            thumbnail: string | null
+            thumbnailUrl?: string | null
+            duration: number | null
+            uploader: string | null
+          }>
+        >
+        start(request: {
+          platform: 'youtube' | 'bili'
+          url: string
+          title: string
+          resourceId: string
+          directory: string
+          downloadType: 'audio' | 'video'
+          quality: 'best' | 'high' | 'standard' | 'compact'
+          locale?: string
+        }): Promise<{ taskId: string }>
+        onProgress(
+          callback: (progress: {
+            taskId: string
+            status: 'downloading' | 'done' | 'error'
+            progress: number
+            filePath?: string
+            title?: string
+            error?: string
+          }) => void
+        ): () => void
+      }
       library: {
         importLocalFolder(): Promise<ImportLocalMusicResult>
         showSongInFolder(songId: number): Promise<{ success: boolean; error?: string }>

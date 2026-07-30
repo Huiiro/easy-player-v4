@@ -91,6 +91,12 @@ export const constRoutes = [
         component: () => import('@/views/settings/Index.vue')
       },
       {
+        path: '/download',
+        name: 'Download',
+        meta: { title: '下载中心' },
+        component: () => import('@/views/download/Index.vue')
+      },
+      {
         path: '/playlist/:id',
         name: 'Playlist',
         meta: { title: '歌单详情', keepAlive: false },

@@ -41,6 +41,7 @@ const libraryItems: NavigationItem[] = [
 
 const utilityItems: NavigationItem[] = [
   { labelKey: 'nav.history', path: '/history', icon: 'menu-history' },
+  { labelKey: 'nav.download', path: '/download', icon: 'menu-download' },
   ...(import.meta.env.DEV ? [{ labelKey: 'nav.developer', path: '/dev', icon: 'menu-dev' }] : []),
   { labelKey: 'nav.settings', path: '/settings', icon: 'menu-settings' }
 ]

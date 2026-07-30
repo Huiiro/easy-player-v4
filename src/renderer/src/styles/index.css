@@ -31,6 +31,14 @@ body {
   background: var(--color-bg);
   font-family: Inter, 'Segoe UI', 'Microsoft YaHei', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.selectable-text {
+  user-select: text;
 }
 
 *,

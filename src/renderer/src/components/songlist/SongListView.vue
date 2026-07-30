@@ -275,6 +275,29 @@ const playActiveMenuSong = (): void => {
   if (activeMenuSong.value) void playSong(activeMenuSong.value)
   closeMenu()
 }
+async function copyActiveMenuSongName(): Promise<void> {
+  const song = activeMenuSong.value
+  closeMenu()
+  const name = song?.title.trim() || (song?.fileName ?? '').trim()
+  if (!name) return
+  try {
+    await navigator.clipboard.writeText(name)
+  } catch {
+    const input = document.createElement('textarea')
+    input.value = name
+    input.style.position = 'fixed'
+    input.style.opacity = '0'
+    document.body.appendChild(input)
+    input.select()
+    const copied = document.execCommand('copy')
+    input.remove()
+    if (!copied) {
+      showError(t('songList.copyNameFailed'))
+      return
+    }
+  }
+  success(t('songList.nameCopied'))
+}
 
 function openPlaylistPicker(songIds: number[]): void {
   if (!songIds.length) return
@@ -573,6 +596,13 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         >
           <svgIcon name="common-delete" class-name="size-4" />
           {{ t('songList.removeFromPlaylist') }}
+        </button>
+        <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="copyActiveMenuSongName"
+        >
+          <svgIcon name="common-text-case" class-name="size-4" />
+          {{ t('songList.copyName') }}
         </button>
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"

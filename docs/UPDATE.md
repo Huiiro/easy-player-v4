@@ -13,3 +13,11 @@ fix display issues
 fix motion reduce
 fix home and settings page card style
 fix footer animation
+
+#### v 3.0.4
+add download center
+allow copy song title
+fix display, settings
+fix colors styles
+fix select component
+fix global none select

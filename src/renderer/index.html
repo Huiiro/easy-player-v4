@@ -6,7 +6,7 @@
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: easy-player-media:; font-src 'self' easy-player-media:"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: easy-player-media: https:; media-src 'self' blob: file: easy-player-media: https://*.bilivideo.com:* https://*.bilivideo.cn:*; connect-src 'self' blob: file: https://*.bilibili.com https://*.biligame.com https://*.bilivideo.com:* https://*.bilivideo.cn:*; font-src 'self' easy-player-media:"
     />
   </head>
 

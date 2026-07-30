@@ -44,7 +44,10 @@ export const useUIStore = defineStore(
       url: '',
       path: '',
       blur: 0,
-      brightness: 100
+      brightness: 100,
+      headerBackground: '#0f1724cc',
+      footerBackground: '#101827d9',
+      chromeBorder: '#ffffff30'
     })
     const currentDynamicBg = reactive({
       bg: 'static_light',
@@ -149,10 +152,33 @@ export const useUIStore = defineStore(
     function syncSystemBackgroundThemeColor(): void {
       const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
       if (!useCustomBg.value) customThemeColor.value = theme.accentColor
+      if (!useCustomBg.value && systemBackground.value !== 'none') {
+        useDarkMode.value = theme.colorMode === 'dark'
+      }
       const root = document.documentElement
-      root.style.setProperty('--app-header-bg', theme.headerBackground)
-      root.style.setProperty('--app-footer-bg', theme.footerBackground)
-      root.style.setProperty('--app-chrome-border', theme.chromeBorder)
+      root.dataset.systemTheme = useCustomBg.value ? 'custom' : systemBackground.value
+      root.style.setProperty(
+        '--app-header-bg',
+        useCustomBg.value ? customBg.headerBackground : theme.headerBackground
+      )
+      root.style.setProperty(
+        '--app-footer-bg',
+        useCustomBg.value ? customBg.footerBackground : theme.footerBackground
+      )
+      root.style.setProperty(
+        '--app-chrome-border',
+        useCustomBg.value ? customBg.chromeBorder : theme.chromeBorder
+      )
+      if (useCustomBg.value) {
+        root.style.setProperty('--color-border', customBg.chromeBorder)
+        root.style.setProperty(
+          '--color-border-l',
+          `color-mix(in srgb, ${customBg.chromeBorder} 68%, white)`
+        )
+      } else {
+        root.style.removeProperty('--color-border')
+        root.style.removeProperty('--color-border-l')
+      }
     }
 
     async function loadCustomFonts(): Promise<void> {
@@ -240,6 +266,18 @@ export const useUIStore = defineStore(
         customBg.path = typeof background.path === 'string' ? background.path : ''
         customBg.blur = Number(background.blur) || 0
         customBg.brightness = Number(background.brightness) || 100
+        customBg.headerBackground =
+          typeof background.headerBackground === 'string'
+            ? background.headerBackground
+            : customBg.headerBackground
+        customBg.footerBackground =
+          typeof background.footerBackground === 'string'
+            ? background.footerBackground
+            : customBg.footerBackground
+        customBg.chromeBorder =
+          typeof background.chromeBorder === 'string'
+            ? background.chromeBorder
+            : customBg.chromeBorder
       }
       syncSystemBackgroundThemeColor()
       applyTheme()
@@ -256,7 +294,15 @@ export const useUIStore = defineStore(
       useCustomBg.value = false
       systemBackground.value = 'none'
       playerBgType.value = PlayerBgType.ALBUM
-      Object.assign(customBg, { url: '', path: '', blur: 0, brightness: 100 })
+      Object.assign(customBg, {
+        url: '',
+        path: '',
+        blur: 0,
+        brightness: 100,
+        headerBackground: '#0f1724cc',
+        footerBackground: '#101827d9',
+        chromeBorder: '#ffffff30'
+      })
     }
     function setLyricsFontSize(size?: number): void {
       if (size) lyricsFontSize.value = size
@@ -296,12 +342,24 @@ export const useUIStore = defineStore(
         () => customBg.url,
         () => customBg.blur,
         () => customBg.brightness,
+        () => customBg.headerBackground,
+        () => customBg.footerBackground,
+        () => customBg.chromeBorder,
         lyricsFontSize,
         lyricsFontPadding
       ],
       applyTheme
     )
-    watch([systemBackground, useCustomBg], syncSystemBackgroundThemeColor)
+    watch(
+      [
+        systemBackground,
+        useCustomBg,
+        () => customBg.headerBackground,
+        () => customBg.footerBackground,
+        () => customBg.chromeBorder
+      ],
+      syncSystemBackgroundThemeColor
+    )
     return {
       locale,
       platform,

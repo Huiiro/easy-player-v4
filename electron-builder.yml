@@ -16,6 +16,7 @@ extraResources:
     filter:
       - '**/*'
       - '!bin{,/**/*}'
+      - '!tools/yt-dlp{,/**/*}'
   - from: 'resources/bin/'
     to: 'tools/flac/'
   - from: 'build/native-addon/'
@@ -30,6 +31,9 @@ asarUnpack:
 win:
   executableName: easy-player
   icon: resources/easy-player.ico
+  extraResources:
+    - from: 'resources/tools/yt-dlp/win/yt-dlp.exe'
+      to: 'tools/yt-dlp/yt-dlp.exe'
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   installerIcon: resources/easy-player.ico
@@ -43,6 +47,9 @@ nsis:
   runAfterFinish: true
 mac:
   entitlementsInherit: build/entitlements.mac.plist
+  extraResources:
+    - from: 'resources/tools/yt-dlp/mac/yt-dlp'
+      to: 'tools/yt-dlp/yt-dlp'
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -53,6 +60,9 @@ dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
   icon: resources/easy-player.ico
+  extraResources:
+    - from: 'resources/tools/yt-dlp/linux/${arch}/yt-dlp'
+      to: 'tools/yt-dlp/yt-dlp'
   target:
     - AppImage
     - snap

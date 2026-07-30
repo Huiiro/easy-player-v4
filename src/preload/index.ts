@@ -167,6 +167,49 @@ const databaseAPI = {
     }
 }
 
+const downloadsAPI = {
+  chooseDirectory: () =>
+    ipcRenderer.invoke('media-download:choose-directory') as Promise<string | null>,
+  history: () => ipcRenderer.invoke('media-download:history'),
+  thumbnail: (url: string) =>
+    ipcRenderer.invoke('media-download:thumbnail', url) as Promise<string>,
+  showInFolder: (filePath: string) =>
+    ipcRenderer.invoke('media-download:show-in-folder', filePath) as Promise<{
+      success: boolean
+      error?: string
+    }>,
+  search: (platform: 'youtube' | 'bili', query: string) =>
+    ipcRenderer.invoke('media-download:search', { platform, query }),
+  parse: (url: string) => ipcRenderer.invoke('media-download:parse', { url }),
+  start: (request: {
+    platform: 'youtube' | 'bili'
+    url: string
+    title: string
+    resourceId: string
+    directory: string
+    downloadType: 'audio' | 'video'
+    quality: 'best' | 'high' | 'standard' | 'compact'
+    locale?: string
+  }) => ipcRenderer.invoke('media-download:start', request) as Promise<{ taskId: string }>,
+  onProgress: (
+    callback: (progress: {
+      taskId: string
+      status: 'downloading' | 'done' | 'error'
+      progress: number
+      filePath?: string
+      title?: string
+      error?: string
+    }) => void
+  ) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      progress: Parameters<typeof callback>[0]
+    ): void => callback(progress)
+    ipcRenderer.on('media-download:progress', handler)
+    return () => ipcRenderer.removeListener('media-download:progress', handler)
+  }
+}
+
 const libraryAPI = {
   importLocalFolder: () => ipcRenderer.invoke('library:import-local-folder'),
   showSongInFolder: (songId: number) =>
@@ -420,6 +463,7 @@ const systemAPI = {
 const api = {
   audio: audioAPI,
   database: databaseAPI,
+  downloads: downloadsAPI,
   library: libraryAPI,
   files: filesAPI,
   lyrics: lyricsAPI,

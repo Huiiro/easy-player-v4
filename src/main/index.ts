@@ -26,6 +26,7 @@ import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
+import { registerDownloadIpcHandlers } from './ipc/downloadIpcHandlers'
 import { cacheRemoteSong, syncRemoteSource, testRemoteSource } from './service/remoteSourceService'
 import {
   checkForUpdates,
@@ -377,8 +378,9 @@ function createDesktopLyricsWindow(): BrowserWindow {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
-  // Set app user model id for windows
-  app.setAppUserModelId('com.electron')
+  // Keep Windows notifications and taskbar identity aligned with the packaged app.
+  app.setName('Easy Player')
+  app.setAppUserModelId('com.huiiro.easyplayer')
   createDir()
   initDatabase()
   registerDatabaseIpcHandlers()
@@ -387,6 +389,7 @@ app.whenReady().then(() => {
   registerFontIpcHandlers()
   registerMetadataIpcHandlers()
   registerFileIpcHandlers()
+  registerDownloadIpcHandlers()
   createTray()
   ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
     setAppSetting('system.close-to-tray', enabled === true)
