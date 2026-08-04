@@ -109,14 +109,16 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
   const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
-  const size = Math.max(1, Math.min(query.size ?? 50, 500))
-  params.size = size
-  params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const size =
+    query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
+  if (size) {
+    params.size = size
+    params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  }
+  const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const data = attachTags(
     db
-      .prepare(
-        `SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} LIMIT @size OFFSET @offset`
-      )
+      .prepare(`SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} ${pagination}`)
       .all(params)
       .map((row) => mapSong(row as SongRow))
   )
@@ -364,11 +366,16 @@ export function queryRecentPlayedSongs(
   query: SongQuery = {}
 ): PagedResult<Song & { playTime: string }> {
   const db = getDatabase()
-  const size = Math.max(1, Math.min(query.size ?? 50, 500))
-  const offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const size =
+    query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
+  const offset = size ? Math.max(0, (query.page ?? 1) - 1) * size : 0
   const search = query.search?.trim()
   const where = ['1 = 1']
-  const params: Record<string, string | number> = { size, offset }
+  const params: Record<string, string | number> = {}
+  if (size) {
+    params.size = size
+    params.offset = offset
+  }
   if (search) {
     where.push(
       '(s.title LIKE @search OR s.artist LIKE @search OR s.album LIKE @search OR s.file_name LIKE @search)'
@@ -385,9 +392,10 @@ export function queryRecentPlayedSongs(
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'play_time'
   const column = sort === 'play_time' ? 'h.play_time' : `s.${sort}`
   const order = query.sortOrder === 'asc' ? 'ASC' : 'DESC'
+  const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const rows = db
     .prepare(
-      `SELECT ${songColumnsFor('s.')}, h.play_time AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
+      `SELECT ${songColumnsFor('s.')}, h.play_time AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
     )
     .all(params)
   const data = attachTags(
@@ -698,14 +706,18 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
   const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
   const column = sort === 'id' ? 'sli.id' : `s.${sort}`
-  const size = Math.max(1, Math.min(query.size ?? 50, 500))
-  params.size = size
-  params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  const size =
+    query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
+  if (size) {
+    params.size = size
+    params.offset = Math.max(0, (query.page ?? 1) - 1) * size
+  }
+  const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const clause = `WHERE ${where.join(' AND ')}`
   const data = attachTags(
     db
       .prepare(
-        `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} LIMIT @size OFFSET @offset`
+        `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
       )
       .all(params)
       .map((row) => mapSong(row as SongRow))

@@ -1,7 +1,8 @@
 import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron'
 import { scanMusicDirectory, type ScanResult } from '../service/scanService'
 
-export const IMPORT_LOCAL_MUSIC_CHANNEL = 'library:import-local-folder'
+export const SELECT_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:select-local-folder'
+export const SCAN_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:scan-local-folder'
 export const SCAN_PROGRESS_EVENT = 'library:scan-progress'
 
 export interface ScanProgress {
@@ -11,11 +12,10 @@ export interface ScanProgress {
   duplicates: number
 }
 
-export type ImportLocalMusicResult =
-  { cancelled: true } | { cancelled: false; directory: string; result: ScanResult }
+export type ScanLocalMusicResult = { directory: string; result: ScanResult }
 
 export function registerScanIpcHandlers(): void {
-  ipcMain.handle(IMPORT_LOCAL_MUSIC_CHANNEL, async (event): Promise<ImportLocalMusicResult> => {
+  ipcMain.handle(SELECT_LOCAL_MUSIC_FOLDER_CHANNEL, async (event): Promise<string | null> => {
     const window = BrowserWindow.fromWebContents(event.sender)
     const options: OpenDialogOptions = {
       properties: ['openDirectory']
@@ -23,11 +23,12 @@ export function registerScanIpcHandlers(): void {
     const selection = window
       ? await dialog.showOpenDialog(window, options)
       : await dialog.showOpenDialog(options)
-    if (selection.canceled || !selection.filePaths[0]) return { cancelled: true }
+    return selection.canceled ? null : selection.filePaths[0] || null
+  })
 
-    const directory = selection.filePaths[0]
-    return {
-      cancelled: false,
+  ipcMain.handle(
+    SCAN_LOCAL_MUSIC_FOLDER_CHANNEL,
+    async (event, directory: string): Promise<ScanLocalMusicResult> => ({
       directory,
       result: await scanMusicDirectory(directory, (current, total, added, duplicates) => {
         if (!event.sender.isDestroyed()) {
@@ -39,6 +40,6 @@ export function registerScanIpcHandlers(): void {
           } satisfies ScanProgress)
         }
       })
-    }
-  })
+    })
+  )
 }

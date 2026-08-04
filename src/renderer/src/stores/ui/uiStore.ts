@@ -253,6 +253,13 @@ export const useUIStore = defineStore(
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       if (Object.values(PlayerBgType).includes(saved.playerBgType as PlayerBgType))
         playerBgType.value = saved.playerBgType as PlayerBgType
+      if (
+        ['auto', 'embedded', 'database', 'local', 'network'].includes(
+          saved.lyricSourceMode as string
+        )
+      ) {
+        lyricSourceMode.value = saved.lyricSourceMode as 'auto' | LyricSource
+      }
       if (Array.isArray(saved.lyricSourceOrder)) {
         const allowed: LyricSource[] = ['embedded', 'database', 'local', 'network']
         const order = saved.lyricSourceOrder.filter((item): item is LyricSource =>

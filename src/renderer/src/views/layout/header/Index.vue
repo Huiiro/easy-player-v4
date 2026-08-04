@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import ScanProgress from '@/components/scan/ScanProgress.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -23,7 +23,6 @@ const scanDuplicates = ref(0)
 const importingLocalFolder = ref(false)
 
 const removeScanProgressListener = window.api.library.onScanProgress((progress) => {
-  if (!importingLocalFolder.value) return
   scanVisible.value = true
   scanning.value = true
   scanCurrent.value = progress.current
@@ -54,14 +53,20 @@ async function uploadLocalFiles(): Promise<void> {
   if (importingLocalFolder.value) return
   importingLocalFolder.value = true
   try {
-    const response = await window.api.library.importLocalFolder()
-    if (!response.cancelled) {
-      scanVisible.value = true
-      scanCurrent.value = response.result.total
-      scanTotal.value = response.result.total
-      scanAdded.value = response.result.added
-      scanDuplicates.value = response.result.duplicates
-    }
+    const directory = await window.api.library.selectLocalMusicFolder()
+    if (!directory) return
+    scanVisible.value = true
+    scanning.value = true
+    scanCurrent.value = 0
+    scanTotal.value = 0
+    scanAdded.value = 0
+    scanDuplicates.value = 0
+    await nextTick()
+    const response = await window.api.library.scanLocalMusicFolder(directory)
+    scanCurrent.value = response.result.total
+    scanTotal.value = response.result.total
+    scanAdded.value = response.result.added
+    scanDuplicates.value = response.result.duplicates
   } finally {
     importingLocalFolder.value = false
     if (scanVisible.value) scanning.value = false
@@ -74,14 +79,16 @@ async function uploadLocalFiles(): Promise<void> {
     class="app-header flex h-[42px] items-center border-b transition-opacity [-webkit-app-region:drag]"
     :class="visible ? '' : 'pointer-events-none opacity-0'"
   >
-    <ScanProgress
-      v-model:visible="scanVisible"
-      :scanning="scanning"
-      :current="scanCurrent"
-      :total="scanTotal"
-      :added="scanAdded"
-      :duplicates="scanDuplicates"
-    />
+    <Teleport to="body">
+      <ScanProgress
+        v-model:visible="scanVisible"
+        :scanning="scanning"
+        :current="scanCurrent"
+        :total="scanTotal"
+        :added="scanAdded"
+        :duplicates="scanDuplicates"
+      />
+    </Teleport>
 
     <div
       class="flex min-w-max cursor-pointer items-center gap-2 pl-3.5 text-text [-webkit-app-region:no-drag]"

@@ -204,10 +204,10 @@ async function loadSongs(): Promise<void> {
   try {
     const response =
       activePlaylistId.value === null
-        ? await window.api.database.command('querySongs', { size: 500 })
+        ? await window.api.database.command('querySongs', {})
         : await window.api.database.command('queryPlaylistSongs', {
             playlistId: activePlaylistId.value,
-            query: { size: 500 }
+            query: {}
           })
     const data = response.success ? (response.data as PagedLibrarySongs) : null
     songs.value = data?.data.filter((song) => song.songStatus !== 0) || []

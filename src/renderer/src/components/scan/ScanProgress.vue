@@ -32,16 +32,18 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.scanning,
-  (newVal) => {
-    if (newVal === false && props.visible) {
+  () => [props.scanning, props.visible] as const,
+  ([scanning, visible]) => {
+    if (!scanning && visible) {
       // 通知父组件重新加载
+      if (autoCloseTimer) return
       autoCloseTimer = window.setTimeout(() => {
         eventBus.emit('scanFinished')
         close()
       }, 2500)
-    } else if (newVal === true && autoCloseTimer) {
+    } else if (scanning && autoCloseTimer) {
       clearTimeout(autoCloseTimer)
+      autoCloseTimer = undefined
     }
   }
 )
@@ -55,7 +57,7 @@ const close = (): void => {
 
 <template>
   <transition name="slide-fade">
-    <div v-if="visible" class="fixed bottom-26 right-2 z-50 pointer-events-none">
+    <div v-if="visible" class="fixed bottom-6 right-6 z-[100] pointer-events-none">
       <div
         class="bg-bg rounded-xl shadow-lg p-4 w-80 border border-r border-border pointer-events-auto transform transition-all duration-300"
       >

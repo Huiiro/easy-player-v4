@@ -11,7 +11,7 @@ import type {
   TransitionConfig
 } from '../renderer/src/types/audio'
 import type { DatabaseAction, DatabaseResponse } from '../main/database/ipc-handlers'
-import type { ImportLocalMusicResult, ScanProgress } from '../main/service/scan-ipc-handlers'
+import type { ScanLocalMusicResult, ScanProgress } from '../main/ipc/scanIpcHandlers'
 
 declare global {
   interface Window {
@@ -270,7 +270,8 @@ declare global {
         ): () => void
       }
       library: {
-        importLocalFolder(): Promise<ImportLocalMusicResult>
+        selectLocalMusicFolder(): Promise<string | null>
+        scanLocalMusicFolder(directory: string): Promise<ScanLocalMusicResult>
         showSongInFolder(songId: number): Promise<{ success: boolean; error?: string }>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }

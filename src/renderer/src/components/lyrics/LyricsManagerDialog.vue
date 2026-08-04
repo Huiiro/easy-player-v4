@@ -102,7 +102,6 @@ async function save(): Promise<void> {
     translation: translation.value || undefined
   })
   if (!response.success) return
-  ui.lyricSourceMode = 'database'
   emit('saved')
   emit('update:modelValue', false)
 }

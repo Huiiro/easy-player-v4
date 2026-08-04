@@ -128,7 +128,7 @@ const getSongs = async (): Promise<LibrarySong[]> => {
           name: 'queryPlaylistSongs',
           params: {
             playlistId: source.id,
-            query: { size: 500, tags: [...selectedTagIds.value] }
+            query: { tags: [...selectedTagIds.value] }
           }
         }
       case 'folder':
@@ -157,7 +157,7 @@ const getSongs = async (): Promise<LibrarySong[]> => {
       case 'history':
         return {
           name: 'queryRecentPlayedSongs',
-          params: { size: 500 }
+          params: {}
         }
       default: {
         const sourceParam =
@@ -174,7 +174,6 @@ const getSongs = async (): Promise<LibrarySong[]> => {
         return {
           name: 'querySongs',
           params: {
-            size: 500,
             tags: [...selectedTagIds.value],
             source: sourceParam,
             sourceId: sourceFilter.value.startsWith('remote:')

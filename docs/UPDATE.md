@@ -21,3 +21,10 @@ fix display, settings
 fix colors styles
 fix select component
 fix global none select
+
+#### v 3.0.5
+fix package
+fix scan progress layer
+fix lyrics source persistent
+fix max load count
+

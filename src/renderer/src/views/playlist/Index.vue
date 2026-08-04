@@ -119,7 +119,7 @@ async function playPlaylist(): Promise<void> {
   try {
     const response = await window.api.database.command('queryPlaylistSongs', {
       playlistId: playlist.value.id,
-      query: { size: 500 }
+      query: {}
     })
     if (!response.success) {
       showError(response.error || t('playlist.playFailed'))
