@@ -89,14 +89,27 @@ if(NOT SOUNDTOUCH_INCLUDE_DIR OR NOT SOUNDTOUCH_LIB OR NOT SOUNDTOUCH_DLL)
     message(FATAL_ERROR "SoundTouch not found under ${SOUNDTOUCH_ROOT}. Install soundtouch:x64-windows or set SOUNDTOUCH_ROOT.")
 endif()
 
-# ── Sources ──
+# ── Engine core ──
+# This target must remain free of N-API and Windows output code. Platform
+# packages (Windows today, Android later) link it and provide an
+# AudioBackendFactory implementation.
+include("${CMAKE_CURRENT_LIST_DIR}/../../../engine-core/engine_core_sources.cmake")
+
+add_library(easy_player_engine_core STATIC ${EASY_PLAYER_ENGINE_CORE_SOURCES})
+target_include_directories(easy_player_engine_core PUBLIC
+    "${FFMPEG_ROOT}/include"
+    "${SAMPLERATE_INCLUDE_DIR}"
+    "${SOUNDTOUCH_INCLUDE_DIR}"
+    "${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}"
+)
+
+# ── Windows Electron adapter ──
 set(SOURCES
-    src/addon.cpp
-    src/audio_engine.cpp
-    src/dsound_backend.cpp
-    src/wasapi_backend.cpp
-    src/asio_backend.cpp
-    src/decoder.cpp
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/addon.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/dsound_backend.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/wasapi_backend.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/asio_backend.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/windows_backend_factory.cpp"
 )
 
 # Add cmake-js delay-load hook if available
@@ -116,12 +129,14 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     "${FFMPEG_ROOT}/include"
     "${SAMPLERATE_INCLUDE_DIR}"
     "${SOUNDTOUCH_INCLUDE_DIR}"
-    src/
+    "${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}"
+    "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src"
     ${CMAKE_JS_INC}
     "${NODE_ADDON_API_DIR}"
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    easy_player_engine_core
     ${CMAKE_JS_LIB}
     ${AVCODEC_LIB}
     ${AVFORMAT_LIB}

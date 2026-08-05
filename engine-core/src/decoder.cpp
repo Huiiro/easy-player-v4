@@ -6,6 +6,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#ifndef _WIN32
+#include <fstream>
+#endif
 #include <vector>
 
 #ifdef _WIN32
@@ -50,7 +53,6 @@ bool file_exists(const std::string& utf8_path) {
 }
 #else
 // POSIX: standard ifstream check works with UTF-8
-#include <fstream>
 bool file_exists(const std::string& path) {
     std::ifstream test(path, std::ios::binary);
     return test.is_open();
@@ -95,6 +97,30 @@ void read_replaygain_metadata(const AVDictionary* dictionary, TrackInfo::Metadat
         else if (key == "replaygain_track_peak") metadata.replaygain_track_peak = value;
         else if (key == "replaygain_album_peak") metadata.replaygain_album_peak = value;
     }
+}
+
+void read_lyrics_metadata(const AVDictionary* dictionary, TrackInfo::Metadata& metadata) {
+    if (!dictionary) return;
+    std::string fallback;
+    AVDictionaryEntry* tag = nullptr;
+    while ((tag = av_dict_get(dictionary, "", tag, AV_DICT_IGNORE_SUFFIX))) {
+        std::string key = tag->key;
+        std::transform(key.begin(), key.end(), key.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        const std::string value = tag->value ? tag->value : "";
+        if (value.empty()) continue;
+        // Prefer timed variants whenever a container exposes both forms.
+        if (key == "syncedlyrics" || key == "synced_lyrics" || key == "sylt") {
+            metadata.lyrics = value;
+            return;
+        }
+        if (fallback.empty() && (key == "lyrics" || key == "unsyncedlyrics" ||
+            key == "unsynced_lyrics" || key == "uslt")) {
+            fallback = value;
+        }
+    }
+    if (metadata.lyrics.empty()) metadata.lyrics = fallback;
 }
 
 } // namespace
@@ -317,6 +343,8 @@ bool Decoder::open(const std::string& file_path) {
 
     read_replaygain_metadata(impl_->fmt_ctx->metadata, track_info_.metadata);
     read_replaygain_metadata(stream->metadata, track_info_.metadata);
+    read_lyrics_metadata(impl_->fmt_ctx->metadata, track_info_.metadata);
+    if (track_info_.metadata.lyrics.empty()) read_lyrics_metadata(stream->metadata, track_info_.metadata);
 
     LOG_INFO("Decoder opened: " + file_path + " [" + track_info_.format + ", " +
              std::to_string(track_info_.sample_rate) + "Hz, " +

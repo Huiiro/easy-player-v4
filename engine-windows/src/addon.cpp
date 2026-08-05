@@ -1,5 +1,6 @@
 #include "audio_engine.h"
 #include "logger.h"
+#include "windows_backend_factory.h"
 #include <napi.h>
 #include <memory>
 #include <string>
@@ -77,7 +78,7 @@ public:
 
     AudioEngineWrapper(const Napi::CallbackInfo& info)
         : Napi::ObjectWrap<AudioEngineWrapper>(info)
-        , engine_(std::make_unique<AudioEngine>())
+        , engine_(std::make_unique<AudioEngine>(std::make_shared<WindowsAudioBackendFactory>()))
     {
         // Wire engine callbacks to JS
         engine_->set_state_callback([this](EngineState state) {

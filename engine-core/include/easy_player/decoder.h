@@ -20,6 +20,9 @@ struct TrackInfo {
         std::string title;
         std::string artist;
         std::string album;
+        // Raw embedded lyric payload (typically LRC in a lyrics/syncedlyrics
+        // tag). Parsing and source selection belong to the UI layer.
+        std::string lyrics;
         int track_number = 0;
         std::string genre;
         float replaygain_track_db = 0.0f;

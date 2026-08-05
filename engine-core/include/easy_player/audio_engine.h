@@ -1,5 +1,6 @@
 #pragma once
 #include "audio_backend.h"
+#include "audio_backend_factory.h"
 #include "byte_ring_buffer.h"
 #include "decoder.h"
 #include "dsp_pipeline.h"
@@ -49,7 +50,7 @@ struct AudioAnalysisSnapshot {
 class AudioEngine {
 public:
     static constexpr const char* kVersion = "1.0.1";
-    AudioEngine();
+    explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }
 
@@ -154,6 +155,7 @@ private:
     std::atomic<EngineState> state_{EngineState::Idle};
 
     // ── Backend ──
+    std::shared_ptr<AudioBackendFactory> backend_factory_;
     std::unique_ptr<AudioBackend> backend_;
     BackendType current_backend_type_{BackendType::DIRECTSOUND};
     std::wstring current_device_id_{L"default"};

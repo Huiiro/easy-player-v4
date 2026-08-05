@@ -1,16 +1,13 @@
 #include "audio_engine.h"
-#include "asio_backend.h"
-#include "dsound_backend.h"
-#include "wasapi_backend.h"
 #include "logger.h"
 #include <algorithm>
 #include <chrono>
 #include <deque>
 #include <sstream>
-#include <unordered_set>
 #include <vector>
 
-AudioEngine::AudioEngine() {
+AudioEngine::AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory)
+    : backend_factory_(std::move(backend_factory)) {
     LOG_INFO(std::string("Easy Player Audio Engine v") + kVersion + " initialized");
 }
 
@@ -186,21 +183,14 @@ bool AudioEngine::play() {
 
     // Ensure we have a backend
     if (!backend_) {
-        // Create the backend based on user-selected type
-        switch (current_backend_type_) {
-            case BackendType::WASAPI_SHARED:
-                backend_ = std::make_unique<WasapiBackend>(false);
-                break;
-            case BackendType::WASAPI_EXCLUSIVE:
-                backend_ = std::make_unique<WasapiBackend>(true);
-                break;
-            case BackendType::ASIO:
-                backend_ = std::make_unique<AsioBackend>();
-                break;
-            case BackendType::DIRECTSOUND:
-            default:
-                backend_ = std::make_unique<DSoundBackend>();
-                break;
+        if (!backend_factory_) {
+            if (error_cb_) error_cb_(-2, "No audio backend factory configured");
+            return false;
+        }
+        backend_ = backend_factory_->create(current_backend_type_);
+        if (!backend_) {
+            if (error_cb_) error_cb_(-2, "Selected audio backend is unavailable");
+            return false;
         }
 
         AudioFormat requested;
@@ -252,7 +242,7 @@ bool AudioEngine::play() {
                     if (primed <= 0 || dop_ring_buffer_->write(dop_work_buffer_.data(), primed) != primed) {
                         LOG_WARN("DSD DoP could not prime encoded transport; falling back to PCM conversion");
                         backend_->close();
-                        if (current_backend_type_ == BackendType::ASIO) backend_ = std::make_unique<AsioBackend>();
+                        backend_ = backend_factory_->create(current_backend_type_);
                         dop_transport_active_.store(false, std::memory_order_release);
                         dop_ring_buffer_.reset();
                         dop_work_buffer_.clear();
@@ -266,7 +256,7 @@ bool AudioEngine::play() {
                 } else {
                     LOG_WARN("DSD DoP unavailable on this device; falling back to PCM conversion");
                     backend_->close();
-                    if (current_backend_type_ == BackendType::ASIO) backend_ = std::make_unique<AsioBackend>();
+                    backend_ = backend_factory_->create(current_backend_type_);
                     dop_transport_active_.store(false, std::memory_order_release);
                     dop_ring_buffer_.reset();
                     dop_work_buffer_.clear();
@@ -646,51 +636,7 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
 // ──────────────────────────────────────────────────────────
 
 std::vector<DeviceInfo> AudioEngine::enumerate_devices() {
-    std::vector<DeviceInfo> devices;
-    std::unordered_set<std::wstring> seen_names;
-
-    auto add_unique = [&](std::vector<DeviceInfo>& list) {
-        for (auto& d : list) {
-            if (seen_names.find(d.name) == seen_names.end()) {
-                seen_names.insert(d.name);
-                devices.push_back(std::move(d));
-            }
-        }
-    };
-
-    // ASIO devices first (lowest latency)
-    {
-        AsioBackend asio;
-        auto d = asio.enumerate_devices();
-        for (auto& di : d) {
-            devices.push_back(std::move(di));
-        }
-    }
-
-    // WASAPI devices (preferred over DSound)
-    {
-        WasapiBackend wasapi_shared(false);
-        auto d = wasapi_shared.enumerate_devices();
-        add_unique(d);
-    }
-    {
-        WasapiBackend wasapi_exclusive(true);
-        auto d = wasapi_exclusive.enumerate_devices();
-        // Exclusive devices share names with shared — but the backend field
-        // differs. Skip name dedup and add them all (user can pick exclusive).
-        for (auto& di : d) {
-            devices.push_back(std::move(di));
-        }
-    }
-
-    // DSound devices last (fallback — on Win10+ these are WASAPI Shared under the hood)
-    {
-        DSoundBackend ds;
-        auto d = ds.enumerate_devices();
-        add_unique(d);
-    }
-
-    return devices;
+    return backend_factory_ ? backend_factory_->enumerate_devices() : std::vector<DeviceInfo>{};
 }
 
 bool AudioEngine::set_device(const std::wstring& device_id) {
@@ -702,10 +648,7 @@ bool AudioEngine::set_backend(BackendType type) {
 }
 
 bool AudioEngine::select_output_device(BackendType type, const std::wstring& device_id) {
-    if (type != BackendType::DIRECTSOUND &&
-        type != BackendType::WASAPI_SHARED &&
-        type != BackendType::WASAPI_EXCLUSIVE &&
-        type != BackendType::ASIO) {
+    if (!backend_factory_ || !backend_factory_->supports(type)) {
         return false;
     }
     if (current_backend_type_ == type && current_device_id_ == device_id) return true;

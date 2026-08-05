@@ -17,3 +17,4 @@ build/
 *.lib
 src/main/native/deps/ffmpeg/
 src/main/native/deps/libsamplerate/
+engine-android/deps/
