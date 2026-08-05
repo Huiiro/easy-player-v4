@@ -39,6 +39,7 @@ const trees = Array.from({ length: 9 }, (_, index) => ({
 
 <style scoped>
 .forest-background {
+  contain: paint;
   background:
     radial-gradient(circle at 22% 22%, rgb(134 207 105 / 62%), transparent 35%),
     radial-gradient(circle at 83% 70%, rgb(44 145 131 / 62%), transparent 40%),

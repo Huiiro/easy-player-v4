@@ -210,7 +210,7 @@ export const audioBridge = {
     const r = await window.api.audio.getAudioChain()
     return cmd<AudioChainStatus>(r)
   },
-  async getAudioAnalysis(): Promise<{
+  async getAudioAnalysis(includeSpectrum = true): Promise<{
     outputTimeMs: number
     analysisTimeMs: number
     analysisLatencyMs: number
@@ -223,9 +223,15 @@ export const audioBridge = {
     momentaryLufs: number
     shortTermLufs: number
     integratedLufs: number
-    spectrum: number[]
+    spectrum?: number[]
   } | null> {
-    return cmd(await window.api.audio.getAudioAnalysis())
+    return cmd(await window.api.audio.getAudioAnalysis(includeSpectrum))
+  },
+  async setLoudnessAnalysisEnabled(enabled: boolean): Promise<boolean> {
+    return (await window.api.audio.setLoudnessAnalysisEnabled(enabled)).success
+  },
+  async setSpectrumAnalysisEnabled(enabled: boolean): Promise<boolean> {
+    return (await window.api.audio.setSpectrumAnalysisEnabled(enabled)).success
   },
 
   // Events

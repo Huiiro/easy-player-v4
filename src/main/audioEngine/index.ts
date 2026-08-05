@@ -378,8 +378,16 @@ export class AudioEngineManager {
     if (!this.engine) return null
     return this.engine.getAudioChain()
   }
-  getAudioAnalysis() {
-    return this.engine?.getAudioAnalysis() ?? null
+  getAudioAnalysis(includeSpectrum = false): unknown {
+    return this.engine?.getAudioAnalysis(includeSpectrum) ?? null
+  }
+  setLoudnessAnalysisEnabled(enabled: boolean): boolean {
+    if (!this.engine) return false
+    return this.engine.setLoudnessAnalysisEnabled(enabled)
+  }
+  setSpectrumAnalysisEnabled(enabled: boolean): boolean {
+    if (!this.engine) return false
+    return this.engine.setSpectrumAnalysisEnabled(enabled)
   }
 
   // ── Callbacks ──

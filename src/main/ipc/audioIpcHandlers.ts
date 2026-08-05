@@ -302,7 +302,14 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
         return { success: true, data: engine.getAudioChain() }
       }
       case 'getAudioAnalysis':
-        return { success: true, data: engine.getAudioAnalysis() }
+        return {
+          success: true,
+          data: engine.getAudioAnalysis(params?.includeSpectrum === true)
+        }
+      case 'setLoudnessAnalysisEnabled':
+        return { success: engine.setLoudnessAnalysisEnabled(params.enabled === true) }
+      case 'setSpectrumAnalysisEnabled':
+        return { success: engine.setSpectrumAnalysisEnabled(params.enabled === true) }
 
       case 'getTrackInfo': {
         return { success: false, error: 'Not implemented — use open() instead' }

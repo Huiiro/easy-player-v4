@@ -33,6 +33,7 @@ const bubbles = Array.from({ length: 26 }, (_, index) => ({
 
 <style scoped>
 .ocean-background {
+  contain: paint;
   background:
     radial-gradient(circle at 78% 15%, rgb(91 211 255 / 62%), transparent 36%),
     radial-gradient(circle at 18% 82%, rgb(35 112 201 / 68%), transparent 43%),

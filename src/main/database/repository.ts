@@ -1,4 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { safeStorage } from 'electron'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
@@ -808,11 +809,48 @@ export function toggleSongTag(tagId: number, songId: number): boolean {
 }
 
 export function listSources(): MusicSource[] {
-  return getDatabase()
+  const sources = getDatabase()
     .prepare(
       'SELECT id, name, type, server, base_url AS baseUrl, user, secret, auth_type AS authType, status, source_order AS sourceOrder, imported_count AS importedCount, song_count AS songCount, last_connect AS lastConnect FROM music_source ORDER BY source_order, id'
     )
     .all() as MusicSource[]
+  return sources.map((source) => ({ ...source, secret: decryptSourceSecret(source.secret) }))
+}
+
+const SOURCE_SECRET_PREFIX = 'safe:v1:'
+
+function encryptSourceSecret(secret: string | null | undefined): string | null {
+  if (!secret) return null
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error('系统凭据加密不可用，无法保存远程音源密码。')
+  return `${SOURCE_SECRET_PREFIX}${safeStorage.encryptString(secret).toString('base64')}`
+}
+
+function decryptSourceSecret(secret: string | null): string | null {
+  if (!secret) return null
+  if (!secret.startsWith(SOURCE_SECRET_PREFIX)) return secret
+  if (!safeStorage.isEncryptionAvailable())
+    throw new Error('系统凭据加密不可用，无法读取远程音源密码。')
+  return safeStorage.decryptString(Buffer.from(secret.slice(SOURCE_SECRET_PREFIX.length), 'base64'))
+}
+
+/** Encrypt legacy plaintext credentials after the app's key store is available. */
+export function migrateSourceSecrets(): void {
+  if (!safeStorage.isEncryptionAvailable()) return
+  const db = getDatabase()
+  const rows = db
+    .prepare('SELECT id, secret FROM music_source WHERE secret IS NOT NULL')
+    .all() as Array<{
+    id: number
+    secret: string
+  }>
+  const update = db.prepare('UPDATE music_source SET secret = ? WHERE id = ?')
+  db.transaction(() => {
+    for (const row of rows) {
+      if (!row.secret.startsWith(SOURCE_SECRET_PREFIX))
+        update.run(encryptSourceSecret(row.secret), row.id)
+    }
+  })()
 }
 export function createSource(input: MusicSourceInput): MusicSource {
   const db = getDatabase()
@@ -826,7 +864,7 @@ export function createSource(input: MusicSourceInput): MusicSource {
       input.server ?? null,
       input.baseUrl ?? null,
       input.user ?? null,
-      input.secret ?? null,
+      encryptSourceSecret(input.secret),
       input.authType ?? null,
       input.status ?? null
     )
@@ -844,7 +882,7 @@ export function updateSource(source: MusicSource): boolean {
         source.server,
         source.baseUrl,
         source.user,
-        source.secret,
+        encryptSourceSecret(source.secret),
         source.authType,
         source.status,
         source.sourceOrder,

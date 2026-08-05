@@ -11,8 +11,7 @@ import {
   screen,
   Tray
 } from 'electron'
-import { readdirSync, statSync } from 'node:fs'
-import { existsSync } from 'node:fs'
+import { existsSync, promises as fs } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import icon from '../../resources/easy-player.ico?asset'
@@ -20,7 +19,7 @@ import { AudioEngineManager } from './audioEngine'
 import { registerIpcHandlers } from './ipc/audioIpcHandlers'
 import { closeDatabase, initDatabase } from './database'
 import { registerDatabaseIpcHandlers } from './ipc/databaseIpcHandlers'
-import { getAppSetting, getSong, setAppSetting } from './database/repository'
+import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
@@ -226,6 +225,8 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
@@ -269,9 +270,15 @@ function createWindow(): void {
   mainWindow.on('unmaximize', sendWindowState)
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
-    shell.openExternal(details.url)
+    try {
+      const url = new URL(details.url)
+      if (url.protocol === 'https:' || url.protocol === 'http:') void shell.openExternal(url.href)
+    } catch {
+      // Ignore malformed external navigation requests.
+    }
     return { action: 'deny' }
   })
+  mainWindow.webContents.on('will-navigate', (event) => event.preventDefault())
 
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.key !== 'F12') return
@@ -312,6 +319,8 @@ function createMiniPlayerWindow(): BrowserWindow {
     backgroundColor: '#111614',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
@@ -353,6 +362,8 @@ function createDesktopLyricsWindow(): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
       sandbox: false
     }
   })
@@ -383,6 +394,7 @@ app.whenReady().then(() => {
   app.setAppUserModelId('com.huiiro.easyplayer')
   createDir()
   initDatabase()
+  migrateSourceSecrets()
   registerDatabaseIpcHandlers()
   registerScanIpcHandlers()
   registerLyricsIpcHandlers()
@@ -537,17 +549,20 @@ app.whenReady().then(() => {
     success: true,
     data: join(getDataPath(), 'cache')
   }))
-  ipcMain.handle('remote-source:cache-size', (_event, directory: unknown) => {
+  ipcMain.handle('remote-source:cache-size', async (_event, directory: unknown) => {
     if (typeof directory !== 'string' || !existsSync(directory)) return { success: true, data: 0 }
-    const sizeOf = (target: string): number =>
-      readdirSync(target, { withFileTypes: true }).reduce((total, entry) => {
+    const sizeOf = async (target: string): Promise<number> => {
+      const entries = await fs.readdir(target, { withFileTypes: true })
+      let total = 0
+      for (const entry of entries) {
         const child = join(target, entry.name)
-        return (
-          total + (entry.isDirectory() ? sizeOf(child) : entry.isFile() ? statSync(child).size : 0)
-        )
-      }, 0)
+        if (entry.isDirectory()) total += await sizeOf(child)
+        else if (entry.isFile()) total += (await fs.stat(child)).size
+      }
+      return total
+    }
     try {
-      return { success: true, data: sizeOf(directory) }
+      return { success: true, data: await sizeOf(directory) }
     } catch {
       return { success: true, data: 0 }
     }

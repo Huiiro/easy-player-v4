@@ -53,6 +53,6 @@ export function registerFileIpcHandlers(): void {
   ipcMain.handle('files:recover-moved-songs', async (event) => {
     const result = await showOpenDialogFor(event, { properties: ['openDirectory'] })
     if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
-    return { success: true, data: recoverMovedSongs(result.filePaths[0]) }
+    return { success: true, data: await recoverMovedSongs(result.filePaths[0]) }
   })
 }

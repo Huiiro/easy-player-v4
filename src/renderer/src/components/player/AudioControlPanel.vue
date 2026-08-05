@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePlayerStore } from '@/stores/player/playerStore'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
@@ -40,8 +40,10 @@ async function initializeAudioControls(): Promise<void> {
 }
 
 onMounted(() => {
+  player.setLoudnessAnalysisEnabled(true)
   void initializeAudioControls()
 })
+onBeforeUnmount(() => player.setLoudnessAnalysisEnabled(false))
 
 function resetEqBands(): void {
   for (const band of player.eqBands) {

@@ -50,6 +50,7 @@ const scanBars = [
 
 <style scoped>
 .matrix-background {
+  contain: paint;
   background:
     radial-gradient(ellipse at 50% 48%, rgb(19 124 76 / 0.24), transparent 37%),
     linear-gradient(135deg, #020b08, #071911 54%, #020806);

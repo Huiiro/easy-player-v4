@@ -113,6 +113,7 @@ function bitPerfectLabel(): string {
 
 // ── Startup ──
 onMounted(async () => {
+  player.setLoudnessAnalysisEnabled(true)
   player.loadRhythmVisualConfig()
   lastAnalysisUpdateAt = performance.now()
   visualDecayTimer = setInterval(() => {
@@ -149,6 +150,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  player.setLoudnessAnalysisEnabled(false)
   if (eqCommitTimer) clearTimeout(eqCommitTimer)
   if (beatPulseTimer) clearTimeout(beatPulseTimer)
   if (visualDecayTimer) clearInterval(visualDecayTimer)

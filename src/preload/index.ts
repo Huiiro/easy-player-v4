@@ -97,8 +97,21 @@ const audioAPI = {
   getEngineInfo: () => ipcRenderer.invoke('audio:command', { action: 'getEngineInfo', params: {} }),
   getStatus: () => ipcRenderer.invoke('audio:command', { action: 'getStatus', params: {} }),
   getAudioChain: () => ipcRenderer.invoke('audio:command', { action: 'getAudioChain', params: {} }),
-  getAudioAnalysis: () =>
-    ipcRenderer.invoke('audio:command', { action: 'getAudioAnalysis', params: {} }),
+  getAudioAnalysis: (includeSpectrum = true) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'getAudioAnalysis',
+      params: { includeSpectrum }
+    }),
+  setLoudnessAnalysisEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'setLoudnessAnalysisEnabled',
+      params: { enabled }
+    }),
+  setSpectrumAnalysisEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'setSpectrumAnalysisEnabled',
+      params: { enabled }
+    }),
 
   // Events (returns unsubscribe function)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

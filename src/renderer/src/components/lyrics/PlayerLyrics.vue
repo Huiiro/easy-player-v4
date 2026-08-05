@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricChar, LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { gsap } from 'gsap'
@@ -34,7 +34,9 @@ const props = withDefaults(
 const emit = defineEmits<{ seek: [positionMs: number] }>()
 
 const ui = useUIStore()
-const lyrics = ref<LyricLine[]>([])
+// Lyrics are replaced as a complete result and never mutated in place. Avoid
+// creating reactive proxies for every line and karaoke character.
+const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
 const viewportRef = ref<HTMLElement>()
 const lineRefs = ref<HTMLElement[]>([])
@@ -89,11 +91,6 @@ async function load(): Promise<void> {
   if (isUnmounted || loadId !== lyricLoadId) return
   lyrics.value = result.lines
   source.value = result.source
-}
-
-const setLineRef = (el: Element | null, idx: number): void => {
-  if (!el) return
-  lineRefs.value[idx] = el as HTMLElement
 }
 
 const scheduleSnapToCurrent = (): void => {
@@ -225,6 +222,11 @@ const getLineStyle = (idx: number) => {
   }
 }
 
+// `frame` updates at 48 FPS for the active lyric. Keep the styles for the
+// complete lyric list stable between line/scroll changes so that update does
+// not allocate a new object for every off-screen line on each render.
+const lineStyles = computed(() => lyrics.value.map((_line, idx) => getLineStyle(idx)))
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const getNormalCharStyle = (idx: number, total: number) => {
   const progress = lineProgress.value * total - idx
@@ -286,15 +288,9 @@ watch(
   }
 )
 
-watch(
-  [() => lyrics, () => source],
-  () => {
-    snapToCurrent()
-  },
-  {
-    deep: true
-  }
-)
+watch([lyrics, source], () => {
+  snapToCurrent()
+})
 
 watch([() => ui.lyricsFontSize, () => ui.lyricsFontPadding, () => ui.showLyricsTranslation], () => {
   scheduleSnapToCurrent()
@@ -342,9 +338,9 @@ onUnmounted(() => {
       <div
         v-for="(line, idx) in lyrics"
         :key="idx"
-        :ref="(el) => setLineRef(el as Element, idx)"
+        ref="lineRefs"
         class="lyric-line group hover:bg-white/2"
-        :style="getLineStyle(idx)"
+        :style="lineStyles[idx]"
       >
         <!-- 主歌词 -->
         <div class="lyric-main" :style="{ textAlign: alignMode }">
@@ -424,7 +420,6 @@ onUnmounted(() => {
   left: 0;
   top: 0;
   width: 100%;
-  will-change: transform;
   padding: 60vh 0;
 }
 
@@ -439,8 +434,19 @@ onUnmounted(() => {
     transform 700ms cubic-bezier(0.22, 1, 0.36, 1),
     opacity 350ms ease,
     filter 400ms ease;
-  will-change: transform;
   transform-origin: center center;
+}
+
+/*
+ * Lyrics outside the scroll viewport do not need a painted blur/transform
+ * surface. Chromium keeps their DOM and restores them before they become
+ * visible, while avoiding a growing raster cache for a full song.
+ */
+@supports (content-visibility: auto) {
+  .lyric-line {
+    content-visibility: auto;
+    contain-intrinsic-size: auto calc(var(--lrc-size) * 4 + var(--lrc-padding) * 2 + 2rem);
+  }
 }
 
 .lyric-main {
@@ -477,8 +483,6 @@ onUnmounted(() => {
   );
   background-clip: text;
   -webkit-background-clip: text;
-  will-change: background-image;
-  transform: translateZ(0);
 }
 
 .lyric-karaoke-char {
@@ -502,7 +506,6 @@ onUnmounted(() => {
     background-size 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
     opacity 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: background-size, transform, opacity;
   transform-origin: center bottom;
   scale: 1.06;
   letter-spacing: 3px;

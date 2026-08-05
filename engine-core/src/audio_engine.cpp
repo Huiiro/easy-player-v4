@@ -1,6 +1,7 @@
 #include "audio_engine.h"
 #include "logger.h"
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <deque>
 #include <sstream>
@@ -1012,10 +1013,17 @@ void AudioEngine::analysis_thread_func() {
     float loudness_rate = 0.0f;
     std::vector<Biquad> shelf_filters, highpass_filters;
     std::deque<std::pair<int, double>> momentary_window, short_term_window;
-    std::vector<double> integrated_blocks;
+    // EBU R128 uses 100 ms loudness steps. Keep the integrated-gate input in
+    // fixed 0.1 LU bins instead of retaining one heap entry per block for the
+    // duration of playback. This bounds the analysis thread's memory while
+    // preserving both the absolute and relative gates.
+    static constexpr size_t kIntegratedLufsBins = 701;
+    std::array<double, kIntegratedLufsBins> integrated_energy_bins{};
+    std::array<uint64_t, kIntegratedLufsBins> integrated_block_counts{};
     double momentary_energy = 0.0, short_term_energy = 0.0, integrated_energy = 0.0;
     int momentary_frames = 0, short_term_frames = 0, integrated_frames = 0;
     uint64_t loudness_log_frames = 0;
+    bool loudness_enabled = false;
     auto configure_loudness = [&](int channels, float rate) {
         loudness_channels = channels; loudness_rate = rate;
         shelf_filters.assign(channels, {}); highpass_filters.assign(channels, {});
@@ -1040,7 +1048,8 @@ void AudioEngine::analysis_thread_func() {
         }
     };
     auto reset_loudness = [&] {
-        momentary_window.clear(); short_term_window.clear(); integrated_blocks.clear();
+        momentary_window.clear(); short_term_window.clear();
+        integrated_energy_bins.fill(0.0); integrated_block_counts.fill(0);
         momentary_energy = short_term_energy = integrated_energy = 0.0;
         momentary_frames = short_term_frames = integrated_frames = 0;
         loudness_channels = 0; loudness_rate = 0.0f;
@@ -1068,61 +1077,94 @@ void AudioEngine::analysis_thread_func() {
         }
         const int channels = std::max(1, static_cast<int>(analysis_work_buffer_.size() / 1024));
         const float sample_rate = backend_ ? static_cast<float>(backend_->current_format().sample_rate) : 48000.0f;
-        if (channels != loudness_channels || std::abs(sample_rate - loudness_rate) > 0.5f) configure_loudness(channels, sample_rate);
+        const bool requested_loudness = loudness_analysis_enabled_.load(std::memory_order_acquire);
+        if (requested_loudness != loudness_enabled) {
+            reset_loudness();
+            loudness_enabled = requested_loudness;
+            analysis_momentary_lufs_.store(-70.0f, std::memory_order_release);
+            analysis_short_term_lufs_.store(-70.0f, std::memory_order_release);
+            analysis_integrated_lufs_.store(-70.0f, std::memory_order_release);
+        }
+        if (loudness_enabled && (channels != loudness_channels || std::abs(sample_rate - loudness_rate) > 0.5f)) configure_loudness(channels, sample_rate);
         double square_sum = 0.0, low_square_sum = 0.0, weighted_square_sum = 0.0;
         for (int frame = 0; frame < frames; ++frame) {
             float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
             mono /= channels; lowpass = 0.94f * lowpass + 0.06f * mono;
             square_sum += mono * mono; low_square_sum += lowpass * lowpass;
-            for (int channel = 0; channel < channels; ++channel) {
-                const float input = analysis_work_buffer_[frame * channels + channel];
-                float filtered = highpass_filters[channel].process(shelf_filters[channel].process(input));
-                // A malformed source sample must not poison a persistent IIR
-                // state and make the public loudness meter permanently NaN.
-                if (!std::isfinite(filtered)) {
-                    shelf_filters[channel].z1 = shelf_filters[channel].z2 = 0.0f;
-                    highpass_filters[channel].z1 = highpass_filters[channel].z2 = 0.0f;
-                    filtered = std::isfinite(input) ? input : 0.0f;
+            if (loudness_enabled) {
+                for (int channel = 0; channel < channels; ++channel) {
+                    const float input = analysis_work_buffer_[frame * channels + channel];
+                    float filtered = highpass_filters[channel].process(shelf_filters[channel].process(input));
+                    // A malformed source sample must not poison a persistent IIR
+                    // state and make the public loudness meter permanently NaN.
+                    if (!std::isfinite(filtered)) {
+                        shelf_filters[channel].z1 = shelf_filters[channel].z2 = 0.0f;
+                        highpass_filters[channel].z1 = highpass_filters[channel].z2 = 0.0f;
+                        filtered = std::isfinite(input) ? input : 0.0f;
+                    }
+                    const float channel_weight = channels > 3 && channel == 3 ? 0.0f : (channels > 3 && channel >= 4 ? 1.41421356f : 1.0f);
+                    weighted_square_sum += channel_weight * filtered * filtered;
                 }
-                const float channel_weight = channels > 3 && channel == 3 ? 0.0f : (channels > 3 && channel >= 4 ? 1.41421356f : 1.0f);
-                weighted_square_sum += channel_weight * filtered * filtered;
             }
         }
         // Preserve a usable output meter if a non-standard multichannel layout
         // exposes only an LFE lane. Normal stereo/multichannel input uses the
         // K-weighted value above.
-        if (!(weighted_square_sum > 0.0) && square_sum > 0.0) weighted_square_sum = square_sum;
         const float rms = std::sqrt(static_cast<float>(square_sum / frames));
         analysis_rms_.store(rms, std::memory_order_release);
         analysis_low_energy_.store(std::sqrt(static_cast<float>(low_square_sum / frames)), std::memory_order_release);
         const float onset = std::max(0.0f, rms - previous_rms);
         analysis_onset_strength_.store(onset, std::memory_order_release);
-        momentary_window.emplace_back(frames, weighted_square_sum); momentary_energy += weighted_square_sum; momentary_frames += frames;
-        short_term_window.emplace_back(frames, weighted_square_sum); short_term_energy += weighted_square_sum; short_term_frames += frames;
-        const int momentary_limit = std::max(1, static_cast<int>(sample_rate * 0.4f)), short_term_limit = std::max(1, static_cast<int>(sample_rate * 3.0f));
-        while (momentary_frames > momentary_limit && !momentary_window.empty()) { momentary_frames -= momentary_window.front().first; momentary_energy -= momentary_window.front().second; momentary_window.pop_front(); }
-        while (short_term_frames > short_term_limit && !short_term_window.empty()) { short_term_frames -= short_term_window.front().first; short_term_energy -= short_term_window.front().second; short_term_window.pop_front(); }
-        analysis_momentary_lufs_.store(lufs_from_energy(momentary_energy / std::max(1, momentary_frames)), std::memory_order_release);
-        analysis_short_term_lufs_.store(lufs_from_energy(short_term_energy / std::max(1, short_term_frames)), std::memory_order_release);
-        loudness_log_frames += frames;
-        if (loudness_log_frames >= static_cast<uint64_t>(sample_rate * 2.0f)) {
+        if (loudness_enabled) {
+            if (!(weighted_square_sum > 0.0) && square_sum > 0.0) weighted_square_sum = square_sum;
+            momentary_window.emplace_back(frames, weighted_square_sum); momentary_energy += weighted_square_sum; momentary_frames += frames;
+            short_term_window.emplace_back(frames, weighted_square_sum); short_term_energy += weighted_square_sum; short_term_frames += frames;
+            const int momentary_limit = std::max(1, static_cast<int>(sample_rate * 0.4f)), short_term_limit = std::max(1, static_cast<int>(sample_rate * 3.0f));
+            while (momentary_frames > momentary_limit && !momentary_window.empty()) { momentary_frames -= momentary_window.front().first; momentary_energy -= momentary_window.front().second; momentary_window.pop_front(); }
+            while (short_term_frames > short_term_limit && !short_term_window.empty()) { short_term_frames -= short_term_window.front().first; short_term_energy -= short_term_window.front().second; short_term_window.pop_front(); }
+            analysis_momentary_lufs_.store(lufs_from_energy(momentary_energy / std::max(1, momentary_frames)), std::memory_order_release);
+            analysis_short_term_lufs_.store(lufs_from_energy(short_term_energy / std::max(1, short_term_frames)), std::memory_order_release);
+            loudness_log_frames += frames;
+            if (loudness_log_frames >= static_cast<uint64_t>(sample_rate * 2.0f)) {
             loudness_log_frames = 0;
             LOG_INFO("Loudness analysis: energy=" + std::to_string(weighted_square_sum / std::max(1, frames)) +
                      ", M=" + std::to_string(analysis_momentary_lufs_.load(std::memory_order_relaxed)) +
                      ", S=" + std::to_string(analysis_short_term_lufs_.load(std::memory_order_relaxed)));
-        }
-        integrated_energy += weighted_square_sum; integrated_frames += frames;
-        if (integrated_frames >= momentary_limit) {
+            }
+            integrated_energy += weighted_square_sum; integrated_frames += frames;
+            if (integrated_frames >= momentary_limit) {
             const double block_energy = integrated_energy / integrated_frames;
-            if (lufs_from_energy(block_energy) > -70.0f) integrated_blocks.push_back(block_energy);
-            if (!integrated_blocks.empty()) {
-                double absolute_sum = 0.0; for (double energy : integrated_blocks) absolute_sum += energy;
-                const float ungated = lufs_from_energy(absolute_sum / integrated_blocks.size());
-                double gated_sum = 0.0; int gated_count = 0;
-                for (double energy : integrated_blocks) if (lufs_from_energy(energy) > ungated - 10.0f) { gated_sum += energy; ++gated_count; }
-                analysis_integrated_lufs_.store(lufs_from_energy(gated_sum / std::max(1, gated_count)), std::memory_order_release);
+            const float block_lufs = lufs_from_energy(block_energy);
+            if (block_lufs > -70.0f) {
+                const auto bin = static_cast<size_t>(std::clamp(
+                    std::lround((std::clamp(block_lufs, -70.0f, 0.0f) + 70.0f) * 10.0f),
+                    0l,
+                    static_cast<long>(kIntegratedLufsBins - 1)));
+                integrated_energy_bins[bin] += block_energy;
+                ++integrated_block_counts[bin];
+
+                double absolute_sum = 0.0;
+                uint64_t absolute_count = 0;
+                for (size_t index = 0; index < kIntegratedLufsBins; ++index) {
+                    absolute_sum += integrated_energy_bins[index];
+                    absolute_count += integrated_block_counts[index];
+                }
+                const float ungated = lufs_from_energy(absolute_sum / std::max<uint64_t>(1, absolute_count));
+                double gated_sum = 0.0;
+                uint64_t gated_count = 0;
+                for (size_t index = 0; index < kIntegratedLufsBins; ++index) {
+                    const float bin_lufs = -70.0f + static_cast<float>(index) / 10.0f;
+                    if (bin_lufs > ungated - 10.0f) {
+                        gated_sum += integrated_energy_bins[index];
+                        gated_count += integrated_block_counts[index];
+                    }
+                }
+                analysis_integrated_lufs_.store(
+                    lufs_from_energy(gated_sum / std::max<uint64_t>(1, gated_count)),
+                    std::memory_order_release);
             }
             integrated_energy = 0.0; integrated_frames = 0;
+            }
         }
         const uint64_t minimum_interval = static_cast<uint64_t>(sample_rate * 0.18f);
         if (onset > std::max(0.003f, onset_average * 1.8f) && (last_beat_frame == 0 || consumed_frames - last_beat_frame >= minimum_interval)) {
@@ -1137,16 +1179,18 @@ void AudioEngine::analysis_thread_func() {
             analysis_beat_sequence_.fetch_add(1, std::memory_order_release);
         }
         onset_average = onset_average * 0.94f + onset * 0.06f;
-        for (int band = 0; band < 64; ++band) {
-            const float frequency = std::min(sample_rate * 0.45f, 45.0f * std::pow(2.0f, band / 10.0f));
-            float real = 0.0f, imaginary = 0.0f;
-            for (int frame = 0; frame < frames; ++frame) {
-                float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
-                const float window = 0.5f - 0.5f * std::cos(6.28318530718f * frame / std::max(1, frames - 1));
-                const float phase = 6.28318530718f * frequency * frame / sample_rate;
-                real += mono * window * std::cos(phase); imaginary -= mono * window * std::sin(phase);
+        if (spectrum_analysis_enabled_.load(std::memory_order_acquire)) {
+            for (int band = 0; band < 64; ++band) {
+                const float frequency = std::min(sample_rate * 0.45f, 45.0f * std::pow(2.0f, band / 10.0f));
+                float real = 0.0f, imaginary = 0.0f;
+                for (int frame = 0; frame < frames; ++frame) {
+                    float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
+                    const float window = 0.5f - 0.5f * std::cos(6.28318530718f * frame / std::max(1, frames - 1));
+                    const float phase = 6.28318530718f * frequency * frame / sample_rate;
+                    real += mono * window * std::cos(phase); imaginary -= mono * window * std::sin(phase);
+                }
+                analysis_spectrum_[band].store(std::min(1.0f, 4.0f * std::sqrt(real * real + imaginary * imaginary) / frames), std::memory_order_release);
             }
-            analysis_spectrum_[band].store(std::min(1.0f, 4.0f * std::sqrt(real * real + imaginary * imaginary) / frames), std::memory_order_release);
         }
         previous_rms = 0.85f * previous_rms + 0.15f * rms;
         consumed_frames += frames;

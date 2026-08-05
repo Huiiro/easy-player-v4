@@ -62,11 +62,12 @@ function getOrInsertFolder(importPath: string, rootPath: string): FolderRow {
   return { id: Number(result.lastInsertRowid) }
 }
 
-function collectMusicFiles(directory: string, files: string[]): void {
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+async function collectMusicFiles(directory: string, files: string[]): Promise<void> {
+  const entries = await fs.promises.readdir(directory, { withFileTypes: true })
+  for (const entry of entries) {
     const fullPath = path.join(directory, entry.name)
     if (entry.isDirectory()) {
-      collectMusicFiles(fullPath, files)
+      await collectMusicFiles(fullPath, files)
     } else if (
       entry.isFile() &&
       SUPPORTED_EXTENSIONS.includes(path.extname(entry.name).toLowerCase())
@@ -82,12 +83,18 @@ export async function scanMusicDirectory(
   callback?: ScanCallback
 ): Promise<ScanResult> {
   const rootPath = path.resolve(dirPath)
-  if (!fs.existsSync(rootPath) || !fs.statSync(rootPath).isDirectory()) {
+  let rootStat: fs.Stats
+  try {
+    rootStat = await fs.promises.stat(rootPath)
+  } catch {
+    throw new Error(`Music directory does not exist: ${rootPath}`)
+  }
+  if (!rootStat.isDirectory()) {
     throw new Error(`Music directory does not exist: ${rootPath}`)
   }
 
   const files: string[] = []
-  collectMusicFiles(rootPath, files)
+  await collectMusicFiles(rootPath, files)
 
   const db = getDatabase()
   const insertSong = db.prepare(`
@@ -103,7 +110,7 @@ export async function scanMusicDirectory(
   `)
   const existsSong = db.prepare('SELECT 1 FROM song WHERE audio = ?')
   const coverDir = path.join(getDataPath(), 'covers')
-  fs.mkdirSync(coverDir, { recursive: true })
+  await fs.promises.mkdir(coverDir, { recursive: true })
   db.prepare('UPDATE song SET is_newest = 0').run()
 
   callback?.(0, files.length, 0, 0)
@@ -124,7 +131,7 @@ export async function scanMusicDirectory(
       let cover: string | null = null
       if (picture) {
         const coverPath = path.join(coverDir, `${crypto.randomUUID()}.jpg`)
-        fs.writeFileSync(coverPath, picture.data)
+        await fs.promises.writeFile(coverPath, picture.data)
         cover = coverPath
       }
 
@@ -145,7 +152,7 @@ export async function scanMusicDirectory(
         channels: format.numberOfChannels || null,
         format: format.container || format.codec || path.extname(fullPath).slice(1) || null,
         fileName: path.basename(fullPath, path.extname(fullPath)),
-        fileSize: fs.statSync(fullPath).size,
+        fileSize: (await fs.promises.stat(fullPath)).size,
         trackNo: common.track.no || null,
         diskNo: common.disk.no || null,
         folderId: folder.id

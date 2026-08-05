@@ -1,14 +1,17 @@
 import { createHash, randomBytes } from 'node:crypto'
 import {
   existsSync,
+  createWriteStream,
   mkdirSync,
   readdirSync,
   renameSync,
   statSync,
-  unlinkSync,
-  writeFileSync
+  unlinkSync
 } from 'node:fs'
 import { basename, extname, join } from 'node:path'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { getDatabase } from '../database'
 import {
   getAppSetting,
@@ -53,8 +56,73 @@ interface RemoteProvider {
 type RemoteConnection = { baseUrl: string; user: string; secret: string; type: RemoteProviderId }
 type ConfiguredSource = MusicSource & RemoteConnection
 
+const REMOTE_REQUEST_TIMEOUT_MS = 20_000
+const MAX_REMOTE_JSON_BYTES = 5 * 1024 * 1024
+const MAX_REMOTE_COVER_BYTES = 15 * 1024 * 1024
+const MAX_REMOTE_STREAM_BYTES = 1024 * 1024 * 1024
+const REMOTE_SYNC_CONCURRENCY = 4
+
 function normalizedBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/$/, '')
+  let url: URL
+  try {
+    url = new URL(baseUrl.trim())
+  } catch {
+    throw new Error('远程音源地址无效')
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:')
+    throw new Error('远程音源仅支持 HTTP 或 HTTPS 地址')
+  if (url.username || url.password) throw new Error('远程音源地址不能包含用户名或密码')
+  return url.href.replace(/\/$/, '')
+}
+
+function remoteFetch(input: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(input, { ...options, signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS) })
+}
+
+function assertResponseSize(response: Response, limit: number, kind: string): void {
+  const length = Number(response.headers.get('content-length') || 0)
+  if (Number.isFinite(length) && length > limit) throw new Error(`${kind}超过允许的大小限制`)
+}
+
+async function writeResponseToFile(
+  response: Response,
+  filePath: string,
+  limit: number,
+  kind: string
+): Promise<void> {
+  assertResponseSize(response, limit, kind)
+  if (!response.body) throw new Error(`${kind}没有可读取的数据`)
+  let received = 0
+  const limiter = new Transform({
+    transform(chunk: Buffer, _encoding, callback) {
+      received += chunk.length
+      if (received > limit) {
+        callback(new Error(`${kind}超过允许的大小限制`))
+        return
+      }
+      callback(null, chunk)
+    }
+  })
+  await pipeline(
+    Readable.fromWeb(response.body as unknown as NodeReadableStream),
+    limiter,
+    createWriteStream(filePath)
+  )
+}
+
+async function forEachWithConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  task: (item: T) => Promise<void>
+): Promise<void> {
+  let cursor = 0
+  const worker = async (): Promise<void> => {
+    while (cursor < items.length) {
+      const index = cursor++
+      await task(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker))
 }
 
 function providerFor(type: string | null | undefined): RemoteProvider {
@@ -112,7 +180,10 @@ interface SubsonicResponse<T> {
 
 /** Some reverse proxies return an empty page or HTML on an authentication error. */
 async function readJson<T>(response: Response): Promise<T | undefined> {
+  assertResponseSize(response, MAX_REMOTE_JSON_BYTES, '远程响应')
   const text = await response.text()
+  if (Buffer.byteLength(text, 'utf8') > MAX_REMOTE_JSON_BYTES)
+    throw new Error('远程响应超过允许的大小限制')
   if (!text.trim()) return undefined
   try {
     return JSON.parse(text) as T
@@ -126,7 +197,7 @@ async function subsonicRequest<T>(
   endpoint: string,
   parameters: Record<string, string> = {}
 ): Promise<T> {
-  const response = await fetch(subsonicUrl(source, endpoint, parameters))
+  const response = await remoteFetch(subsonicUrl(source, endpoint, parameters))
   const body = await readJson<SubsonicResponse<T>>(response)
   const result = body?.['subsonic-response']
   if (!response.ok || result?.status !== 'ok')
@@ -183,8 +254,8 @@ const navidromeProvider: RemoteProvider = {
     return tracks
   },
   fetchCover: (source, coverId) =>
-    fetch(subsonicUrl(source, 'getCoverArt', { id: coverId, size: '600' })),
-  fetchStream: (source, trackId) => fetch(subsonicUrl(source, 'stream', { id: trackId }))
+    remoteFetch(subsonicUrl(source, 'getCoverArt', { id: coverId, size: '600' })),
+  fetchStream: (source, trackId) => remoteFetch(subsonicUrl(source, 'stream', { id: trackId }))
 }
 
 interface JellyfinItem {
@@ -217,7 +288,7 @@ interface JellyfinAuth {
 }
 
 async function jellyfinToken(connection: RemoteConnection): Promise<string> {
-  const response = await fetch(
+  const response = await remoteFetch(
     `${normalizedBaseUrl(connection.baseUrl)}/Users/AuthenticateByName`,
     {
       method: 'POST',
@@ -240,7 +311,7 @@ async function jellyfinFetch(
   options: RequestInit = {}
 ): Promise<Response> {
   const token = await jellyfinToken(connection)
-  return fetch(`${normalizedBaseUrl(connection.baseUrl)}${path}`, {
+  return remoteFetch(`${normalizedBaseUrl(connection.baseUrl)}${path}`, {
     ...options,
     headers: { ...options.headers, 'X-Emby-Token': token }
   })
@@ -250,7 +321,7 @@ const jellyfinProvider: RemoteProvider = {
   id: 'jellyfin',
   async test(config) {
     const token = await jellyfinToken(config)
-    const response = await fetch(`${normalizedBaseUrl(config.baseUrl)}/System/Info`, {
+    const response = await remoteFetch(`${normalizedBaseUrl(config.baseUrl)}/System/Info`, {
       headers: { 'X-Emby-Token': token }
     })
     const info = (await readJson<{ Version?: string; Message?: string }>(response)) || {}
@@ -342,7 +413,14 @@ async function cacheCover(source: ConfiguredSource, coverId?: string): Promise<s
   if (existsSync(filePath)) return filePath
   const response = await providerFor(source.type).fetchCover(source, coverId)
   if (!response.ok) return null
-  writeFileSync(filePath, Buffer.from(await response.arrayBuffer()))
+  const temporaryPath = `${filePath}.part`
+  try {
+    await writeResponseToFile(response, temporaryPath, MAX_REMOTE_COVER_BYTES, '远程封面')
+    renameSync(temporaryPath, filePath)
+  } catch (error) {
+    if (existsSync(temporaryPath)) unlinkSync(temporaryPath)
+    throw error
+  }
   return filePath
 }
 
@@ -387,7 +465,9 @@ export async function syncRemoteSource(
   validateSource(source)
   const tracks = await providerFor(source.type).listTracks(source)
   const folderId = remoteFolderId(source)
-  for (const track of tracks) await upsertSong(source, folderId, track)
+  await forEachWithConcurrency(tracks, REMOTE_SYNC_CONCURRENCY, (track) =>
+    upsertSong(source, folderId, track)
+  )
   touchSource(sourceId)
   updateSourceStats(sourceId, tracks.length, tracks.length)
   return { imported: tracks.length, total: tracks.length }
@@ -437,7 +517,7 @@ export async function cacheRemoteSong(songId: number): Promise<string> {
   const response = await providerFor(source.type).fetchStream(source, song.remoteId)
   if (!response.ok) throw new Error(`下载远程歌曲失败（${response.status}）`)
   const temporaryPath = `${filePath}.part`
-  writeFileSync(temporaryPath, Buffer.from(await response.arrayBuffer()))
+  await writeResponseToFile(response, temporaryPath, MAX_REMOTE_STREAM_BYTES, '远程歌曲')
   if (existsSync(filePath)) unlinkSync(filePath)
   renameSync(temporaryPath, filePath)
   cleanupCache(directory)

@@ -49,7 +49,7 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.1";
+    static constexpr const char* kVersion = "1.0.2";
     explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }
@@ -125,6 +125,12 @@ public:
     int glitch_count() const { return glitch_count_.load(); }
     AudioChainStatus audio_chain_status() const;
     AudioAnalysisSnapshot audio_analysis_snapshot() const;
+    void set_loudness_analysis_enabled(bool enabled) {
+        loudness_analysis_enabled_.store(enabled, std::memory_order_release);
+    }
+    void set_spectrum_analysis_enabled(bool enabled) {
+        spectrum_analysis_enabled_.store(enabled, std::memory_order_release);
+    }
 
     // ── Callbacks (called from native) ──
     using StateChangedCallback = std::function<void(EngineState)>;
@@ -202,6 +208,8 @@ private:
     std::atomic<float> analysis_momentary_lufs_{-70.0f};
     std::atomic<float> analysis_short_term_lufs_{-70.0f};
     std::atomic<float> analysis_integrated_lufs_{-70.0f};
+    std::atomic<bool> loudness_analysis_enabled_{false};
+    std::atomic<bool> spectrum_analysis_enabled_{false};
     std::atomic<uint64_t> analysis_reset_generation_{0};
     std::array<std::atomic<float>, 64> analysis_spectrum_{};
     // Preallocated source-format buffer. The audio callback never allocates;

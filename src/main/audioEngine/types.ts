@@ -66,9 +66,22 @@ export interface ResamplerConfig {
   quality: 'best' | 'medium' | 'fast'
 }
 
-export interface DspNodeConfig { id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'; enabled: boolean }
-export interface CompressorConfig { thresholdDb: number; ratio: number; attackMs: number; releaseMs: number; makeupDb: number }
-export interface DelayConfig { delayMs: number; feedback: number; mix: number }
+export interface DspNodeConfig {
+  id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+  enabled: boolean
+}
+export interface CompressorConfig {
+  thresholdDb: number
+  ratio: number
+  attackMs: number
+  releaseMs: number
+  makeupDb: number
+}
+export interface DelayConfig {
+  delayMs: number
+  feedback: number
+  mix: number
+}
 
 // Engine state enum matching C++ EngineState
 export enum EngineState {
@@ -133,6 +146,8 @@ export type AudioCommandAction =
   | 'getStatus'
   | 'getAudioChain'
   | 'getAudioAnalysis'
+  | 'setLoudnessAnalysisEnabled'
+  | 'setSpectrumAnalysisEnabled'
   | 'getTrackInfo'
 
 export type AudioEventType =

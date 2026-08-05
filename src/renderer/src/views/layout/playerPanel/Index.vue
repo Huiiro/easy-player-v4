@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -103,22 +103,19 @@ const glowStyle = computed(() => ({
   '--cover-secondary': `rgb(${coverColors.value.secondary} / 52%)`
 }))
 const coverGlowStyle = computed(() => ({
-  transform: `scale(${1 + rhythmAmount.value * 0.5})`,
-  opacity: String(0.62 + rhythmAmount.value * 0.38),
   '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
-  '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
+  '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`,
+  '--rhythm-scale': String(1 + rhythmAmount.value * 0.5),
+  '--rhythm-opacity': String(0.62 + rhythmAmount.value * 0.38)
 }))
 const coverFrameStyle = computed(() => ({
-  transform: `scale(${1 + rhythmAmount.value * 0.085})`,
-  filter: `brightness(${1 + rhythmAmount.value * 0.12})`
+  transform: `scale(${1 + rhythmAmount.value * 0.085})`
 }))
 const coverCardStyle = computed(() => {
-  const energy = rhythmAmount.value
   const primary = coverColors.value.primary
 
   return {
-    '--cover-shadow-rgb': primary,
-    boxShadow: `0 ${18 + energy * 10}px ${35 + energy * 28}px rgb(${primary} / ${0.3 + energy * 0.38})`
+    '--cover-shadow-rgb': primary
   }
 })
 const shouldAnimate = computed(
@@ -127,6 +124,17 @@ const shouldAnimate = computed(
     player.rhythmVisualConfig.enabled &&
     !player.rhythmVisualConfig.reducedMotion
 )
+const analysisPollingRate = computed(() => {
+  if (!ui.showPlayer) return 0
+  if (ui.showPlayerSpectrum) return 28
+  return shouldAnimate.value ? 16 : 0
+})
+watch(
+  analysisPollingRate,
+  (rate) => player.setAudioAnalysisPollingRate(rate, ui.showPlayerSpectrum),
+  { immediate: true }
+)
+onUnmounted(() => player.setAudioAnalysisPollingRate(0))
 const beatRingRef = ref<HTMLElement>()
 
 function restartBeatRing(): void {
@@ -178,6 +186,9 @@ watch(coverUrl, () => {
 })
 
 function close(): void {
+  player.setAudioAnalysisPollingRate(0)
+  performance.clearMarks()
+  performance.clearMeasures()
   ui.showPlayer = false
 }
 function toggleCollapsed(): void {
@@ -308,10 +319,7 @@ function extractCoverColors(event: Event): void {
           :key="backgroundSource"
           :src="backgroundSource"
           class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[24px] transition-transform duration-150"
-          :class="[
-            useAlbumArtwork ? 'opacity-100' : 'opacity-0',
-            shouldAnimate ? 'panel-cover--animated' : ''
-          ]"
+          :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
           :style="backgroundStyle"
           alt=""
           crossorigin="anonymous"
@@ -390,7 +398,6 @@ function extractCoverColors(event: Event): void {
           >
             <div
               class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura"
-              :class="shouldAnimate ? 'cover-aura--breathing' : ''"
               :style="coverGlowStyle"
             />
             <div v-if="shouldAnimate" class="cover-ring-anchor">
@@ -402,7 +409,6 @@ function extractCoverColors(event: Event): void {
             </div>
             <div
               class="cover-card relative z-10 grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
-              :class="shouldAnimate ? 'cover-card--breathing' : ''"
               :style="coverCardStyle"
             >
               <img
@@ -722,10 +728,14 @@ function extractCoverColors(event: Event): void {
       <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
       <!-- play spectrum-->
       <div
-        v-if="ui.showPlayerSpectrum"
+        v-if="ui.showPlayer && ui.showPlayerSpectrum"
         class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-80"
       >
-        <PlayerSpectrum :spectrum="player.audioAnalysis.spectrum" :color="coverColors.primary" />
+        <PlayerSpectrum
+          :spectrum="player.audioAnalysis.spectrum"
+          :color="coverColors.primary"
+          :active="player.isPlaying"
+        />
       </div>
     </section>
   </div>
@@ -733,14 +743,18 @@ function extractCoverColors(event: Event): void {
 
 <style scoped>
 .panel-ambient {
+  overflow: hidden;
+  transition: opacity 500ms ease;
+}
+.panel-ambient::before {
+  position: absolute;
+  inset: -12%;
   background:
     radial-gradient(circle at 14% 18%, var(--cover-primary), transparent 34%),
     radial-gradient(circle at 86% 76%, var(--cover-secondary), transparent 38%),
     radial-gradient(circle at 72% 14%, rgb(70 204 174 / 28%), transparent 30%);
   filter: blur(24px);
-  transition:
-    opacity 500ms ease,
-    transform 120ms ease;
+  content: '';
 }
 .panel-tool {
   display: flex;
@@ -884,7 +898,6 @@ function extractCoverColors(event: Event): void {
 .cover-frame {
   isolation: isolate;
   transform-origin: center;
-  will-change: transform, filter;
 }
 .cover-ring-anchor {
   position: absolute;
@@ -921,10 +934,7 @@ function extractCoverColors(event: Event): void {
   padding-left: 2rem;
 }
 .cover-card {
-  transition: box-shadow 100ms ease-out;
-}
-.cover-card--breathing {
-  animation: cover-card-breathe 2.8s ease-in-out infinite;
+  box-shadow: 0 22px 42px rgb(var(--cover-shadow-rgb) / 42%);
 }
 .panel-background-enter-active,
 .panel-background-leave-active {
@@ -939,17 +949,16 @@ function extractCoverColors(event: Event): void {
     radial-gradient(circle at 25% 22%, var(--cover-primary-solid), transparent 51%),
     radial-gradient(circle at 76% 78%, var(--cover-secondary-solid), transparent 58%);
   filter: blur(24px) saturate(1.25);
+  opacity: var(--rhythm-opacity);
+  transform: scale(var(--rhythm-scale));
   transition:
     opacity 120ms ease,
     transform 100ms ease;
 }
-.cover-aura--breathing {
-  animation: cover-aura-breathe 3.2s ease-in-out infinite;
-}
-.panel-cover--animated {
-  animation: player-panel-cover-drift 18s ease-in-out infinite alternate;
-}
 .panel-ambient--animated {
+  animation: none;
+}
+.panel-ambient--animated::before {
   animation: player-panel-ambient-drift 14s ease-in-out infinite alternate;
 }
 .panel-gradient {
@@ -989,26 +998,12 @@ function extractCoverColors(event: Event): void {
     transform: translate(-50%, -50%) scale(1.38);
   }
 }
-@keyframes player-panel-cover-drift {
-  from {
-    background-position: 46% 50%;
-  }
-  to {
-    background-position: 54% 46%;
-  }
-}
 @keyframes player-panel-ambient-drift {
   from {
-    background-position:
-      0 0,
-      100% 100%,
-      70% 0;
+    transform: translate(-2%, -1%) scale(1.02);
   }
   to {
-    background-position:
-      20% 12%,
-      78% 82%,
-      55% 16%;
+    transform: translate(2%, 1%) scale(1.05);
   }
 }
 @keyframes player-panel-orb-drift {
@@ -1019,32 +1014,11 @@ function extractCoverColors(event: Event): void {
     translate: 5% 4%;
   }
 }
-@keyframes cover-aura-breathe {
-  0%,
-  100% {
-    filter: blur(24px) saturate(1.2) brightness(0.9);
-  }
-  50% {
-    filter: blur(28px) saturate(1.45) brightness(1.18);
-  }
-}
-@keyframes cover-card-breathe {
-  0%,
-  100% {
-    filter: drop-shadow(0 10px 16px rgb(var(--cover-shadow-rgb) / 18%));
-  }
-  50% {
-    filter: drop-shadow(0 18px 26px rgb(var(--cover-shadow-rgb) / 42%));
-  }
-}
 @media (prefers-reduced-motion: reduce) {
   .beat-ring,
   .beat-ring--pulse,
-  .panel-cover--animated,
   .panel-ambient--animated,
-  .panel-orb--animated,
-  .cover-aura--breathing,
-  .cover-card--breathing {
+  .panel-orb--animated {
     animation: none;
   }
 }

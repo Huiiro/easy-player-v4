@@ -28,3 +28,7 @@ fix scan progress layer
 fix lyrics source persistent
 fix max load count
 
+#### v 3.0.6
+fix performance
+fix display
+

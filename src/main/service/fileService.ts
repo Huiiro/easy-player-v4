@@ -1,5 +1,5 @@
 import AdmZip from 'adm-zip'
-import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, promises as fs, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
@@ -14,7 +14,9 @@ type BackupManifest = {
   contents: Partial<Record<BackupPart, { file: string; count: number }>>
 }
 
-export function recoverMovedSongs(root: string): { total: number; recovered: number } {
+export async function recoverMovedSongs(
+  root: string
+): Promise<{ total: number; recovered: number }> {
   const db = getDatabase()
   const localSongs = db
     .prepare(
@@ -27,11 +29,11 @@ export function recoverMovedSongs(root: string): { total: number; recovered: num
   if (!missing.length) return { total: 0, recovered: 0 }
   const files = new Map<string, string[]>()
   const names = new Map<string, string[]>()
-  const visit = (directory: string): void => {
-    for (const name of readdirSync(directory)) {
+  const visit = async (directory: string): Promise<void> => {
+    for (const name of await fs.readdir(directory)) {
       const fullPath = join(directory, name)
-      const stat = statSync(fullPath)
-      if (stat.isDirectory()) visit(fullPath)
+      const stat = await fs.stat(fullPath)
+      if (stat.isDirectory()) await visit(fullPath)
       else {
         for (const fileName of new Set([name, basename(name, extname(name))])) {
           const key = `${fileName}\0${stat.size}`
@@ -41,7 +43,7 @@ export function recoverMovedSongs(root: string): { total: number; recovered: num
       }
     }
   }
-  visit(root)
+  await visit(root)
   const update = db.prepare(
     'UPDATE song SET audio = ?, file_name = ?, file_size = ?, song_status = 1 WHERE id = ?'
   )
@@ -53,7 +55,7 @@ export function recoverMovedSongs(root: string): { total: number; recovered: num
     const filePath =
       candidates.length === 1 ? candidates[0] : fallback.length === 1 ? fallback[0] : null
     if (filePath) {
-      update.run(filePath, basename(filePath), statSync(filePath).size, song.id)
+      update.run(filePath, basename(filePath), (await fs.stat(filePath)).size, song.id)
       recovered++
     }
   }

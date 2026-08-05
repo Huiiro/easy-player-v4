@@ -1,5 +1,6 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { shallowRef } from 'vue'
 import type {
   AudioChainStatus,
   ChannelMatrixConfig,
@@ -37,7 +38,10 @@ export const usePlayerStore = defineStore('player', () => {
   const devices = ref<DeviceInfo[]>([])
   const currentDeviceId = ref('default')
   const audioChain = ref<AudioChainStatus | null>(null)
-  const audioAnalysis = ref({
+  // Analysis snapshots arrive frequently and contain a spectrum array. Keep
+  // the snapshot shallow so every IPC result does not create a deep proxy tree
+  // that V8 retains in its expanded old-space heap after the visual closes.
+  const audioAnalysis = shallowRef({
     outputTimeMs: 0,
     analysisTimeMs: 0,
     analysisLatencyMs: 0,
@@ -780,9 +784,15 @@ export const usePlayerStore = defineStore('player', () => {
   async function refreshAudioChain(): Promise<void> {
     audioChain.value = await audioBridge.getAudioChain()
   }
-  async function refreshAudioAnalysis(): Promise<void> {
-    const snapshot = await audioBridge.getAudioAnalysis()
-    if (snapshot) audioAnalysis.value = snapshot
+  async function refreshAudioAnalysis(includeSpectrum = false): Promise<void> {
+    const snapshot = await audioBridge.getAudioAnalysis(includeSpectrum)
+    if (!snapshot) return
+    audioAnalysis.value = snapshot.spectrum
+      ? snapshot
+      : { ...snapshot, spectrum: audioAnalysis.value.spectrum }
+  }
+  function setLoudnessAnalysisEnabled(enabled: boolean): void {
+    void audioBridge.setLoudnessAnalysisEnabled(enabled)
   }
 
   /**
@@ -799,6 +809,7 @@ export const usePlayerStore = defineStore('player', () => {
       volume.value = Math.max(0, Math.min(1, status.volume))
       glitchCount.value = status.glitchCount
       trackInfo.value = status.trackInfo
+      startAudioAnalysisPolling()
     }
 
     await Promise.allSettled([
@@ -882,8 +893,53 @@ export const usePlayerStore = defineStore('player', () => {
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
   let analysisTimer: ReturnType<typeof setInterval> | undefined
+  let audioAnalysisPollingRate = 0
+  let audioAnalysisIncludesSpectrum = false
+  let analysisRefreshInFlight = false
   let autoAdvanceInProgress = false
   let lastTrackEndedAt = 0
+
+  function startAudioAnalysisPolling(): void {
+    if (
+      analysisTimer ||
+      analysisRefreshInFlight ||
+      state.value !== 'playing' ||
+      audioAnalysisPollingRate <= 0
+    )
+      return
+    analysisRefreshInFlight = true
+    void refreshAudioAnalysis(audioAnalysisIncludesSpectrum).finally(() => {
+      analysisRefreshInFlight = false
+      if (state.value !== 'playing' || audioAnalysisPollingRate <= 0) return
+      analysisTimer = setTimeout(
+        () => {
+          analysisTimer = undefined
+          startAudioAnalysisPolling()
+        },
+        Math.round(1000 / audioAnalysisPollingRate)
+      )
+    })
+  }
+
+  function stopAudioAnalysisPolling(): void {
+    if (!analysisTimer) return
+    clearInterval(analysisTimer)
+    analysisTimer = undefined
+  }
+
+  function setAudioAnalysisPollingRate(rate: number, includeSpectrum = false): void {
+    const normalized = Math.max(0, Math.min(60, Math.round(rate)))
+    if (
+      audioAnalysisPollingRate === normalized &&
+      audioAnalysisIncludesSpectrum === (normalized > 0 && includeSpectrum)
+    )
+      return
+    audioAnalysisPollingRate = normalized
+    audioAnalysisIncludesSpectrum = normalized > 0 && includeSpectrum
+    void audioBridge.setSpectrumAnalysisEnabled(audioAnalysisIncludesSpectrum)
+    stopAudioAnalysisPolling()
+    startAudioAnalysisPolling()
+  }
 
   async function handleTrackEnded(reason: string, filePath?: string): Promise<void> {
     // `trackEnded` crosses the native, main and renderer event queues. If a
@@ -897,6 +953,7 @@ export const usePlayerStore = defineStore('player', () => {
     lastTrackEndedAt = now
     autoAdvanceInProgress = true
     state.value = 'stopped'
+    stopAudioAnalysisPolling()
     useLogStore().addEntry({
       level: 'info',
       message: `Playback reached end of track (${reason})`,
@@ -916,15 +973,17 @@ export const usePlayerStore = defineStore('player', () => {
 
   function subscribeToEvents(): void {
     if (unsubs.length) return
-    if (!analysisTimer)
-      analysisTimer = setInterval(() => {
-        void refreshAudioAnalysis()
-      }, 20)
+    startAudioAnalysisPolling()
     unsubs.push(
       audioBridge.onStateChanged((data) => {
         state.value = data.state as PlaybackState
-        if (data.state === 'playing') resumeHistory()
-        else if (data.state === 'paused') pauseHistory()
+        if (data.state === 'playing') {
+          resumeHistory()
+          startAudioAnalysisPolling()
+        } else {
+          if (data.state === 'paused') pauseHistory()
+          stopAudioAnalysisPolling()
+        }
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
@@ -970,8 +1029,7 @@ export const usePlayerStore = defineStore('player', () => {
     flushHistory(true)
     unsubs.forEach((fn) => fn())
     unsubs = []
-    if (analysisTimer) clearInterval(analysisTimer)
-    analysisTimer = undefined
+    stopAudioAnalysisPolling()
     if (playbackSessionTimer) clearTimeout(playbackSessionTimer)
     playbackSessionTimer = undefined
     savePlaybackSessionSync()
@@ -1109,6 +1167,8 @@ export const usePlayerStore = defineStore('player', () => {
     refreshDevices,
     refreshAudioChain,
     refreshAudioAnalysis,
+    setLoudnessAnalysisEnabled,
+    setAudioAnalysisPollingRate,
     initializePersistentState,
     loadRhythmVisualConfig,
     saveRhythmVisualConfig,

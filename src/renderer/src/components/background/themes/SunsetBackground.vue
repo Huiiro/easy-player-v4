@@ -41,6 +41,7 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
 
 <style scoped>
 .sunset-background {
+  contain: paint;
   background:
     radial-gradient(circle at 18% 20%, rgb(255 188 112 / 68%), transparent 35%),
     radial-gradient(circle at 82% 72%, rgb(211 83 158 / 62%), transparent 42%),
@@ -83,18 +84,24 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
   left: -15%;
   z-index: 2;
   height: 46%;
+  overflow: hidden;
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  transform: perspective(180px) rotateX(55deg);
+  transform-origin: bottom;
+  filter: drop-shadow(0 0 5px rgb(255 47 207 / 0.8));
+  opacity: 0.92;
+}
+.sunset-background__neon-grid::before {
+  position: absolute;
+  inset: -22px 0 0;
   background:
     linear-gradient(rgb(255 68 208 / 0.7) 1px, transparent 2px),
     linear-gradient(90deg, rgb(59 239 255 / 0.62) 1px, transparent 2px);
   background-size:
     100% 22px,
     34px 100%;
-  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
-  transform: perspective(180px) rotateX(55deg);
-  transform-origin: bottom;
-  filter: drop-shadow(0 0 5px rgb(255 47 207 / 0.8));
-  opacity: 0.92;
-  animation: neon-grid 2.8s linear infinite;
+  content: '';
+  animation: neon-grid-scroll 2.8s linear infinite;
 }
 .sunset-background__scan-lines {
   position: absolute;
@@ -103,12 +110,7 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
   top: 78%;
   z-index: 1;
   height: 42%;
-  background:
-    linear-gradient(rgb(255 94 218 / 0.96) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(92 244 255 / 0.88) 1px, transparent 1px);
-  background-size:
-    100% 20px,
-    32px 100%;
+  overflow: hidden;
   border-top: 2px solid rgb(255 102 218 / 0.95);
   box-shadow:
     0 -4px 22px rgb(255 58 198 / 0.52),
@@ -117,11 +119,11 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
   opacity: 1;
   transform: perspective(520px) rotateX(42deg) translateZ(0);
   transform-origin: top;
-  animation: scan-lines 2.6s linear infinite;
 }
 .sunset-background__scan-lines::before {
   position: absolute;
   inset: 0;
+  z-index: 1;
   background: repeating-linear-gradient(
     to bottom,
     rgb(255 137 227 / 0.98) 0 1px,
@@ -130,6 +132,18 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
   content: '';
   mix-blend-mode: screen;
   animation: scan-line-flicker 3.8s steps(1, end) infinite;
+}
+.sunset-background__scan-lines::after {
+  position: absolute;
+  inset: -20px 0 0;
+  background:
+    linear-gradient(rgb(255 94 218 / 0.96) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(92 244 255 / 0.88) 1px, transparent 1px);
+  background-size:
+    100% 20px,
+    32px 100%;
+  content: '';
+  animation: scan-lines-scroll 2.6s linear infinite;
 }
 .sunset-background__skyline {
   position: absolute;
@@ -164,6 +178,15 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
     linear-gradient(to top, rgb(21 18 56 / 0.9), rgb(96 40 120 / 0.68));
   border-top: 1px solid rgb(86 239 255 / 0.7);
   box-shadow: 0 -2px 8px rgb(255 63 190 / 0.55);
+}
+.sunset-background__skyline i::after {
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    0 -2px 18px rgb(86 239 255 / 0.92),
+    0 0 14px rgb(255 55 201 / 0.7);
+  opacity: 0.18;
+  content: '';
   animation: neon-pulse 2.4s ease-in-out infinite alternate;
 }
 .sunset-background__mote {
@@ -191,25 +214,19 @@ const buildings = Array.from({ length: 12 }, (_, index) => ({
     opacity: 0.2;
   }
 }
-@keyframes neon-grid {
+@keyframes neon-grid-scroll {
   to {
-    background-position:
-      0 22px,
-      0 0;
+    transform: translateY(22px);
   }
 }
 @keyframes neon-pulse {
   to {
-    box-shadow:
-      0 -2px 18px rgb(86 239 255 / 0.92),
-      0 0 14px rgb(255 55 201 / 0.7);
+    opacity: 1;
   }
 }
-@keyframes scan-lines {
+@keyframes scan-lines-scroll {
   to {
-    background-position:
-      0 20px,
-      0 0;
+    transform: translateY(20px);
   }
 }
 @keyframes scan-line-flicker {

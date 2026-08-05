@@ -35,6 +35,7 @@ const stars = Array.from({ length: 24 }, (_, index) => ({
 
 <style scoped>
 .aurora-background {
+  contain: paint;
   background:
     radial-gradient(circle at 15% 19%, rgb(71 239 156 / 76%), transparent 34%),
     radial-gradient(circle at 12% 14%, rgb(86 222 188 / 72%), transparent 42%),

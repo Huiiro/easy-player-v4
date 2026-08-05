@@ -162,7 +162,7 @@ declare global {
         }>
         getStatus(): Promise<{ success: boolean; data?: PlaybackStatus; error?: string }>
         getAudioChain(): Promise<{ success: boolean; data?: AudioChainStatus; error?: string }>
-        getAudioAnalysis(): Promise<{
+        getAudioAnalysis(includeSpectrum?: boolean): Promise<{
           success: boolean
           data?: {
             outputTimeMs: number
@@ -177,10 +177,12 @@ declare global {
             momentaryLufs: number
             shortTermLufs: number
             integratedLufs: number
-            spectrum: number[]
+            spectrum?: number[]
           }
           error?: string
         }>
+        setLoudnessAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
+        setSpectrumAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         onEvent(type: string, callback: (data: any) => void): () => void

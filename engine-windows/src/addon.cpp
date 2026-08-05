@@ -60,6 +60,8 @@ public:
             InstanceMethod("getStatus", &AudioEngineWrapper::GetStatus),
             InstanceMethod("getAudioChain", &AudioEngineWrapper::GetAudioChain),
             InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
+            InstanceMethod("setLoudnessAnalysisEnabled", &AudioEngineWrapper::SetLoudnessAnalysisEnabled),
+            InstanceMethod("setSpectrumAnalysisEnabled", &AudioEngineWrapper::SetSpectrumAnalysisEnabled),
             InstanceMethod("getGlitchCount", &AudioEngineWrapper::GetGlitchCount),
             InstanceMethod("onStateChanged", &AudioEngineWrapper::OnStateChanged),
             InstanceMethod("onPositionChanged", &AudioEngineWrapper::OnPositionChanged),
@@ -538,7 +540,23 @@ private:
         obj.Set("momentaryLufs", Napi::Number::New(info.Env(), value.momentary_lufs));
         obj.Set("shortTermLufs", Napi::Number::New(info.Env(), value.short_term_lufs));
         obj.Set("integratedLufs", Napi::Number::New(info.Env(), value.integrated_lufs));
-        auto spectrum = Napi::Array::New(info.Env(), value.spectrum.size()); for (size_t i = 0; i < value.spectrum.size(); ++i) spectrum.Set(i, Napi::Number::New(info.Env(), value.spectrum[i])); obj.Set("spectrum", spectrum); return obj;
+        const bool include_spectrum = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        if (include_spectrum) {
+            auto spectrum = Napi::Array::New(info.Env(), value.spectrum.size());
+            for (size_t i = 0; i < value.spectrum.size(); ++i) spectrum.Set(i, Napi::Number::New(info.Env(), value.spectrum[i]));
+            obj.Set("spectrum", spectrum);
+        }
+        return obj;
+    }
+    Napi::Value SetLoudnessAnalysisEnabled(const Napi::CallbackInfo& info) {
+        const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        engine_->set_loudness_analysis_enabled(enabled);
+        return Napi::Boolean::New(info.Env(), true);
+    }
+    Napi::Value SetSpectrumAnalysisEnabled(const Napi::CallbackInfo& info) {
+        const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        engine_->set_spectrum_analysis_enabled(enabled);
+        return Napi::Boolean::New(info.Env(), true);
     }
 
     // ── Callback registration ──
