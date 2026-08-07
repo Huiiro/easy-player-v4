@@ -62,6 +62,12 @@ export const useUIStore = defineStore(
     const lyricsFontPadding = ref(30)
     const lyricsOffsetMs = ref(0)
     const lyricsStyle = ref<'none' | 'glow' | 'follow'>('none')
+    const lyricsColors = reactive({
+      default: '#AEB4C0',
+      highlight: '#FFFFFF',
+      translation: '#D9DDE4',
+      overrideAutoContrast: false
+    })
     const lyricsFontSizeIndex = ref(1)
     const showLyricsSizeSlider = ref(false)
     const showLyricsEditor = ref(false)
@@ -327,6 +333,14 @@ export const useUIStore = defineStore(
     function resetLyricsOffset(): void {
       lyricsOffsetMs.value = 0
     }
+    function resetLyricsColors(): void {
+      Object.assign(lyricsColors, {
+        default: '#AEB4C0',
+        highlight: '#FFFFFF',
+        translation: '#D9DDE4',
+        overrideAutoContrast: false
+      })
+    }
     function handleClickStyle(): void {
       if (lyricsStyle.value === 'none') {
         lyricsStyle.value = 'glow'
@@ -396,6 +410,7 @@ export const useUIStore = defineStore(
       lyricsFontPadding,
       lyricsOffsetMs,
       lyricsStyle,
+      lyricsColors,
       lyricsFontSizeIndex,
       showLyricsSizeSlider,
       showLyricsEditor,
@@ -434,6 +449,7 @@ export const useUIStore = defineStore(
       setLyricsFontPadding,
       setLyricsOffset,
       resetLyricsOffset,
+      resetLyricsColors,
       handleClickStyle,
       toggleTranslation
     }
@@ -470,6 +486,7 @@ export const useUIStore = defineStore(
         'lyricsFontPadding',
         'lyricsOffsetMs',
         'lyricsStyle',
+        'lyricsColors',
         'lyricsFontSizeIndex',
         'showLyricsTranslation',
         'autoLyricsFontResizer',

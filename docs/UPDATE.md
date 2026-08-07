@@ -32,3 +32,11 @@ fix max load count
 fix performance
 fix display
 
+#### v 3.0.7
+allow change lyrics color
+allow add to playlist in player
+fix desktop lyrics layer
+fix lyrics performance
+fix history sort error
+fix colors
+fix known issues

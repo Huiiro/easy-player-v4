@@ -23,7 +23,7 @@ type SongListSource =
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
-type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt'
+type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt' | 'playTime'
 interface MusicSourceOption {
   id: number
   name: string
@@ -41,8 +41,8 @@ const songs = ref<LibrarySong[]>([])
 const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
 const loading = ref(false)
 const keyword = ref('')
-const sortBy = ref<SortField>('title')
-const sortOrder = ref<'asc' | 'desc'>('asc')
+const sortBy = ref<SortField>(props.source.type === 'history' ? 'playTime' : 'title')
+const sortOrder = ref<'asc' | 'desc'>(props.source.type === 'history' ? 'desc' : 'asc')
 const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())

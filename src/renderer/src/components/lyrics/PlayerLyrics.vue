@@ -21,6 +21,7 @@ const props = withDefaults(
     layoutToken?: number
     alignMode?: 'left' | 'center' | 'right'
     allowTransform?: boolean
+    darkText?: boolean
   }>(),
   {
     alignMode: 'left',
@@ -28,7 +29,8 @@ const props = withDefaults(
     forcedSource: 'auto',
     autoSearchNetwork: true,
     reloadToken: 0,
-    layoutToken: 0
+    layoutToken: 0,
+    darkText: false
   }
 )
 const emit = defineEmits<{ seek: [positionMs: number] }>()
@@ -333,7 +335,12 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div ref="viewportRef" class="lyric-viewport" @scroll="handleScrollVelocity">
+  <div
+    ref="viewportRef"
+    class="lyric-viewport"
+    :class="props.darkText && 'player-lyrics--dark-text'"
+    @scroll="handleScrollVelocity"
+  >
     <div class="lyric-track">
       <div
         v-for="(line, idx) in lyrics"

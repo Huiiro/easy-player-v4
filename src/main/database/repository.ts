@@ -396,7 +396,7 @@ export function queryRecentPlayedSongs(
   const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const rows = db
     .prepare(
-      `SELECT ${songColumnsFor('s.')}, h.play_time AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
+      `SELECT ${songColumnsFor('s.')}, strftime('%Y-%m-%dT%H:%M:%fZ', h.play_time) AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
     )
     .all(params)
   const data = attachTags(

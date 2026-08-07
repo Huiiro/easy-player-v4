@@ -14,7 +14,6 @@ import {
 import { existsSync, promises as fs } from 'node:fs'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import icon from '../../resources/easy-player.ico?asset'
 import { AudioEngineManager } from './audioEngine'
 import { registerIpcHandlers } from './ipc/audioIpcHandlers'
 import { closeDatabase, initDatabase } from './database'
@@ -36,6 +35,10 @@ import {
 } from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
+
+const icon = app.isPackaged
+  ? join(process.resourcesPath, 'resources', 'easy-player.ico')
+  : join(__dirname, '../../resources/easy-player.ico')
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -367,7 +370,11 @@ function createDesktopLyricsWindow(): BrowserWindow {
       sandbox: false
     }
   })
-  desktopLyricsWindow.setAlwaysOnTop(true, 'floating')
+  // `floating` sits below many exclusive/full-screen games. Keep lyrics above
+  // that layer; the renderer makes the window click-through by default so it
+  // does not steal focus or input from the game.
+  desktopLyricsWindow.setAlwaysOnTop(true, 'screen-saver')
+  desktopLyricsWindow.setIgnoreMouseEvents(true, { forward: true })
   desktopLyricsWindow.on('ready-to-show', () => desktopLyricsWindow?.showInactive())
   desktopLyricsWindow.on('closed', () => {
     desktopLyricsWindow = null

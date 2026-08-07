@@ -10,6 +10,8 @@ import PlayerLyrics from '@/components/lyrics/PlayerLyrics.vue'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
+import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
+import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -27,6 +29,8 @@ const trackArtist = computed(
 const coverFailed = ref(false)
 const showQueue = ref(false)
 const showLyricsManager = ref(false)
+const showPlaylistPicker = ref(false)
+const showLyricsColorDialog = ref(false)
 const lyricReloadToken = ref(0)
 const progressStyle = ref<'thin' | 'thick'>('thin')
 const collapsed = ref(false)
@@ -79,8 +83,6 @@ watch(
   },
   { immediate: true }
 )
-// `DEFAULT` was the old persisted value before the album-art setting existed.
-// Treat it as album artwork so existing users receive the new default immediately.
 const useAlbumArtwork = computed(
   () => ui.playerBgType === PlayerBgType.ALBUM || ui.playerBgType === PlayerBgType.DEFAULT
 )
@@ -96,6 +98,16 @@ const backgroundStyle = computed(() => ({
   transform: `scale(${1.1 + rhythmAmount.value * 0.1})`
 }))
 const coverColors = ref({ primary: '77 136 220', secondary: '205 78 165' })
+const useDarkLyrics = ref(false)
+const lyricColorStyle = computed(() => {
+  if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
+  return {
+    '--lrc-default': ui.lyricsColors.default,
+    '--lrc-highlight': ui.lyricsColors.highlight,
+    '--lrc-translate': ui.lyricsColors.translation
+  }
+})
+// const showLyricsSamplingRegion = import.meta.env.DEV
 const glowStyle = computed(() => ({
   transform: `scale(${1 + rhythmAmount.value * 0.62})`,
   opacity: String(0.68 + rhythmAmount.value * 0.32),
@@ -184,6 +196,9 @@ const audioDetails = computed(() => {
 watch(coverUrl, () => {
   coverFailed.value = false
 })
+watch(backgroundSource, (source) => {
+  if (!source) useDarkLyrics.value = false
+})
 
 function close(): void {
   player.setAudioAnalysisPollingRate(0)
@@ -201,7 +216,6 @@ function handleCollapsePointerDown(event: PointerEvent): void {
   toggleCollapsed()
 }
 function handleCollapseClick(): void {
-  // Pointer input toggles on press; keyboard activation has no pointer event.
   if (collapseTriggeredByPointer) {
     collapseTriggeredByPointer = false
     return
@@ -287,6 +301,60 @@ function averageColor(
   if (!count) return '77 136 220'
   return `${Math.round(red / count)} ${Math.round(green / count)} ${Math.round(blue / count)}`
 }
+function shouldUseDarkLyrics(data: Uint8ClampedArray): boolean {
+  let visible = 0
+  let lightNeutral = 0
+  let nearWhite = 0
+
+  for (let index = 0; index < data.length; index += 4) {
+    const alpha = data[index + 3] / 255
+    if (!alpha) continue
+
+    const red = data[index]
+    const green = data[index + 1]
+    const blue = data[index + 2]
+    const luminance = (red * 0.2126 + green * 0.7152 + blue * 0.0722) / 255
+    const chroma = Math.max(red, green, blue) - Math.min(red, green, blue)
+
+    visible += alpha
+    if (luminance >= 0.72 && chroma <= 42) lightNeutral += alpha
+    if (luminance >= 0.86 && chroma <= 26) nearWhite += alpha
+  }
+
+  if (!visible) return false
+  return lightNeutral / visible >= 0.42 || nearWhite / visible >= 0.38
+}
+
+function getLyricsRegion(image: HTMLImageElement): [number, number, number, number] | null {
+  const bounds = image.getBoundingClientRect()
+  if (!bounds.width || !bounds.height || !image.naturalWidth || !image.naturalHeight) return null
+
+  const panelLeft = window.innerWidth * 0.55
+  const panelTop = window.innerHeight * 0.14
+  const panelRight = window.innerWidth * 0.8
+  const panelBottom = window.innerHeight * 0.86
+  const left = Math.max(panelLeft, bounds.left)
+  const top = Math.max(panelTop, bounds.top)
+  const right = Math.min(panelRight, bounds.right)
+  const bottom = Math.min(panelBottom, bounds.bottom)
+  if (right <= left || bottom <= top) return null
+
+  const scale = Math.max(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight)
+  const visibleWidth = bounds.width / scale
+  const visibleHeight = bounds.height / scale
+  const sourceLeft = (image.naturalWidth - visibleWidth) / 2
+  const sourceTop = (image.naturalHeight - visibleHeight) / 2
+  const toSourceX = (value: number): number =>
+    sourceLeft + ((value - bounds.left) / bounds.width) * visibleWidth
+  const toSourceY = (value: number): number =>
+    sourceTop + ((value - bounds.top) / bounds.height) * visibleHeight
+  return [
+    toSourceX(left),
+    toSourceY(top),
+    toSourceX(right) - toSourceX(left),
+    toSourceY(bottom) - toSourceY(top)
+  ]
+}
 function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
   if (!image.naturalWidth || !image.naturalHeight) return
@@ -303,6 +371,13 @@ function extractCoverColors(event: Event): void {
       primary: averageColor(pixels, 0, size / 2, size),
       secondary: averageColor(pixels, size / 2, size, size)
     }
+    if (image.classList.contains('panel-background-item')) {
+      const lyricsRegion = getLyricsRegion(image)
+      if (!lyricsRegion) return
+      context.clearRect(0, 0, size, size)
+      context.drawImage(image, ...lyricsRegion, 0, 0, size, size)
+      useDarkLyrics.value = shouldUseDarkLyrics(context.getImageData(0, 0, size, size).data)
+    }
   } catch {
     // Keep the neutral fallback colors for covers that cannot be sampled.
   }
@@ -318,7 +393,7 @@ function extractCoverColors(event: Event): void {
           v-if="backgroundSource"
           :key="backgroundSource"
           :src="backgroundSource"
-          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover blur-[24px] transition-transform duration-150"
+          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-150"
           :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
           :style="backgroundStyle"
           alt=""
@@ -345,7 +420,17 @@ function extractCoverColors(event: Event): void {
         ]"
         :style="glowStyle"
       />
-      <div class="absolute inset-0 panel-gradient" />
+      <div class="pointer-events-none absolute inset-0 panel-sheen" />
+      <!--      <div-->
+      <!--        v-if="showLyricsSamplingRegion"-->
+      <!--        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[20%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"-->
+      <!--      >-->
+      <!--        <span-->
+      <!--          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-950"-->
+      <!--        >-->
+      <!--          歌词取色区域-->
+      <!--        </span>-->
+      <!--      </div>-->
     </div>
     <!-- content -->
     <section
@@ -368,7 +453,7 @@ function extractCoverColors(event: Event): void {
         >
           <SvgIcon
             :name="collapsed ? 'arrow-arrow-right-light' : 'arrow-arrow-left-light'"
-            class-name="size-5 text-white"
+            class-name="size-5 panel-primary-text"
           />
         </button>
         <button
@@ -378,7 +463,7 @@ function extractCoverColors(event: Event): void {
           :aria-label="t('playerPanel.close')"
           @click="close"
         >
-          <SvgIcon name="common-close" class-name="size-5 text-white" />
+          <SvgIcon name="common-close" class-name="size-5 panel-primary-text" />
         </button>
       </header>
 
@@ -426,12 +511,12 @@ function extractCoverColors(event: Event): void {
           <!-- title && artist -->
           <div class="min-w-0 text-center cursor-pointer">
             <h2
-              class="max-w-[min(440px,72vw)] truncate text-2xl text-white font-bold"
+              class="panel-primary-text max-w-[min(440px,72vw)] truncate text-2xl font-bold"
               :title="trackTitle"
             >
               {{ trackTitle }}
             </h2>
-            <p class="mt-1 truncate text-white/50">{{ trackArtist }}</p>
+            <p class="panel-secondary-text mt-1 truncate">{{ trackArtist }}</p>
           </div>
           <!-- metadata -->
           <dl
@@ -443,12 +528,12 @@ function extractCoverColors(event: Event): void {
               :key="label"
               class="min-w-0 px-1.5 py-2 text-center"
             >
-              <dt class="truncate text-[0.65rem] text-white/50">{{ label }}</dt>
-              <dd class="mt-1 truncate text-xs font-semibold text-white">{{ value }}</dd>
+              <dt class="panel-secondary-text truncate text-[0.65rem]">{{ label }}</dt>
+              <dd class="panel-primary-text mt-1 truncate text-xs font-semibold">{{ value }}</dd>
             </div>
           </dl>
           <!-- args control -->
-          <div class="flex flex-wrap items-center justify-center gap-2 text-xs">
+          <div class="flex w-full flex-nowrap items-center justify-center gap-1 text-xs">
             <!-- volume -->
             <label
               class="panel-tool vertical-tool"
@@ -487,6 +572,16 @@ function extractCoverColors(event: Event): void {
                 />
               </span>
             </label>
+            <!-- add current song to playlist -->
+            <button
+              class="panel-tool"
+              :disabled="!player.currentQueueSong"
+              :title="t('songList.addToPlaylist')"
+              :aria-label="t('songList.addToPlaylist')"
+              @click="showPlaylistPicker = true"
+            >
+              <SvgIcon name="common-plus" class-name="size-4" />
+            </button>
             <!-- rhythm visuals -->
             <button
               class="panel-tool"
@@ -616,6 +711,20 @@ function extractCoverColors(event: Event): void {
                 <svg-icon name="common-lyrics-effect" class-name="w-[16px] h-[16px]" />
               </span>
             </button>
+            <!-- lyrics colors -->
+            <button
+              class="panel-tool"
+              :title="t('playerPanel.lyricColorsTitle')"
+              :aria-label="t('playerPanel.lyricColorsTitle')"
+              @click="showLyricsColorDialog = true"
+            >
+              <span
+                class="size-4 rounded-full border border-white/45"
+                :style="{
+                  background: `linear-gradient(135deg, ${ui.lyricsColors.highlight} 0 34%, ${ui.lyricsColors.default} 34% 67%, ${ui.lyricsColors.translation} 67%)`
+                }"
+              />
+            </button>
             <!-- lyrics manager -->
             <button
               class="panel-tool"
@@ -653,7 +762,7 @@ function extractCoverColors(event: Event): void {
               :aria-label="t('playerPanel.progress')"
               @input="seek"
             />
-            <div class="flex justify-between text-xs tabular-nums text-white/50">
+            <div class="panel-secondary-text flex justify-between text-xs tabular-nums">
               <span>{{ player.positionFormatted }}</span>
               <span>{{ player.durationFormatted }}</span>
             </div>
@@ -662,14 +771,14 @@ function extractCoverColors(event: Event): void {
           <div class="flex items-center gap-6">
             <!-- play mode -->
             <button
-              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :title="playModeLabel"
               @click="cyclePlayMode"
             >
               <SvgIcon :name="playModeIcon" class-name="size-6" />
             </button>
             <button
-              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :disabled="!player.queue.length"
               :title="t('playerPanel.previous')"
               @click="playPrevious"
@@ -685,7 +794,7 @@ function extractCoverColors(event: Event): void {
               <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-8" />
             </button>
             <button
-              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :disabled="!player.queue.length"
               :title="t('playerPanel.next')"
               @click="playNext"
@@ -694,7 +803,7 @@ function extractCoverColors(event: Event): void {
             </button>
             <!-- queue -->
             <button
-              class="grid size-6 place-items-center rounded-full text-white/50 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :title="t('queue.title')"
               :class="showQueue && 'active'"
               @click="showQueue = !showQueue"
@@ -711,6 +820,7 @@ function extractCoverColors(event: Event): void {
         >
           <PlayerLyrics
             class="size-full flex-1"
+            :style="lyricColorStyle"
             :song="player.currentQueueSong"
             :current-time="player.positionMs + ui.lyricsOffsetMs"
             :source-order="ui.lyricSourceOrder"
@@ -719,6 +829,7 @@ function extractCoverColors(event: Event): void {
             :auto-search-network="ui.autoSearchNetworkLyrics"
             :reload-token="lyricReloadToken"
             :layout-token="collapsed ? 1 : 0"
+            :dark-text="useDarkLyrics"
             @seek="seekTo"
           />
         </section>
@@ -726,6 +837,11 @@ function extractCoverColors(event: Event): void {
       <!-- play queue-->
       <PlayQueueDrawer v-model="showQueue" />
       <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
+      <LyricsColorDialog v-model="showLyricsColorDialog" />
+      <AddSongsToPlaylistDialog
+        v-model="showPlaylistPicker"
+        :song-ids="player.currentQueueSong ? [player.currentQueueSong.id] : []"
+      />
       <!-- play spectrum-->
       <div
         v-if="ui.showPlayer && ui.showPlayerSpectrum"
@@ -746,6 +862,9 @@ function extractCoverColors(event: Event): void {
   overflow: hidden;
   transition: opacity 500ms ease;
 }
+.panel-background-item {
+  filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
+}
 .panel-ambient::before {
   position: absolute;
   inset: -12%;
@@ -754,6 +873,21 @@ function extractCoverColors(event: Event): void {
     radial-gradient(circle at 86% 76%, var(--cover-secondary), transparent 38%),
     radial-gradient(circle at 72% 14%, rgb(70 204 174 / 28%), transparent 30%);
   filter: blur(24px);
+  content: '';
+}
+.panel-ambient::after {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 42%, transparent 14%, rgb(2 5 12 / 20%) 100%),
+    repeating-linear-gradient(
+      115deg,
+      rgb(255 255 255 / 2%) 0,
+      rgb(255 255 255 / 2%) 1px,
+      transparent 1px,
+      transparent 5px
+    );
+  opacity: 0.42;
   content: '';
 }
 .panel-tool {
@@ -913,6 +1047,7 @@ function extractCoverColors(event: Event): void {
   grid-template-columns: minmax(0, 0fr) minmax(0, 1fr);
 }
 .panel-side {
+  position: relative;
   transition:
     opacity 520ms cubic-bezier(0.22, 1, 0.36, 1),
     transform 520ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -961,16 +1096,11 @@ function extractCoverColors(event: Event): void {
 .panel-ambient--animated::before {
   animation: player-panel-ambient-drift 14s ease-in-out infinite alternate;
 }
-.panel-gradient {
+.panel-sheen {
   background:
-    radial-gradient(
-      ellipse at 74% 50%,
-      rgb(10 14 21 / 6%) 0%,
-      rgb(7 10 16 / 16%) 56%,
-      rgb(4 7 12 / 34%) 100%
-    ),
-    linear-gradient(112deg, rgb(5 8 13 / 42%) 0%, rgb(12 16 23 / 9%) 42%, rgb(4 7 12 / 48%) 100%),
-    linear-gradient(180deg, rgb(9 12 17 / 4%) 0%, rgb(7 9 14 / 25%) 100%);
+    radial-gradient(ellipse 48% 30% at 72% 8%, rgb(255 255 255 / 15%), transparent 72%),
+    radial-gradient(ellipse 30% 22% at 16% 86%, rgb(180 226 255 / 8%), transparent 76%);
+  box-shadow: inset 0 1px rgb(255 255 255 / 10%);
 }
 .beat-ring {
   position: absolute;

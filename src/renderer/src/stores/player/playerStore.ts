@@ -388,7 +388,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function pause(): Promise<boolean> {
     const result = await audioBridge.pause()
-    if (result) flushHistory(true)
+    if (result) pauseHistory()
     schedulePlaybackSessionSave()
     return result
   }

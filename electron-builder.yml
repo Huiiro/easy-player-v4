@@ -3,6 +3,15 @@ productName: Easy Player
 directories:
   buildResources: build
 files:
+  # The desktop package runs the compiled Electron output only. Keep mobile
+  # projects, native source trees and build artifacts out of app.asar.
+  - '!{android-app,engine-android,mobile}/**/*'
+  - '!{engine-core,engine-windows}/**/*'
+  - '!{build,dist,docs}/**/*'
+  - '!{.agents,.github,.idea,.tools,.vscode}/**/*'
+  - '!**/.git/**'
+  - '!src/**/*'
+  - '!resources/**/*'
   - '!resources/bin{,/**/*}'
   - '!resources/tools/yt-dlp{,/**/*}'
   - '!**/.vscode/*'

@@ -21,7 +21,10 @@ interface DesktopState {
   }
 }
 
-const locked = ref(false)
+// Desktop lyrics are primarily an overlay. Starting locked makes the window
+// click-through, so interacting with a full-screen game cannot focus this
+// window or accidentally activate its controls.
+const locked = ref(true)
 const hovering = ref(true)
 const windowHeight = ref(window.innerHeight)
 const lockButton = ref<HTMLButtonElement>()
@@ -232,6 +235,7 @@ watch(
 )
 onMounted(() => {
   window.api.desktopLyrics.ready()
+  window.api.desktopLyrics.setLocked(true)
   window.addEventListener('resize', handleResize)
   // Draggable Electron regions do not consistently bubble pointer-enter to
   // Vue. A window-level listener still receives the forwarded moves.

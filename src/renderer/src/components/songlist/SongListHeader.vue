@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
-type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt'
+type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt' | 'playTime'
 interface SourceOption {
   label: string
   value: string

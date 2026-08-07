@@ -72,6 +72,19 @@
   --lrc-padding: 30px;
 }
 
+.player-lyrics--dark-text {
+  --lrc-highlight: #000000;
+  --lrc-default: rgb(0 0 0 / 58%);
+  --lrc-translate: rgb(0 0 0 / 42%);
+}
+
+.panel-primary-text {
+  color: rgb(255 255 255);
+}
+.panel-secondary-text {
+  color: rgb(255 255 255 / 50%);
+}
+
 :root {
   --color-primary: oklch(0.691 0.198 148.262);
   --color-primary-l-10: color-mix(in srgb, var(--color-primary), #fff 10%);
@@ -91,14 +104,14 @@
   --color-danger: oklch(55% 0.22 25);
   --color-success: oklch(65% 0.18 145);
   --color-warning: oklch(75% 0.16 80);
-  --color-text: oklch(21% 0.034 264.665);      /* 主文字（深） */
-  --color-text-l: oklch(45% 0.02 260);         /* 次级文字 */
-  --color-text-l2: oklch(36% 0.01 260);        /* 更弱文字（辅助信息） */
-  --color-text-l3: oklch(87.2% 0.01 258.338);  /* 浅色文字（反差用） */
-  --color-bg: oklch(98.5% 0.001 106.423);  /* 主背景 */
-  --color-bg-l: oklch(95% 0.01 110);       /* 卡片背景（微灰） */
-  --color-bg-l2: oklch(96% 0.005 110);     /* 更浅卡片 */
-  --color-bg-d: oklch(55.1% 0.027 264.364);/* 深背景（特殊） */
+  --color-text: oklch(21% 0.034 264.665); /* 主文字（深） */
+  --color-text-l: oklch(45% 0.02 260); /* 次级文字 */
+  --color-text-l2: oklch(36% 0.01 260); /* 更弱文字（辅助信息） */
+  --color-text-l3: oklch(87.2% 0.01 258.338); /* 浅色文字（反差用） */
+  --color-bg: oklch(98.5% 0.001 106.423); /* 主背景 */
+  --color-bg-l: oklch(95% 0.01 110); /* 卡片背景（微灰） */
+  --color-bg-l2: oklch(96% 0.005 110); /* 更浅卡片 */
+  --color-bg-d: oklch(55.1% 0.027 264.364); /* 深背景（特殊） */
 
   --color-hover: rgba(0, 0, 0, 0.05);
   --color-hover-bg: oklch(92% 0.01 110);
@@ -137,20 +150,19 @@
 }
 
 .dark {
-
-  --color-danger: oklch(65% 0.20 25);
+  --color-danger: oklch(65% 0.2 25);
   --color-success: oklch(70% 0.18 145);
   --color-warning: oklch(80% 0.16 80);
 
-  --color-text: oklch(92% 0.01 260);      /* 主文字（亮） */
-  --color-text-l: oklch(70% 0.02 260);    /* 次级文字 */
-  --color-text-l2: oklch(55% 0.015 260);  /* 辅助文字 */
-  --color-text-l3: oklch(35% 0.01 260);   /* 最弱文字 */
+  --color-text: oklch(92% 0.01 260); /* 主文字（亮） */
+  --color-text-l: oklch(70% 0.02 260); /* 次级文字 */
+  --color-text-l2: oklch(55% 0.015 260); /* 辅助文字 */
+  --color-text-l3: oklch(35% 0.01 260); /* 最弱文字 */
 
-  --color-bg: oklch(14% 0.01 260);        /* 主背景（接近 #0f172a） */
-  --color-bg-l: oklch(18% 0.015 260);     /* 卡片背景 */
-  --color-bg-l2: oklch(22% 0.02 260);     /* 浅一层 */
-  --color-bg-d: oklch(10% 0.01 260);      /* 更深背景（overlay） */
+  --color-bg: oklch(14% 0.01 260); /* 主背景（接近 #0f172a） */
+  --color-bg-l: oklch(18% 0.015 260); /* 卡片背景 */
+  --color-bg-l2: oklch(22% 0.02 260); /* 浅一层 */
+  --color-bg-d: oklch(10% 0.01 260); /* 更深背景（overlay） */
 
   --color-hover: rgba(255, 255, 255, 0.06);
 
@@ -167,7 +179,7 @@
   --color-border: oklch(0.306 0.005 286.081);
   --color-border-l: oklch(0.532 0.002 286.347);
 
-  --color-border-danger: oklch(60% 0.20 25);
+  --color-border-danger: oklch(60% 0.2 25);
   --color-border-success: oklch(65% 0.18 145);
   --color-border-warning: oklch(75% 0.16 80);
 
