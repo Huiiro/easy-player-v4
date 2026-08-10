@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import type { LyricSource, NetworkLyricCandidate } from '@/services/lyrics'
+import type { LyricFormat, LyricSource, NetworkLyricCandidate } from '@/services/lyrics'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
@@ -17,6 +17,10 @@ const candidates = ref<NetworkLyricCandidate[]>([])
 const selected = ref(0)
 const lyric = ref('')
 const translation = ref('')
+const lyricFormat = ref<LyricFormat | undefined>()
+const translationFormat = ref<LyricFormat | undefined>()
+const romanization = ref('')
+const romanizationFormat = ref<LyricFormat | undefined>()
 const query = ref({ title: '', artist: '', album: '' })
 const sources = computed(() => [
   { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
@@ -29,18 +33,34 @@ async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
   const song = player.currentQueueSong
   lyric.value = ''
   translation.value = ''
+  romanization.value = ''
+  lyricFormat.value = undefined
+  translationFormat.value = undefined
+  romanizationFormat.value = undefined
   if (!song || source === 'auto' || source === 'network') return
   if (source === 'database') {
     const response = await window.api.database.command('getSong', { id: song.id })
     const data = response.success
-      ? (response.data as { lrc?: string | null; translation?: string | null })
+      ? (response.data as {
+          lrc?: string | null
+          lyricFormat?: LyricFormat
+          translation?: string | null
+          translationFormat?: LyricFormat
+          romanization?: string | null
+          romanizationFormat?: LyricFormat
+        })
       : null
     lyric.value = data?.lrc || ''
+    lyricFormat.value = data?.lyricFormat
     translation.value = data?.translation || ''
+    translationFormat.value = data?.translationFormat
+    romanization.value = data?.romanization || ''
+    romanizationFormat.value = data?.romanizationFormat
     return
   }
   const response = await window.api.lyrics.loadSource(song.audio, source)
-  lyric.value = response.success ? response.data || '' : ''
+  lyric.value = response.success ? response.data?.content || '' : ''
+  lyricFormat.value = response.success ? response.data?.format : undefined
 }
 async function initializeDraft(): Promise<void> {
   const metadata = player.trackInfo?.metadata
@@ -73,7 +93,11 @@ function selectCandidate(index: number): void {
   const item = candidates.value[index]
   if (item) {
     lyric.value = item.lrc
+    lyricFormat.value = item.format
     translation.value = item.translation || ''
+    translationFormat.value = item.translation ? 'lrc' : undefined
+    romanization.value = item.romanization || ''
+    romanizationFormat.value = item.romanization ? 'lrc' : undefined
   }
 }
 async function search(): Promise<void> {
@@ -99,7 +123,11 @@ async function save(): Promise<void> {
   const response = await window.api.database.command('updateSongLyrics', {
     id: song.id,
     lrc: lyric.value,
-    translation: translation.value || undefined
+    lyricFormat: lyricFormat.value,
+    translation: translation.value || undefined,
+    translationFormat: translation.value ? translationFormat.value : undefined,
+    romanization: romanization.value || undefined,
+    romanizationFormat: romanization.value ? romanizationFormat.value : undefined
   })
   if (!response.success) return
   emit('saved')
@@ -192,6 +220,11 @@ async function save(): Promise<void> {
           v-model="translation"
           class="lyric-editor lyric-editor--translation"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
+        />
+        <textarea
+          v-model="romanization"
+          class="lyric-editor lyric-editor--translation"
+          :placeholder="t('playerPanel.lyricRomanizationPlaceholder')"
         />
       </div>
     </div>

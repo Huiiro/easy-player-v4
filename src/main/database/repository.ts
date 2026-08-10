@@ -48,7 +48,7 @@ import type {
   TagInput
 } from './types'
 
-const songColumns = `id, title, artist, album, duration, cover, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
+const songColumns = `id, title, artist, album, duration, cover, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
 const songColumnsFor = (alias: string): string =>
   songColumns
     .split(', ')
@@ -330,13 +330,29 @@ export function countSongsByArtist(artist: string | null): number {
   ) as { count: number }
   return row.count
 }
-export function updateSongLyrics(id: number, lrc: string, translation?: string): boolean {
-  const result =
-    translation === undefined
-      ? getDatabase().prepare('UPDATE song SET lrc = ? WHERE id = ?').run(lrc, id)
-      : getDatabase()
-          .prepare('UPDATE song SET lrc = ?, translation = ? WHERE id = ?')
-          .run(lrc, translation, id)
+export function updateSongLyrics(
+  id: number,
+  payload: {
+    lrc: string
+    lyricFormat?: string
+    translation?: string
+    translationFormat?: string
+    romanization?: string
+    romanizationFormat?: string
+  }
+): boolean {
+  const result = getDatabase()
+    .prepare(
+      `UPDATE song
+       SET lrc = @lrc,
+           lyric_format = @lyricFormat,
+           translation = @translation,
+           translation_format = @translationFormat,
+           romanization = @romanization,
+           romanization_format = @romanizationFormat
+       WHERE id = @id`
+    )
+    .run({ id, ...payload })
   return result.changes > 0
 }
 export function setSongStatus(id: number, status: number): boolean {

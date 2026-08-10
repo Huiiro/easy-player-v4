@@ -24,8 +24,11 @@ const handlers = {
   countSongsByAlbum: ({ album, artist }: { album: string; artist: string | null }) =>
     library.countSongsByAlbum(album, artist),
   countSongsByArtist: ({ artist }: { artist: string | null }) => library.countSongsByArtist(artist),
-  updateSongLyrics: ({ id, lrc, translation }: { id: number; lrc: string; translation?: string }) =>
-    library.updateSongLyrics(id, lrc, translation),
+  updateSongLyrics: ({
+    id,
+    ...payload
+  }: Parameters<typeof library.updateSongLyrics>[1] & { id: number }) =>
+    library.updateSongLyrics(id, payload),
   setSongStatus: ({ id, status }: { id: number; status: number }) =>
     library.setSongStatus(id, status),
   refreshMissingSongStatus: () => library.refreshMissingSongStatus(),

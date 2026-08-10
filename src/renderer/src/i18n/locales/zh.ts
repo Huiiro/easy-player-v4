@@ -564,6 +564,7 @@ export default {
     alignCenter: '居中',
     alignRight: '右对齐',
     showTranslation: '显示翻译',
+    showRomanization: '显示罗马音',
     lyricAlignment: '歌词对齐：{alignment}',
     lyricEffect: '歌词效果：{effect}',
     lyricEffectNone: '无',
@@ -591,6 +592,7 @@ export default {
     lyricAlbum: '专辑（可选）',
     lyricEditorPlaceholder: '在此编辑 LRC 歌词…',
     lyricTranslationPlaceholder: '在此编辑翻译歌词（可选）…',
+    lyricRomanizationPlaceholder: '在此编辑罗马音歌词（可选，支持 ELRC/YRC 逐词时间）…',
     lyricProviderNetease: '网易云',
     lyricProviderKugou: '酷狗'
   },

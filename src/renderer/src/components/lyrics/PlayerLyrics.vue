@@ -351,36 +351,64 @@ onUnmounted(() => {
       >
         <!-- 主歌词 -->
         <div class="lyric-main" :style="{ textAlign: alignMode }">
-          <div v-if="currentIndex == idx">
-            <!-- 逐字歌词 -->
-            <template v-if="line.chars?.length">
-              <span
-                v-for="(char, charIdx) in line.chars"
-                :key="charIdx"
-                class="lyric-karaoke-char"
-                :style="getCharStyle(char)"
-              >
-                {{ char.char }}
-              </span>
-            </template>
-            <!-- 普通歌词 -->
-            <template v-else>
-              <span
-                v-for="(char, charIdx) in line.text"
-                :key="charIdx"
-                :class="['lyric-char', ui.lyricsStyle == 'glow' ? 'lyric-glow' : '']"
-                :style="
-                  ui.lyricsStyle == 'follow'
-                    ? getNormalCharStyle(charIdx, line.text.length)
-                    : `color: var(--lrc-highlight)`
-                "
-              >
-                {{ char }}
-              </span>
-            </template>
-          </div>
-          <div v-else>
-            {{ line.text }}
+          <template v-if="ui.showLyricsRomanization && line.rubySegments?.length">
+            <ruby
+              v-for="(segment, segmentIndex) in line.rubySegments"
+              :key="segmentIndex"
+              class="lyric-ruby"
+            >
+              <template v-if="currentIndex == idx">
+                <span
+                  v-for="(char, charIdx) in segment.chars"
+                  :key="charIdx"
+                  class="lyric-karaoke-char"
+                  :style="getCharStyle(char)"
+                >
+                  {{ char.char }}
+                </span>
+              </template>
+              <span v-else>{{ segment.text }}</span>
+              <rt>{{ segment.romanization }}</rt>
+            </ruby>
+          </template>
+          <template v-else>
+            <div v-if="currentIndex == idx">
+              <!-- 逐字歌词 -->
+              <template v-if="line.chars?.length">
+                <span
+                  v-for="(char, charIdx) in line.chars"
+                  :key="charIdx"
+                  class="lyric-karaoke-char"
+                  :style="getCharStyle(char)"
+                >
+                  {{ char.char }}
+                </span>
+              </template>
+              <!-- 普通歌词 -->
+              <template v-else>
+                <span
+                  v-for="(char, charIdx) in line.text"
+                  :key="charIdx"
+                  :class="['lyric-char', ui.lyricsStyle == 'glow' ? 'lyric-glow' : '']"
+                  :style="
+                    ui.lyricsStyle == 'follow'
+                      ? getNormalCharStyle(charIdx, line.text.length)
+                      : `color: var(--lrc-highlight)`
+                  "
+                >
+                  {{ char }}
+                </span>
+              </template>
+            </div>
+            <div v-else>
+              {{ line.text }}
+            </div>
+          </template>
+          <div
+            v-if="ui.showLyricsRomanization && line.romanization && !line.rubySegments?.length"
+            class="lyric-romanization"
+          >
+            {{ line.romanization }}
           </div>
           <!-- 翻译 -->
           <div v-if="ui.showLyricsTranslation && line.translation" class="lyric-translation">
@@ -468,6 +496,27 @@ onUnmounted(() => {
   margin-top: 10px;
   font-size: var(--lrc-translate-size);
   color: var(--lrc-translate);
+}
+
+.lyric-romanization {
+  margin-top: 0.3rem;
+  color: color-mix(in srgb, var(--lrc-translate) 88%, var(--lrc-default));
+  font-size: calc(var(--lrc-translate-size) * 0.92);
+  letter-spacing: 0.025em;
+}
+
+.lyric-ruby {
+  ruby-position: over;
+  ruby-align: center;
+  white-space: pre;
+}
+
+.lyric-ruby rt {
+  color: color-mix(in srgb, var(--lrc-translate) 88%, var(--lrc-default));
+  font-size: 0.42em;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+  user-select: text;
 }
 
 .lyric-glow {

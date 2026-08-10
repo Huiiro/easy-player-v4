@@ -72,6 +72,7 @@ export const useUIStore = defineStore(
     const showLyricsSizeSlider = ref(false)
     const showLyricsEditor = ref(false)
     const showLyricsTranslation = ref(false)
+    const showLyricsRomanization = ref(false)
     const autoLyricsFontResizer = ref(true)
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
@@ -123,6 +124,9 @@ export const useUIStore = defineStore(
         ? `"${customFontFamily.value}", Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
         : 'inherit'
     )
+    function normalizeLyricsFontPadding(value: number): number {
+      return Math.max(3, Math.min(78, Math.round(value / 3) * 3))
+    }
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
     const getBackgroundStyle = computed(() => {
       const brightness = customBg.brightness / 100
@@ -152,7 +156,9 @@ export const useUIStore = defineStore(
       if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
       else root.style.removeProperty('--color-primary')
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
-      root.style.setProperty('--lrc-padding', `${lyricsFontPadding.value}px`)
+      const normalizedPadding = normalizeLyricsFontPadding(lyricsFontPadding.value)
+      if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
+      root.style.setProperty('--lrc-padding', `${normalizedPadding}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
     }
     function syncSystemBackgroundThemeColor(): void {
@@ -323,7 +329,8 @@ export const useUIStore = defineStore(
       root.style.setProperty('--lrc-size', lyricsFontSize.value + 'rem')
     }
     function setLyricsFontPadding(padding?: number): void {
-      if (padding) lyricsFontPadding.value = padding
+      if (typeof padding === 'number' && Number.isFinite(padding))
+        lyricsFontPadding.value = normalizeLyricsFontPadding(padding)
       const root = document.documentElement
       root.style.setProperty('--lrc-padding', lyricsFontPadding.value + 'px')
     }
@@ -352,6 +359,9 @@ export const useUIStore = defineStore(
     }
     function toggleTranslation(): void {
       showLyricsTranslation.value = !showLyricsTranslation.value
+    }
+    function toggleRomanization(): void {
+      showLyricsRomanization.value = !showLyricsRomanization.value
     }
     watch(
       [
@@ -415,6 +425,7 @@ export const useUIStore = defineStore(
       showLyricsSizeSlider,
       showLyricsEditor,
       showLyricsTranslation,
+      showLyricsRomanization,
       autoLyricsFontResizer,
       lyricSourceOrder,
       playerBgType,
@@ -451,7 +462,8 @@ export const useUIStore = defineStore(
       resetLyricsOffset,
       resetLyricsColors,
       handleClickStyle,
-      toggleTranslation
+      toggleTranslation,
+      toggleRomanization
     }
   },
   {
@@ -489,6 +501,7 @@ export const useUIStore = defineStore(
         'lyricsColors',
         'lyricsFontSizeIndex',
         'showLyricsTranslation',
+        'showLyricsRomanization',
         'autoLyricsFontResizer',
         'lyricSourceOrder',
         'playerBgType',

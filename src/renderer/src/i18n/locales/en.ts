@@ -571,6 +571,7 @@ export default {
     speed: 'Speed',
     spectrum: 'Spectrum',
     showTranslation: 'Show Translation',
+    showRomanization: 'Show Romanization',
     lyricFontSize: 'Lyric font size',
     lyricSpacing: 'Lyric spacing',
     lyricTiming: 'Lyric timing offset (±5 seconds)',
@@ -606,6 +607,8 @@ export default {
     lyricAlbum: 'Album (optional)',
     lyricEditorPlaceholder: 'Edit LRC lyrics here…',
     lyricTranslationPlaceholder: 'Edit translated lyrics here (optional)…',
+    lyricRomanizationPlaceholder:
+      'Edit romanized lyrics here (optional; ELRC/YRC word timing supported)…',
     lyricProviderNetease: 'NetEase Cloud Music',
     lyricProviderKugou: 'KuGou'
   },

@@ -40,3 +40,9 @@ fix lyrics performance
 fix history sort error
 fix colors
 fix known issues
+
+#### v 3.0.8
+fix player cover/panel/controls
+support more lrc format
+support romaji
+fix text padding

@@ -9,6 +9,12 @@ import {
 import kugouApi from 'kugoumusicapi'
 
 export type LyricsSource = 'embedded' | 'local' | 'network'
+type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+interface LyricLoadPayload {
+  content: string
+  format: LyricFormat
+  path?: string
+}
 export interface LyricSearchRequest {
   title: string
   artist?: string | null
@@ -21,7 +27,9 @@ export interface NetworkLyricCandidate {
   artist: string
   album?: string
   lrc: string
+  format?: LyricFormat
   translation?: string
+  romanization?: string
 }
 
 const KUGOU_COOKIE = 'dfid=test;userid=0;token='
@@ -53,9 +61,15 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
       if (id === undefined) return null
       const result = (await getNeteaseLyric({ id })) as unknown as {
         status?: number
-        body?: { lrc?: { lyric?: string }; tlyric?: { lyric?: string } }
+        body?: {
+          lrc?: { lyric?: string }
+          yrc?: { lyric?: string }
+          tlyric?: { lyric?: string }
+          romalrc?: { lyric?: string }
+        }
       }
-      const lrc = result.body?.lrc?.lyric?.trim()
+      const yrc = result.body?.yrc?.lyric?.trim()
+      const lrc = yrc || result.body?.lrc?.lyric?.trim()
       if (result.status !== 200 || !lrc) return null
       const artists = Array.isArray(song.artists)
         ? song.artists
@@ -71,7 +85,9 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
         artist: artists || request.artist || '',
         album,
         lrc,
-        translation: result.body?.tlyric?.lyric?.trim() || undefined
+        format: yrc ? 'yrc' : 'lrc',
+        translation: result.body?.tlyric?.lyric?.trim() || undefined,
+        romanization: result.body?.romalrc?.lyric?.trim() || undefined
       }
     })
   )
@@ -123,11 +139,15 @@ async function searchNetworkLyrics(request: LyricSearchRequest): Promise<Network
   return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
 }
 
-function readLocalLyrics(audioPath: string): string | null {
+function readLocalLyrics(audioPath: string): LyricLoadPayload | null {
   const directory = dirname(audioPath)
   const stem = basename(audioPath, extname(audioPath))
-  for (const candidate of [join(directory, `${stem}.lrc`), join(directory, 'lyrics.lrc')]) {
-    if (existsSync(candidate)) return readFileSync(candidate, 'utf8')
+  const formats: LyricFormat[] = ['elrc', 'yrc', 'ttml', 'lrc']
+  for (const name of [stem, 'lyrics']) {
+    for (const format of formats) {
+      const path = join(directory, `${name}.${format}`)
+      if (existsSync(path)) return { content: readFileSync(path, 'utf8'), format, path }
+    }
   }
   return null
 }
@@ -139,22 +159,21 @@ function formatTimestamp(timestampMs: number): string {
   return `${minutes}:${seconds}`
 }
 
-function embeddedLyricsToLrc(
+function embeddedLyricsToPayload(
   lyrics: Awaited<ReturnType<typeof parseFile>>['common']['lyrics']
-): string | null {
+): LyricLoadPayload | null {
   if (!lyrics?.length) return null
   const synchronized = lyrics.flatMap((tag) =>
     tag.syncText
       .filter((item) => item.text?.trim() && typeof item.timestamp === 'number')
       .map((item) => `[${formatTimestamp(item.timestamp!)}]${item.text.trim()}`)
   )
-  if (synchronized.length) return synchronized.join('\n')
-  return (
-    lyrics
-      .map((tag) => tag.text?.trim())
-      .filter(Boolean)
-      .join('\n') || null
-  )
+  if (synchronized.length) return { content: synchronized.join('\n'), format: 'lrc' }
+  const content = lyrics
+    .map((tag) => tag.text?.trim())
+    .filter(Boolean)
+    .join('\n')
+  return content ? { content, format: 'plain' } : null
 }
 
 export function registerLyricsIpcHandlers(): void {
@@ -167,7 +186,7 @@ export function registerLyricsIpcHandlers(): void {
         if (request.source === 'local')
           return { success: true, data: readLocalLyrics(request.audioPath) }
         const metadata = await parseFile(request.audioPath, { skipCovers: true })
-        return { success: true, data: embeddedLyricsToLrc(metadata.common.lyrics) }
+        return { success: true, data: embeddedLyricsToPayload(metadata.common.lyrics) }
       } catch (error) {
         return {
           success: false,

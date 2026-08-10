@@ -14,6 +14,10 @@ export interface Song {
   isNewest: boolean
   lrc: string | null
   translation: string | null
+  lyricFormat: string | null
+  translationFormat: string | null
+  romanization: string | null
+  romanizationFormat: string | null
   year: number | null
   genre: string | null
   bitrate: number | null

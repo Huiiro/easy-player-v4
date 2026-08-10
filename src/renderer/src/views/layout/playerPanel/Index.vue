@@ -271,7 +271,7 @@ function changeLyricSize(event: WheelEvent): void {
 function changeLyricPadding(event: WheelEvent): void {
   event.preventDefault()
   ui.setLyricsFontPadding(
-    Math.max(4, Math.min(78, ui.lyricsFontPadding + (event.deltaY < 0 ? 4 : -4)))
+    Math.max(3, Math.min(78, ui.lyricsFontPadding + (event.deltaY < 0 ? 3 : -3)))
   )
 }
 function changeLyricsOffset(event: WheelEvent): void {
@@ -473,12 +473,12 @@ function extractCoverColors(event: Event): void {
       >
         <!-- metadata & control -->
         <section
-          class="panel-side flex min-w-0 flex-col items-center justify-center gap-5 px-[clamp(2rem,6vw,7rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
+          class="panel-side flex min-w-0 flex-col items-center justify-center gap-5 px-[clamp(1.5rem,4vw,4rem)] py-8 max-[760px]:border-r-0 max-[760px]:px-6 max-[760px]:py-6 max-[700px]:gap-4"
           :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
           <div
-            class="cover-frame relative w-[min(320px,32vw)] transition-[transform,filter] duration-100 max-[760px]:w-[min(260px,62vw)] max-[700px]:w-[min(205px,44vh)]"
+            class="cover-frame relative transition-[transform,filter] duration-100"
             :style="coverFrameStyle"
           >
             <div
@@ -534,23 +534,6 @@ function extractCoverColors(event: Event): void {
           </dl>
           <!-- args control -->
           <div class="flex w-full flex-nowrap items-center justify-center gap-1 text-xs">
-            <!-- volume -->
-            <label
-              class="panel-tool vertical-tool"
-              :title="t('footer.volume')"
-              @wheel="changeVolume"
-            >
-              <svg-icon name="volume-volume-high" class-name="w-[16px] h-[16px]" />
-              <span class="vertical-popup">
-                <b>{{ Math.round(player.volume * 100) }}%</b>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  :value="player.volume * 100"
-                  @input="player.setVolume(Number(($event.target as HTMLInputElement).value) / 100)"
-                />
-              </span>
-            </label>
             <!-- speed -->
             <label
               class="panel-tool vertical-tool"
@@ -572,16 +555,6 @@ function extractCoverColors(event: Event): void {
                 />
               </span>
             </label>
-            <!-- add current song to playlist -->
-            <button
-              class="panel-tool"
-              :disabled="!player.currentQueueSong"
-              :title="t('songList.addToPlaylist')"
-              :aria-label="t('songList.addToPlaylist')"
-              @click="showPlaylistPicker = true"
-            >
-              <SvgIcon name="common-plus" class-name="size-4" />
-            </button>
             <!-- rhythm visuals -->
             <button
               class="panel-tool"
@@ -667,9 +640,9 @@ function extractCoverColors(event: Event): void {
                 <input
                   class="accent-primary"
                   type="range"
-                  min="4"
+                  min="3"
                   max="78"
-                  step="4"
+                  step="3"
                   :value="ui.lyricsFontPadding"
                   @input="
                     ui.setLyricsFontPadding(Number(($event.target as HTMLInputElement).value))
@@ -748,6 +721,15 @@ function extractCoverColors(event: Event): void {
                 <SvgIcon name="common-translate" class-name="w-[16px] h-[16px]" />
               </span>
             </button>
+            <button
+              class="panel-tool"
+              :class="ui.showLyricsRomanization && 'active'"
+              :title="t('playerPanel.showRomanization')"
+              :aria-label="t('playerPanel.showRomanization')"
+              @click="ui.toggleRomanization()"
+            >
+              <SvgIcon name="common-romaji" class-name="w-[16px] h-[16px]" />
+            </button>
           </div>
           <!-- progress -->
           <div class="w-[min(440px,100%)]">
@@ -769,6 +751,23 @@ function extractCoverColors(event: Event): void {
           </div>
           <!-- play control -->
           <div class="flex items-center gap-6">
+            <!-- volume -->
+            <label
+              class="panel-secondary-text vertical-tool grid size-6 place-items-center rounded-full transition hover:scale-105"
+              :title="t('footer.volume')"
+              @wheel="changeVolume"
+            >
+              <svg-icon name="volume-volume-high" class-name="size-6" />
+              <span class="vertical-popup">
+                <small>{{ Math.round(player.volume * 100) }}%</small>
+                <input
+                  class="accent-primary"
+                  type="range"
+                  :value="player.volume * 100"
+                  @input="player.setVolume(Number(($event.target as HTMLInputElement).value) / 100)"
+                />
+              </span>
+            </label>
             <!-- play mode -->
             <button
               class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
@@ -809,6 +808,16 @@ function extractCoverColors(event: Event): void {
               @click="showQueue = !showQueue"
             >
               <svg-icon name="control-playlist" class-name="size-6" />
+            </button>
+            <!-- add current song to playlist -->
+            <button
+              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+              :disabled="!player.currentQueueSong"
+              :title="t('songList.addToPlaylist')"
+              :aria-label="t('songList.addToPlaylist')"
+              @click="showPlaylistPicker = true"
+            >
+              <SvgIcon name="common-plus" class-name="size-6" />
             </button>
           </div>
         </section>
@@ -1030,8 +1039,22 @@ function extractCoverColors(event: Event): void {
   animation-delay: -3.4s;
 }
 .cover-frame {
+  /* Reserve room for the title, metadata, tool strip, progress and controls.
+   * This keeps the lower controls visible at the 780px minimum window height. */
+  width: min(520px, 36vw, calc(100dvh - 30rem));
+  max-width: 100%;
   isolation: isolate;
   transform-origin: center;
+}
+@media (max-width: 760px) {
+  .cover-frame {
+    width: min(320px, 62vw, calc(100dvh - 24rem));
+  }
+}
+@media (max-width: 700px) {
+  .cover-frame {
+    width: min(230px, 44vh);
+  }
 }
 .cover-ring-anchor {
   position: absolute;

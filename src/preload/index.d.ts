@@ -304,7 +304,15 @@ declare global {
         loadSource(
           audioPath: string,
           source: 'embedded' | 'local' | 'network'
-        ): Promise<{ success: boolean; data?: string | null; error?: string }>
+        ): Promise<{
+          success: boolean
+          data?: {
+            content: string
+            format: 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+            path?: string
+          } | null
+          error?: string
+        }>
         searchNetwork(request: {
           title: string
           artist?: string | null
@@ -318,7 +326,9 @@ declare global {
             artist: string
             album?: string
             lrc: string
+            format?: 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
             translation?: string
+            romanization?: string
           }>
           error?: string
         }>
