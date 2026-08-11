@@ -1,6 +1,6 @@
 {
   "name": "easy-player",
-  "version": "3.0.8",
+  "version": "3.0.9",
   "description": "Easy Player V4",
   "main": "./out/main/index.js",
   "author": "huiiro",
@@ -23,8 +23,8 @@
     "build:native:debug": "cmake-js compile --directory src/main/native --out build/native-addon --debug",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
-    "build:win": "npm run build:nocheck && electron-builder --win",
-    "build:mac": "npm run build && electron-builder --mac",
+    "build:win": "npm run build:native && npm run build:nocheck && electron-builder --win",
+    "build:mac": "npm run build:native && node scripts/bundle-macos-native-deps.js && npm run build:nocheck && electron-builder --mac",
     "build:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {

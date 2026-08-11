@@ -4,6 +4,87 @@ project(easy_player_native LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# macOS uses the portable engine core plus the CoreAudio shared-output backend.
+# Keep this branch self-contained so the existing Windows/vcpkg configuration
+# remains unchanged below.
+if(APPLE)
+    enable_language(OBJCXX)
+
+    if(CMAKE_OSX_ARCHITECTURES)
+        set(EASY_PLAYER_MACOS_ARCH "${CMAKE_OSX_ARCHITECTURES}")
+    elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
+        set(EASY_PLAYER_MACOS_ARCH arm64)
+    else()
+        set(EASY_PLAYER_MACOS_ARCH x86_64)
+    endif()
+
+    set(HOMEBREW_PREFIX "/opt/homebrew")
+    if(EASY_PLAYER_MACOS_ARCH STREQUAL "x86_64")
+        set(HOMEBREW_PREFIX "/usr/local")
+    endif()
+    set(EASY_PLAYER_MACOS_DEPS_PREFIX "${HOMEBREW_PREFIX}/opt" CACHE PATH
+        "Homebrew opt directory containing FFmpeg, libsamplerate and SoundTouch")
+
+    find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h
+        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/include" NO_DEFAULT_PATH)
+    find_library(AVCODEC_LIB avcodec PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
+    find_library(AVFORMAT_LIB avformat PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
+    find_library(AVUTIL_LIB avutil PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
+    find_library(SWRESAMPLE_LIB swresample PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
+    find_path(SAMPLERATE_INCLUDE_DIR samplerate.h
+        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/libsamplerate/include" NO_DEFAULT_PATH)
+    find_library(SAMPLERATE_LIB samplerate
+        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/libsamplerate/lib" NO_DEFAULT_PATH)
+    # engine-core includes <soundtouch/SoundTouch.h>, so retain the include
+    # root rather than the nested soundtouch directory.
+    find_path(SOUNDTOUCH_INCLUDE_DIR soundtouch/SoundTouch.h
+        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/sound-touch/include" NO_DEFAULT_PATH)
+    find_library(SOUNDTOUCH_LIB SoundTouch
+        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/sound-touch/lib" NO_DEFAULT_PATH)
+
+    if(NOT FFMPEG_INCLUDE_DIR OR NOT AVCODEC_LIB OR NOT AVFORMAT_LIB OR NOT AVUTIL_LIB OR
+       NOT SWRESAMPLE_LIB OR NOT SAMPLERATE_INCLUDE_DIR OR NOT SAMPLERATE_LIB OR
+       NOT SOUNDTOUCH_INCLUDE_DIR OR NOT SOUNDTOUCH_LIB)
+        message(FATAL_ERROR
+            "macOS engine dependencies are missing. Install them with:\n"
+            "  brew install ffmpeg libsamplerate sound-touch\n"
+            "or set EASY_PLAYER_MACOS_DEPS_PREFIX to the Homebrew opt directory.")
+    endif()
+
+    include("${CMAKE_CURRENT_LIST_DIR}/../../../engine-core/engine_core_sources.cmake")
+    add_library(easy_player_engine_core STATIC ${EASY_PLAYER_ENGINE_CORE_SOURCES})
+    target_include_directories(easy_player_engine_core PUBLIC
+        "${FFMPEG_INCLUDE_DIR}" "${SAMPLERATE_INCLUDE_DIR}" "${SOUNDTOUCH_INCLUDE_DIR}"
+        "${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}")
+
+    set(SOURCES
+        "${CMAKE_CURRENT_LIST_DIR}/../../../engine-windows/src/addon.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/../../../engine-macos/src/macos_audio_backend.mm"
+        "${CMAKE_CURRENT_LIST_DIR}/../../../engine-macos/src/macos_backend_factory.cpp")
+    if(DEFINED CMAKE_JS_SRC)
+        list(APPEND SOURCES ${CMAKE_JS_SRC})
+    endif()
+    add_library(${PROJECT_NAME} SHARED ${SOURCES})
+    get_filename_component(NODE_ADDON_API_DIR
+        "${CMAKE_SOURCE_DIR}/../../../node_modules/node-addon-api" ABSOLUTE)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE EASY_PLAYER_MACOS=1)
+    target_include_directories(${PROJECT_NAME} PRIVATE
+        "${FFMPEG_INCLUDE_DIR}" "${SAMPLERATE_INCLUDE_DIR}" "${SOUNDTOUCH_INCLUDE_DIR}"
+        "${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}"
+        "${CMAKE_CURRENT_LIST_DIR}/../../../engine-macos/src"
+        ${CMAKE_JS_INC} "${NODE_ADDON_API_DIR}")
+    target_link_libraries(${PROJECT_NAME} PRIVATE
+        easy_player_engine_core ${CMAKE_JS_LIB}
+        ${AVCODEC_LIB} ${AVFORMAT_LIB} ${AVUTIL_LIB} ${SWRESAMPLE_LIB}
+        ${SAMPLERATE_LIB} ${SOUNDTOUCH_LIB}
+        "-framework AudioToolbox" "-framework CoreAudio" "-framework Foundation")
+    set_target_properties(${PROJECT_NAME} PROPERTIES PREFIX "" SUFFIX ".node")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:${PROJECT_NAME}>" "${CMAKE_BINARY_DIR}/easy_player_native.node")
+    return()
+endif()
+
 # ── Node.js & N-API ──
 # cmake-js sets CMAKE_JS_SRC, CMAKE_JS_INC, CMAKE_JS_LIB automatically
 # when invoked via cmake-js.

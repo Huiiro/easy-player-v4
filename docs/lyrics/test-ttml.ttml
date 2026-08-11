@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml">
+  <body>
+    <div>
+      <p begin="10.360s" dur="5.460s"><span begin="10.360s" dur="2.730s">TTML徘徊着的 </span><span begin="13.090s" dur="2.730s">在路上的</span></p>
+      <p begin="15.820s" dur="5.460s"><span begin="15.820s" dur="1.820s">你要走吗 </span><span begin="17.640s" dur="1.820s">via </span><span begin="19.460s" dur="1.820s">via</span></p>
+      <p begin="21.280s" dur="5.470s"><span begin="21.280s" dur="2.740s">易碎的 </span><span begin="24.020s" dur="2.730s">骄傲着</span></p>
+      <p begin="26.750s" dur="5.450s"><span begin="26.750s" dur="5.450s">那也曾是我的模样</span></p>
+      <p begin="32.200s" dur="5.460s"><span begin="32.200s" dur="2.730s">沸腾着的 </span><span begin="34.930s" dur="2.730s">不安着的</span></p>
+      <p begin="37.660s" dur="5.460s"><span begin="37.660s" dur="1.820s">你要去哪 </span><span begin="39.480s" dur="1.820s">via </span><span begin="41.300s" dur="1.820s">via</span></p>
+      <p begin="43.120s" dur="5.460s"><span begin="43.120s" dur="2.730s">谜一样的 </span><span begin="45.850s" dur="2.730s">沉默着的</span></p>
+      <p begin="48.580s" dur="5.470s"><span begin="48.580s" dur="5.470s">故事你真的在听吗</span></p>
+      <p begin="54.050s" dur="3.360s"><span begin="54.050s" dur="3.360s">我曾经跨过山和大海</span></p>
+      <p begin="57.410s" dur="3.360s"><span begin="57.410s" dur="3.360s">也穿过人山人海</span></p>
+      <p begin="60.770s" dur="3.360s"><span begin="60.770s" dur="3.360s">我曾经拥有着的一切</span></p>
+      <p begin="64.130s" dur="3.360s"><span begin="64.130s" dur="3.360s">转眼都飘散如烟</span></p>
+    </div>
+  </body>
+</tt>

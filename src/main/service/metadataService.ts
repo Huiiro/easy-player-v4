@@ -1,13 +1,8 @@
 import path from 'path'
-import fs from 'fs'
-import os from 'os'
 import { parseFile } from 'music-metadata'
-import { execFile } from 'node:child_process'
-import { writeFlacMetadata } from './flacMetadataService'
 import { writeMp3Metadata } from './mp3MetadataService'
-import { writeM4aMetadata } from './m4aMetadataService'
-import { getFfmpegPath } from '../utils/ffmpegUtils'
 import { Logger } from './loggerService'
+import { writeNativeMetadata } from '../audioEngine'
 
 export interface SongMetadata {
   // 基础信息
@@ -72,43 +67,8 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
     Logger.error('MetadataService: parse Metadata fail: ', err)
     const ext = filePath.split('.').pop()?.toLowerCase()
     if (ext === 'm4a' || ext === 'aac') {
-      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'easy-player-repair-'))
-      const tmpFile = path.join(tmpDir, 'repaired.m4a')
-      try {
-        await new Promise<void>((resolve, reject) => {
-          execFile(
-            getFfmpegPath(),
-            ['-i', filePath, '-c', 'copy', '-y', tmpFile],
-            { timeout: 120_000 },
-            (err) => {
-              if (err) return reject(err)
-              if (!fs.existsSync(tmpFile)) return reject(new Error('ffmpeg produced no output'))
-              // Copy to original location; avoid rename across devices
-              const backup = filePath + '.bak'
-              fs.renameSync(filePath, backup)
-              try {
-                fs.copyFileSync(tmpFile, filePath)
-                fs.unlinkSync(backup)
-              } catch (copyErr) {
-                try {
-                  fs.renameSync(backup, filePath)
-                } catch {
-                  /* ignore */
-                }
-                throw copyErr
-              }
-              resolve()
-            }
-          )
-        })
-        metadata = await parseFile(filePath)
-      } finally {
-        try {
-          fs.rmSync(tmpDir, { recursive: true, force: true })
-        } catch {
-          /* ignore */
-        }
-      }
+      if (!writeNativeMetadata(filePath, {})) throw err
+      metadata = await parseFile(filePath)
     } else {
       Logger.error('MetadataService: parse Metadata fail: Unsupported file extension.')
       throw err
@@ -186,15 +146,13 @@ async function dispatchMetadata(
   input: SongMetadata
 ): Promise<boolean> {
   try {
+    if (format === 'FLAC' || format === 'M4A' || format === 'AAC') {
+      return writeNativeMetadata(filePath, input)
+    }
     if (format === 'MPEG') {
       return await writeMp3Metadata(filePath, input)
-    } else if (format === 'FLAC') {
-      return await writeFlacMetadata(filePath, input)
-    } else if (format === 'M4A' || format === 'AAC') {
-      return await writeM4aMetadata(filePath, input)
-    } else {
-      return false
     }
+    return false
   } catch (err) {
     Logger.error(
       `MetadataService: file: ${filePath}, format: ${format}, dispatchMetadata fail: ${err}`

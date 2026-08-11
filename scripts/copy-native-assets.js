@@ -3,6 +3,19 @@ const fs = require('fs')
 const path = require('path')
 
 const srcDir = path.join(__dirname, '..', 'build', 'native-addon')
+if (process.platform === 'darwin') {
+  const nodePath = path.join(srcDir, 'easy_player_native.node')
+  const releaseNodePath = path.join(srcDir, 'Release', 'easy_player_native.node')
+  if (fs.existsSync(releaseNodePath)) {
+    fs.copyFileSync(releaseNodePath, nodePath)
+    console.log('[copy-native-assets] Copied:', releaseNodePath, '→', nodePath)
+  } else if (!fs.existsSync(nodePath)) {
+    console.error('[copy-native-assets] macOS addon not found:', releaseNodePath)
+    process.exit(1)
+  }
+  console.log('[copy-native-assets] macOS addon ready:', nodePath)
+  process.exit(0)
+}
 const ffmpegBin = path.join(
   __dirname,
   '..',

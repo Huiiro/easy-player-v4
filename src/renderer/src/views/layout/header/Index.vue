@@ -21,6 +21,7 @@ const scanTotal = ref(0)
 const scanAdded = ref(0)
 const scanDuplicates = ref(0)
 const importingLocalFolder = ref(false)
+const isMac = navigator.userAgent.includes('Macintosh')
 
 const removeScanProgressListener = window.api.library.onScanProgress((progress) => {
   scanVisible.value = true
@@ -77,7 +78,7 @@ async function uploadLocalFiles(): Promise<void> {
 <template>
   <header
     class="app-header flex h-[42px] items-center border-b transition-opacity [-webkit-app-region:drag]"
-    :class="visible ? '' : 'pointer-events-none opacity-0'"
+    :class="[visible ? '' : 'pointer-events-none opacity-0', isMac ? 'app-header--mac' : '']"
   >
     <Teleport to="body">
       <ScanProgress
@@ -91,7 +92,8 @@ async function uploadLocalFiles(): Promise<void> {
     </Teleport>
 
     <div
-      class="flex min-w-max cursor-pointer items-center gap-2 pl-3.5 text-text [-webkit-app-region:no-drag]"
+      class="flex min-w-max cursor-pointer items-center gap-2 text-text [-webkit-app-region:no-drag]"
+      :class="isMac ? 'pl-[84px]' : 'pl-3.5'"
       @click="go('/home')"
     >
       <span
@@ -138,7 +140,7 @@ async function uploadLocalFiles(): Promise<void> {
         />
       </button>
     </div>
-    <div class="flex self-stretch [-webkit-app-region:no-drag]">
+    <div v-if="!isMac" class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
         class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="t('header.miniPlayer')"
@@ -193,5 +195,10 @@ async function uploadLocalFiles(): Promise<void> {
     background-color 0.3s ease,
     border-color 0.3s ease,
     opacity 0.2s ease;
+}
+
+/* The native macOS traffic lights occupy the left side of the 42px header. */
+.app-header--mac {
+  min-height: 42px;
 }
 </style>

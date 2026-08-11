@@ -45,6 +45,10 @@ function loadNativeAddon(): boolean {
   }
 }
 
+export function writeNativeMetadata(filePath: string, metadata: object): boolean {
+  return loadNativeAddon() && nativeAddon?.writeMetadata?.(filePath, metadata) === true
+}
+
 export class AudioEngineManager {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private engine: any = null

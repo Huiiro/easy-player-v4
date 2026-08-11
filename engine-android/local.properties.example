@@ -1,0 +1,3 @@
+# Copy values into android-app/local.properties or configure them in Android Studio.
+# sdk.dir=D:/dependency/android/sdk
+# easyPlayer.androidDepsRoot=D:/dependency/android/audio-libs

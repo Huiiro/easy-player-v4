@@ -1,0 +1,24 @@
+name: macOS build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install native dependencies
+        run: brew install ffmpeg libsamplerate sound-touch
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Build macOS package
+        run: npm run build:mac -- --publish never

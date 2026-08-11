@@ -12,7 +12,6 @@ files:
   - '!**/.git/**'
   - '!src/**/*'
   - '!resources/**/*'
-  - '!resources/bin{,/**/*}'
   - '!resources/tools/yt-dlp{,/**/*}'
   - '!**/.vscode/*'
   - '!src/*'
@@ -25,15 +24,7 @@ extraResources:
     to: 'resources/'
     filter:
       - '**/*'
-      - '!bin{,/**/*}'
       - '!tools/yt-dlp{,/**/*}'
-  - from: 'resources/bin/'
-    to: 'tools/flac/'
-  - from: 'build/native-addon/'
-    to: 'native/'
-    filter:
-      - '**/*.node'
-      - '**/*.dll'
 asarUnpack:
   - resources/**
   - 'node_modules/better-sqlite3/**'
@@ -42,6 +33,11 @@ win:
   executableName: easy-player
   icon: resources/easy-player.ico
   extraResources:
+    - from: 'build/native-addon/'
+      to: 'native/'
+      filter:
+        - '**/*.node'
+        - '**/*.dll'
     - from: 'resources/tools/yt-dlp/win/yt-dlp.exe'
       to: 'tools/yt-dlp/yt-dlp.exe'
 nsis:
@@ -56,8 +52,15 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: true
 mac:
+  icon: resources/easy-player.icns
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:
+    - from: 'build/native-addon/easy_player_native.node'
+      to: 'native/easy_player_native.node'
+    - from: 'build/native-addon/deps/'
+      to: 'native/deps/'
+      filter:
+        - '**/*.dylib'
     - from: 'resources/tools/yt-dlp/mac/yt-dlp'
       to: 'tools/yt-dlp/yt-dlp'
   extendInfo:
@@ -65,7 +68,6 @@ mac:
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
-  notarize: false
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:

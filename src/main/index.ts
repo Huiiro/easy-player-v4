@@ -7,6 +7,7 @@ import {
   Menu,
   ipcMain,
   net,
+  nativeImage,
   protocol,
   screen,
   Tray
@@ -36,9 +37,36 @@ import {
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
 
+// Set this before Electron creates the macOS application menu. In development
+// the executable is Electron.app, but the visible app/menu name is ours.
+app.setName('Easy Player')
+process.title = 'Easy Player'
+
+/**
+ * macOS cannot create a tray image from Windows `.ico` files, and Electron's
+ * Tray API does not reliably decode SVG paths. Keep ICO for Windows and use
+ * the PNG generated from the project SVG for macOS.
+ */
 const icon = app.isPackaged
-  ? join(process.resourcesPath, 'resources', 'easy-player.ico')
-  : join(__dirname, '../../resources/easy-player.ico')
+  ? join(
+      process.resourcesPath,
+      'resources',
+      process.platform === 'win32' ? 'easy-player.ico' : 'easy-player.png'
+    )
+  : join(
+      __dirname,
+      '../..',
+      process.platform === 'win32' ? 'resources/easy-player.ico' : 'resources/easy-player.png'
+    )
+const trayIcon =
+  process.platform === 'darwin'
+    ? app.isPackaged
+      ? join(process.resourcesPath, 'resources', 'easy-playerTemplate.png')
+      : join(__dirname, '../..', 'resources/easy-playerTemplate.png')
+    : icon
+const dockIcon = app.isPackaged
+  ? join(process.resourcesPath, 'icon.icns')
+  : join(__dirname, '../..', 'resources/easy-player.icns')
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -52,6 +80,7 @@ let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let audioEngine: AudioEngineManager | null = null
 let tray: Tray | null = null
+let trayMenu: Menu | null = null
 let trayTrack = { title: '', artist: '', isPlaying: false }
 let isQuitting = false
 
@@ -60,6 +89,23 @@ function showMainWindow(): void {
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()
+}
+
+function quitApplication(): void {
+  isQuitting = true
+  audioEngine?.stop()
+  globalShortcut.unregisterAll()
+  tray?.destroy()
+  tray = null
+  closeDatabase()
+  // Do not let a hidden close-to-tray window intercept this explicit user
+  // request. `app.exit` is intentional here; cleanup was completed above.
+  app.exit(0)
+}
+
+function sendTrayAction(action: 'previous' | 'toggle' | 'next'): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('tray:action', action)
 }
 
 // Keep one process and one main window active. A second launch simply restores the first.
@@ -71,40 +117,54 @@ if (!app.requestSingleInstanceLock()) {
 
 function updateTrayMenu(): void {
   if (!tray) return
-  const label = trayTrack.title
+  const trackLabel = trayTrack.title || 'No track playing'
+  const artistLabel = trayTrack.artist || 'Easy Player'
+  const tooltip = trayTrack.title
     ? `${trayTrack.title}${trayTrack.artist ? ` — ${trayTrack.artist}` : ''}`
     : 'Easy Player'
-  tray.setToolTip(label)
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label, enabled: false },
+  tray.setToolTip(tooltip)
+  if (process.platform === 'darwin') {
+    const compactTitle = trayTrack.title.length > 24 ? `${trayTrack.title.slice(0, 23)}…` : trayTrack.title
+    // Keep a compact, persistent now-playing entry on the right side of the
+    // macOS menu bar. Its assigned menu opens only when the entry is clicked.
+    tray.setTitle(` ${compactTitle || 'Easy Player'}`)
+  }
+  trayMenu = Menu.buildFromTemplate([
+      { label: trackLabel, enabled: false },
+      { label: artistLabel, enabled: false },
       { type: 'separator' },
-      { label: 'Previous', click: () => mainWindow?.webContents.send('tray:action', 'previous') },
+      { label: 'Previous', click: () => sendTrayAction('previous') },
       {
         label: trayTrack.isPlaying ? 'Pause' : 'Play',
-        click: () => mainWindow?.webContents.send('tray:action', 'toggle')
+        click: () => sendTrayAction('toggle')
       },
-      { label: 'Next', click: () => mainWindow?.webContents.send('tray:action', 'next') },
+      { label: 'Next', click: () => sendTrayAction('next') },
       { type: 'separator' },
       {
-        label: 'Show / Hide window',
-        click: () => (mainWindow?.isVisible() ? mainWindow.hide() : showMainWindow())
+        label: 'Show window',
+        click: showMainWindow
       },
       { type: 'separator' },
       {
         label: 'Quit',
-        click: () => {
-          isQuitting = true
-          app.quit()
-        }
+        click: quitApplication
       }
     ])
-  )
+  // macOS menu-bar items use their assigned menu for both normal and
+  // secondary clicks. This avoids Electron's fallback status-item menu.
+  tray.setContextMenu(trayMenu)
 }
 function createTray(): void {
   if (tray) return
-  tray = new Tray(icon)
-  tray.on('double-click', showMainWindow)
+  if (!existsSync(trayIcon)) {
+    console.warn(`[Tray] Icon not found; tray is disabled: ${trayIcon}`)
+    return
+  }
+  tray = new Tray(trayIcon)
+  // macOS uses the assigned custom menu for normal and secondary clicks.
+  if (process.platform !== 'darwin') {
+    tray.on('double-click', showMainWindow)
+  }
   updateTrayMenu()
 }
 const shortcutActions = ['previous', 'toggle', 'next', 'volumeUp', 'volumeDown'] as const
@@ -223,6 +283,14 @@ function createWindow(): void {
     minHeight: 780,
     show: false,
     frame: false,
+    // Extend the renderer into the native title bar while retaining macOS
+    // traffic-light controls. The renderer reserves this area in Header.
+    ...(process.platform === 'darwin'
+      ? {
+          titleBarStyle: 'hiddenInset' as const,
+          trafficLightPosition: { x: 16, y: 14 }
+        }
+      : {}),
     backgroundColor: '#111614',
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -397,8 +465,18 @@ function createDesktopLyricsWindow(): BrowserWindow {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   // Keep Windows notifications and taskbar identity aligned with the packaged app.
-  app.setName('Easy Player')
   app.setAppUserModelId('com.huiiro.easyplayer')
+  // The player is controlled from its right-side status item on macOS. Avoid
+  // Electron's empty/default application menu occupying the rest of the bar.
+  if (process.platform === 'darwin') Menu.setApplicationMenu(null)
+  // `app.dock.setIcon` accepts a NativeImage reliably; passing an ICNS path
+  // string makes Electron try its PNG path loader and can reject at startup.
+  if (process.platform === 'darwin') {
+    const dockImage = nativeImage.createFromPath(dockIcon)
+    const fallbackDockImage = nativeImage.createFromPath(icon)
+    if (!dockImage.isEmpty()) app.dock?.setIcon(dockImage)
+    else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
+  }
   createDir()
   initDatabase()
   migrateSourceSecrets()
@@ -413,6 +491,9 @@ app.whenReady().then(() => {
   ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
     setAppSetting('system.close-to-tray', enabled === true)
     return { success: true }
+  })
+  ipcMain.on('window:set-traffic-light-visible', (_event, visible: boolean) => {
+    if (process.platform === 'darwin') mainWindow?.setWindowButtonVisibility(visible)
   })
   ipcMain.handle('system:set-auto-start', (_event, enabled: boolean) => {
     app.setLoginItemSettings({ openAtLogin: enabled === true })
@@ -659,28 +740,28 @@ app.whenReady().then(() => {
     console.warn('[Main] Audio engine failed to load — running without audio')
   }
 
-  app.on('activate', function () {
-    // On macOS it's common to re-create a window in the app when the
-    // dock icon is clicked and there are no other windows open.
+  app.on('activate', () => {
+    // A hidden close-to-tray window must be restored when the Dock icon is
+    // activated; only create a replacement when no window exists at all.
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow()
       if (audioEngine?.loaded && mainWindow) {
         registerIpcHandlers(audioEngine, mainWindow)
       }
+    } else {
+      showMainWindow()
     }
   })
 })
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// The close-to-tray option is handled by the window's `close` event above.
+// If it is disabled, closing the final window must terminate the app on every
+// platform; otherwise macOS would leave a background/tray process behind.
 app.on('window-all-closed', () => {
   if (audioEngine) {
     audioEngine.stop()
   }
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })
 
 app.on('will-quit', () => {

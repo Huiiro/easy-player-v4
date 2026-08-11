@@ -275,6 +275,8 @@ const filesAPI = {
 const windowAPI = {
   command: (command: 'minimize' | 'toggle-maximize' | 'close') =>
     ipcRenderer.invoke('window:command', command) as Promise<{ maximized: boolean }>,
+  setTrafficLightVisible: (visible: boolean): void =>
+    ipcRenderer.send('window:set-traffic-light-visible', visible),
   onState: (callback: (state: { maximized: boolean }) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, state: { maximized: boolean }): void =>
       callback(state)

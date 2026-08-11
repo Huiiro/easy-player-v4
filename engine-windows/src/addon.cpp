@@ -1,11 +1,57 @@
 #include "audio_engine.h"
 #include "logger.h"
+#ifdef EASY_PLAYER_MACOS
+#include "macos_backend_factory.h"
+using PlatformAudioBackendFactory = MacOSAudioBackendFactory;
+#else
 #include "windows_backend_factory.h"
+using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
+#endif
 #include <napi.h>
 #include <memory>
 #include <string>
-#define NOMINMAX
-#include <windows.h>
+#include <filesystem>
+#include <map>
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/dict.h>
+}
+
+static bool rewrite_metadata(const std::string& source, const std::map<std::string, std::string>& tags, const std::string& cover_path, std::string& error) {
+    AVFormatContext* input = nullptr;
+    AVFormatContext* output = nullptr;
+    AVFormatContext* cover = nullptr;
+    int cover_stream = -1;
+    int cover_output_stream = -1;
+    const std::filesystem::path source_path(source);
+    const auto temporary = (source_path.parent_path() / (source_path.stem().string() + ".easy-player-meta-tmp" + source_path.extension().string())).string();
+    if (avformat_open_input(&input, source.c_str(), nullptr, nullptr) < 0 || avformat_find_stream_info(input, nullptr) < 0) { error = "Unable to open media file"; goto done; }
+    if (!cover_path.empty()) { if (avformat_open_input(&cover, cover_path.c_str(), nullptr, nullptr) < 0 || avformat_find_stream_info(cover, nullptr) < 0) { error = "Unable to open cover image"; goto done; } cover_stream = av_find_best_stream(cover, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0); if (cover_stream < 0) { error = "Cover image has no video stream"; goto done; } }
+    if (avformat_alloc_output_context2(&output, nullptr, nullptr, temporary.c_str()) < 0 || !output) { error = "Unable to create output container"; goto done; }
+    av_dict_copy(&output->metadata, input->metadata, 0);
+    for (const auto& [key, value] : tags) { if (value.empty()) av_dict_set(&output->metadata, key.c_str(), nullptr, 0); else av_dict_set(&output->metadata, key.c_str(), value.c_str(), 0); }
+    for (unsigned i = 0; i < input->nb_streams; ++i) { AVStream* in = input->streams[i]; if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) continue; AVStream* out = avformat_new_stream(output, nullptr); if (!out || avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) { error = "Unable to copy media stream"; goto done; } out->time_base = in->time_base; av_dict_copy(&out->metadata, in->metadata, 0); }
+    if (cover_stream >= 0) { AVStream* in = cover->streams[cover_stream]; AVStream* out = avformat_new_stream(output, nullptr); if (!out || avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) { error = "Unable to copy cover stream"; goto done; } out->time_base = in->time_base; out->disposition |= AV_DISPOSITION_ATTACHED_PIC; cover_output_stream = out->index; }
+    if (!(output->oformat->flags & AVFMT_NOFILE) && avio_open(&output->pb, temporary.c_str(), AVIO_FLAG_WRITE) < 0) { error = "Unable to create temporary file"; goto done; }
+    if (avformat_write_header(output, nullptr) < 0) { error = "Unable to write metadata header"; goto done; }
+    if (cover_stream >= 0) { AVPacket packet; av_init_packet(&packet); while (av_read_frame(cover, &packet) >= 0) { if (packet.stream_index == cover_stream) { AVStream* in = cover->streams[cover_stream]; AVStream* out = output->streams[cover_output_stream]; packet.stream_index = cover_output_stream; av_packet_rescale_ts(&packet, in->time_base, out->time_base); const int result = av_interleaved_write_frame(output, &packet); av_packet_unref(&packet); if (result < 0) { error = "Unable to write cover image"; goto done; } break; } av_packet_unref(&packet); } }
+    { AVPacket packet; av_init_packet(&packet); while (av_read_frame(input, &packet) >= 0) { AVStream* in = input->streams[packet.stream_index]; if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) { av_packet_unref(&packet); continue; } AVStream* out = output->streams[packet.stream_index]; av_packet_rescale_ts(&packet, in->time_base, out->time_base); int result = av_interleaved_write_frame(output, &packet); av_packet_unref(&packet); if (result < 0) { error = "Unable to write media packet"; goto done; } } }
+    av_write_trailer(output);
+    avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); output = nullptr;
+    std::filesystem::rename(temporary, source_path); return true;
+done:
+    if (input) avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (output) { if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); } std::error_code ec; std::filesystem::remove(temporary, ec); return false;
+}
+
+static Napi::Value WriteMetadata(const Napi::CallbackInfo& info) {
+    if (!info[0].IsString() || !info[1].IsObject()) return Napi::Boolean::New(info.Env(), false);
+    const auto values = info[1].As<Napi::Object>(); std::map<std::string, std::string> tags;
+    const std::pair<const char*, const char*> names[] = {{"title","title"},{"artist","artist"},{"album","album"},{"albumArtist","album_artist"},{"year","date"},{"genre","genre"},{"trackNumber","track"},{"discNumber","disc"},{"composer","composer"},{"lyricist","writer"},{"lyrics","lyrics"}};
+    for (const auto& [js, ff] : names) { const auto v = values.Get(js); if (v.IsString() || v.IsNumber()) tags[ff] = v.ToString().Utf8Value(); }
+    const auto cover = values.Get("coverPath"); const std::string cover_path = cover.IsString() ? cover.ToString().Utf8Value() : "";
+    std::string error; const bool ok = rewrite_metadata(info[0].As<Napi::String>().Utf8Value(), tags, cover_path, error); if (!ok) Napi::Error::New(info.Env(), error).ThrowAsJavaScriptException(); return Napi::Boolean::New(info.Env(), ok);
+}
 
 // ──────────────────────────────────────────────────────────
 // N-API wrapper for AudioEngine
@@ -75,12 +121,13 @@ public:
         env.SetInstanceData(constructor);
 
         exports.Set("AudioEngine", func);
+        exports.Set("writeMetadata", Napi::Function::New(env, WriteMetadata));
         return exports;
     }
 
     AudioEngineWrapper(const Napi::CallbackInfo& info)
         : Napi::ObjectWrap<AudioEngineWrapper>(info)
-        , engine_(std::make_unique<AudioEngine>(std::make_shared<WindowsAudioBackendFactory>()))
+        , engine_(std::make_unique<AudioEngine>(std::make_shared<PlatformAudioBackendFactory>()))
     {
         // Wire engine callbacks to JS
         engine_->set_state_callback([this](EngineState state) {
@@ -413,6 +460,15 @@ private:
             // Convert wide strings to UTF-8 (fixes CJK encoding)
             auto wide_to_utf8 = [](const std::wstring& ws) -> std::string {
                 if (ws.empty()) return {};
+#ifdef EASY_PLAYER_MACOS
+                std::string result;
+                result.reserve(ws.size());
+                for (wchar_t ch : ws) {
+                    if (ch >= 0 && ch <= 0x7f) result.push_back(static_cast<char>(ch));
+                    else result.push_back('?');
+                }
+                return result;
+#else
                 int len = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
                                               nullptr, 0, nullptr, nullptr);
                 if (len <= 0) return {};
@@ -420,6 +476,7 @@ private:
                 WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
                                     &result[0], len, nullptr, nullptr);
                 return result;
+#endif
             };
 
             obj.Set("id", Napi::String::New(info.Env(),

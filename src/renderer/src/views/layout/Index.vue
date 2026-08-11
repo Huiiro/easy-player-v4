@@ -25,6 +25,14 @@ watch(
   { immediate: true }
 )
 
+// The player panel owns its own controls. Hide the native macOS traffic lights
+// while it is open, then restore them on the normal/home layout.
+watch(
+  () => ui.showPlayer,
+  (showPlayer) => window.api.window.setTrafficLightVisible(!showPlayer),
+  { immediate: true }
+)
+
 onMounted(async () => {
   await ui.initializeTheme()
   player.subscribeToEvents()
