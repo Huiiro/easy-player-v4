@@ -47,7 +47,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
   ipcMain.handle(IPC.COMMAND, async (_event, { action, params }) => {
     switch (action) {
       case 'open': {
-        const ok = engine.open(params.filePath)
+        const ok = await engine.openAsync(params.filePath)
         if (ok) saveCheckpoint({ currentFile: params.filePath, positionMs: 0, wasPlaying: false })
         return { success: ok }
       }
@@ -65,7 +65,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       }
 
       case 'stop': {
-        const ok = engine.stop()
+        const ok = await engine.stopAsync()
         if (ok) saveCheckpoint({ wasPlaying: false })
         return { success: ok }
       }
@@ -331,11 +331,10 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       [EngineState.Stopped]: 'stopped'
     }
 
-    sendEvent(mainWindow, 'stateChanged', {
-      state: stateMap[state] ?? 'idle',
-      trackInfo: engine.getStatus()?.trackInfo ?? null
-    })
-    sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+    // `open` and `stop` now run on a N-API worker. Do not synchronously read
+    // engine-owned data from this state callback: a Loading/Ready event can
+    // otherwise race the worker that is updating the decoder and output path.
+    sendEvent(mainWindow, 'stateChanged', { state: stateMap[state] ?? 'idle', trackInfo: null })
   })
 
   // ── Position events ──

@@ -78,6 +78,16 @@ export class AudioEngineManager {
     return this.engine.open(filePath)
   }
 
+  async openAsync(filePath: string): Promise<boolean> {
+    if (!this.engine) return false
+    // The Windows backends already switch tracks without stalling Electron's
+    // message loop. CoreAudio teardown/open can wait noticeably on macOS, so
+    // only macOS uses the N-API worker path.
+    return process.platform === 'darwin'
+      ? this.engine.openAsync(filePath)
+      : this.engine.open(filePath)
+  }
+
   play(): boolean {
     if (!this.engine) return false
     return this.engine.play()
@@ -91,6 +101,11 @@ export class AudioEngineManager {
   stop(): boolean {
     if (!this.engine) return false
     return this.engine.stop()
+  }
+
+  async stopAsync(): Promise<boolean> {
+    if (!this.engine) return false
+    return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
   }
 
   seek(positionMs: number): boolean {

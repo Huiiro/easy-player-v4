@@ -124,6 +124,7 @@ export const usePlayerStore = defineStore('player', () => {
   const shufflePlayedSongIds = new Set<number>()
   const stopAfterCurrent = ref(false)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
+  let deferredRestore: { filePath: string; positionMs: number } | null = null
   let historySession:
     | { songId: number; startedAt: number; accumulatedMs: number; playingSince: number | null }
     | undefined
@@ -173,6 +174,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Actions ──
   async function openFile(filePath: string): Promise<boolean> {
+    deferredRestore = null
     currentFile.value = filePath
     const ok = await audioBridge.open(filePath)
     if (ok) {
@@ -191,6 +193,12 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function play(): Promise<boolean> {
+    if (deferredRestore) {
+      const restore = deferredRestore
+      deferredRestore = null
+      if (!(await openFile(restore.filePath))) return false
+      if (restore.positionMs > 0 && !(await seek(restore.positionMs))) return false
+    }
     const result = await audioBridge.play()
     if (result && currentQueueSong.value) beginHistory(currentQueueSong.value)
     schedulePlaybackSessionSave()
@@ -477,11 +485,12 @@ export const usePlayerStore = defineStore('player', () => {
         playMode.value = session.playMode as PlayMode
       }
       if (typeof session.currentFile !== 'string' || !session.currentFile) return
-      const opened = await openFile(session.currentFile)
-      if (!opened) return
-      if (typeof session.positionMs === 'number' && session.positionMs > 0) {
-        await seek(session.positionMs)
-      }
+      currentFile.value = session.currentFile
+      const restoredPosition =
+        typeof session.positionMs === 'number' && session.positionMs > 0 ? session.positionMs : 0
+      // Do not probe a restored path during startup. On macOS that can trigger
+      // a TCC prompt for Downloads/Documents without an explicit user action.
+      deferredRestore = { filePath: session.currentFile, positionMs: restoredPosition }
       if (autoPlay && session.wasPlaying === true) await play()
     } catch {
       // A missing file or malformed prior session should start with an idle player.

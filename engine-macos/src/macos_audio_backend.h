@@ -34,4 +34,8 @@ private:
 
     std::unique_ptr<Impl> impl_;
     std::atomic<bool> active_{false};
+    // AudioQueue may deliver one last output callback while `close()` is
+    // disposing it on the command worker. That callback must not re-enqueue
+    // its buffer into a queue that is being torn down.
+    std::atomic<bool> closing_{false};
 };

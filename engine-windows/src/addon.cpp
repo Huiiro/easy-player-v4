@@ -9,6 +9,7 @@ using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
 #endif
 #include <napi.h>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <filesystem>
 #include <map>
@@ -62,9 +63,11 @@ public:
     static Napi::Object Init(Napi::Env env, Napi::Object exports) {
         Napi::Function func = DefineClass(env, "AudioEngine", {
             InstanceMethod("open", &AudioEngineWrapper::Open),
+            InstanceMethod("openAsync", &AudioEngineWrapper::OpenAsync),
             InstanceMethod("play", &AudioEngineWrapper::Play),
             InstanceMethod("pause", &AudioEngineWrapper::Pause),
             InstanceMethod("stop", &AudioEngineWrapper::Stop),
+            InstanceMethod("stopAsync", &AudioEngineWrapper::StopAsync),
             InstanceMethod("seek", &AudioEngineWrapper::Seek),
             InstanceMethod("setVolume", &AudioEngineWrapper::SetVolume),
             InstanceMethod("setPreamp", &AudioEngineWrapper::SetPreamp),
@@ -152,8 +155,60 @@ public:
 private:
     // ── Commands ──
 
+    class EngineCommandWorker final : public Napi::AsyncWorker {
+    public:
+        EngineCommandWorker(AudioEngineWrapper* owner, std::string path, bool open)
+            : Napi::AsyncWorker(owner->Env())
+            , owner_(owner)
+            , path_(std::move(path))
+            , open_(open)
+            , deferred_(Napi::Promise::Deferred::New(owner->Env())) {}
+
+        Napi::Promise Promise() const { return deferred_.Promise(); }
+
+        void Execute() override {
+            try {
+                std::lock_guard<std::mutex> lock(owner_->operation_mutex_);
+                result_ = open_ ? owner_->engine_->open(path_) : owner_->engine_->stop();
+            } catch (const std::exception& error) {
+                SetError(error.what());
+            }
+        }
+
+        void OnOK() override {
+            deferred_.Resolve(Napi::Boolean::New(Env(), result_));
+            owner_->Unref();
+        }
+
+        void OnError(const Napi::Error& error) override {
+            deferred_.Reject(error.Value());
+            owner_->Unref();
+        }
+
+    private:
+        AudioEngineWrapper* owner_;
+        std::string path_;
+        bool open_;
+        bool result_ = false;
+        Napi::Promise::Deferred deferred_;
+    };
+
+    Napi::Value OpenAsync(const Napi::CallbackInfo& info) {
+        if (!info[0].IsString()) {
+            auto deferred = Napi::Promise::Deferred::New(info.Env());
+            deferred.Resolve(Napi::Boolean::New(info.Env(), false));
+            return deferred.Promise();
+        }
+        Ref();
+        auto* worker = new EngineCommandWorker(this, info[0].As<Napi::String>().Utf8Value(), true);
+        const auto promise = worker->Promise();
+        worker->Queue();
+        return promise;
+    }
+
     Napi::Value Open(const Napi::CallbackInfo& info) {
         std::string path = info[0].As<Napi::String>().Utf8Value();
+        std::lock_guard<std::mutex> lock(operation_mutex_);
         bool ok = engine_->open(path);
         return Napi::Boolean::New(info.Env(), ok);
     }
@@ -169,8 +224,17 @@ private:
     }
 
     Napi::Value Stop(const Napi::CallbackInfo& info) {
+        std::lock_guard<std::mutex> lock(operation_mutex_);
         bool ok = engine_->stop();
         return Napi::Boolean::New(info.Env(), ok);
+    }
+
+    Napi::Value StopAsync(const Napi::CallbackInfo& info) {
+        Ref();
+        auto* worker = new EngineCommandWorker(this, "", false);
+        const auto promise = worker->Promise();
+        worker->Queue();
+        return promise;
     }
 
     Napi::Value Seek(const Napi::CallbackInfo& info) {
@@ -712,6 +776,10 @@ private:
 
     // ── Members ──
     std::unique_ptr<AudioEngine> engine_;
+    // `open` and `stop` can synchronously probe media, close CoreAudio and
+    // join decoder threads. IPC runs them through AsyncWorker; this mutex also
+    // keeps the synchronous shutdown path from racing that worker.
+    std::mutex operation_mutex_;
 
     std::unique_ptr<Napi::ThreadSafeFunction> state_tsfn_;
     std::unique_ptr<Napi::ThreadSafeFunction> pos_tsfn_;
