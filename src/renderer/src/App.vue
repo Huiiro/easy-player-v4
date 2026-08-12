@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseMessage from '@/components/ui/BaseMessage.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import router from '@/router'
+import { flushPlayerDataStorage } from '@/stores/persistence'
 
 const { t } = useI18n()
 const { success } = useMessage()
@@ -18,10 +19,13 @@ const clearPerformanceEntries = (): void => {
 let performanceCleanupTimer: ReturnType<typeof setInterval> | undefined
 onMounted(() => {
   performanceCleanupTimer = setInterval(clearPerformanceEntries, 10_000)
+  window.addEventListener('beforeunload', flushPlayerDataStorage)
 })
 onBeforeUnmount(() => {
   removeDownloadProgress()
   if (performanceCleanupTimer) clearInterval(performanceCleanupTimer)
+  window.removeEventListener('beforeunload', flushPlayerDataStorage)
+  flushPlayerDataStorage()
   clearPerformanceEntries()
 })
 </script>

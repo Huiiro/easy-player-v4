@@ -48,3 +48,10 @@ support romaji
 fix text padding
 
 #### v 3.0.9
+support mac
+fix known issues
+
+#### v3.0.10
+follow system theme
+fix performance
+fix known issues

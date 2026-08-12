@@ -29,7 +29,6 @@ export const useUIStore = defineStore(
     const themeBeforeFollowingSystem = ref<{
       useDarkMode: boolean
       useCustomBg: boolean
-      customThemeColor: string
       systemBackground: SystemBackground
     } | null>(null)
     const useCardView = ref(false)
@@ -180,7 +179,6 @@ export const useUIStore = defineStore(
         if (previous) {
           useDarkMode.value = previous.useDarkMode
           useCustomBg.value = previous.useCustomBg
-          customThemeColor.value = previous.customThemeColor
           systemBackground.value = previous.systemBackground
         }
         themeBeforeFollowingSystem.value = null
@@ -189,20 +187,17 @@ export const useUIStore = defineStore(
       themeBeforeFollowingSystem.value = {
         useDarkMode: useDarkMode.value,
         useCustomBg: useCustomBg.value,
-        customThemeColor: customThemeColor.value,
         systemBackground: systemBackground.value
       }
       followSystemTheme.value = enabled
       useCustomBg.value = false
       systemBackground.value = 'none'
-      customThemeColor.value = ''
       syncFollowSystemTheme()
     }
     function syncSystemBackgroundThemeColor(): void {
       if (followSystemTheme.value) {
         useCustomBg.value = false
         systemBackground.value = 'none'
-        customThemeColor.value = ''
       }
       const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
       if (!followSystemTheme.value && !useCustomBg.value) customThemeColor.value = theme.accentColor
@@ -297,7 +292,8 @@ export const useUIStore = defineStore(
         // Invalid persisted preferences should not prevent the app from starting.
       }
       if (typeof saved.useDarkMode === 'boolean') useDarkMode.value = saved.useDarkMode
-      if (typeof saved.followSystemTheme === 'boolean') followSystemTheme.value = saved.followSystemTheme
+      if (typeof saved.followSystemTheme === 'boolean')
+        followSystemTheme.value = saved.followSystemTheme
       if (typeof saved.customThemeColor === 'string')
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
@@ -455,6 +451,7 @@ export const useUIStore = defineStore(
       themeBeforeFollowingSystem,
       useCardView,
       useCustomBg,
+      reduceMotion,
       autoPlayOnRestore,
       closeToTray,
       autoStart,

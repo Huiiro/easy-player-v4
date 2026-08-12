@@ -73,9 +73,9 @@
 }
 
 .player-lyrics--dark-text {
-  --lrc-highlight: #000000;
-  --lrc-default: rgb(0 0 0 / 58%);
-  --lrc-translate: rgb(0 0 0 / 42%);
+  --lrc-highlight: #252a32;
+  --lrc-default: rgb(37 42 50 / 68%);
+  --lrc-translate: rgb(37 42 50 / 52%);
 }
 
 .panel-primary-text {

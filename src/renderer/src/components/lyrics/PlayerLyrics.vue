@@ -36,8 +36,6 @@ const props = withDefaults(
 const emit = defineEmits<{ seek: [positionMs: number] }>()
 
 const ui = useUIStore()
-// Lyrics are replaced as a complete result and never mutated in place. Avoid
-// creating reactive proxies for every line and karaoke character.
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
 const viewportRef = ref<HTMLElement>()
@@ -111,9 +109,6 @@ const requestSnapToCurrent = (): void => {
   })
 }
 
-/**
- * 自动定位到当前歌词
- */
 const snapToCurrent = (): void => {
   const viewport = viewportRef.value
   const el = lineRefs.value[currentIndex.value]
@@ -137,9 +132,6 @@ const snapToCurrent = (): void => {
   }, 1000)
 }
 
-/**
- * 用户滚动
- */
 const handleScroll = (): void => {
   const viewport = viewportRef.value
   if (!viewport) return

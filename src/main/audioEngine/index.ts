@@ -54,6 +54,7 @@ export class AudioEngineManager {
   private engine: any = null
   private isLoaded = false
   private dspSettings: DspSettings
+  private dspSettingsSaveTimer: ReturnType<typeof setTimeout> | undefined
 
   constructor() {
     this.dspSettings = loadDspSettings()
@@ -460,6 +461,13 @@ export class AudioEngineManager {
   }
 
   private persistDspSettings(): void {
+    if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
+    this.dspSettingsSaveTimer = setTimeout(() => this.flushDspSettings(), 400)
+  }
+
+  flushDspSettings(): void {
+    if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
+    this.dspSettingsSaveTimer = undefined
     try {
       saveDspSettings(this.dspSettings)
     } catch (error) {

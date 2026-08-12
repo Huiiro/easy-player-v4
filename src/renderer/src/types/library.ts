@@ -5,6 +5,11 @@ export interface LibrarySong {
   album: string | null
   duration: number | null
   cover: string | null
+  coverAnalysisPath?: string | null
+  coverPrimary?: string | null
+  coverSecondary?: string | null
+  coverLyricsDark?: number | null
+  coverAnalysisVersion?: number | null
   audio: string
   isNewest: boolean
   fileName: string | null

@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 2
+export const DATABASE_SCHEMA_VERSION = 4
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -154,4 +154,29 @@ export const schemaV2 = `
   ALTER TABLE song ADD COLUMN translation_format TEXT;
   ALTER TABLE song ADD COLUMN romanization TEXT;
   ALTER TABLE song ADD COLUMN romanization_format TEXT;
+`
+
+export const schemaV3 = `
+  ALTER TABLE song ADD COLUMN cover_analysis_path TEXT;
+  ALTER TABLE song ADD COLUMN cover_primary TEXT;
+  ALTER TABLE song ADD COLUMN cover_secondary TEXT;
+  ALTER TABLE song ADD COLUMN cover_lyrics_dark INTEGER;
+  ALTER TABLE song ADD COLUMN cover_analysis_version INTEGER;
+`
+
+// Cover-derived values are a cache. Keep it impossible for a changed cover to
+// reuse colors or lyric-contrast data calculated from the previous artwork.
+export const schemaV4 = `
+  CREATE TRIGGER IF NOT EXISTS invalidate_song_cover_analysis
+  AFTER UPDATE OF cover ON song
+  WHEN OLD.cover IS NOT NEW.cover
+  BEGIN
+    UPDATE song
+    SET cover_analysis_path = NULL,
+        cover_primary = NULL,
+        cover_secondary = NULL,
+        cover_lyrics_dark = NULL,
+        cover_analysis_version = NULL
+    WHERE id = NEW.id;
+  END;
 `

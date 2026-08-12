@@ -48,7 +48,7 @@ import type {
   TagInput
 } from './types'
 
-const songColumns = `id, title, artist, album, duration, cover, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
+const songColumns = `id, title, artist, album, duration, cover, cover_analysis_path AS coverAnalysisPath, cover_primary AS coverPrimary, cover_secondary AS coverSecondary, cover_lyrics_dark AS coverLyricsDark, cover_analysis_version AS coverAnalysisVersion, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
 const songColumnsFor = (alias: string): string =>
   songColumns
     .split(', ')
@@ -132,6 +132,18 @@ export function getSong(id: number): Song | null {
   const row = getDatabase().prepare(`SELECT ${songColumns} FROM song WHERE id = ?`).get(id) as
     SongRow | undefined
   return row ? attachTags([mapSong(row)])[0] : null
+}
+
+export function updateSongCoverAnalysis(
+  id: number,
+  analysis: { path: string; primary: string; secondary: string; lyricsDark: boolean; version: number }
+): void {
+  getDatabase()
+    .prepare(
+      `UPDATE song SET cover_analysis_path = ?, cover_primary = ?, cover_secondary = ?,
+       cover_lyrics_dark = ?, cover_analysis_version = ? WHERE id = ?`
+    )
+    .run(analysis.path, analysis.primary, analysis.secondary, analysis.lyricsDark ? 1 : 0, analysis.version, id)
 }
 export function queryAllSongs(): Song[] {
   return attachTags(

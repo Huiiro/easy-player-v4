@@ -388,7 +388,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class="setting-row" :class="{ 'pointer-events-none': ui.followSystemTheme }">
+            <div class="setting-row">
               <div>
                 <h3>{{ t('settings.themeColor') }}</h3>
                 <p>{{ t('settings.themeColorDescription') }}</p>

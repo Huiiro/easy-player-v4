@@ -10,7 +10,9 @@ interface PlaybackCheckpoint {
 }
 
 export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: BrowserWindow): void {
-  const storedCheckpoint = getAppSetting('player.playback-session')
+  // Keep the frequently updated resume point separate from the queue snapshot.
+  // The latter can be large, while this value is written from position events.
+  const storedCheckpoint = getAppSetting('player.playback-checkpoint')
   const stored =
     storedCheckpoint && typeof storedCheckpoint === 'object'
       ? (storedCheckpoint as PlaybackCheckpoint)
@@ -24,9 +26,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
   const saveCheckpoint = (changes: Partial<PlaybackCheckpoint>, delayed = false): void => {
     checkpoint = { ...checkpoint, ...changes }
     const write = (): void => {
-      const saved = getAppSetting('player.playback-session')
-      const existing = saved && typeof saved === 'object' ? (saved as Record<string, unknown>) : {}
-      setAppSetting('player.playback-session', { ...existing, ...checkpoint })
+      setAppSetting('player.playback-checkpoint', checkpoint)
     }
     if (!delayed) {
       if (checkpointTimer) clearTimeout(checkpointTimer)
@@ -38,7 +38,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       checkpointTimer = setTimeout(() => {
         checkpointTimer = undefined
         write()
-      }, 1000)
+      }, 5000)
     }
   }
 

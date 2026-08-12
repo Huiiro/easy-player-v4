@@ -201,7 +201,6 @@ export const usePlayerStore = defineStore('player', () => {
     }
     const result = await audioBridge.play()
     if (result && currentQueueSong.value) beginHistory(currentQueueSong.value)
-    schedulePlaybackSessionSave()
     return result
   }
 
@@ -397,14 +396,12 @@ export const usePlayerStore = defineStore('player', () => {
   async function pause(): Promise<boolean> {
     const result = await audioBridge.pause()
     if (result) pauseHistory()
-    schedulePlaybackSessionSave()
     return result
   }
 
   async function stop(): Promise<boolean> {
     const result = await audioBridge.stop()
     if (result) flushHistory(true)
-    schedulePlaybackSessionSave()
     return result
   }
   function setStopAfterCurrent(enabled: boolean): void {
@@ -414,20 +411,64 @@ export const usePlayerStore = defineStore('player', () => {
   async function seek(ms: number): Promise<boolean> {
     const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
     positionMs.value = targetMs
-    const result = await audioBridge.seek(targetMs)
-    schedulePlaybackSessionSave()
-    return result
+    return audioBridge.seek(targetMs)
   }
 
   interface PlaybackSession {
-    currentFile: string | null
-    positionMs: number
     durationMs: number
     trackInfo: TrackInfo | null
-    queue: LibrarySong[]
+    queue: PersistedQueueSong[]
     currentQueueIndex: number
     playMode: PlayMode
+  }
+
+  interface PlaybackCheckpoint {
+    currentFile: string | null
+    positionMs: number
     wasPlaying: boolean
+  }
+
+  type PersistedQueueSong = Pick<
+    LibrarySong,
+    | 'id'
+    | 'title'
+    | 'artist'
+    | 'album'
+    | 'duration'
+    | 'cover'
+    | 'coverAnalysisPath'
+    | 'coverPrimary'
+    | 'coverSecondary'
+    | 'coverLyricsDark'
+    | 'coverAnalysisVersion'
+    | 'audio'
+    | 'isNewest'
+    | 'fileName'
+    | 'createdAt'
+    | 'songStatus'
+    | 'sourceId'
+  >
+
+  function serializeQueueSong(song: LibrarySong): PersistedQueueSong {
+    return {
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      album: song.album,
+      duration: song.duration,
+      cover: song.cover,
+      coverAnalysisPath: song.coverAnalysisPath,
+      coverPrimary: song.coverPrimary,
+      coverSecondary: song.coverSecondary,
+      coverLyricsDark: song.coverLyricsDark,
+      coverAnalysisVersion: song.coverAnalysisVersion,
+      audio: song.audio,
+      isNewest: song.isNewest,
+      fileName: song.fileName,
+      createdAt: song.createdAt,
+      songStatus: song.songStatus,
+      sourceId: song.sourceId
+    }
   }
 
   function schedulePlaybackSessionSave(): void {
@@ -444,14 +485,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   function savePlaybackSessionSync(): void {
     const session: PlaybackSession = {
-      currentFile: currentFile.value,
-      positionMs: positionMs.value,
       durationMs: durationMs.value,
       trackInfo: toPlainData(trackInfo.value),
-      queue: toPlainData(queue.value),
+      queue: queue.value.map(serializeQueueSong),
       currentQueueIndex: currentQueueIndex.value,
-      playMode: playMode.value,
-      wasPlaying: isPlaying.value
+      playMode: playMode.value
     }
     try {
       const result = window.api.database.saveSync('player.playback-session', session)
@@ -467,7 +505,14 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       const response = window.api.database.getSync('player.playback-session')
       if (!response.success || !response.data || typeof response.data !== 'object') return
-      const session = response.data as Partial<PlaybackSession>
+      const session = response.data as Partial<PlaybackSession & PlaybackCheckpoint>
+      const checkpointResponse = window.api.database.getSync('player.playback-checkpoint')
+      const checkpoint =
+        checkpointResponse.success &&
+        checkpointResponse.data &&
+        typeof checkpointResponse.data === 'object'
+          ? (checkpointResponse.data as Partial<PlaybackCheckpoint>)
+          : session
       if (Array.isArray(session.queue)) queue.value = session.queue as LibrarySong[]
       if (session.trackInfo && typeof session.trackInfo === 'object') {
         trackInfo.value = session.trackInfo as TrackInfo
@@ -484,14 +529,20 @@ export const usePlayerStore = defineStore('player', () => {
       if (typeof session.playMode === 'number' && session.playMode >= 0 && session.playMode <= 3) {
         playMode.value = session.playMode as PlayMode
       }
-      if (typeof session.currentFile !== 'string' || !session.currentFile) return
-      currentFile.value = session.currentFile
+      if (typeof checkpoint.currentFile !== 'string' || !checkpoint.currentFile) return
+      currentFile.value = checkpoint.currentFile
       const restoredPosition =
-        typeof session.positionMs === 'number' && session.positionMs > 0 ? session.positionMs : 0
+        typeof checkpoint.positionMs === 'number' && checkpoint.positionMs > 0
+          ? checkpoint.positionMs
+          : 0
       // Do not probe a restored path during startup. On macOS that can trigger
       // a TCC prompt for Downloads/Documents without an explicit user action.
-      deferredRestore = { filePath: session.currentFile, positionMs: restoredPosition }
-      if (autoPlay && session.wasPlaying === true) await play()
+      deferredRestore = { filePath: checkpoint.currentFile, positionMs: restoredPosition }
+      // The decoder intentionally stays unopened until a user action, but the
+      // restored UI must still reflect the saved resume point. `play()` will
+      // perform the actual seek after opening the file.
+      positionMs.value = restoredPosition
+      if (autoPlay && checkpoint.wasPlaying === true) await play()
     } catch {
       // A missing file or malformed prior session should start with an idle player.
     }
@@ -907,12 +958,14 @@ export const usePlayerStore = defineStore('player', () => {
   let analysisRefreshInFlight = false
   let autoAdvanceInProgress = false
   let lastTrackEndedAt = 0
+  let documentVisible = typeof document === 'undefined' ? true : !document.hidden
 
   function startAudioAnalysisPolling(): void {
     if (
       analysisTimer ||
       analysisRefreshInFlight ||
       state.value !== 'playing' ||
+      !documentVisible ||
       audioAnalysisPollingRate <= 0
     )
       return
@@ -932,7 +985,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function stopAudioAnalysisPolling(): void {
     if (!analysisTimer) return
-    clearInterval(analysisTimer)
+    clearTimeout(analysisTimer)
     analysisTimer = undefined
   }
 
@@ -948,6 +1001,11 @@ export const usePlayerStore = defineStore('player', () => {
     void audioBridge.setSpectrumAnalysisEnabled(audioAnalysisIncludesSpectrum)
     stopAudioAnalysisPolling()
     startAudioAnalysisPolling()
+  }
+  function handleDocumentVisibility(): void {
+    documentVisible = !document.hidden
+    if (!documentVisible) stopAudioAnalysisPolling()
+    else startAudioAnalysisPolling()
   }
 
   async function handleTrackEnded(reason: string, filePath?: string): Promise<void> {
@@ -982,6 +1040,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function subscribeToEvents(): void {
     if (unsubs.length) return
+    document.addEventListener('visibilitychange', handleDocumentVisibility)
     startAudioAnalysisPolling()
     unsubs.push(
       audioBridge.onStateChanged((data) => {
@@ -996,7 +1055,6 @@ export const usePlayerStore = defineStore('player', () => {
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
-        schedulePlaybackSessionSave()
       })
     )
     unsubs.push(window.api.miniPlayer.onAction(handleMiniPlayerAction))
@@ -1013,7 +1071,6 @@ export const usePlayerStore = defineStore('player', () => {
       audioBridge.onPositionChanged((data) => {
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
-        schedulePlaybackSessionSave()
       })
     )
 
@@ -1035,6 +1092,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function unsubscribe(): void {
+    document.removeEventListener('visibilitychange', handleDocumentVisibility)
     flushHistory(true)
     unsubs.forEach((fn) => fn())
     unsubs = []

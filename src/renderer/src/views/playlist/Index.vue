@@ -30,6 +30,7 @@ const editDescription = ref('')
 const editingField = ref<'name' | 'description' | null>(null)
 const saving = ref(false)
 const playing = ref(false)
+const headerCollapsed = ref(false)
 const player = usePlayerStore()
 const { success, warning, error: showError } = useMessage()
 const { t, locale } = useI18n()
@@ -164,14 +165,22 @@ watch(playlistId, () => void load())
     {{ t('playlist.notFound') }}
   </section>
   <section v-else class="flex h-full min-h-0 flex-col text-text">
-    <header class="flex shrink-0 items-end gap-6 px-6 py-6">
+    <header
+      class="flex shrink-0 gap-6 px-6 transition-all duration-200"
+      :class="headerCollapsed ? 'items-center py-3' : 'items-end py-6'"
+    >
       <button
-        class="group relative grid size-40 shrink-0 place-items-center overflow-hidden rounded-2xl bg-bg-l shadow-lg"
+        class="group relative grid shrink-0 place-items-center overflow-hidden bg-bg-l shadow-lg transition-all duration-200"
+        :class="headerCollapsed ? 'size-11 rounded-lg' : 'size-40 rounded-2xl'"
         :title="t('playlist.setCover')"
         @click="coverInput?.click()"
       >
         <img v-if="coverUrl" :src="coverUrl" class="size-full object-cover" :alt="playlist.name" />
-        <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
+        <SvgIcon
+          v-else
+          name="common-music"
+          :class-name="headerCollapsed ? 'size-5 text-text-l' : 'size-12 text-text-l'"
+        />
         <span
           class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
         >
@@ -186,10 +195,10 @@ watch(playlistId, () => void load())
         @change="selectCustomCover"
       />
       <div class="min-w-0 flex-1">
-        <p class="text-xs font-semibold tracking-[.12em] text-text-l ml-1">
+        <p v-if="!headerCollapsed" class="text-xs font-semibold tracking-[.12em] text-text-l ml-1">
           {{ t('playlist.label') }}
         </p>
-        <div class="mt-2 flex min-w-0 items-center gap-2">
+        <div class="flex min-w-0 items-center gap-2" :class="headerCollapsed ? '' : 'mt-2'">
           <input
             v-if="editingField === 'name'"
             v-model="editName"
@@ -200,8 +209,11 @@ watch(playlistId, () => void load())
             @keydown.enter.prevent="savePlaylist"
             @keydown.esc.prevent="cancelEditing"
           />
-          <h1 v-else class="truncate text-3xl font-bold">{{ playlist.name }}</h1>
+          <h1 v-else class="truncate font-bold" :class="headerCollapsed ? 'text-base' : 'text-3xl'">
+            {{ playlist.name }}
+          </h1>
           <button
+            v-if="!headerCollapsed"
             class="btn-hover grid size-4 shrink-0 place-items-center"
             :title="t('playlist.editName')"
             @click="startEditing('name')"
@@ -209,7 +221,10 @@ watch(playlistId, () => void load())
             <SvgIcon name="common-edit" class-name="size-3.5" />
           </button>
         </div>
-        <div class="mt-2 flex min-w-0 items-start gap-2 text-sm text-text-l">
+        <div
+          v-if="!headerCollapsed"
+          class="mt-2 flex min-w-0 items-start gap-2 text-sm text-text-l"
+        >
           <textarea
             v-if="editingField === 'description'"
             v-model="editDescription"
@@ -231,10 +246,10 @@ watch(playlistId, () => void load())
             <SvgIcon name="common-edit" class-name="size-3.5" />
           </button>
         </div>
-        <p class="mt-2 text-xs text-text-l">
+        <p v-if="!headerCollapsed" class="mt-2 text-xs text-text-l">
           {{ t('playlist.createdAt', { date: formatCreatedAt(playlist.createdAt) }) }}
         </p>
-        <div class="mt-3 flex flex-wrap items-center gap-2">
+        <div v-if="!headerCollapsed" class="mt-3 flex flex-wrap items-center gap-2">
           <button
             class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:text-white disabled:opacity-50"
             :disabled="playing"
@@ -257,7 +272,27 @@ watch(playlistId, () => void load())
           </button>
         </div>
       </div>
-      <div class="mb-1 flex shrink-0 items-center gap-1 btn-hover">
+      <div class="flex shrink-0 items-center gap-1">
+        <button
+          class="btn-hover grid size-8 place-items-center"
+          :title="headerCollapsed ? t('playlist.expandHeader') : t('playlist.collapseHeader')"
+          @click="headerCollapsed = !headerCollapsed"
+        >
+          <SvgIcon
+            :name="headerCollapsed ? 'common-expand-down' : 'common-expand-up'"
+            class-name="size-4"
+          />
+        </button>
+        <button
+          v-if="headerCollapsed"
+          class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:text-white disabled:opacity-50"
+          :disabled="playing"
+          @click="playPlaylist"
+        >
+          {{ t('playlist.play') }}
+        </button>
+      </div>
+      <div v-if="!headerCollapsed" class="mb-1 flex shrink-0 items-center gap-1 btn-hover">
         <SvgIcon name="common-back" class-name="size-3.5" />
         <button class="text-sm" @click="router.back()">{{ t('playlist.back') }}</button>
       </div>

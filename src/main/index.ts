@@ -95,6 +95,7 @@ function showMainWindow(): void {
 function quitApplication(): void {
   isQuitting = true
   audioEngine?.stop()
+  audioEngine?.flushDspSettings()
   globalShortcut.unregisterAll()
   tray?.destroy()
   tray = null
@@ -125,32 +126,33 @@ function updateTrayMenu(): void {
     : 'Easy Player'
   tray.setToolTip(tooltip)
   if (process.platform === 'darwin') {
-    const compactTitle = trayTrack.title.length > 24 ? `${trayTrack.title.slice(0, 23)}…` : trayTrack.title
+    const compactTitle =
+      trayTrack.title.length > 24 ? `${trayTrack.title.slice(0, 23)}…` : trayTrack.title
     // Keep a compact, persistent now-playing entry on the right side of the
     // macOS menu bar. Its assigned menu opens only when the entry is clicked.
     tray.setTitle(` ${compactTitle || 'Easy Player'}`)
   }
   trayMenu = Menu.buildFromTemplate([
-      { label: trackLabel, enabled: false },
-      { label: artistLabel, enabled: false },
-      { type: 'separator' },
-      { label: 'Previous', click: () => sendTrayAction('previous') },
-      {
-        label: trayTrack.isPlaying ? 'Pause' : 'Play',
-        click: () => sendTrayAction('toggle')
-      },
-      { label: 'Next', click: () => sendTrayAction('next') },
-      { type: 'separator' },
-      {
-        label: 'Show window',
-        click: showMainWindow
-      },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: quitApplication
-      }
-    ])
+    { label: trackLabel, enabled: false },
+    { label: artistLabel, enabled: false },
+    { type: 'separator' },
+    { label: 'Previous', click: () => sendTrayAction('previous') },
+    {
+      label: trayTrack.isPlaying ? 'Pause' : 'Play',
+      click: () => sendTrayAction('toggle')
+    },
+    { label: 'Next', click: () => sendTrayAction('next') },
+    { type: 'separator' },
+    {
+      label: 'Show window',
+      click: showMainWindow
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: quitApplication
+    }
+  ])
   // macOS menu-bar items use their assigned menu for both normal and
   // secondary clicks. This avoids Electron's fallback status-item menu.
   tray.setContextMenu(trayMenu)
@@ -242,7 +244,7 @@ function saveWindowState(window: BrowserWindow): void {
 function registerMediaProtocol(): void {
   protocol.handle('easy-player-media', async (request) => {
     const url = new URL(request.url)
-    const requestedPath = ['cover', 'font'].includes(url.hostname)
+    const requestedPath = ['cover', 'cover-thumb', 'font'].includes(url.hostname)
       ? url.searchParams.get('path')
       : null
     if (!requestedPath) return new Response('Not Found', { status: 404 })
@@ -259,14 +261,18 @@ function registerMediaProtocol(): void {
     }
 
     const size = Math.min(512, Math.max(64, Number(url.searchParams.get('size')) || 0))
-    if (url.hostname === 'cover' && size) {
+    if (url.hostname === 'cover-thumb' && size) {
       try {
         const thumbnail = await sharp(coverPath)
           .resize(size, size, { fit: 'cover', withoutEnlargement: true })
           .jpeg({ quality: 78, progressive: true })
           .toBuffer()
         return new Response(thumbnail, {
-          headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin': '*' }
+          headers: {
+            'Content-Type': 'image/jpeg',
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            'Access-Control-Allow-Origin': '*'
+          }
         })
       } catch {
         // Fall back to the original image for uncommon formats or corrupt cache entries.
@@ -278,6 +284,7 @@ function registerMediaProtocol(): void {
     // `easy-player-media` is a separate origin from the Vite renderer, so the
     // response must opt in to anonymous CORS reads.
     headers.set('Access-Control-Allow-Origin', '*')
+    if (url.searchParams.get('full') === '1') headers.set('Cache-Control', 'no-store')
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
@@ -782,5 +789,6 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   isQuitting = true
   globalShortcut.unregisterAll()
+  audioEngine?.flushDspSettings()
   closeDatabase()
 })

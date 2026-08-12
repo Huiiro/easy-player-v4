@@ -4,7 +4,12 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import { resolveLyrics, type LyricFormat, type LyricSource, type NetworkLyricCandidate } from '@/services/lyrics'
+import {
+  resolveLyrics,
+  type LyricFormat,
+  type LyricSource,
+  type NetworkLyricCandidate
+} from '@/services/lyrics'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
@@ -46,7 +51,12 @@ async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
   resolvedSource.value = null
   if (!song || source === 'network') return
   if (source === 'auto') {
-    const result = await resolveLyrics(song, ui.lyricSourceOrder, 'auto', ui.autoSearchNetworkLyrics)
+    const result = await resolveLyrics(
+      song,
+      ui.lyricSourceOrder,
+      'auto',
+      ui.autoSearchNetworkLyrics
+    )
     resolvedSource.value = result.source
     lyric.value = result.content || ''
     lyricFormat.value = result.format
@@ -181,7 +191,11 @@ async function save(): Promise<void> {
               @click="selectSource(source.value as 'auto' | LyricSource)"
             >
               <span>{{ source.label }}</span>
-              <span v-if="source.value === 'auto' && ui.lyricSourceMode === 'auto'" class="ml-1 text-[10px] opacity-75">· {{ sourceLabel }}</span>
+              <span
+                v-if="source.value === 'auto' && ui.lyricSourceMode === 'auto'"
+                class="ml-1 text-[10px] opacity-75"
+                >· {{ sourceLabel }}
+              </span>
             </button>
           </div>
         </div>
@@ -212,26 +226,29 @@ async function save(): Promise<void> {
         </div>
       </div>
       <div class="flex min-w-0 min-h-0 flex-col gap-3">
-        <div v-if="candidates.length" class="candidate-list custom-scrollbar shrink-0 overflow-y-auto pr-1">
+        <div
+          v-if="candidates.length"
+          class="candidate-list custom-scrollbar shrink-0 overflow-y-auto pr-1"
+        >
           <div class="flex flex-wrap gap-2">
-          <button
-            v-for="(candidate, index) in candidates"
-            :key="candidate.id"
-            class="manager-button max-w-full rounded-lg px-2.5 py-1.5 text-left text-xs"
-            :class="
-              selected === index ? 'bg-primary/25 text-primary' : 'bg-text/5 hover:bg-text/10'
-            "
-            @click="selectCandidate(index)"
-          >
-            {{
-              t(
-                candidate.provider === 'netease'
-                  ? 'playerPanel.lyricProviderNetease'
-                  : 'playerPanel.lyricProviderKugou'
-              )
-            }}
-            · {{ candidate.title }} — {{ candidate.artist }}
-          </button>
+            <button
+              v-for="(candidate, index) in candidates"
+              :key="candidate.id"
+              class="manager-button max-w-full rounded-lg px-2.5 py-1.5 text-left text-xs"
+              :class="
+                selected === index ? 'bg-primary/25 text-primary' : 'bg-text/5 hover:bg-text/10'
+              "
+              @click="selectCandidate(index)"
+            >
+              {{
+                t(
+                  candidate.provider === 'netease'
+                    ? 'playerPanel.lyricProviderNetease'
+                    : 'playerPanel.lyricProviderKugou'
+                )
+              }}
+              · {{ candidate.title }} — {{ candidate.artist }}
+            </button>
           </div>
         </div>
         <p v-if="error" class="text-sm text-red-400">{{ error }}</p>

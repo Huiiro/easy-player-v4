@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -67,6 +67,36 @@ const targetRhythmAmount = computed(() => {
 })
 const rhythmAmount = ref(0)
 let lastVisualUpdateAt = 0
+const panelRoot = ref<HTMLElement>()
+let rhythmStyleFrame = 0
+
+function applyRhythmStyles(): void {
+  rhythmStyleFrame = 0
+  const root = panelRoot.value
+  if (!root) return
+
+  const amount = rhythmAmount.value
+  root.style.setProperty('--rhythm-background-scale', String(1.1 + amount * 0.1))
+  root.style.setProperty('--rhythm-glow-scale', String(1 + amount * 0.62))
+  root.style.setProperty('--rhythm-glow-opacity', String(0.68 + amount * 0.32))
+  root.style.setProperty('--rhythm-aura-scale', String(1 + amount * 0.5))
+  root.style.setProperty('--rhythm-aura-opacity', String(0.62 + amount * 0.38))
+  root.style.setProperty('--rhythm-cover-scale', String(1 + amount * 0.085))
+  root.style.setProperty('--beat-strength', String(0.35 + amount * 0.65))
+}
+
+watch(
+  rhythmAmount,
+  () => {
+    if (!rhythmStyleFrame) rhythmStyleFrame = requestAnimationFrame(applyRhythmStyles)
+  },
+  { immediate: true }
+)
+
+onMounted(applyRhythmStyles)
+onUnmounted(() => {
+  if (rhythmStyleFrame) cancelAnimationFrame(rhythmStyleFrame)
+})
 
 watch(
   targetRhythmAmount,
@@ -94,11 +124,9 @@ const backgroundSource = computed(() => {
   if (ui.playerBgType === PlayerBgType.CUSTOM && ui.customBg.url) return ui.customBg.url
   return null
 })
-const backgroundStyle = computed(() => ({
-  transform: `scale(${1.1 + rhythmAmount.value * 0.1})`
-}))
 const coverColors = ref({ primary: '77 136 220', secondary: '205 78 165' })
 const useDarkLyrics = ref(false)
+const COVER_ANALYSIS_VERSION = 1
 const lyricColorStyle = computed(() => {
   if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
   return {
@@ -107,21 +135,25 @@ const lyricColorStyle = computed(() => {
     '--lrc-translate': ui.lyricsColors.translation
   }
 })
-// const showLyricsSamplingRegion = import.meta.env.DEV
+const showLyricsSamplingRegion = import.meta.env.DEV && false
+const lyricsContrastDebug = ref({
+  averageLuminance: 0,
+  brightRatio: 0,
+  nearWhite: 0,
+  lowContrastRisk: 0,
+  useDarkText: false
+})
 const glowStyle = computed(() => ({
-  transform: `scale(${1 + rhythmAmount.value * 0.62})`,
-  opacity: String(0.68 + rhythmAmount.value * 0.32),
   '--cover-primary': `rgb(${coverColors.value.primary} / 58%)`,
   '--cover-secondary': `rgb(${coverColors.value.secondary} / 52%)`
 }))
+const ambientStyle = computed(() => ({
+  ...glowStyle.value,
+  '--ambient-base-opacity': useAmbientBackground.value ? '1' : '0.58'
+}))
 const coverGlowStyle = computed(() => ({
   '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
-  '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`,
-  '--rhythm-scale': String(1 + rhythmAmount.value * 0.5),
-  '--rhythm-opacity': String(0.62 + rhythmAmount.value * 0.38)
-}))
-const coverFrameStyle = computed(() => ({
-  transform: `scale(${1 + rhythmAmount.value * 0.085})`
+  '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
 }))
 const coverCardStyle = computed(() => {
   const primary = coverColors.value.primary
@@ -138,8 +170,8 @@ const shouldAnimate = computed(
 )
 const analysisPollingRate = computed(() => {
   if (!ui.showPlayer) return 0
-  if (ui.showPlayerSpectrum) return 28
-  return shouldAnimate.value ? 16 : 0
+  if (ui.showPlayerSpectrum) return 20
+  return shouldAnimate.value ? 12 : 0
 })
 watch(
   analysisPollingRate,
@@ -301,10 +333,18 @@ function averageColor(
   if (!count) return '77 136 220'
   return `${Math.round(red / count)} ${Math.round(green / count)} ${Math.round(blue / count)}`
 }
-function shouldUseDarkLyrics(data: Uint8ClampedArray): boolean {
+function analyzeLyricsContrast(data: Uint8ClampedArray): {
+  averageLuminance: number
+  brightRatio: number
+  nearWhite: number
+  lowContrastRisk: number
+  useDarkText: boolean
+} {
   let visible = 0
-  let lightNeutral = 0
+  let luminanceSum = 0
+  let bright = 0
   let nearWhite = 0
+  let lowContrastRisk = 0
 
   for (let index = 0; index < data.length; index += 4) {
     const alpha = data[index + 3] / 255
@@ -313,16 +353,37 @@ function shouldUseDarkLyrics(data: Uint8ClampedArray): boolean {
     const red = data[index]
     const green = data[index + 1]
     const blue = data[index + 2]
+    // Relative luminance and chroma are both normalized to 0–1. Use sRGB
+    // luminance here because this is a perceptual UI contrast heuristic.
     const luminance = (red * 0.2126 + green * 0.7152 + blue * 0.0722) / 255
-    const chroma = Math.max(red, green, blue) - Math.min(red, green, blue)
+    const chroma = (Math.max(red, green, blue) - Math.min(red, green, blue)) / 255
 
     visible += alpha
-    if (luminance >= 0.72 && chroma <= 42) lightNeutral += alpha
-    if (luminance >= 0.86 && chroma <= 26) nearWhite += alpha
+    luminanceSum += luminance * alpha
+    if (luminance >= 0.72) bright += alpha
+    if (luminance >= 0.9 && chroma <= 0.16) nearWhite += alpha
+    // Bright colored artwork can also make white lyrics disappear. Weight it
+    // lower than neutral white so saturated highlights do not dominate alone.
+    if (luminance >= 0.82 && chroma <= 0.5) lowContrastRisk += alpha
   }
 
-  if (!visible) return false
-  return lightNeutral / visible >= 0.42 || nearWhite / visible >= 0.38
+  const averageLuminance = visible ? luminanceSum / visible : 0
+  const brightRatio = visible ? bright / visible : 0
+  const nearWhiteRatio = visible ? nearWhite / visible : 0
+  const lowContrastRiskRatio = visible ? lowContrastRisk / visible : 0
+  // Require a consistently light reading rather than a few light pixels.
+  // The third condition handles broadly bright, moderately saturated covers.
+  const useDarkText =
+    (averageLuminance >= 0.74 && brightRatio >= 0.56) ||
+    nearWhiteRatio >= 0.42 ||
+    (averageLuminance >= 0.68 && lowContrastRiskRatio >= 0.62)
+  return {
+    averageLuminance,
+    brightRatio,
+    nearWhite: nearWhiteRatio,
+    lowContrastRisk: lowContrastRiskRatio,
+    useDarkText
+  }
 }
 
 function getLyricsRegion(image: HTMLImageElement): [number, number, number, number] | null {
@@ -358,6 +419,23 @@ function getLyricsRegion(image: HTMLImageElement): [number, number, number, numb
 function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
   if (!image.naturalWidth || !image.naturalHeight) return
+  const song = player.currentQueueSong
+  const cached =
+    song &&
+    song.coverAnalysisPath === song.cover &&
+    song.coverAnalysisVersion === COVER_ANALYSIS_VERSION
+  if (
+    image.classList.contains('panel-background-item') &&
+    cached &&
+    song.coverPrimary &&
+    song.coverSecondary &&
+    song.coverLyricsDark !== null &&
+    song.coverLyricsDark !== undefined
+  ) {
+    coverColors.value = { primary: song.coverPrimary, secondary: song.coverSecondary }
+    useDarkLyrics.value = song.coverLyricsDark === 1
+    return
+  }
   try {
     const canvas = document.createElement('canvas')
     const size = 32
@@ -367,16 +445,33 @@ function extractCoverColors(event: Event): void {
     if (!context) return
     context.drawImage(image, 0, 0, size, size)
     const pixels = context.getImageData(0, 0, size, size).data
-    coverColors.value = {
+    const colors = {
       primary: averageColor(pixels, 0, size / 2, size),
       secondary: averageColor(pixels, size / 2, size, size)
     }
+    coverColors.value = colors
+    let lyricsDark = false
     if (image.classList.contains('panel-background-item')) {
       const lyricsRegion = getLyricsRegion(image)
       if (!lyricsRegion) return
       context.clearRect(0, 0, size, size)
       context.drawImage(image, ...lyricsRegion, 0, 0, size, size)
-      useDarkLyrics.value = shouldUseDarkLyrics(context.getImageData(0, 0, size, size).data)
+      const result = analyzeLyricsContrast(context.getImageData(0, 0, size, size).data)
+      lyricsDark = result.useDarkText
+      useDarkLyrics.value = lyricsDark
+      lyricsContrastDebug.value = result
+    }
+    if (image.classList.contains('panel-background-item') && song?.cover) {
+      void window.api.database.command('updateSongCoverAnalysis', {
+        id: song.id,
+        analysis: {
+          path: song.cover,
+          primary: colors.primary,
+          secondary: colors.secondary,
+          lyricsDark,
+          version: COVER_ANALYSIS_VERSION
+        }
+      })
     }
   } catch {
     // Keep the neutral fallback colors for covers that cannot be sampled.
@@ -385,7 +480,10 @@ function extractCoverColors(event: Event): void {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
+  <div
+    ref="panelRoot"
+    class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none"
+  >
     <!-- Visuals live in one isolated full-screen layer. UI elements never create a backdrop above it. -->
     <div class="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
       <Transition name="panel-background">
@@ -395,7 +493,6 @@ function extractCoverColors(event: Event): void {
           :src="backgroundSource"
           class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-150"
           :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
-          :style="backgroundStyle"
           alt=""
           crossorigin="anonymous"
           @load="extractCoverColors"
@@ -414,23 +511,25 @@ function extractCoverColors(event: Event): void {
       />
       <div
         class="absolute inset-0 panel-ambient"
-        :class="[
-          useAmbientBackground ? 'opacity-100' : 'opacity-58',
-          shouldAnimate ? 'panel-ambient--animated' : ''
-        ]"
-        :style="glowStyle"
+        :class="shouldAnimate ? 'panel-ambient--animated' : ''"
+        :style="ambientStyle"
       />
       <div class="pointer-events-none absolute inset-0 panel-sheen" />
-      <!--      <div-->
-      <!--        v-if="showLyricsSamplingRegion"-->
-      <!--        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[20%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"-->
-      <!--      >-->
-      <!--        <span-->
-      <!--          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-950"-->
-      <!--        >-->
-      <!--          歌词取色区域-->
-      <!--        </span>-->
-      <!--      </div>-->
+      <div
+        v-if="showLyricsSamplingRegion"
+        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[20%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"
+      >
+        <span
+          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium leading-5 text-slate-950"
+        >
+          歌词取色区域<br />
+          平均亮度 {{ lyricsContrastDebug.averageLuminance.toFixed(3) }} / 阈值 0.74<br />
+          明亮像素 {{ (lyricsContrastDebug.brightRatio * 100).toFixed(1) }}% / 阈值 56%<br />
+          近白 {{ (lyricsContrastDebug.nearWhite * 100).toFixed(1) }}% / 阈值 42%<br />
+          低对比风险 {{ (lyricsContrastDebug.lowContrastRisk * 100).toFixed(1) }}% / 阈值 62%<br />
+          判定：{{ lyricsContrastDebug.useDarkText ? '深色歌词' : '浅色歌词' }}
+        </span>
+      </div>
     </div>
     <!-- content -->
     <section
@@ -477,20 +576,13 @@ function extractCoverColors(event: Event): void {
           :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
-          <div
-            class="cover-frame relative transition-[transform,filter] duration-100"
-            :style="coverFrameStyle"
-          >
+          <div class="cover-frame relative transition-[transform,filter] duration-100">
             <div
               class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura"
               :style="coverGlowStyle"
             />
             <div v-if="shouldAnimate" class="cover-ring-anchor">
-              <div
-                ref="beatRingRef"
-                class="beat-ring"
-                :style="{ '--beat-strength': String(0.35 + rhythmAmount * 0.65) }"
-              />
+              <div ref="beatRingRef" class="beat-ring" />
             </div>
             <div
               class="cover-card relative z-10 grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
@@ -869,10 +961,13 @@ function extractCoverColors(event: Event): void {
 <style scoped>
 .panel-ambient {
   overflow: hidden;
+  opacity: calc(var(--rhythm-glow-opacity, 0.68) * var(--ambient-base-opacity, 1));
+  transform: scale(var(--rhythm-glow-scale, 1));
   transition: opacity 500ms ease;
 }
 .panel-background-item {
   filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
+  transform: scale(var(--rhythm-background-scale, 1.1));
 }
 .panel-ambient::before {
   position: absolute;
@@ -1022,6 +1117,8 @@ function extractCoverColors(event: Event): void {
 .panel-orb {
   filter: blur(42px) saturate(1.35);
   mix-blend-mode: screen;
+  opacity: var(--rhythm-glow-opacity, 0.68);
+  transform: scale(var(--rhythm-glow-scale, 1));
   transition:
     opacity 140ms ease,
     transform 120ms ease;
@@ -1044,6 +1141,7 @@ function extractCoverColors(event: Event): void {
   width: min(520px, 36vw, calc(100dvh - 30rem));
   max-width: 100%;
   isolation: isolate;
+  transform: scale(var(--rhythm-cover-scale, 1));
   transform-origin: center;
 }
 @media (max-width: 760px) {
@@ -1107,8 +1205,8 @@ function extractCoverColors(event: Event): void {
     radial-gradient(circle at 25% 22%, var(--cover-primary-solid), transparent 51%),
     radial-gradient(circle at 76% 78%, var(--cover-secondary-solid), transparent 58%);
   filter: blur(24px) saturate(1.25);
-  opacity: var(--rhythm-opacity);
-  transform: scale(var(--rhythm-scale));
+  opacity: var(--rhythm-aura-opacity, 0.62);
+  transform: scale(var(--rhythm-aura-scale, 1));
   transition:
     opacity 120ms ease,
     transform 100ms ease;

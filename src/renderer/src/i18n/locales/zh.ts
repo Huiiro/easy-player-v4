@@ -203,6 +203,8 @@ export default {
     play: '播放歌单',
     empty: '歌单中没有可播放的歌曲',
     playFailed: '播放歌单失败',
+    collapseHeader: '收起歌单信息',
+    expandHeader: '展开歌单信息',
     back: '返回'
   },
   remote: {
@@ -402,7 +404,8 @@ export default {
     theme: '主题设置',
     themeDescription: '选择明暗方案和界面的强调色。',
     followSystemTheme: '跟随系统主题',
-    followSystemThemeDescription: '自动使用 Windows 或 macOS 的浅色/深色外观，并禁用自定义主题背景和主题色。',
+    followSystemThemeDescription:
+      '自动使用 Windows 或 macOS 的浅色/深色外观，并禁用自定义主题背景。',
     restoreDefault: '恢复默认',
     appearanceMode: '外观模式',
     appearanceDescription: '自定义背景默认遵循深色方案，以保证内容清晰易读。',
@@ -606,7 +609,13 @@ export default {
     lyricSourceNone: '未找到歌词'
   },
   lyrics: {
-    source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词', none: '未找到歌词' }
+    source: {
+      embedded: '内嵌歌词',
+      database: '数据库歌词',
+      local: '本地歌词',
+      network: '网络歌词',
+      none: '未找到歌词'
+    }
   },
   footer: {
     playerControls: '播放器控制栏，点击打开播放器面板',

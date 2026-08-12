@@ -11,9 +11,16 @@ let bars = new Float32Array(0)
 let gradient: CanvasGradient | undefined
 let gradientHeight = 0
 let gradientColor = ''
+let context: CanvasRenderingContext2D | null = null
+let resizeObserver: ResizeObserver | null = null
+let width = 1
+let height = 1
+let pixelScale = 1
+const ready = ref(false)
 
 function scheduleRender(): void {
-  if (!ui.reduceMotion && props.active !== false) raf = requestAnimationFrame(render)
+  if (!raf && !document.hidden && !ui.reduceMotion && props.active !== false)
+    raf = requestAnimationFrame(render)
 }
 
 function updateTarget(values: number[]): void {
@@ -22,19 +29,18 @@ function updateTarget(values: number[]): void {
 }
 
 function render(): void {
+  raf = 0
   const e = canvas.value
   if (!e) return
-  const r = e.getBoundingClientRect(),
-    d = devicePixelRatio || 1,
-    w = Math.max(1, Math.floor(r.width * d)),
-    h = Math.max(1, Math.floor(r.height * d))
-  if (e.width !== w || e.height !== h) {
-    e.width = w
-    e.height = h
+  if (e.width !== width || e.height !== height) {
+    e.width = width
+    e.height = height
+    gradient = undefined
   }
-  const c = e.getContext('2d')
+  const c = context || e.getContext('2d')
   if (!c) return
-  c.clearRect(0, 0, w, h)
+  context = c
+  c.clearRect(0, 0, width, height)
   if (!target.length) {
     scheduleRender()
     return
@@ -50,33 +56,59 @@ function render(): void {
   }
 
   const color = props.color || '77 136 220'
-  if (!gradient || gradientHeight !== h || gradientColor !== color) {
-    gradient = c.createLinearGradient(0, h, 0, 0)
+  if (!gradient || gradientHeight !== height || gradientColor !== color) {
+    gradient = c.createLinearGradient(0, height, 0, 0)
     gradient.addColorStop(0, `rgb(${color} / .32)`)
     gradient.addColorStop(1, `rgb(${color} / .98)`)
-    gradientHeight = h
+    gradientHeight = height
     gradientColor = color
   }
 
-  const bw = w / barCount
+  const bw = width / barCount
   const barWidth = Math.max(1, bw * 0.58)
   c.fillStyle = gradient
   for (let index = 0; index < barCount; index += 1) {
     const value = bars[index]
     levels[index] += (Math.max(0, Math.min(1, value)) - levels[index]) * 0.28
-    const barHeight = Math.max(2 * d, levels[index] * h)
-    c.fillRect(index * bw + (bw - barWidth) / 2, h - barHeight, barWidth, barHeight)
+    const barHeight = Math.max(2 * pixelScale, levels[index] * height)
+    c.fillRect(index * bw + (bw - barWidth) / 2, height - barHeight, barWidth, barHeight)
   }
   scheduleRender()
 }
 watch(() => props.spectrum, updateTarget, { immediate: true })
-onMounted(() => scheduleRender())
+function handleVisibilityChange(): void {
+  if (document.hidden) {
+    cancelAnimationFrame(raf)
+    raf = 0
+  } else scheduleRender()
+}
+onMounted(() => {
+  const element = canvas.value
+  if (element) {
+    resizeObserver = new ResizeObserver(([entry]) => {
+      const box = entry?.contentRect
+      if (!box) return
+      pixelScale = Math.min(window.devicePixelRatio || 1, 1.5)
+      width = Math.max(1, Math.round(box.width * pixelScale))
+      height = Math.max(1, Math.round(box.height * pixelScale))
+      ready.value = true
+      scheduleRender()
+    })
+    resizeObserver.observe(element)
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  scheduleRender()
+})
 onBeforeUnmount(() => {
   cancelAnimationFrame(raf)
   target = new Float32Array(0)
   levels = new Float32Array(0)
   bars = new Float32Array(0)
   gradient = undefined
+  context = null
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   const element = canvas.value
   if (element) {
     element.width = 1
@@ -103,5 +135,9 @@ watch(
 )
 </script>
 <template>
-  <canvas ref="canvas" class="block h-16 w-full" />
+  <canvas
+    ref="canvas"
+    class="block h-16 w-full transition-opacity duration-150"
+    :class="ready ? 'opacity-100' : 'opacity-0'"
+  />
 </template>

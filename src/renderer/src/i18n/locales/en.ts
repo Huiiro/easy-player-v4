@@ -204,6 +204,8 @@ export default {
     play: 'Play playlist',
     empty: 'There are no playable songs in this playlist',
     playFailed: 'Unable to play playlist',
+    collapseHeader: 'Collapse playlist information',
+    expandHeader: 'Expand playlist information',
     back: 'Back'
   },
   remote: {
@@ -405,7 +407,8 @@ export default {
     theme: 'Theme',
     themeDescription: 'Choose the light or dark scheme and interface accent color.',
     followSystemTheme: 'Follow system theme',
-    followSystemThemeDescription: 'Uses the Windows or macOS light/dark appearance and disables custom theme backgrounds and accent colors.',
+    followSystemThemeDescription:
+      'Uses the Windows or macOS light/dark appearance and disables custom theme backgrounds.',
     restoreDefault: 'Restore defaults',
     appearanceMode: 'Appearance Mode',
     appearanceDescription: 'Custom backgrounds default to dark scheme to ensure clear readability.',

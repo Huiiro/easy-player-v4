@@ -63,11 +63,17 @@ function valueOrUnknown(value: string | null, kind: LibraryKind): string {
 function displayName(value: string | null): string {
   return value?.trim() || t('library.unknown')
 }
-function itemKey(item: GridItem): string { return `${item.value}-${item.subtitle || ''}` }
-function coverUrl(cover: string | null): string | null {
-  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}&size=${cardSize.value}` : null
+function itemKey(item: GridItem): string {
+  return `${item.value}-${item.subtitle || ''}`
 }
-function shouldLoadCover(item: GridItem): boolean { return visibleCoverKeys.value.has(itemKey(item)) }
+function coverUrl(cover: string | null): string | null {
+  return cover
+    ? `easy-player-media://cover-thumb?path=${encodeURIComponent(cover)}&size=${cardSize.value}`
+    : null
+}
+function shouldLoadCover(item: GridItem): boolean {
+  return visibleCoverKeys.value.has(itemKey(item))
+}
 function observeCover(element: unknown, item: GridItem): void {
   if (!(element instanceof Element) || !item.cover || shouldLoadCover(item)) return
   const key = itemKey(item)
@@ -135,16 +141,21 @@ watch([keyword, order], () => {
   visibleCoverKeys.value = new Set()
   void load()
 })
-watch(cardSize, () => { visibleCoverKeys.value = new Set() })
+watch(cardSize, () => {
+  visibleCoverKeys.value = new Set()
+})
 onMounted(() => {
-  coverObserver = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      if (!entry.isIntersecting) continue
-      const key = (entry.target as HTMLElement).dataset.coverKey
-      if (key) visibleCoverKeys.value = new Set([...visibleCoverKeys.value, key])
-      coverObserver?.unobserve(entry.target)
-    }
-  }, { rootMargin: '320px 0px' })
+  coverObserver = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue
+        const key = (entry.target as HTMLElement).dataset.coverKey
+        if (key) visibleCoverKeys.value = new Set([...visibleCoverKeys.value, key])
+        coverObserver?.unobserve(entry.target)
+      }
+    },
+    { rootMargin: '320px 0px' }
+  )
   void load()
 })
 onBeforeUnmount(() => coverObserver?.disconnect())
