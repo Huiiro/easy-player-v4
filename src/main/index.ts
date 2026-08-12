@@ -36,6 +36,7 @@ import {
 } from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
+import sharp from 'sharp'
 
 // Set this before Electron creates the macOS application menu. In development
 // the executable is Electron.app, but the visible app/menu name is ours.
@@ -257,6 +258,20 @@ function registerMediaProtocol(): void {
       return new Response('Not Found', { status: 404 })
     }
 
+    const size = Math.min(512, Math.max(64, Number(url.searchParams.get('size')) || 0))
+    if (url.hostname === 'cover' && size) {
+      try {
+        const thumbnail = await sharp(coverPath)
+          .resize(size, size, { fit: 'cover', withoutEnlargement: true })
+          .jpeg({ quality: 78, progressive: true })
+          .toBuffer()
+        return new Response(thumbnail, {
+          headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin': '*' }
+        })
+      } catch {
+        // Fall back to the original image for uncommon formats or corrupt cache entries.
+      }
+    }
     const response = await net.fetch(pathToFileURL(coverPath).toString())
     const headers = new Headers(response.headers)
     // The renderer samples cover pixels with Canvas for player-panel colors.

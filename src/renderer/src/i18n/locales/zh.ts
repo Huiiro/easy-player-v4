@@ -602,10 +602,11 @@ export default {
     lyricTranslationPlaceholder: '在此编辑翻译歌词（可选）…',
     lyricRomanizationPlaceholder: '在此编辑罗马音歌词（可选，支持 ELRC/YRC 逐词时间）…',
     lyricProviderNetease: '网易云',
-    lyricProviderKugou: '酷狗'
+    lyricProviderKugou: '酷狗',
+    lyricSourceNone: '未找到歌词'
   },
   lyrics: {
-    source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词' }
+    source: { embedded: '内嵌歌词', database: '数据库歌词', local: '本地歌词', network: '网络歌词', none: '未找到歌词' }
   },
   footer: {
     playerControls: '播放器控制栏，点击打开播放器面板',

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -40,6 +40,8 @@ const order = ref<SortOrder>('asc')
 const cardSize = ref(176)
 const loading = ref(false)
 const items = ref<GridItem[]>([])
+const visibleCoverKeys = ref(new Set<string>())
+let coverObserver: IntersectionObserver | null = null
 
 const title = computed(() => t(`library.${props.kind}s`))
 const icon = computed(() =>
@@ -61,8 +63,16 @@ function valueOrUnknown(value: string | null, kind: LibraryKind): string {
 function displayName(value: string | null): string {
   return value?.trim() || t('library.unknown')
 }
+function itemKey(item: GridItem): string { return `${item.value}-${item.subtitle || ''}` }
 function coverUrl(cover: string | null): string | null {
-  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
+  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}&size=${cardSize.value}` : null
+}
+function shouldLoadCover(item: GridItem): boolean { return visibleCoverKeys.value.has(itemKey(item)) }
+function observeCover(element: unknown, item: GridItem): void {
+  if (!(element instanceof Element) || !item.cover || shouldLoadCover(item)) return
+  const key = itemKey(item)
+  element.setAttribute('data-cover-key', key)
+  coverObserver?.observe(element)
 }
 async function load(): Promise<void> {
   loading.value = true
@@ -121,8 +131,23 @@ function open(item: GridItem): void {
   void router.push({ path: `/${props.kind}/detail`, query })
 }
 
-watch([keyword, order], () => void load())
-onMounted(() => void load())
+watch([keyword, order], () => {
+  visibleCoverKeys.value = new Set()
+  void load()
+})
+watch(cardSize, () => { visibleCoverKeys.value = new Set() })
+onMounted(() => {
+  coverObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const key = (entry.target as HTMLElement).dataset.coverKey
+      if (key) visibleCoverKeys.value = new Set([...visibleCoverKeys.value, key])
+      coverObserver?.unobserve(entry.target)
+    }
+  }, { rootMargin: '320px 0px' })
+  void load()
+})
+onBeforeUnmount(() => coverObserver?.disconnect())
 </script>
 
 <template>
@@ -189,7 +214,7 @@ onMounted(() => void load())
     >
       <div
         v-for="item in items"
-        :key="`${item.value}-${item.subtitle || ''}`"
+        :key="itemKey(item)"
         class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
         @click="open(item)"
       >
@@ -198,12 +223,15 @@ onMounted(() => void load())
           :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-xl'"
         >
           <div
+            :ref="(element) => observeCover(element, item)"
             class="size-full overflow-hidden"
             :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-lg'"
           >
             <img
-              v-if="coverUrl(item.cover)"
+              v-if="shouldLoadCover(item) && coverUrl(item.cover)"
               :src="coverUrl(item.cover)!"
+              loading="lazy"
+              decoding="async"
               class="size-full object-cover transition-transform duration-300 group-hover:scale-105"
               :alt="item.name"
             />

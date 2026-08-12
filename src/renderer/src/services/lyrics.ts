@@ -415,7 +415,16 @@ export async function resolveLyrics(
   order: LyricSource[],
   forcedSource: LyricSource | 'auto' = 'auto',
   allowAutoNetworkSearch = true
-): Promise<{ lines: LyricLine[]; source: LyricSource | null }> {
+): Promise<{
+  lines: LyricLine[]
+  source: LyricSource | null
+  content?: string
+  format?: LyricFormat
+  translation?: string
+  translationFormat?: LyricFormat
+  romanization?: string
+  romanizationFormat?: LyricFormat
+}> {
   const sourceOrder =
     forcedSource === 'auto'
       ? [
@@ -494,7 +503,7 @@ export async function resolveLyrics(
         : undefined,
       source
     }).lines
-    if (lines.length) return { lines, source }
+    if (lines.length) return { lines, source, content: lrc, format, translation: translation || undefined, translationFormat, romanization: romanization || undefined, romanizationFormat }
   }
   return { lines: [], source: null }
 }

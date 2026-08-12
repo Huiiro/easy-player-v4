@@ -618,14 +618,16 @@ export default {
     lyricRomanizationPlaceholder:
       'Edit romanized lyrics here (optional; ELRC/YRC word timing supported)…',
     lyricProviderNetease: 'NetEase Cloud Music',
-    lyricProviderKugou: 'KuGou'
+    lyricProviderKugou: 'KuGou',
+    lyricSourceNone: 'No lyrics found'
   },
   lyrics: {
     source: {
       embedded: 'Embedded lyrics',
       database: 'Database lyrics',
       local: 'Local lyrics',
-      network: 'Network lyrics'
+      network: 'Network lyrics',
+      none: 'No lyrics found'
     }
   },
   footer: {

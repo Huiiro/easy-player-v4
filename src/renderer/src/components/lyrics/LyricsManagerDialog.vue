@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import type { LyricFormat, LyricSource, NetworkLyricCandidate } from '@/services/lyrics'
+import { resolveLyrics, type LyricFormat, type LyricSource, type NetworkLyricCandidate } from '@/services/lyrics'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
@@ -22,6 +22,12 @@ const translationFormat = ref<LyricFormat | undefined>()
 const romanization = ref('')
 const romanizationFormat = ref<LyricFormat | undefined>()
 const query = ref({ title: '', artist: '', album: '' })
+const resolvedSource = ref<LyricSource | null>(null)
+const sourceLabel = computed(() => {
+  if (!resolvedSource.value) return t('playerPanel.lyricSourceNone')
+  return t(`lyrics.source.${resolvedSource.value}`)
+})
+const isAutoPreview = computed(() => ui.lyricSourceMode === 'auto')
 const sources = computed(() => [
   { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
   { value: 'embedded', label: t('lyrics.source.embedded') },
@@ -37,7 +43,19 @@ async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
   lyricFormat.value = undefined
   translationFormat.value = undefined
   romanizationFormat.value = undefined
-  if (!song || source === 'auto' || source === 'network') return
+  resolvedSource.value = null
+  if (!song || source === 'network') return
+  if (source === 'auto') {
+    const result = await resolveLyrics(song, ui.lyricSourceOrder, 'auto', ui.autoSearchNetworkLyrics)
+    resolvedSource.value = result.source
+    lyric.value = result.content || ''
+    lyricFormat.value = result.format
+    translation.value = result.translation || ''
+    translationFormat.value = result.translationFormat
+    romanization.value = result.romanization || ''
+    romanizationFormat.value = result.romanizationFormat
+    return
+  }
   if (source === 'database') {
     const response = await window.api.database.command('getSong', { id: song.id })
     const data = response.success
@@ -61,6 +79,7 @@ async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
   const response = await window.api.lyrics.loadSource(song.audio, source)
   lyric.value = response.success ? response.data?.content || '' : ''
   lyricFormat.value = response.success ? response.data?.format : undefined
+  resolvedSource.value = lyric.value ? source : null
 }
 async function initializeDraft(): Promise<void> {
   const metadata = player.trackInfo?.metadata
@@ -92,6 +111,7 @@ function selectCandidate(index: number): void {
   selected.value = index
   const item = candidates.value[index]
   if (item) {
+    resolvedSource.value = 'network'
     lyric.value = item.lrc
     lyricFormat.value = item.format
     translation.value = item.translation || ''
@@ -118,6 +138,7 @@ async function search(): Promise<void> {
   }
 }
 async function save(): Promise<void> {
+  if (isAutoPreview.value) return
   const song = player.currentQueueSong
   if (!song) return
   const response = await window.api.database.command('updateSongLyrics', {
@@ -143,8 +164,8 @@ async function save(): Promise<void> {
     width="max-w-4xl"
     @update:model-value="updateVisible"
   >
-    <div class="grid gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
-      <div class="space-y-4">
+    <div class="grid h-[min(64vh,42rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
+      <div class="custom-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
         <div>
           <p class="mb-2 text-xs text-text-l">{{ t('playerPanel.lyricSource') }}</p>
           <div class="grid gap-1">
@@ -159,7 +180,8 @@ async function save(): Promise<void> {
               "
               @click="selectSource(source.value as 'auto' | LyricSource)"
             >
-              {{ source.label }}
+              <span>{{ source.label }}</span>
+              <span v-if="source.value === 'auto' && ui.lyricSourceMode === 'auto'" class="ml-1 text-[10px] opacity-75">· {{ sourceLabel }}</span>
             </button>
           </div>
         </div>
@@ -189,8 +211,9 @@ async function save(): Promise<void> {
           </button>
         </div>
       </div>
-      <div class="min-w-0 space-y-3">
-        <div v-if="candidates.length" class="flex flex-wrap gap-2">
+      <div class="flex min-w-0 min-h-0 flex-col gap-3">
+        <div v-if="candidates.length" class="candidate-list custom-scrollbar shrink-0 overflow-y-auto pr-1">
+          <div class="flex flex-wrap gap-2">
           <button
             v-for="(candidate, index) in candidates"
             :key="candidate.id"
@@ -209,21 +232,25 @@ async function save(): Promise<void> {
             }}
             · {{ candidate.title }} — {{ candidate.artist }}
           </button>
+          </div>
         </div>
         <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
         <textarea
           v-model="lyric"
-          class="lyric-editor"
+          class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1"
+          :readonly="isAutoPreview"
           :placeholder="t('playerPanel.lyricEditorPlaceholder')"
         />
         <textarea
           v-model="translation"
-          class="lyric-editor lyric-editor--translation"
+          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
+          :readonly="isAutoPreview"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
         />
         <textarea
           v-model="romanization"
-          class="lyric-editor lyric-editor--translation"
+          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
+          :readonly="isAutoPreview"
           :placeholder="t('playerPanel.lyricRomanizationPlaceholder')"
         />
       </div>
@@ -239,6 +266,7 @@ async function save(): Promise<void> {
       <button
         class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
         type="button"
+        :disabled="isAutoPreview"
         @click="save"
       >
         {{ t('common.save') }}
@@ -276,18 +304,47 @@ async function save(): Promise<void> {
 }
 .lyric-editor {
   display: block;
-  min-height: 14rem;
   resize: vertical;
   padding: 0.75rem;
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 0.75rem;
   line-height: 1.6;
 }
+.candidate-list {
+  min-height: 3rem;
+  max-height: 14rem;
+  resize: vertical;
+}
+.lyric-editor--main {
+  min-height: 8rem;
+}
+.lyric-editor::-webkit-scrollbar {
+  width: 8px;
+}
+.lyric-editor::-webkit-scrollbar-track {
+  background: color-mix(in srgb, var(--color-bg-l) 70%, transparent);
+  border-radius: 999px;
+}
+.lyric-editor::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--color-text-l) 52%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+.lyric-editor::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
 .lyric-editor--translation {
-  min-height: 7rem;
+  height: 5.5rem;
+  min-height: 5.5rem;
 }
 .lyric-input:focus,
 .lyric-editor:focus {
   border-color: var(--color-primary);
+}
+.lyric-editor[readonly] {
+  cursor: default;
 }
 </style>

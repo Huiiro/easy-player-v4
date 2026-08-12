@@ -38,6 +38,30 @@ function searchKeyword(request: LyricSearchRequest): string {
   return [request.title, request.artist, request.album].filter(Boolean).join(' ').trim()
 }
 
+function normalizeMatchText(value?: string | null): string {
+  return (value || '').toLowerCase().replace(/[\s\p{P}\p{S}_]+/gu, '')
+}
+
+function matchScore(actual: string | undefined, expected: string | null | undefined): number {
+  const left = normalizeMatchText(actual)
+  const right = normalizeMatchText(expected)
+  if (!left || !right) return 0
+  if (left === right) return 1
+  if (left.includes(right) || right.includes(left)) return 0.8
+  const common = [...new Set(left)].filter((character) => right.includes(character)).length
+  return common / Math.max(left.length, right.length)
+}
+
+function rankCandidates(candidates: NetworkLyricCandidate[], request: LyricSearchRequest): NetworkLyricCandidate[] {
+  return candidates.sort((left, right) => {
+    const score = (candidate: NetworkLyricCandidate): number =>
+      matchScore(candidate.title, request.title) * 0.7 +
+      matchScore(candidate.artist, request.artist) * 0.2 +
+      matchScore(candidate.album, request.album) * 0.1
+    return score(right) - score(left)
+  })
+}
+
 function normalizeLyric(text: string): string {
   return text
     .split(/\r?\n/)
@@ -136,7 +160,7 @@ async function searchNetworkLyrics(request: LyricSearchRequest): Promise<Network
     searchNeteaseLyrics(request),
     searchKugouLyrics(request)
   ])
-  return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  return rankCandidates(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])), request)
 }
 
 function readLocalLyrics(audioPath: string): LyricLoadPayload | null {
