@@ -25,6 +25,13 @@ export const useUIStore = defineStore(
     // ========== UI设置 ==========
     // The player is dark by default; custom backgrounds inherit this mode for contrast.
     const useDarkMode = ref(true)
+    const followSystemTheme = ref(false)
+    const themeBeforeFollowingSystem = ref<{
+      useDarkMode: boolean
+      useCustomBg: boolean
+      customThemeColor: string
+      systemBackground: SystemBackground
+    } | null>(null)
     const useCardView = ref(false)
     const useCustomBg = ref(false)
     const useDynamicBg = ref(false)
@@ -161,9 +168,44 @@ export const useUIStore = defineStore(
       root.style.setProperty('--lrc-padding', `${normalizedPadding}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
     }
+    function syncFollowSystemTheme(): void {
+      if (!followSystemTheme.value || typeof window === 'undefined') return
+      useDarkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+    }
+    function setFollowSystemTheme(enabled: boolean): void {
+      if (enabled === followSystemTheme.value) return
+      if (!enabled) {
+        const previous = themeBeforeFollowingSystem.value
+        followSystemTheme.value = false
+        if (previous) {
+          useDarkMode.value = previous.useDarkMode
+          useCustomBg.value = previous.useCustomBg
+          customThemeColor.value = previous.customThemeColor
+          systemBackground.value = previous.systemBackground
+        }
+        themeBeforeFollowingSystem.value = null
+        return
+      }
+      themeBeforeFollowingSystem.value = {
+        useDarkMode: useDarkMode.value,
+        useCustomBg: useCustomBg.value,
+        customThemeColor: customThemeColor.value,
+        systemBackground: systemBackground.value
+      }
+      followSystemTheme.value = enabled
+      useCustomBg.value = false
+      systemBackground.value = 'none'
+      customThemeColor.value = ''
+      syncFollowSystemTheme()
+    }
     function syncSystemBackgroundThemeColor(): void {
+      if (followSystemTheme.value) {
+        useCustomBg.value = false
+        systemBackground.value = 'none'
+        customThemeColor.value = ''
+      }
       const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
-      if (!useCustomBg.value) customThemeColor.value = theme.accentColor
+      if (!followSystemTheme.value && !useCustomBg.value) customThemeColor.value = theme.accentColor
       if (!useCustomBg.value && systemBackground.value !== 'none') {
         useDarkMode.value = theme.colorMode === 'dark'
       }
@@ -232,6 +274,7 @@ export const useUIStore = defineStore(
       // plugin. Keep this one-time reader solely for migration from the former
       // partial theme snapshot.
       if (hasPersistedStore(persistedSettingsKey)) {
+        syncFollowSystemTheme()
         syncSystemBackgroundThemeColor()
         applyTheme()
         return
@@ -254,6 +297,7 @@ export const useUIStore = defineStore(
         // Invalid persisted preferences should not prevent the app from starting.
       }
       if (typeof saved.useDarkMode === 'boolean') useDarkMode.value = saved.useDarkMode
+      if (typeof saved.followSystemTheme === 'boolean') followSystemTheme.value = saved.followSystemTheme
       if (typeof saved.customThemeColor === 'string')
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
@@ -299,16 +343,20 @@ export const useUIStore = defineStore(
             : customBg.chromeBorder
       }
       syncSystemBackgroundThemeColor()
+      syncFollowSystemTheme()
       applyTheme()
       if (migratedLegacyTheme) localStorage.removeItem('easy-player.theme-settings')
     }
 
     function setTheme(mode: 'light' | 'dark'): void {
+      if (followSystemTheme.value) return
       useDarkMode.value = mode === 'dark'
     }
 
     function resetTheme(): void {
       useDarkMode.value = true
+      followSystemTheme.value = false
+      themeBeforeFollowingSystem.value = null
       customThemeColor.value = ''
       useCustomBg.value = false
       systemBackground.value = 'none'
@@ -366,6 +414,7 @@ export const useUIStore = defineStore(
     watch(
       [
         useDarkMode,
+        followSystemTheme,
         customFontFamily,
         customThemeColor,
         useCustomBg,
@@ -381,6 +430,10 @@ export const useUIStore = defineStore(
       ],
       applyTheme
     )
+    if (typeof window !== 'undefined') {
+      const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+      systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
+    }
     watch(
       [
         systemBackground,
@@ -398,6 +451,8 @@ export const useUIStore = defineStore(
       userName,
       itemOrder,
       useDarkMode,
+      followSystemTheme,
+      themeBeforeFollowingSystem,
       useCardView,
       useCustomBg,
       autoPlayOnRestore,
@@ -453,6 +508,7 @@ export const useUIStore = defineStore(
       initializeTheme,
       loadCustomFonts,
       setTheme,
+      setFollowSystemTheme,
       resetTheme,
       toggleCardStyle,
       setCardStyle,
@@ -476,6 +532,8 @@ export const useUIStore = defineStore(
         'userName',
         'itemOrder',
         'useDarkMode',
+        'followSystemTheme',
+        'themeBeforeFollowingSystem',
         'useCardView',
         'useCustomBg',
         'reduceMotion',

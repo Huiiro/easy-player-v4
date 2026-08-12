@@ -404,6 +404,8 @@ export default {
     languageEnglish: 'English',
     theme: 'Theme',
     themeDescription: 'Choose the light or dark scheme and interface accent color.',
+    followSystemTheme: 'Follow system theme',
+    followSystemThemeDescription: 'Uses the Windows or macOS light/dark appearance and disables custom theme backgrounds and accent colors.',
     restoreDefault: 'Restore defaults',
     appearanceMode: 'Appearance Mode',
     appearanceDescription: 'Custom backgrounds default to dark scheme to ensure clear readability.',

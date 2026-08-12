@@ -78,6 +78,7 @@ function isThemeBackgroundSelected(value: ThemeBackgroundChoice): boolean {
   return ui.systemBackground === value
 }
 function selectThemeBackground(value: ThemeBackgroundChoice): void {
+  if (ui.followSystemTheme) return
   ui.useCustomBg = false
   if (value === 'custom') {
     ui.systemBackground = 'none'
@@ -338,8 +339,21 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="settings-card">
-            <div class="setting-row setting-row-stack">
+          <div class="settings-card" :class="{ muted: ui.followSystemTheme }">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.followSystemTheme') }}</h3>
+                <p>{{ t('settings.followSystemThemeDescription') }}</p>
+              </div>
+              <BaseSwitch
+                :model-value="ui.followSystemTheme"
+                @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
+              />
+            </div>
+            <div
+              class="setting-row setting-row-stack"
+              :class="{ 'pointer-events-none': ui.followSystemTheme }"
+            >
               <div>
                 <h3>{{ t('settings.themeBackground') }}</h3>
                 <p>{{ t('settings.themeBackgroundDescription') }}</p>
@@ -374,7 +388,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class="setting-row">
+            <div class="setting-row" :class="{ 'pointer-events-none': ui.followSystemTheme }">
               <div>
                 <h3>{{ t('settings.themeColor') }}</h3>
                 <p>{{ t('settings.themeColorDescription') }}</p>
@@ -397,7 +411,13 @@ onBeforeUnmount(() => {
             </span>
           </div>
 
-          <div class="settings-card" :class="{ muted: !ui.useCustomBg }">
+          <div
+            class="settings-card"
+            :class="{
+              muted: !ui.useCustomBg || ui.followSystemTheme,
+              'pointer-events-none': ui.followSystemTheme
+            }"
+          >
             <div class="setting-row background-row">
               <div>
                 <h3>{{ t('settings.backgroundImage') }}</h3>

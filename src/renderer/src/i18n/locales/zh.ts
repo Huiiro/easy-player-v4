@@ -401,6 +401,8 @@ export default {
     languageEnglish: '英语',
     theme: '主题设置',
     themeDescription: '选择明暗方案和界面的强调色。',
+    followSystemTheme: '跟随系统主题',
+    followSystemThemeDescription: '自动使用 Windows 或 macOS 的浅色/深色外观，并禁用自定义主题背景和主题色。',
     restoreDefault: '恢复默认',
     appearanceMode: '外观模式',
     appearanceDescription: '自定义背景默认遵循深色方案，以保证内容清晰易读。',
