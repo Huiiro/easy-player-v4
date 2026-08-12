@@ -7,6 +7,38 @@ import { getSong } from '../database/repository'
 import { getDatabase } from '../database'
 import { getDataPath } from '../utils/pathUtils'
 import { Logger } from '../service/loggerService'
+import { search as searchNetease } from '@neteasecloudmusicapienhanced/api'
+
+interface CoverSearchRequest {
+  title: string
+  artist?: string | null
+  album?: string | null
+}
+
+function coverSearchKeyword(request: CoverSearchRequest): string {
+  return [request.title, request.artist, request.album].filter(Boolean).join(' ').trim()
+}
+
+function saveCoverDataUrl(dataUrl: string): string {
+  const matched = /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(dataUrl)
+  if (!matched) throw new Error('Invalid cover image data')
+  const coverDir = join(getDataPath(), 'covers')
+  mkdirSync(coverDir, { recursive: true })
+  const path = join(coverDir, `metadata-${randomUUID()}.jpg`)
+  writeFileSync(path, Buffer.from(matched[1], 'base64'))
+  return path
+}
+
+async function downloadCoverDataUrl(imageUrl: string): Promise<string> {
+  if (!/^https?:\/\//i.test(imageUrl)) throw new Error('Invalid cover URL')
+  const response = await fetch(imageUrl)
+  const contentType = response.headers.get('content-type') || ''
+  if (!response.ok || !contentType.startsWith('image/'))
+    throw new Error('Unable to download cover image')
+  const buffer = Buffer.from(await response.arrayBuffer())
+  if (!buffer.length || buffer.length > 20 * 1024 * 1024) throw new Error('Invalid cover image')
+  return `data:${contentType.split(';')[0]};base64,${buffer.toString('base64')}`
+}
 
 async function reloadSongMetadata(songId: number): Promise<void> {
   const song = getSong(songId)
@@ -135,6 +167,72 @@ export function registerMetadataIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('metadata:search-covers', async (_event, request: CoverSearchRequest) => {
+    try {
+      const keyword = coverSearchKeyword(request)
+      if (!keyword) return { success: true, data: [] }
+      const response = (await searchNetease({
+        keywords: keyword,
+        type: 10,
+        limit: 12
+      })) as unknown as {
+        status?: number
+        body?: { result?: { albums?: Array<Record<string, unknown>> } }
+      }
+      if (response.status !== 200) return { success: true, data: [] }
+      const candidates = (response.body?.result?.albums ?? []).flatMap((album) => {
+        const imageUrl =
+          typeof album.picUrl === 'string' ? album.picUrl.replace(/^http:\/\//i, 'https://') : ''
+        if (!imageUrl) return []
+        const artist =
+          typeof (album.artist as { name?: string } | undefined)?.name === 'string'
+            ? (album.artist as { name: string }).name
+            : ''
+        return [
+          {
+            id: String(album.id ?? imageUrl),
+            title: String(album.name ?? ''),
+            artist,
+            album: String(album.name ?? ''),
+            imageUrl
+          }
+        ]
+      })
+      // Fetch previews in the main process. NetEase CDN URLs can redirect to HTTP,
+      // which the renderer's strict CSP correctly refuses to display directly.
+      const data = (
+        await Promise.all(
+          candidates.map(async (candidate) => {
+            try {
+              return { ...candidate, previewUrl: await downloadCoverDataUrl(candidate.imageUrl) }
+            } catch {
+              return null
+            }
+          })
+        )
+      ).filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+      return { success: true, data }
+    } catch (error) {
+      Logger.error('metadata:search-covers error:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to search covers'
+      }
+    }
+  })
+
+  ipcMain.handle('metadata:download-cover', async (_event, imageUrl: string) => {
+    try {
+      return { success: true, data: { dataUrl: await downloadCoverDataUrl(imageUrl) } }
+    } catch (error) {
+      Logger.error('metadata:download-cover error:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to download cover'
+      }
+    }
+  })
+
   ipcMain.handle(
     'metadata:write',
     async (_event, request: { songId: number; metadata: SongMetadata }) => {
@@ -151,10 +249,17 @@ export function registerMetadataIpcHandlers(): void {
           return { success: false, error: 'Remote songs are not supported' }
         }
 
-        const result = await writeMetadata(song.audio, song.format || '', metadata)
-        if (!result) {
-          return { success: false, error: 'Failed to write metadata' }
+        const temporaryCover = metadata.coverDataUrl
+          ? saveCoverDataUrl(metadata.coverDataUrl)
+          : null
+        if (temporaryCover) metadata.coverPath = temporaryCover
+        let result: boolean
+        try {
+          result = await writeMetadata(song.audio, song.format || '', metadata)
+        } finally {
+          if (temporaryCover && existsSync(temporaryCover)) unlinkSync(temporaryCover)
         }
+        if (!result) return { success: false, error: 'Failed to write metadata' }
 
         // Re-read file to sync database with updated metadata
         const updatedMeta = await readMetadata(song.audio)

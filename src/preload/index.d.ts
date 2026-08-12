@@ -353,6 +353,16 @@ declare global {
           data?: { filePath: string; dataUrl: string }
           error?: string
         }>
+        searchCovers(request: { title: string; artist?: string | null; album?: string | null }): Promise<{
+          success: boolean
+          data?: Array<{ id: string; title: string; artist: string; album: string; imageUrl: string; previewUrl: string }>
+          error?: string
+        }>
+        downloadCover(imageUrl: string): Promise<{
+          success: boolean
+          data?: { dataUrl: string }
+          error?: string
+        }>
       }
       shortcuts: {
         registerGlobal(shortcuts: Record<string, string>): Promise<{

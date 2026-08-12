@@ -46,3 +46,5 @@ fix player cover/panel/controls
 support more lrc format
 support romaji
 fix text padding
+
+#### v 3.0.9

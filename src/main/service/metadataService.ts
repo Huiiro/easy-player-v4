@@ -33,6 +33,7 @@ export interface SongMetadata {
   // 封面
   cover?: Buffer | null
   coverPath?: string
+  coverDataUrl?: string
   coverMimeType?: string
 
   // 技术参数

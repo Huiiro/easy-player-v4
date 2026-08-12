@@ -5,6 +5,8 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useMessage } from '@/components/ui/useMessage'
+import CropperDialog from '@/components/cropper/CropperDialog.vue'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 export interface SongMetadata {
   title?: string
@@ -24,6 +26,7 @@ export interface SongMetadata {
   comment?: string | null
   cover?: Buffer | null
   coverPath?: string
+  coverDataUrl?: string
   coverMimeType?: string
   duration?: number
   bitrate?: number
@@ -50,6 +53,21 @@ const coverPreview = ref<string | null>(null)
 const originalCoverUrl = ref<string | null>(null)
 const newCoverPath = ref<string | null>(null)
 const coverChanged = ref(false)
+const rawCoverDataUrl = ref<string | null>(null)
+const cropDialogVisible = ref(false)
+const coverSearchDialogVisible = ref(false)
+const coverSearch = ref('')
+const coverResults = ref<
+  Array<{
+    id: string
+    title: string
+    artist: string
+    album: string
+    imageUrl: string
+    previewUrl: string
+  }>
+>([])
+const searchingCovers = ref(false)
 
 function cloneMetadata(src: SongMetadata): SongMetadata {
   return JSON.parse(JSON.stringify(src))
@@ -95,13 +113,63 @@ async function chooseCover(): Promise<void> {
   if (response && response.success && response.data) {
     const { filePath, dataUrl } = response.data as { filePath: string; dataUrl: string }
     newCoverPath.value = filePath
-    coverPreview.value = dataUrl
-    coverChanged.value = true
+    await prepareCrop(dataUrl)
+  }
+}
+
+async function prepareCrop(dataUrl: string): Promise<void> {
+  rawCoverDataUrl.value = dataUrl
+  coverChanged.value = true
+  cropDialogVisible.value = true
+}
+
+function applyCrop(dataUrl: string): void {
+  coverPreview.value = dataUrl
+}
+
+async function searchCovers(): Promise<void> {
+  const title = coverSearch.value.trim() || metadata.value.title || ''
+  if (!title) return
+  searchingCovers.value = true
+  try {
+    const response = await window.api.metadata.searchCovers({
+      title,
+      artist: metadata.value.artist,
+      album: metadata.value.album
+    })
+    coverResults.value = response.success ? (response.data ?? []) : []
+  } finally {
+    searchingCovers.value = false
+  }
+}
+
+async function openCoverSearch(): Promise<void> {
+  coverSearch.value = [metadata.value.title, metadata.value.artist, metadata.value.album]
+    .filter(Boolean)
+    .join(' ')
+  coverResults.value = []
+  coverSearchDialogVisible.value = true
+  await searchCovers()
+}
+
+async function selectNetworkCover(imageUrl: string): Promise<void> {
+  try {
+    const response = await window.api.metadata.downloadCover(imageUrl)
+    if (!response.success || !response.data) {
+      showError(response.error || t('metadataEdit.coverSetFailed'))
+      return
+    }
+    newCoverPath.value = null
+    coverSearchDialogVisible.value = false
+    await prepareCrop(response.data.dataUrl)
+  } catch {
+    showError(t('metadataEdit.coverSetFailed'))
   }
 }
 
 function removeCover(): void {
   newCoverPath.value = null
+  rawCoverDataUrl.value = null
   coverPreview.value = originalCoverUrl.value
   coverChanged.value = false
 }
@@ -126,7 +194,9 @@ async function handleSave(): Promise<void> {
     if (curr.lyricist !== orig.lyricist) payload.lyricist = curr.lyricist
     if (curr.lyrics !== orig.lyrics) payload.lyrics = curr.lyrics
 
-    if (newCoverPath.value) {
+    if (coverChanged.value && coverPreview.value?.startsWith('data:image/')) {
+      payload.coverDataUrl = coverPreview.value
+    } else if (newCoverPath.value) {
       payload.coverPath = newCoverPath.value
     }
 
@@ -143,11 +213,6 @@ async function handleSave(): Promise<void> {
   } finally {
     saving.value = false
   }
-}
-
-function formatNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) return ''
-  return String(value)
 }
 
 const inputLabelClass = 'mb-1 text-xs text-text-l'
@@ -185,12 +250,20 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
             ✕
           </button>
         </div>
-        <button
-          class="px-3 py-1 mt-2 rounded bg-primary hover:opacity-85 text-white cursor-pointer text-sm w-full text-center"
-          @click="chooseCover"
-        >
-          {{ t('metadataEdit.chooseCover') }}
-        </button>
+        <div class="mt-2 flex gap-1">
+          <BaseButton class="min-w-0 flex-1" @click="chooseCover">{{
+            t('metadataEdit.chooseCover')
+          }}</BaseButton>
+          <button
+            class="grid h-9 px-1 shrink-0 place-items-center rounded text-white hover:opacity-85 disabled:opacity-50"
+            :aria-label="t('metadataEdit.searchCover')"
+            :title="t('metadataEdit.searchCover')"
+            :disabled="searchingCovers"
+            @click="openCoverSearch"
+          >
+            <svg-icon name="common-search" class-name="size-4" />
+          </button>
+        </div>
         <div class="mt-4 w-40">
           <div :class="inputLabelClass">{{ t('metadataEdit.lyrics') }}</div>
           <textarea
@@ -216,11 +289,21 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         </div>
         <div>
           <div :class="inputLabelClass">{{ t('metadataEdit.year') }}</div>
-          <BaseInput v-model="metadata.year" :clearable="false" type="number" />
+          <BaseInput
+            :model-value="metadata.year ?? ''"
+            :clearable="false"
+            type="number"
+            @update:model-value="metadata.year = $event === '' ? undefined : Number($event)"
+          />
         </div>
         <div>
           <div :class="inputLabelClass">{{ t('metadataEdit.trackNumber') }}</div>
-          <BaseInput v-model="metadata.trackNumber" :clearable="false" type="number" />
+          <BaseInput
+            :model-value="metadata.trackNumber ?? ''"
+            :clearable="false"
+            type="number"
+            @update:model-value="metadata.trackNumber = $event === '' ? null : Number($event)"
+          />
         </div>
       </div>
 
@@ -244,7 +327,12 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         </div>
         <div>
           <div :class="inputLabelClass">{{ t('metadataEdit.discNumber') }}</div>
-          <BaseInput v-model="metadata.discNumber" :clearable="false" type="number" />
+          <BaseInput
+            :model-value="metadata.discNumber ?? ''"
+            :clearable="false"
+            type="number"
+            @update:model-value="metadata.discNumber = $event === '' ? null : Number($event)"
+          />
         </div>
       </div>
     </div>
@@ -256,5 +344,52 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         {{ saving ? t('metadataEdit.saving') : t('metadataEdit.save') }}
       </BaseButton>
     </template>
+  </BaseDialog>
+  <CropperDialog
+    v-model="cropDialogVisible"
+    :image-url="rawCoverDataUrl"
+    :size="1000"
+    @confirm="applyCrop"
+  />
+  <BaseDialog
+    :model-value="coverSearchDialogVisible"
+    :title="t('metadataEdit.searchCover')"
+    width="max-w-xl"
+    @update:model-value="coverSearchDialogVisible = $event"
+  >
+    <div class="p-2">
+      <div class="flex gap-2">
+        <BaseInput
+          v-model="coverSearch"
+          :placeholder="t('metadataEdit.searchCoverPlaceholder')"
+          :clearable="false"
+          @keyup.enter="searchCovers"
+        />
+        <BaseButton :disabled="searchingCovers" class="text-nowrap" @click="searchCovers">
+          <svg-icon name="common-search" class-name="size-[14px] mr-1" />
+          {{ t('metadataEdit.searchCover') }}
+        </BaseButton>
+      </div>
+      <div v-if="coverResults.length" class="mt-4 grid grid-cols-4 gap-3">
+        <button
+          v-for="result in coverResults"
+          :key="result.id"
+          class="overflow-hidden rounded-lg border border-border text-left hover:border-primary"
+          :title="[result.title, result.artist].filter(Boolean).join(' · ')"
+          @click="selectNetworkCover(result.imageUrl)"
+        >
+          <img
+            :src="result.previewUrl"
+            class="aspect-square w-full object-cover"
+            :alt="result.title"
+          />
+          <span class="block truncate px-2 py-1 text-xs">{{ result.title }}</span>
+          <span class="block truncate px-2 pb-2 text-[11px] text-text-l">{{ result.artist }}</span>
+        </button>
+      </div>
+      <p v-else-if="!searchingCovers" class="mt-4 text-center text-sm text-text-l">
+        {{ t('metadataEdit.searchCoverEmpty') }}
+      </p>
+    </div>
   </BaseDialog>
 </template>
