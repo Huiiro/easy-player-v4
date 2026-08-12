@@ -452,7 +452,14 @@ const metadataAPI = {
   searchCovers: (request: { title: string; artist?: string | null; album?: string | null }) =>
     ipcRenderer.invoke('metadata:search-covers', request) as Promise<{
       success: boolean
-      data?: Array<{ id: string; title: string; artist: string; album: string; imageUrl: string; previewUrl: string }>
+      data?: Array<{
+        id: string
+        title: string
+        artist: string
+        album: string
+        imageUrl: string
+        previewUrl: string
+      }>
       error?: string
     }>,
   downloadCover: (imageUrl: string) =>
@@ -480,6 +487,8 @@ const shortcutsAPI = {
 const systemAPI = {
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),
+  getMicaState: () => ipcRenderer.invoke('system:get-mica-state'),
+  setMicaEnabled: (enabled: boolean) => ipcRenderer.invoke('system:set-mica-enabled', enabled),
   updateTray: (data: { title: string; artist: string; isPlaying: boolean }) =>
     ipcRenderer.send('tray:update', data),
   onTrayAction: (callback: (action: 'previous' | 'toggle' | 'next') => void): (() => void) => {

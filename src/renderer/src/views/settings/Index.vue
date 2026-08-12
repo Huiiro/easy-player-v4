@@ -99,9 +99,15 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
 const fontOptions = computed(() => [
   { label: t('settings.fontSystemDefault'), value: '' },
   { label: t('settings.fontSystemUi'), value: 'system-ui' },
-  { label: t('settings.fontMicrosoftYahei'), value: 'Microsoft YaHei' },
+  { label: t('settings.fontAppleMusic'), value: 'SF Pro Display' },
+  { label: t('settings.fontAppleMusicRounded'), value: 'SF Pro Rounded' },
   { label: t('settings.fontPingfang'), value: 'PingFang SC' },
-  { label: 'Noto Sans SC', value: 'Noto Sans SC' },
+  { label: t('settings.fontSegoeUiVariable'), value: 'Segoe UI Variable' },
+  { label: t('settings.fontMicrosoftYahei'), value: 'Microsoft YaHei' },
+  { label: t('settings.fontMiSans'), value: 'MiSans' },
+  { label: t('settings.fontHarmonyOsSans'), value: 'HarmonyOS Sans SC' },
+  { label: t('settings.fontSourceHanSans'), value: 'Source Han Sans SC' },
+  { label: t('settings.fontNotoSans'), value: 'Noto Sans SC' },
   ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
 ])
 const desktopLyricsFontOptions = computed(() => [
@@ -339,7 +345,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="settings-card" :class="{ muted: ui.followSystemTheme }">
+          <div class="settings-card" :class="{ muted: ui.followSystemTheme || ui.useMica }">
             <div class="setting-row">
               <div>
                 <h3>{{ t('settings.followSystemTheme') }}</h3>
@@ -347,12 +353,23 @@ onBeforeUnmount(() => {
               </div>
               <BaseSwitch
                 :model-value="ui.followSystemTheme"
+                :disabled="ui.useMica"
                 @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
+              />
+            </div>
+            <div v-if="ui.micaAvailable" class="setting-row">
+              <div>
+                <h3>{{ t('settings.micaEffect') }}</h3>
+                <p>{{ t('settings.micaEffectDescription') }}</p>
+              </div>
+              <BaseSwitch
+                :model-value="ui.useMica"
+                @update:model-value="ui.setMicaEnabled(Boolean($event))"
               />
             </div>
             <div
               class="setting-row setting-row-stack"
-              :class="{ 'pointer-events-none': ui.followSystemTheme }"
+              :class="{ 'pointer-events-none': ui.followSystemTheme || ui.useMica }"
             >
               <div>
                 <h3>{{ t('settings.themeBackground') }}</h3>
@@ -388,7 +405,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div class="setting-row">
+            <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
               <div>
                 <h3>{{ t('settings.themeColor') }}</h3>
                 <p>{{ t('settings.themeColorDescription') }}</p>

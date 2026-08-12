@@ -34,6 +34,14 @@ body {
   user-select: none;
 }
 
+/* Mica is drawn by Windows behind the WebContents, so no renderer surface may
+ * paint an opaque base color over it. This must follow the regular body rule. */
+html.mica-enabled,
+html.mica-enabled body,
+html.mica-enabled #app {
+  background: transparent !important;
+}
+
 input,
 textarea,
 [contenteditable='true'],

@@ -26,6 +26,14 @@ export const useUIStore = defineStore(
     // The player is dark by default; custom backgrounds inherit this mode for contrast.
     const useDarkMode = ref(true)
     const followSystemTheme = ref(false)
+    const micaAvailable = ref(false)
+    const useMica = ref(false)
+    const themeBeforeMica = ref<{
+      useDarkMode: boolean
+      followSystemTheme: boolean
+      useCustomBg: boolean
+      systemBackground: SystemBackground
+    } | null>(null)
     const themeBeforeFollowingSystem = ref<{
       useDarkMode: boolean
       useCustomBg: boolean
@@ -125,11 +133,27 @@ export const useUIStore = defineStore(
       volumeUp: '',
       volumeDown: ''
     })
-    const fontStack = computed(() =>
-      customFontFamily.value
-        ? `"${customFontFamily.value}", Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
-        : 'inherit'
-    )
+    const presetFontStacks: Record<string, string> = {
+      'system-ui': 'system-ui, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif',
+      'SF Pro Display':
+        '"SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI Variable", "Microsoft YaHei", sans-serif',
+      'SF Pro Rounded':
+        '"SF Pro Rounded", "SF Pro Display", "PingFang SC", "Segoe UI Variable", "Microsoft YaHei", sans-serif',
+      'PingFang SC': '"PingFang SC", "SF Pro Display", "Microsoft YaHei", sans-serif',
+      'Segoe UI Variable': '"Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif',
+      MiSans: 'MiSans, "Microsoft YaHei", "Segoe UI", sans-serif',
+      'HarmonyOS Sans SC': '"HarmonyOS Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif',
+      'Source Han Sans SC': '"Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
+      'Noto Sans SC': '"Noto Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif'
+    }
+    const fontStack = computed(() => {
+      const family = customFontFamily.value
+      if (!family) return 'inherit'
+      return (
+        presetFontStacks[family] ||
+        `"${family}", Inter, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
+      )
+    })
     function normalizeLyricsFontPadding(value: number): number {
       return Math.max(3, Math.min(78, Math.round(value / 3) * 3))
     }
@@ -158,6 +182,8 @@ export const useUIStore = defineStore(
       const root = document.documentElement
       root.classList.toggle('dark', useDarkMode.value)
       root.classList.toggle('reduce-motion', reduceMotion.value)
+      root.classList.toggle('mica-enabled', useMica.value)
+      document.body.classList.toggle('mica-enabled', useMica.value)
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
       if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
       else root.style.removeProperty('--color-primary')
@@ -171,7 +197,14 @@ export const useUIStore = defineStore(
       if (!followSystemTheme.value || typeof window === 'undefined') return
       useDarkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches
     }
+    function applyMicaThemeConstraints(): void {
+      followSystemTheme.value = true
+      useCustomBg.value = false
+      systemBackground.value = 'none'
+      syncFollowSystemTheme()
+    }
     function setFollowSystemTheme(enabled: boolean): void {
+      if (useMica.value && !enabled) return
       if (enabled === followSystemTheme.value) return
       if (!enabled) {
         const previous = themeBeforeFollowingSystem.value
@@ -265,10 +298,20 @@ export const useUIStore = defineStore(
 
     async function initializeTheme(): Promise<void> {
       await loadCustomFonts()
+      try {
+        const mica = await window.api.system.getMicaState()
+        if (mica.success && mica.data) {
+          micaAvailable.value = mica.data.available
+          useMica.value = mica.data.enabled
+        }
+      } catch {
+        // Native material is an optional Windows-only enhancement.
+      }
       // New installations are hydrated synchronously by the Pinia persistence
       // plugin. Keep this one-time reader solely for migration from the former
       // partial theme snapshot.
       if (hasPersistedStore(persistedSettingsKey)) {
+        if (useMica.value) applyMicaThemeConstraints()
         syncFollowSystemTheme()
         syncSystemBackgroundThemeColor()
         applyTheme()
@@ -339,6 +382,7 @@ export const useUIStore = defineStore(
             : customBg.chromeBorder
       }
       syncSystemBackgroundThemeColor()
+      if (useMica.value) applyMicaThemeConstraints()
       syncFollowSystemTheme()
       applyTheme()
       if (migratedLegacyTheme) localStorage.removeItem('easy-player.theme-settings')
@@ -347,6 +391,35 @@ export const useUIStore = defineStore(
     function setTheme(mode: 'light' | 'dark'): void {
       if (followSystemTheme.value) return
       useDarkMode.value = mode === 'dark'
+    }
+    async function setMicaEnabled(enabled: boolean): Promise<void> {
+      if (!micaAvailable.value) return
+      const response = await window.api.system.setMicaEnabled(enabled)
+      if (!response.success || !response.data) return
+      if (response.data.enabled) {
+        if (!useMica.value) {
+          themeBeforeMica.value = {
+            useDarkMode: useDarkMode.value,
+            followSystemTheme: followSystemTheme.value,
+            useCustomBg: useCustomBg.value,
+            systemBackground: systemBackground.value
+          }
+        }
+        useMica.value = true
+        applyMicaThemeConstraints()
+        return
+      }
+
+      useMica.value = false
+      const previous = themeBeforeMica.value
+      if (previous) {
+        useDarkMode.value = previous.useDarkMode
+        followSystemTheme.value = previous.followSystemTheme
+        useCustomBg.value = previous.useCustomBg
+        systemBackground.value = previous.systemBackground
+        syncFollowSystemTheme()
+      }
+      themeBeforeMica.value = null
     }
 
     function resetTheme(): void {
@@ -411,6 +484,7 @@ export const useUIStore = defineStore(
       [
         useDarkMode,
         followSystemTheme,
+        useMica,
         customFontFamily,
         customThemeColor,
         useCustomBg,
@@ -448,6 +522,9 @@ export const useUIStore = defineStore(
       itemOrder,
       useDarkMode,
       followSystemTheme,
+      micaAvailable,
+      useMica,
+      themeBeforeMica,
       themeBeforeFollowingSystem,
       useCardView,
       useCustomBg,
@@ -506,6 +583,7 @@ export const useUIStore = defineStore(
       loadCustomFonts,
       setTheme,
       setFollowSystemTheme,
+      setMicaEnabled,
       resetTheme,
       toggleCardStyle,
       setCardStyle,
@@ -530,6 +608,8 @@ export const useUIStore = defineStore(
         'itemOrder',
         'useDarkMode',
         'followSystemTheme',
+        'useMica',
+        'themeBeforeMica',
         'themeBeforeFollowingSystem',
         'useCardView',
         'useCustomBg',

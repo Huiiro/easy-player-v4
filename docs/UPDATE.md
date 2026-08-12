@@ -53,5 +53,6 @@ fix known issues
 
 #### v3.0.10
 follow system theme
+add Windows mica
 fix performance
 fix known issues

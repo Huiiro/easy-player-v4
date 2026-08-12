@@ -34,6 +34,7 @@ const showLyricsColorDialog = ref(false)
 const lyricReloadToken = ref(0)
 const progressStyle = ref<'thin' | 'thick'>('thin')
 const collapsed = ref(false)
+const maximized = ref(false)
 let collapseTriggeredByPointer = false
 const playModeIcon = computed(
   () => ['control-order', 'control-loop', 'control-single', 'control-shuffle'][player.playMode]
@@ -237,6 +238,10 @@ function close(): void {
   performance.clearMarks()
   performance.clearMeasures()
   ui.showPlayer = false
+}
+async function runWindowCommand(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<void> {
+  const state = await window.api.window.command(command)
+  maximized.value = state.maximized
 }
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value

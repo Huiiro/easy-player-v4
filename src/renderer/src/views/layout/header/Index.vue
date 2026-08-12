@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import ScanProgress from '@/components/scan/ScanProgress.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -22,6 +22,14 @@ const scanAdded = ref(0)
 const scanDuplicates = ref(0)
 const importingLocalFolder = ref(false)
 const isMac = navigator.userAgent.includes('Macintosh')
+const headerStyle = computed(() =>
+  ui.useMica
+    ? {
+        background: 'transparent',
+        backdropFilter: 'none'
+      }
+    : undefined
+)
 
 const removeScanProgressListener = window.api.library.onScanProgress((progress) => {
   scanVisible.value = true
@@ -79,6 +87,7 @@ async function uploadLocalFiles(): Promise<void> {
   <header
     class="app-header flex h-[42px] items-center border-b transition-opacity [-webkit-app-region:drag]"
     :class="[visible ? '' : 'pointer-events-none opacity-0', isMac ? 'app-header--mac' : '']"
+    :style="headerStyle"
   >
     <Teleport to="body">
       <ScanProgress
@@ -98,8 +107,8 @@ async function uploadLocalFiles(): Promise<void> {
     >
       <span
         class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
-        >EY</span
-      >
+        >EY
+      </span>
       <span class="text-[16px] font-semibold tracking-tight">{{ ui.logoText }}</span>
       <span class="text-[9px] mt-2">V {{ VERSION }}</span>
     </div>
@@ -149,6 +158,8 @@ async function uploadLocalFiles(): Promise<void> {
       >
         <svgIcon name="common-mini-player" class-name="size-5" />
       </button>
+    </div>
+    <div v-if="!isMac" class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
         class="grid w-[46px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="t('header.minimize')"

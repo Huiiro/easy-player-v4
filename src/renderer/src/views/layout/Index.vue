@@ -25,8 +25,8 @@ watch(
   { immediate: true }
 )
 
-// The player panel owns its own controls. Hide the native macOS traffic lights
-// while it is open, then restore them on the normal/home layout.
+// Hide the native caption area while the immersive player is open. On Windows
+// the main process collapses the Window Controls Overlay itself.
 watch(
   () => ui.showPlayer,
   (showPlayer) => window.api.window.setTrafficLightVisible(!showPlayer),
@@ -52,7 +52,7 @@ onBeforeUnmount(() => {
   <DesktopLyricsSync />
   <div
     class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
-    :class="ui.hasBackground ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
+    :class="ui.hasBackground || ui.useMica ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
     <AppBackground />

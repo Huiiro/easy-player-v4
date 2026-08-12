@@ -13,6 +13,7 @@ import {
   Tray
 } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
+import { release as osRelease } from 'node:os'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AudioEngineManager } from './audioEngine'
@@ -84,6 +85,25 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let trayTrack = { title: '', artist: '', isPlaying: false }
 let isQuitting = false
+
+function supportsWindowsMica(): boolean {
+  if (process.platform !== 'win32') return false
+  const build = Number(osRelease().split('.')[2])
+  // Electron exposes system backdrop materials from Windows 11 22H2 onward.
+  return Number.isFinite(build) && build >= 22621
+}
+
+function setWindowsMica(enabled: boolean): boolean {
+  if (!mainWindow || mainWindow.isDestroyed() || !supportsWindowsMica()) return false
+  mainWindow.setBackgroundColor('#111614')
+  mainWindow.setBackgroundMaterial(enabled ? 'mica' : 'none')
+  return enabled
+}
+
+function setPlayerWindowControlsVisible(visible: boolean): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(visible)
+}
 
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -295,6 +315,8 @@ function registerMediaProtocol(): void {
 
 function createWindow(): void {
   const restoredState = loadWindowState()
+  const supportsMica = supportsWindowsMica()
+  const micaEnabled = supportsMica && getAppSetting('window.mica-enabled') === true
   // Create the browser window.
   mainWindow = new BrowserWindow({
     x: restoredState.x,
@@ -304,6 +326,8 @@ function createWindow(): void {
     minWidth: 1280,
     minHeight: 780,
     show: false,
+    // Use renderer-owned caption buttons. Window Controls Overlay retains
+    // native hit targets even when hidden, which conflicts with player UI.
     frame: false,
     // Extend the renderer into the native title bar while retaining macOS
     // traffic-light controls. The renderer reserves this area in Header.
@@ -314,6 +338,7 @@ function createWindow(): void {
         }
       : {}),
     backgroundColor: '#111614',
+    ...(micaEnabled ? { backgroundMaterial: 'mica' as const } : {}),
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -323,6 +348,7 @@ function createWindow(): void {
       sandbox: false
     }
   })
+  setWindowsMica(getAppSetting('window.mica-enabled') === true)
 
   mainWindow.on('ready-to-show', () => {
     if (restoredState.maximized) mainWindow?.maximize()
@@ -514,13 +540,25 @@ app.whenReady().then(() => {
     setAppSetting('system.close-to-tray', enabled === true)
     return { success: true }
   })
-  ipcMain.on('window:set-traffic-light-visible', (_event, visible: boolean) => {
-    if (process.platform === 'darwin') mainWindow?.setWindowButtonVisibility(visible)
-  })
+  ipcMain.on('window:set-traffic-light-visible', (_event, visible: boolean) =>
+    setPlayerWindowControlsVisible(visible)
+  )
   ipcMain.handle('system:set-auto-start', (_event, enabled: boolean) => {
     app.setLoginItemSettings({ openAtLogin: enabled === true })
     setAppSetting('system.auto-start', enabled === true)
     return { success: true }
+  })
+  ipcMain.handle('system:get-mica-state', () => {
+    const available = supportsWindowsMica()
+    return {
+      success: true,
+      data: { available, enabled: available && getAppSetting('window.mica-enabled') === true }
+    }
+  })
+  ipcMain.handle('system:set-mica-enabled', (_event, enabled: boolean) => {
+    const active = setWindowsMica(enabled === true)
+    if (supportsWindowsMica()) setAppSetting('window.mica-enabled', active)
+    return { success: true, data: { available: supportsWindowsMica(), enabled: active } }
   })
   ipcMain.on(
     'tray:update',

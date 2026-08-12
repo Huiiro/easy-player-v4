@@ -353,9 +353,20 @@ declare global {
           data?: { filePath: string; dataUrl: string }
           error?: string
         }>
-        searchCovers(request: { title: string; artist?: string | null; album?: string | null }): Promise<{
+        searchCovers(request: {
+          title: string
+          artist?: string | null
+          album?: string | null
+        }): Promise<{
           success: boolean
-          data?: Array<{ id: string; title: string; artist: string; album: string; imageUrl: string; previewUrl: string }>
+          data?: Array<{
+            id: string
+            title: string
+            artist: string
+            album: string
+            imageUrl: string
+            previewUrl: string
+          }>
           error?: string
         }>
         downloadCover(imageUrl: string): Promise<{
@@ -376,6 +387,14 @@ declare global {
       system: {
         setCloseToTray(enabled: boolean): Promise<{ success: boolean }>
         setAutoStart(enabled: boolean): Promise<{ success: boolean }>
+        getMicaState(): Promise<{
+          success: boolean
+          data?: { available: boolean; enabled: boolean }
+        }>
+        setMicaEnabled(enabled: boolean): Promise<{
+          success: boolean
+          data?: { available: boolean; enabled: boolean }
+        }>
         updateTray(data: { title: string; artist: string; isPlaying: boolean }): void
         onTrayAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
       }
