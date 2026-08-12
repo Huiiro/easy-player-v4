@@ -34,7 +34,6 @@ const showLyricsColorDialog = ref(false)
 const lyricReloadToken = ref(0)
 const progressStyle = ref<'thin' | 'thick'>('thin')
 const collapsed = ref(false)
-const maximized = ref(false)
 let collapseTriggeredByPointer = false
 const playModeIcon = computed(
   () => ['control-order', 'control-loop', 'control-single', 'control-shuffle'][player.playMode]
@@ -127,7 +126,7 @@ const backgroundSource = computed(() => {
 })
 const coverColors = ref({ primary: '77 136 220', secondary: '205 78 165' })
 const useDarkLyrics = ref(false)
-const COVER_ANALYSIS_VERSION = 1
+const COVER_ANALYSIS_VERSION = 2
 const lyricColorStyle = computed(() => {
   if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
   return {
@@ -136,7 +135,7 @@ const lyricColorStyle = computed(() => {
     '--lrc-translate': ui.lyricsColors.translation
   }
 })
-const showLyricsSamplingRegion = import.meta.env.DEV && false
+// const showLyricsSamplingRegion = import.meta.env.DEV
 const lyricsContrastDebug = ref({
   averageLuminance: 0,
   brightRatio: 0,
@@ -238,10 +237,6 @@ function close(): void {
   performance.clearMarks()
   performance.clearMeasures()
   ui.showPlayer = false
-}
-async function runWindowCommand(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<void> {
-  const state = await window.api.window.command(command)
-  maximized.value = state.maximized
 }
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
@@ -397,7 +392,7 @@ function getLyricsRegion(image: HTMLImageElement): [number, number, number, numb
 
   const panelLeft = window.innerWidth * 0.55
   const panelTop = window.innerHeight * 0.14
-  const panelRight = window.innerWidth * 0.8
+  const panelRight = window.innerWidth * 0.85
   const panelBottom = window.innerHeight * 0.86
   const left = Math.max(panelLeft, bounds.left)
   const top = Math.max(panelTop, bounds.top)
@@ -520,21 +515,21 @@ function extractCoverColors(event: Event): void {
         :style="ambientStyle"
       />
       <div class="pointer-events-none absolute inset-0 panel-sheen" />
-      <div
-        v-if="showLyricsSamplingRegion"
-        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[20%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"
-      >
-        <span
-          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium leading-5 text-slate-950"
-        >
-          歌词取色区域<br />
-          平均亮度 {{ lyricsContrastDebug.averageLuminance.toFixed(3) }} / 阈值 0.74<br />
-          明亮像素 {{ (lyricsContrastDebug.brightRatio * 100).toFixed(1) }}% / 阈值 56%<br />
-          近白 {{ (lyricsContrastDebug.nearWhite * 100).toFixed(1) }}% / 阈值 42%<br />
-          低对比风险 {{ (lyricsContrastDebug.lowContrastRisk * 100).toFixed(1) }}% / 阈值 62%<br />
-          判定：{{ lyricsContrastDebug.useDarkText ? '深色歌词' : '浅色歌词' }}
-        </span>
-      </div>
+      <!--      <div-->
+      <!--        v-if="showLyricsSamplingRegion"-->
+      <!--        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[15%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"-->
+      <!--      >-->
+      <!--        <span-->
+      <!--          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium leading-5 text-slate-950"-->
+      <!--        >-->
+      <!--          歌词取色区域<br />-->
+      <!--          平均亮度 {{ lyricsContrastDebug.averageLuminance.toFixed(3) }} / 阈值 0.74<br />-->
+      <!--          明亮像素 {{ (lyricsContrastDebug.brightRatio * 100).toFixed(1) }}% / 阈值 56%<br />-->
+      <!--          近白 {{ (lyricsContrastDebug.nearWhite * 100).toFixed(1) }}% / 阈值 42%<br />-->
+      <!--          低对比风险 {{ (lyricsContrastDebug.lowContrastRisk * 100).toFixed(1) }}% / 阈值 62%<br />-->
+      <!--          判定：{{ lyricsContrastDebug.useDarkText ? '深色歌词' : '浅色歌词' }}-->
+      <!--        </span>-->
+      <!--      </div>-->
     </div>
     <!-- content -->
     <section
