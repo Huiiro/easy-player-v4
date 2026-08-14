@@ -6,6 +6,7 @@ using PlatformAudioBackendFactory = MacOSAudioBackendFactory;
 #else
 #include "windows_backend_factory.h"
 using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
+#include <windows.h>
 #endif
 #include <napi.h>
 #include <memory>
@@ -533,12 +534,12 @@ private:
                 }
                 return result;
 #else
-                int len = WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
+                int len = WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()),
                                               nullptr, 0, nullptr, nullptr);
                 if (len <= 0) return {};
-                std::string result(len - 1, '\0');
-                WideCharToMultiByte(CP_UTF8, 0, ws.c_str(), -1,
-                                    &result[0], len, nullptr, nullptr);
+                std::string result(len, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, ws.data(), static_cast<int>(ws.size()),
+                                    result.data(), len, nullptr, nullptr);
                 return result;
 #endif
             };
