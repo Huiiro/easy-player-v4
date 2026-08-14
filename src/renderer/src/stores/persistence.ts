@@ -5,13 +5,21 @@ const fallbackPrefix = 'easy-player.'
 const pendingWrites = new Map<string, string>()
 let writeTimer: ReturnType<typeof setTimeout> | undefined
 
+function databaseKey(key: string): string {
+  return key.startsWith(prefix) ? key : `${prefix}${key}`
+}
+
+function localFallbackKey(key: string): string {
+  return `${fallbackPrefix}${databaseKey(key).slice(prefix.length)}`
+}
+
 function flushPendingWrites(): void {
   if (writeTimer) clearTimeout(writeTimer)
   writeTimer = undefined
   for (const [key, value] of pendingWrites) {
     try {
       const response = window.api.database.saveSync(key, value)
-      if (response.success) localStorage.removeItem(`${fallbackPrefix}${key.slice(prefix.length)}`)
+      if (response.success) localStorage.removeItem(localFallbackKey(key))
     } catch {
       // Keep the local copy for the next startup when the database is unavailable.
     }
@@ -36,11 +44,11 @@ export function flushPlayerDataStorage(): void {
  */
 export const playerDataStorage: StorageLike = {
   getItem(key) {
-    const fallbackKey = `${fallbackPrefix}${key.slice(prefix.length)}`
+    const fallbackKey = localFallbackKey(key)
     const pending = localStorage.getItem(fallbackKey)
     if (pending !== null) return pending
     try {
-      const response = window.api.database.getSync(`${prefix}${key}`)
+      const response = window.api.database.getSync(databaseKey(key))
       if (response.success && typeof response.data === 'string') return response.data
     } catch {
       // The renderer can start before a development database bridge is ready.
@@ -48,21 +56,21 @@ export const playerDataStorage: StorageLike = {
     return localStorage.getItem(fallbackKey)
   },
   setItem(key, value) {
-    const storageKey = `${prefix}${key}`
+    const storageKey = databaseKey(key)
     // Pinia persists after every reactive change. Keep an immediate recovery copy
     // in the renderer, then coalesce its synchronous SQLite writes.
-    localStorage.setItem(`${fallbackPrefix}${key}`, value)
+    localStorage.setItem(localFallbackKey(key), value)
     pendingWrites.set(storageKey, value)
     schedulePendingWrite()
   }
 }
 
 export function hasPersistedStore(key: string): boolean {
-  if (localStorage.getItem(`${fallbackPrefix}${key}`) !== null) return true
+  if (localStorage.getItem(localFallbackKey(key)) !== null) return true
   try {
-    const response = window.api.database.getSync(`${prefix}${key}`)
+    const response = window.api.database.getSync(databaseKey(key))
     return response.success && typeof response.data === 'string'
   } catch {
-    return localStorage.getItem(`${fallbackPrefix}${key}`) !== null
+    return localStorage.getItem(localFallbackKey(key)) !== null
   }
 }

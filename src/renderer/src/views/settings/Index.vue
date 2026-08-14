@@ -329,6 +329,17 @@ onBeforeUnmount(() => {
                   <span class="preview-window"><i /><b /></span>
                   <span>{{ t('settings.playerBackgroundAmbient') }}</span>
                 </button>
+                <button
+                  type="button"
+                  class="theme-option liquid-background-preview"
+                  :class="{ selected: playerBackground === PlayerBgType.LIQUID }"
+                  :aria-checked="playerBackground === PlayerBgType.LIQUID"
+                  role="radio"
+                  @click="playerBackground = PlayerBgType.LIQUID"
+                >
+                  <span class="preview-window"><i /><b /><em /></span>
+                  <span>{{ t('settings.playerBackgroundLiquid') }}</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1062,6 +1073,34 @@ onBeforeUnmount(() => {
 }
 .ambient-background-preview b {
   background: rgb(255 255 255 / 10%);
+}
+.liquid-background-preview .preview-window {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 20% 32%, #467fcb 0%, transparent 48%),
+    radial-gradient(ellipse at 82% 68%, #c54c90 0%, transparent 52%),
+    radial-gradient(ellipse at 56% 8%, #43b9a1 0%, transparent 42%), #151827;
+}
+.liquid-background-preview i,
+.liquid-background-preview b,
+.liquid-background-preview em {
+  position: absolute;
+  display: block;
+  border-radius: 999px;
+  filter: blur(5px);
+}
+.liquid-background-preview i {
+  inset: 20% 45% 18% -8%;
+  background: rgb(130 183 255 / 50%);
+}
+.liquid-background-preview b {
+  inset: 42% -12% -18% 40%;
+  background: rgb(255 121 198 / 42%);
+}
+.liquid-background-preview em {
+  inset: -20% 26% 56% 30%;
+  background: rgb(111 255 207 / 35%);
 }
 .default-background-preview .preview-window {
   background: #1e2427;

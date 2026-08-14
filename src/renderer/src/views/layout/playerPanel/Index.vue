@@ -12,6 +12,7 @@ import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
+import LiquidBackground from '@/components/background/LiquidBackground.vue'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -119,14 +120,29 @@ const useAlbumArtwork = computed(
 const useAmbientBackground = computed(
   () => (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT
 )
+const useLiquidBackground = computed(
+  () => (ui.playerBgType as PlayerBgType) === PlayerBgType.LIQUID
+)
+const liquidUnavailable = ref(false)
+const showLiquidDebug = import.meta.env.DEV
+const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
+const liquidDebug = ref({ width: 0, height: 0, time: 0, flowSpeed: 0, warpStrength: 0, beat: 0 })
+watch(useLiquidBackground, () => {
+  liquidUnavailable.value = false
+})
 const backgroundSource = computed(() => {
   if (useAlbumArtwork.value && coverUrl.value && !coverFailed.value) return coverUrl.value
   if (ui.playerBgType === PlayerBgType.CUSTOM && ui.customBg.url) return ui.customBg.url
   return null
 })
-const coverColors = ref({ primary: '77 136 220', secondary: '205 78 165' })
+const coverColors = ref({
+  primary: '77 136 220',
+  secondary: '205 78 165',
+  tertiary: '73 186 165',
+  quaternary: '120 95 214'
+})
 const useDarkLyrics = ref(false)
-const COVER_ANALYSIS_VERSION = 2
+const COVER_ANALYSIS_VERSION = 4
 const lyricColorStyle = computed(() => {
   if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
   return {
@@ -167,6 +183,24 @@ const shouldAnimate = computed(
     player.isPlaying &&
     player.rhythmVisualConfig.enabled &&
     !player.rhythmVisualConfig.reducedMotion
+)
+const liquidEnergy = computed(() => {
+  if (!player.rhythmVisualConfig.enabled) return 0
+  const { rms, onsetStrength } = player.audioAnalysis
+  return Math.min(1, Math.max(0, rms * 3.5, onsetStrength * 0.9, rhythmAmount.value * 0.8))
+})
+const liquidBass = computed(() =>
+  player.rhythmVisualConfig.enabled
+    ? Math.min(1, Math.max(0, player.audioAnalysis.lowEnergy) * 3.4)
+    : 0
+)
+const liquidBeat = computed(() =>
+  player.rhythmVisualConfig.enabled
+    ? Math.min(
+        1,
+        Math.max(0, player.audioAnalysis.onsetStrength) * player.rhythmVisualConfig.intensity * 4.2
+      )
+    : 0
 )
 const analysisPollingRate = computed(() => {
   if (!ui.showPlayer) return 0
@@ -333,7 +367,109 @@ function averageColor(
   if (!count) return '77 136 220'
   return `${Math.round(red / count)} ${Math.round(green / count)} ${Math.round(blue / count)}`
 }
-function analyzeLyricsContrast(data: Uint8ClampedArray): {
+function extractVibrantColors(
+  data: Uint8ClampedArray,
+  size: number
+): {
+  primary: string
+  secondary: string
+  tertiary: string
+  quaternary: string
+} {
+  const fallbackPrimary = averageColor(data, 0, size / 2, size)
+  const fallbackSecondary = averageColor(data, size / 2, size, size)
+  const swatches = new Map<string, { red: number; green: number; blue: number; weight: number }>()
+  for (let index = 0; index < data.length; index += 16) {
+    const red = data[index]
+    const green = data[index + 1]
+    const blue = data[index + 2]
+    const alpha = data[index + 3] / 255
+    const maximum = Math.max(red, green, blue)
+    const minimum = Math.min(red, green, blue)
+    if (alpha < 0.75 || maximum < 30) continue
+    const saturation = maximum - minimum
+    const key = `${Math.floor(red / 32)}-${Math.floor(green / 32)}-${Math.floor(blue / 32)}`
+    const swatch = swatches.get(key) ?? { red: 0, green: 0, blue: 0, weight: 0 }
+    const weight = 0.18 + (saturation / 255) * 1.8 + (maximum / 255) * 0.25
+    swatch.red += red * weight
+    swatch.green += green * weight
+    swatch.blue += blue * weight
+    swatch.weight += weight
+    swatches.set(key, swatch)
+  }
+  const candidates = [...swatches.values()]
+    .sort((left, right) => right.weight - left.weight)
+    .map((swatch) => ({
+      red: Math.round(swatch.red / swatch.weight),
+      green: Math.round(swatch.green / swatch.weight),
+      blue: Math.round(swatch.blue / swatch.weight)
+    }))
+  const chosen = candidates.reduce<typeof candidates>((selected, candidate) => {
+    if (
+      selected.length < 4 &&
+      selected.every(
+        (existing) =>
+          Math.hypot(
+            candidate.red - existing.red,
+            candidate.green - existing.green,
+            candidate.blue - existing.blue
+          ) > 58
+      )
+    )
+      selected.push(candidate)
+    return selected
+  }, [])
+  const primary = chosen[0]
+  if (!primary) return createPalette(fallbackPrimary, fallbackSecondary)
+  const secondary = chosen[1]
+  const palette = createPalette(
+    `${primary.red} ${primary.green} ${primary.blue}`,
+    secondary ? `${secondary.red} ${secondary.green} ${secondary.blue}` : fallbackSecondary
+  )
+  return {
+    ...palette,
+    tertiary: chosen[2]
+      ? `${chosen[2].red} ${chosen[2].green} ${chosen[2].blue}`
+      : palette.tertiary,
+    quaternary: chosen[3]
+      ? `${chosen[3].red} ${chosen[3].green} ${chosen[3].blue}`
+      : palette.quaternary
+  }
+}
+function createPalette(
+  primary: string,
+  secondary: string
+): {
+  primary: string
+  secondary: string
+  tertiary: string
+  quaternary: string
+} {
+  const first = primary.split(/\s+/).map(Number)
+  const second = secondary.split(/\s+/).map(Number)
+  const colour = (values: number[]): string =>
+    values.map((value) => Math.round(Math.max(0, Math.min(255, value)))).join(' ')
+  // Monochrome artwork still needs a varied field. These related colours keep
+  // the cover's palette while giving the shader enough separation to flow.
+  return {
+    primary,
+    secondary,
+    tertiary: colour([
+      first[0] * 0.58 + second[0] * 0.42 + 16,
+      first[1] * 0.58 + second[1] * 0.42 + 28,
+      first[2] * 0.58 + second[2] * 0.42 + 8
+    ]),
+    quaternary: colour([
+      second[0] * 0.68 + first[0] * 0.32 + 28,
+      second[1] * 0.68 + first[1] * 0.32 + 4,
+      second[2] * 0.68 + first[2] * 0.32 + 34
+    ])
+  }
+}
+function analyzeLyricsContrast(
+  data: Uint8ClampedArray,
+  liquidBackground = false
+): {
   averageLuminance: number
   brightRatio: number
   nearWhite: number
@@ -373,10 +509,13 @@ function analyzeLyricsContrast(data: Uint8ClampedArray): {
   const lowContrastRiskRatio = visible ? lowContrastRisk / visible : 0
   // Require a consistently light reading rather than a few light pixels.
   // The third condition handles broadly bright, moderately saturated covers.
-  const useDarkText =
-    (averageLuminance >= 0.74 && brightRatio >= 0.56) ||
-    nearWhiteRatio >= 0.42 ||
-    (averageLuminance >= 0.68 && lowContrastRiskRatio >= 0.62)
+  const useDarkText = liquidBackground
+    ? (averageLuminance >= 0.79 && brightRatio >= 0.65) ||
+      nearWhiteRatio >= 0.55 ||
+      (averageLuminance >= 0.75 && lowContrastRiskRatio >= 0.72)
+    : (averageLuminance >= 0.74 && brightRatio >= 0.56) ||
+      nearWhiteRatio >= 0.42 ||
+      (averageLuminance >= 0.68 && lowContrastRiskRatio >= 0.62)
   return {
     averageLuminance,
     brightRatio,
@@ -420,20 +559,22 @@ function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
   if (!image.naturalWidth || !image.naturalHeight) return
   const song = player.currentQueueSong
+  const panelBackground = image.classList.contains('panel-background-item')
   const cached =
     song &&
     song.coverAnalysisPath === song.cover &&
     song.coverAnalysisVersion === COVER_ANALYSIS_VERSION
   if (
-    image.classList.contains('panel-background-item') &&
+    panelBackground &&
     cached &&
     song.coverPrimary &&
     song.coverSecondary &&
     song.coverLyricsDark !== null &&
     song.coverLyricsDark !== undefined
   ) {
-    coverColors.value = { primary: song.coverPrimary, secondary: song.coverSecondary }
+    coverColors.value = createPalette(song.coverPrimary, song.coverSecondary)
     useDarkLyrics.value = song.coverLyricsDark === 1
+    coverColorSource.value = 'cache'
     return
   }
   try {
@@ -445,13 +586,11 @@ function extractCoverColors(event: Event): void {
     if (!context) return
     context.drawImage(image, 0, 0, size, size)
     const pixels = context.getImageData(0, 0, size, size).data
-    const colors = {
-      primary: averageColor(pixels, 0, size / 2, size),
-      secondary: averageColor(pixels, size / 2, size, size)
-    }
+    const colors = extractVibrantColors(pixels, size)
     coverColors.value = colors
+    coverColorSource.value = 'sampled'
     let lyricsDark = false
-    if (image.classList.contains('panel-background-item')) {
+    if (panelBackground) {
       const lyricsRegion = getLyricsRegion(image)
       if (!lyricsRegion) return
       context.clearRect(0, 0, size, size)
@@ -461,7 +600,13 @@ function extractCoverColors(event: Event): void {
       useDarkLyrics.value = lyricsDark
       lyricsContrastDebug.value = result
     }
-    if (image.classList.contains('panel-background-item') && song?.cover) {
+    if (!panelBackground && useLiquidBackground.value) {
+      const result = analyzeLyricsContrast(pixels, true)
+      lyricsDark = result.useDarkText
+      useDarkLyrics.value = lyricsDark
+      lyricsContrastDebug.value = result
+    }
+    if (panelBackground && song?.cover) {
       void window.api.database.command('updateSongCoverAnalysis', {
         id: song.id,
         analysis: {
@@ -475,7 +620,19 @@ function extractCoverColors(event: Event): void {
     }
   } catch {
     // Keep the neutral fallback colors for covers that cannot be sampled.
+    coverColorSource.value = 'failed'
   }
+}
+watch(
+  coverUrl,
+  (url) => {
+    if (useLiquidBackground.value && url) coverColorSource.value = 'loading'
+    else coverColorSource.value = 'idle'
+  },
+  { immediate: true }
+)
+function handleLiquidCoverError(): void {
+  coverColorSource.value = 'failed'
 }
 </script>
 
@@ -499,17 +656,50 @@ function extractCoverColors(event: Event): void {
           @error="coverFailed = true"
         />
       </Transition>
+      <img
+        v-if="useLiquidBackground && coverUrl"
+        :key="coverUrl"
+        :src="coverUrl"
+        class="absolute size-px opacity-0"
+        alt=""
+        crossorigin="anonymous"
+        @load="extractCoverColors"
+        @error="handleLiquidCoverError"
+      />
+      <LiquidBackground
+        v-if="useLiquidBackground && !liquidUnavailable"
+        :primary="coverColors.primary"
+        :secondary="coverColors.secondary"
+        :tertiary="coverColors.tertiary"
+        :quaternary="coverColors.quaternary"
+        :cover-src="coverUrl"
+        :energy="liquidEnergy"
+        :bass="liquidBass"
+        :beat="liquidBeat"
+        :active="player.isPlaying"
+        :reduced-motion="player.rhythmVisualConfig.reducedMotion"
+        :debug="showLiquidDebug"
+        @unavailable="liquidUnavailable = true"
+        @debug="liquidDebug = $event"
+      />
       <div
+        v-if="useLiquidBackground && !liquidUnavailable"
+        class="absolute inset-0 liquid-background-soften"
+      />
+      <div
+        v-if="!useLiquidBackground || liquidUnavailable"
         class="absolute -left-[12%] -top-[16%] size-[58vw] max-h-[76vh] max-w-[76vh] rounded-full panel-orb panel-orb-primary"
         :class="shouldAnimate ? 'panel-orb--animated' : ''"
         :style="glowStyle"
       />
       <div
+        v-if="!useLiquidBackground || liquidUnavailable"
         class="absolute -bottom-[22%] -right-[13%] size-[62vw] max-h-[82vh] max-w-[82vh] rounded-full panel-orb panel-orb-secondary"
         :class="shouldAnimate ? 'panel-orb--animated panel-orb--delayed' : ''"
         :style="glowStyle"
       />
       <div
+        v-if="!useLiquidBackground || liquidUnavailable"
         class="absolute inset-0 panel-ambient"
         :class="shouldAnimate ? 'panel-ambient--animated' : ''"
         :style="ambientStyle"
@@ -531,6 +721,36 @@ function extractCoverColors(event: Event): void {
       <!--        </span>-->
       <!--      </div>-->
     </div>
+    <!--    <aside v-if="showLiquidDebug && useLiquidBackground" class="liquid-debug" aria-live="polite">-->
+    <!--      <strong>Liquid background · DEV</strong>-->
+    <!--      <span>颜色来源：{{ coverColorSource }}</span>-->
+    <!--      <span-->
+    <!--        ><i :style="{ background: `rgb(${coverColors.primary})` }" />主色-->
+    <!--        {{ coverColors.primary }}</span-->
+    <!--      >-->
+    <!--      <span-->
+    <!--        ><i :style="{ background: `rgb(${coverColors.secondary})` }" />副色-->
+    <!--        {{ coverColors.secondary }}</span-->
+    <!--      >-->
+    <!--      <span-->
+    <!--        ><i :style="{ background: `rgb(${coverColors.tertiary})` }" />三色-->
+    <!--        {{ coverColors.tertiary }}</span-->
+    <!--      >-->
+    <!--      <span-->
+    <!--        ><i :style="{ background: `rgb(${coverColors.quaternary})` }" />四色-->
+    <!--        {{ coverColors.quaternary }}</span-->
+    <!--      >-->
+    <!--      <span>RMS {{ liquidEnergy.toFixed(3) }} · Bass {{ liquidBass.toFixed(3) }}</span>-->
+    <!--      <span>Beat {{ liquidDebug.beat.toFixed(3) }}</span>-->
+    <!--      <span-->
+    <!--        >速度 {{ liquidDebug.flowSpeed.toFixed(3) }} · 扰动-->
+    <!--        {{ liquidDebug.warpStrength.toFixed(3) }}</span-->
+    <!--      >-->
+    <!--      <span-->
+    <!--        >帧缓冲 {{ liquidDebug.width }}×{{ liquidDebug.height }} · t-->
+    <!--        {{ liquidDebug.time.toFixed(1) }}s</span-->
+    <!--      >-->
+    <!--    </aside>-->
     <!-- content -->
     <section
       class="relative z-10 size-full overflow-hidden bg-transparent"
@@ -964,6 +1184,44 @@ function extractCoverColors(event: Event): void {
   opacity: calc(var(--rhythm-glow-opacity, 0.68) * var(--ambient-base-opacity, 1));
   transform: scale(var(--rhythm-glow-scale, 1));
   transition: opacity 500ms ease;
+}
+.liquid-background-soften {
+  background: rgb(8 11 20 / 10%);
+  backdrop-filter: blur(16px) saturate(1.92);
+}
+.liquid-debug {
+  position: absolute;
+  top: 4.5rem;
+  left: 1rem;
+  z-index: 35;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 16rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 0.6rem;
+  color: rgb(255 255 255 / 86%);
+  background: rgb(5 8 16 / 72%);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 22%);
+  backdrop-filter: blur(12px);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+.liquid-debug strong {
+  color: #fff;
+  font-size: 0.72rem;
+}
+.liquid-debug span {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.liquid-debug i {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid rgb(255 255 255 / 30%);
+  border-radius: 999px;
 }
 .panel-background-item {
   filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);

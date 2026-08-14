@@ -504,6 +504,7 @@ export default {
     playerBackgroundStyleDescription: '专辑封面会自动加入模糊、渐变和律动效果。',
     playerBackgroundAlbum: '专辑封面',
     playerBackgroundAmbient: '氛围光晕',
+    playerBackgroundLiquid: '流体氛围',
     playerBackgroundDefault: '纯色',
     lyrics: '歌词设置',
     lyricsDescription: '拖动优先级决定歌词的加载顺序。',

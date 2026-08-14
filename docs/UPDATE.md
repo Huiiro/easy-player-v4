@@ -57,3 +57,6 @@ add Windows mica
 fix performance
 fix known issues
 fix pre-wrap lyrics
+
+#### v3.0.11
+add  liquid background

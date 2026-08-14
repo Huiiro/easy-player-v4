@@ -517,6 +517,7 @@ export default {
       'Album artwork automatically receives blur, gradients, and rhythm effects.',
     playerBackgroundAlbum: 'Album artwork',
     playerBackgroundAmbient: 'Ambient glow',
+    playerBackgroundLiquid: 'Liquid flow',
     playerBackgroundDefault: 'Solid',
     lyrics: 'Lyrics',
     lyricsDescription: 'Adjust the lyric loading priority.',
