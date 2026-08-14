@@ -19,6 +19,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  # Rebuild intermediates from native modules are not needed at runtime.
+  - '!node_modules/better-sqlite3/{deps,src}/**/*'
+  - '!node_modules/better-sqlite3/build/Release/obj{,/**/*}'
+  - '!node_modules/better-sqlite3/build/Release/*.{iobj,ipdb,lib}'
+electronLanguages:
+  - en-US
+  - zh-CN
 extraResources:
   - from: 'resources/'
     to: 'resources/'
