@@ -104,6 +104,7 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
         :selected-id="selectedFolderId"
         @select="selectedFolderId = $event"
       />
+      <div class="h-20" />
     </aside>
     <div
       class="local-resizer"

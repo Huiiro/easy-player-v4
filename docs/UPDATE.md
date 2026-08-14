@@ -56,3 +56,4 @@ follow system theme
 add Windows mica
 fix performance
 fix known issues
+fix pre-wrap lyrics

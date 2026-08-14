@@ -53,6 +53,9 @@ let snapRaf = 0
 let lyricLoadId = 0
 let isUnmounted = false
 const currentIndex = ref(0)
+const hasUntimedLyrics = computed(
+  () => lyrics.value.length > 0 && lyrics.value.every((line) => line.untimed)
+)
 const velocity = ref(12)
 const lineProgress = ref(0)
 const FPS = 48
@@ -135,6 +138,7 @@ const snapToCurrent = (): void => {
 const handleScroll = (): void => {
   const viewport = viewportRef.value
   if (!viewport) return
+  if (hasUntimedLyrics.value) return
   if (isAutoScrolling.value) return
 
   isUserScrolling.value = true
@@ -169,7 +173,7 @@ const update = (now: number): void => {
   smoothTime += (real - smoothTime) * 0.25
   frame.value = now
 
-  const idx = findCurrentLineIndex(lyrics.value, smoothTime)
+  const idx = hasUntimedLyrics.value ? 0 : findCurrentLineIndex(lyrics.value, smoothTime)
   currentIndex.value = idx
 
   const line = lyrics.value[idx]
@@ -183,6 +187,13 @@ const update = (now: number): void => {
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 const getLineStyle = (idx: number) => {
+  if (lyrics.value[idx]?.untimed) {
+    return {
+      transform: 'none',
+      filter: 'none',
+      opacity: 1
+    }
+  }
   const distance = idx - currentIndex.value
   const directionFactor = distance < 0 ? 0.35 : 1.65
   const abs = Math.abs(distance)
@@ -364,7 +375,10 @@ onUnmounted(() => {
             </ruby>
           </template>
           <template v-else>
-            <div v-if="currentIndex == idx">
+            <div v-if="line.untimed" class="lyric-plain">
+              {{ line.text }}
+            </div>
+            <div v-else-if="currentIndex == idx">
               <!-- 逐字歌词 -->
               <template v-if="line.chars?.length">
                 <span
@@ -482,6 +496,12 @@ onUnmounted(() => {
   font-size: var(--lrc-size);
   line-height: var(--lrc-height);
   font-weight: 700;
+}
+
+.lyric-plain {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .lyric-translation {

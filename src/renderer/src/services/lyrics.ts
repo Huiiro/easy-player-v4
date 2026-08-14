@@ -31,6 +31,7 @@ export interface LyricLine {
   timeMs: number
   endMs?: number
   text: string
+  untimed?: boolean
   translation?: string
   romanization?: string
   romanizationWords?: LyricWord[]
@@ -158,7 +159,8 @@ function parseLrcTrack(source: string): ParsedLrcTrack {
     }
   }
 
-  if (!lines.length && plainLines.length) lines.push({ timeMs: 0, text: plainLines.join(' ') })
+  if (!lines.length && plainLines.length)
+    lines.push(...plainLines.map((text) => ({ timeMs: 0, text, untimed: true })))
   return { metadata, lines }
 }
 
@@ -327,11 +329,17 @@ function addRubySegments(line: LyricLine): LyricLine {
 }
 
 function parsePlainLyrics(content: string): LyricDocument {
-  const text = content
+  const lines = content
     .replace(/^\uFEFF/, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return { format: 'plain', metadata: emptyMetadata(), lines: text ? [{ timeMs: 0, text }] : [] }
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, MAX_LYRIC_LINES)
+  return {
+    format: 'plain',
+    metadata: emptyMetadata(),
+    lines: lines.map((text) => ({ timeMs: 0, text, untimed: true }))
+  }
 }
 
 export function parseLyrics(payload: LyricPayload): LyricDocument {
