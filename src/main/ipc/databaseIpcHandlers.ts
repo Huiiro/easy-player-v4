@@ -11,8 +11,13 @@ const handlers = {
   querySongs: (params: Parameters<typeof library.querySongs>[0]) => library.querySongs(params),
   queryAllSongs: () => library.queryAllSongs(),
   getSong: ({ id }: { id: number }) => library.getSong(id),
-  updateSongCoverAnalysis: ({ id, analysis }: { id: number; analysis: Parameters<typeof library.updateSongCoverAnalysis>[1] }) =>
-    library.updateSongCoverAnalysis(id, analysis),
+  updateSongCoverAnalysis: ({
+    id,
+    analysis
+  }: {
+    id: number
+    analysis: Parameters<typeof library.updateSongCoverAnalysis>[1]
+  }) => library.updateSongCoverAnalysis(id, analysis),
   getSongsByAlbum: ({ album, artist }: { album: string; artist?: string }) =>
     library.getSongsByAlbum(album, artist),
   getSongsByGenre: ({ genre }: { genre: string }) => library.getSongsByGenre(genre),

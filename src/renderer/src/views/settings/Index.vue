@@ -618,6 +618,10 @@ onBeforeUnmount(() => {
                     <span>{{ t('settings.desktopLyricsGlow') }}</span>
                     <BaseSwitch v-model="ui.desktopLyricsStyles.glow" :size="'sm'" />
                   </label>
+                  <label class="flex items-center gap-2 my-3 text-xs text-text-l">
+                    <span>{{ t('settings.desktopLyricsSweep') }}</span>
+                    <BaseSwitch v-model="ui.desktopLyricsStyles.sweep" :size="'sm'" />
+                  </label>
                 </div>
               </div>
               <div
@@ -629,7 +633,12 @@ onBeforeUnmount(() => {
                 }"
               >
                 <strong
-                  :class="ui.desktopLyricsStyles.glow && 'desktop-lyrics-preview--glow'"
+                  :class="[
+                    ui.desktopLyricsStyles.glow &&
+                      !ui.desktopLyricsStyles.sweep &&
+                      'desktop-lyrics-preview--glow',
+                    ui.desktopLyricsStyles.sweep && 'desktop-lyrics-preview--sweep'
+                  ]"
                   :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
                   >{{ t('settings.desktopLyricsPreviewLine') }}</strong
                 >
@@ -1128,6 +1137,12 @@ onBeforeUnmount(() => {
 }
 .desktop-lyrics-preview--glow {
   text-shadow: 0 0 15px var(--desktop-active);
+}
+.desktop-lyrics-preview--sweep {
+  color: transparent;
+  background: linear-gradient(90deg, var(--desktop-active) 0 56%, var(--desktop-inactive) 56% 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
 }
 .desktop-lyrics-preview span {
   color: var(--desktop-inactive);

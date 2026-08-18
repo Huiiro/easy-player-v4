@@ -52,7 +52,10 @@ function matchScore(actual: string | undefined, expected: string | null | undefi
   return common / Math.max(left.length, right.length)
 }
 
-function rankCandidates(candidates: NetworkLyricCandidate[], request: LyricSearchRequest): NetworkLyricCandidate[] {
+function rankCandidates(
+  candidates: NetworkLyricCandidate[],
+  request: LyricSearchRequest
+): NetworkLyricCandidate[] {
   return candidates.sort((left, right) => {
     const score = (candidate: NetworkLyricCandidate): number =>
       matchScore(candidate.title, request.title) * 0.7 +
@@ -160,7 +163,10 @@ async function searchNetworkLyrics(request: LyricSearchRequest): Promise<Network
     searchNeteaseLyrics(request),
     searchKugouLyrics(request)
   ])
-  return rankCandidates(results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])), request)
+  return rankCandidates(
+    results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
+    request
+  )
 }
 
 function readLocalLyrics(audioPath: string): LyricLoadPayload | null {

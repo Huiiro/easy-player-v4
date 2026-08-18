@@ -31,17 +31,35 @@ function currentIndex(): number {
   return 0
 }
 
+function lyricSweepRange(
+  current: LyricLine | undefined,
+  next: LyricLine | undefined
+): { startMs: number; endMs: number } | null {
+  if (!current) return null
+  const startMs = current.words?.[0]?.startMs ?? current.timeMs
+  const endMs =
+    current.words?.at(-1)?.endMs ??
+    current.endMs ??
+    next?.timeMs ??
+    Math.max(startMs + 1, current.timeMs + 3000)
+  return { startMs, endMs: Math.max(startMs + 1, endMs) }
+}
+
 function publish(): void {
   if (!ui.useDesktopLyrics) return
   const index = currentIndex()
   const current = lyrics.value[index]
   const next = lyrics.value[index + 1]
+  const sweepRange = lyricSweepRange(current, next)
   window.api.desktopLyrics.update({
     songId: player.currentQueueSong?.id,
     revision: lyricRevision,
     current: current?.text || player.currentQueueSong?.title || '',
     next: next?.text || player.currentQueueSong?.artist || '',
     translation: ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
+    positionMs: player.positionMs,
+    sweepStartMs: sweepRange?.startMs,
+    sweepEndMs: sweepRange?.endMs,
     isPlaying: player.isPlaying,
     styles: {
       ...ui.desktopLyricsStyles,

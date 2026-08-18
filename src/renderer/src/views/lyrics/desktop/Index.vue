@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, type CSSProperties } from 'vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 interface DesktopState {
@@ -8,6 +8,9 @@ interface DesktopState {
   current: string
   next: string
   translation: string
+  positionMs?: number
+  sweepStartMs?: number
+  sweepEndMs?: number
   isPlaying?: boolean
   styles: {
     fontSize: number
@@ -15,6 +18,7 @@ interface DesktopState {
     inactiveColor: string
     fontBold: boolean
     glow: boolean
+    sweep: boolean
     showTranslation: boolean
     autoHideBackground: boolean
     fontFamily: string
@@ -41,6 +45,9 @@ let previousSongId: number | undefined
 let previousRevision: number | undefined
 let replaceFirst = true
 const activeSlot = ref<'first' | 'second'>('first')
+const animatedSweepProgress = ref(0)
+let sweepPositionAnchor = { positionMs: 0, receivedAt: performance.now() }
+let sweepAnimationFrame: number | undefined
 const state = ref<DesktopState>({
   current: '',
   next: '',
@@ -52,6 +59,7 @@ const state = ref<DesktopState>({
     inactiveColor: 'rgba(255, 255, 255, 0.58)',
     fontBold: true,
     glow: true,
+    sweep: false,
     showTranslation: true,
     autoHideBackground: true,
     fontFamily: ''
@@ -99,12 +107,51 @@ const inactiveStyle = computed(() => ({
   textShadow: 'none',
   fontFamily: fontFamilyStyle.value
 }))
-const firstStyle = computed(() =>
-  activeSlot.value === 'first' ? currentStyle.value : inactiveStyle.value
-)
-const secondStyle = computed(() =>
-  activeSlot.value === 'second' ? currentStyle.value : inactiveStyle.value
-)
+const sweepProgress = computed(() => animatedSweepProgress.value)
+
+function updateSweepProgress(now = performance.now()): void {
+  const startMs = state.value.sweepStartMs
+  const endMs = state.value.sweepEndMs
+  if (typeof startMs !== 'number' || typeof endMs !== 'number' || endMs <= startMs) {
+    animatedSweepProgress.value = 0
+    return
+  }
+  const elapsedMs = state.value.isPlaying ? Math.max(0, now - sweepPositionAnchor.receivedAt) : 0
+  const positionMs = sweepPositionAnchor.positionMs + elapsedMs
+  animatedSweepProgress.value = Math.max(0, Math.min(1, (positionMs - startMs) / (endMs - startMs)))
+}
+
+function animateSweep(now: number): void {
+  updateSweepProgress(now)
+  if (state.value.styles.sweep && state.value.isPlaying)
+    sweepAnimationFrame = requestAnimationFrame(animateSweep)
+  else sweepAnimationFrame = undefined
+}
+
+function syncSweepAnimation(): void {
+  updateSweepProgress()
+  if (state.value.styles.sweep && state.value.isPlaying && sweepAnimationFrame === undefined)
+    sweepAnimationFrame = requestAnimationFrame(animateSweep)
+  if ((!state.value.styles.sweep || !state.value.isPlaying) && sweepAnimationFrame !== undefined) {
+    cancelAnimationFrame(sweepAnimationFrame)
+    sweepAnimationFrame = undefined
+  }
+}
+
+function lineStyle(slot: 'first' | 'second'): CSSProperties {
+  const active = activeSlot.value === slot
+  const style = active ? currentStyle.value : inactiveStyle.value
+  if (!active || !state.value.styles.sweep) return style
+  const progress = `${(sweepProgress.value * 100).toFixed(2)}%`
+  return {
+    ...style,
+    color: 'transparent',
+    textShadow: 'none',
+    backgroundImage: `linear-gradient(90deg, ${state.value.styles.activeColor} 0%, ${state.value.styles.activeColor} ${progress}, ${state.value.styles.inactiveColor} ${progress}, ${state.value.styles.inactiveColor} 100%)`,
+    WebkitBackgroundClip: 'text',
+    backgroundClip: 'text'
+  }
+}
 
 async function checkOverflow(): Promise<void> {
   await nextTick()
@@ -179,14 +226,30 @@ function closeWindow(): void {
 const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   if (!data || typeof data !== 'object') return
   const next = data as Partial<DesktopState>
+  const previousState = state.value
   const fontSizeChanged =
     typeof next.styles?.fontSize === 'number' &&
-    next.styles.fontSize !== state.value.styles.fontSize
+    next.styles.fontSize !== previousState.styles.fontSize
+  // Playback progress arrives frequently while sweep mode is active. Measuring
+  // scroll widths forces layout, so reserve that work for text/metric changes
+  // rather than every gradient-progress update.
+  const needsOverflowCheck =
+    next.current !== previousState.current ||
+    next.next !== previousState.next ||
+    next.translation !== previousState.translation ||
+    fontSizeChanged ||
+    (typeof next.styles?.fontFamily === 'string' &&
+      next.styles.fontFamily !== previousState.styles.fontFamily) ||
+    (typeof next.styles?.fontBold === 'boolean' &&
+      next.styles.fontBold !== previousState.styles.fontBold)
   state.value = {
     ...state.value,
     ...next,
     styles: { ...state.value.styles, ...(next.styles || {}) }
   }
+  if (typeof next.positionMs === 'number')
+    sweepPositionAnchor = { positionMs: next.positionMs, receivedAt: performance.now() }
+  syncSweepAnimation()
   if (
     !previousCurrent ||
     !next.current ||
@@ -218,7 +281,7 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   previousSongId = state.value.songId
   previousRevision = state.value.revision
   if (fontSizeChanged) window.api.desktopLyrics.resizeForFont(state.value.styles.fontSize)
-  void checkOverflow()
+  if (needsOverflowCheck) void checkOverflow()
 })
 const removeBounds = window.api.desktopLyrics.onBounds((bounds) => {
   windowHeight.value = bounds.height
@@ -242,6 +305,7 @@ onMounted(() => {
   window.addEventListener('mousemove', move)
   window.addEventListener('mouseleave', leave)
   scheduleHide()
+  syncSweepAnimation()
 })
 onUnmounted(() => {
   removeUpdate()
@@ -251,6 +315,7 @@ onUnmounted(() => {
   window.removeEventListener('mousemove', move)
   window.removeEventListener('mouseleave', leave)
   if (hideTimer) clearTimeout(hideTimer)
+  if (sweepAnimationFrame !== undefined) cancelAnimationFrame(sweepAnimationFrame)
 })
 </script>
 
@@ -299,7 +364,7 @@ onUnmounted(() => {
             ref="currentText"
             class="marquee-text"
             :class="currentOverflows && 'marquee-text--scroll'"
-            :style="firstStyle"
+            :style="lineStyle('first')"
           >
             {{ displayedFirst }}
           </p>
@@ -309,7 +374,7 @@ onUnmounted(() => {
             ref="secondText"
             class="marquee-text"
             :class="secondOverflows && 'marquee-text--scroll'"
-            :style="state.translation ? inactiveStyle : secondStyle"
+            :style="state.translation ? inactiveStyle : lineStyle('second')"
           >
             {{ state.translation || displayedSecond }}
           </p>

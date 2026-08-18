@@ -136,14 +136,27 @@ export function getSong(id: number): Song | null {
 
 export function updateSongCoverAnalysis(
   id: number,
-  analysis: { path: string; primary: string; secondary: string; lyricsDark: boolean; version: number }
+  analysis: {
+    path: string
+    primary: string
+    secondary: string
+    lyricsDark: boolean
+    version: number
+  }
 ): void {
   getDatabase()
     .prepare(
       `UPDATE song SET cover_analysis_path = ?, cover_primary = ?, cover_secondary = ?,
        cover_lyrics_dark = ?, cover_analysis_version = ? WHERE id = ?`
     )
-    .run(analysis.path, analysis.primary, analysis.secondary, analysis.lyricsDark ? 1 : 0, analysis.version, id)
+    .run(
+      analysis.path,
+      analysis.primary,
+      analysis.secondary,
+      analysis.lyricsDark ? 1 : 0,
+      analysis.version,
+      id
+    )
 }
 export function queryAllSongs(): Song[] {
   return attachTags(

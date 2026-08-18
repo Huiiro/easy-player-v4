@@ -113,6 +113,7 @@ export const useUIStore = defineStore(
       inactiveColor: 'rgba(255, 255, 255, 0.58)',
       fontBold: true,
       glow: true,
+      sweep: false,
       showTranslation: true,
       autoHideBackground: true,
       fontFamily: ''

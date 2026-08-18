@@ -523,6 +523,7 @@ export default {
     desktopLyricsInactiveColor: '非当前行',
     desktopLyricsBold: '粗体',
     desktopLyricsGlow: '发光效果',
+    desktopLyricsSweep: '扫动模式',
     desktopLyricsTranslation: '显示翻译',
     desktopLyricsAutoHide: '自动隐藏背景',
     desktopLyricsFontFamily: '字体',

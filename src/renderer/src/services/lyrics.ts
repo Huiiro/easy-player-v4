@@ -511,7 +511,17 @@ export async function resolveLyrics(
         : undefined,
       source
     }).lines
-    if (lines.length) return { lines, source, content: lrc, format, translation: translation || undefined, translationFormat, romanization: romanization || undefined, romanizationFormat }
+    if (lines.length)
+      return {
+        lines,
+        source,
+        content: lrc,
+        format,
+        translation: translation || undefined,
+        translationFormat,
+        romanization: romanization || undefined,
+        romanizationFormat
+      }
   }
   return { lines: [], source: null }
 }

@@ -16,26 +16,10 @@ if (process.platform === 'darwin') {
   console.log('[copy-native-assets] macOS addon ready:', nodePath)
   process.exit(0)
 }
-const ffmpegBin = path.join(
-  __dirname,
-  '..',
-  'src',
-  'main',
-  'native',
-  'deps',
-  'ffmpeg'
-)
+const ffmpegBin = path.join(__dirname, '..', 'src', 'main', 'native', 'deps', 'ffmpeg')
 
 // Find the FFmpeg directory (glob pattern: ffmpeg-*)
-const ffmpegDepsDir = path.join(
-  __dirname,
-  '..',
-  'src',
-  'main',
-  'native',
-  'deps',
-  'ffmpeg'
-)
+const ffmpegDepsDir = path.join(__dirname, '..', 'src', 'main', 'native', 'deps', 'ffmpeg')
 let ffmpegBinDir = ''
 try {
   const entries = fs.readdirSync(ffmpegDepsDir)
@@ -75,7 +59,9 @@ if (fs.existsSync(dllPath)) {
 const ffmpegPrefixes = ['avcodec-', 'avformat-', 'avutil-', 'swresample-']
 const ffmpegEntries = fs.readdirSync(ffmpegBinDir)
 for (const prefix of ffmpegPrefixes) {
-  const dll = ffmpegEntries.find((entry) => entry.toLowerCase().startsWith(prefix) && entry.toLowerCase().endsWith('.dll'))
+  const dll = ffmpegEntries.find(
+    (entry) => entry.toLowerCase().startsWith(prefix) && entry.toLowerCase().endsWith('.dll')
+  )
   if (!dll) {
     console.error('[copy-native-assets] Required FFmpeg DLL not found for prefix:', prefix)
     process.exit(1)

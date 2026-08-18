@@ -538,6 +538,7 @@ export default {
     desktopLyricsInactiveColor: 'Other lines',
     desktopLyricsBold: 'Bold',
     desktopLyricsGlow: 'Glow effect',
+    desktopLyricsSweep: 'Sweep effect',
     desktopLyricsTranslation: 'Show translation',
     desktopLyricsAutoHide: 'Auto-hide background',
     desktopLyricsFontFamily: 'Font',
