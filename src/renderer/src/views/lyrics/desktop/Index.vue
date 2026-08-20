@@ -81,7 +81,7 @@ const lyricFontSize = computed(() => {
   // 24px vertical padding + the 26.4px toolbar / 4px margin + lyric gap and
   // an additional glow-safe buffer. Two equal lyric rows must always fit.
   const availableLyricsHeight = Math.max(0, windowHeight.value - 24 - 30.4 - 4 - 16)
-  const maxFittingSize = availableLyricsHeight / (2 * 1.18)
+  const maxFittingSize = availableLyricsHeight / (2 * 1.3)
   return Math.max(1, Math.round(Math.min(resizedSize, maxFittingSize)))
 })
 const fontFamilyStyle = computed(() => {
@@ -93,7 +93,7 @@ const fontFamilyStyle = computed(() => {
 })
 const currentStyle = computed(() => ({
   fontSize: `${lyricFontSize.value}px`,
-  lineHeight: 1.18,
+  lineHeight: 1.3,
   color: state.value.styles.activeColor,
   fontWeight: state.value.styles.fontBold ? 700 : 500,
   textShadow: state.value.styles.glow ? `0 0 8px ${state.value.styles.activeColor}` : 'none',
@@ -102,7 +102,7 @@ const currentStyle = computed(() => ({
 const inactiveStyle = computed(() => ({
   color: state.value.styles.inactiveColor,
   fontSize: `${lyricFontSize.value}px`,
-  lineHeight: 1.18,
+  lineHeight: 1.3,
   fontWeight: state.value.styles.fontBold ? 700 : 500,
   textShadow: 'none',
   fontFamily: fontFamilyStyle.value
@@ -416,6 +416,7 @@ body,
 .marquee-text {
   display: inline-block;
   max-width: none;
+  padding-block: 0.08em;
   white-space: nowrap;
 }
 .marquee-text--scroll {

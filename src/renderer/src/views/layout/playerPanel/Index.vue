@@ -93,10 +93,20 @@ function applyRhythmStyles(): void {
   root.style.setProperty('--rhythm-aura-scale', String(1 + amount * 0.5))
   root.style.setProperty('--rhythm-aura-opacity', String(0.62 + amount * 0.38))
   root.style.setProperty('--rhythm-cover-scale', String(1 + amount * 0.085))
+  root.style.setProperty('--rhythm-particle-scale', String(0.8 + amount * 0.55))
+  root.style.setProperty('--rhythm-particle-opacity', String(0.16 + amount * 0.52))
   root.style.setProperty('--beat-strength', String(0.35 + amount * 0.65))
+  const bpm = player.audioAnalysis.bpm
+  const beatInterval = bpm >= 40 && bpm <= 240 ? 60000 / bpm : 700
+  const beatEnergy = Math.min(
+    1,
+    Math.max(amount, player.audioAnalysis.onsetStrength * player.rhythmVisualConfig.intensity)
+  )
+  const burstDuration = Math.max(380, Math.min(1300, beatInterval * (1.12 - beatEnergy * 0.38)))
+  root.style.setProperty('--particle-burst-duration', `${Math.round(burstDuration)}ms`)
 }
 watch(
-  rhythmAmount,
+  [rhythmAmount, () => player.audioAnalysis.bpm],
   () => {
     if (!rhythmStyleFrame) rhythmStyleFrame = requestAnimationFrame(applyRhythmStyles)
   },
@@ -293,16 +303,49 @@ watch(
 onUnmounted(() => player.setAudioAnalysisPollingRate(0))
 
 /**
- * beatRing
+ * Beat particles
  */
 const beatRingRef = ref<HTMLElement>()
+const particleColors = ['#ffffff', '#7dd3fc', '#c4b5fd', '#f9a8d4', '#fde68a', '#86efac']
+function randomizeParticle(particle: HTMLElement, index: number): void {
+  const angle = (Math.PI * 2 * index) / 42 - Math.PI / 2 + (Math.random() - 0.5) * 0.38
+  const originDistance = 45 + Math.random() * 10
+  const travelDistance = 44 + Math.random() * 28
+  particle.style.setProperty('--particle-x', `${Math.cos(angle) * travelDistance}%`)
+  particle.style.setProperty('--particle-y', `${Math.sin(angle) * travelDistance}%`)
+  particle.style.setProperty('--particle-origin-x', `${Math.cos(angle) * originDistance}%`)
+  particle.style.setProperty('--particle-origin-y', `${Math.sin(angle) * originDistance}%`)
+  particle.style.setProperty('--particle-delay', `${Math.round(Math.random() * 95)}ms`)
+  particle.style.setProperty('--particle-size', `${4 + Math.round(Math.random() * 5)}px`)
+  particle.style.setProperty(
+    '--particle-color',
+    particleColors[Math.floor(Math.random() * particleColors.length)]
+  )
+}
+const beatParticles = Array.from({ length: 42 }, (_, index) => {
+  const angle = (Math.PI * 2 * index) / 18 - Math.PI / 2
+  const originDistance = 47 + (index % 2) * 4
+  const travelDistance = 52 + (index % 3) * 11
+  return {
+    originX: `${Math.cos(angle) * originDistance}%`,
+    originY: `${Math.sin(angle) * originDistance}%`,
+    x: `${Math.cos(angle) * travelDistance}%`,
+    y: `${Math.sin(angle) * travelDistance}%`,
+    delay: `${(index % 4) * 18}ms`,
+    size: `${5 + (index % 3) * 2}px`,
+    color: particleColors[index % particleColors.length]
+  }
+})
 
 function restartBeatRing(): void {
   const ring = beatRingRef.value
   if (!ring || !shouldAnimate.value) return
-  ring.classList.remove('beat-ring--pulse')
+  Array.from(ring.children).forEach((particle, index) =>
+    randomizeParticle(particle as HTMLElement, index)
+  )
+  ring.classList.remove('beat-particles--burst')
   void ring.offsetWidth
-  ring.classList.add('beat-ring--pulse')
+  ring.classList.add('beat-particles--burst')
 }
 watch(() => [player.audioAnalysis.beatSequence, shouldAnimate.value], restartBeatRing, {
   flush: 'post'
@@ -593,9 +636,28 @@ function changeLyricsOffset(event: WheelEvent): void {
               :style="coverGlowStyle"
             />
             <div class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura" />
-            <!-- TODO: change display style-->
-            <div v-if="shouldAnimate" class="cover-ring-anchor">
-              <div ref="beatRingRef" class="beat-ring" />
+            <div
+              v-if="shouldAnimate"
+              class="cover-particles-anchor"
+              :style="coverGlowStyle"
+              aria-hidden="true"
+            >
+              <div ref="beatRingRef" class="beat-particles">
+                <i
+                  v-for="(particle, index) in beatParticles"
+                  :key="index"
+                  class="beat-particle"
+                  :style="{
+                    '--particle-x': particle.x,
+                    '--particle-y': particle.y,
+                    '--particle-origin-x': particle.originX,
+                    '--particle-origin-y': particle.originY,
+                    '--particle-delay': particle.delay,
+                    '--particle-size': particle.size,
+                    '--particle-color': particle.color
+                  }"
+                />
+              </div>
             </div>
             <div
               class="cover-card relative z-10 grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
@@ -1205,10 +1267,10 @@ function changeLyricsOffset(event: WheelEvent): void {
     width: min(230px, 44vh);
   }
 }
-.cover-ring-anchor {
+.cover-particles-anchor {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: 5;
   pointer-events: none;
 }
 .player-panel-layout {
@@ -1274,30 +1336,46 @@ function changeLyricsOffset(event: WheelEvent): void {
     radial-gradient(ellipse 30% 22% at 16% 86%, rgb(180 226 255 / 8%), transparent 76%);
   box-shadow: inset 0 1px rgb(255 255 255 / 10%);
 }
-.beat-ring {
+.beat-particles {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 170%;
-  aspect-ratio: 1;
-  border: 1px solid rgb(255 255 255 / 15%);
+  inset: 0;
+  overflow: visible;
+}
+.beat-particle {
+  position: absolute;
+  top: calc(50% + var(--particle-origin-y));
+  left: calc(50% + var(--particle-origin-x));
+  width: var(--particle-size);
+  height: var(--particle-size);
   border-radius: 50%;
-  opacity: 0;
+  background: var(--particle-color);
+  opacity: var(--rhythm-particle-opacity, 0.2);
   box-shadow:
-    0 0 80px rgb(255 255 255 / 18%),
-    inset 0 0 60px rgb(255 255 255 / 10%);
+    0 0 9px color-mix(in srgb, var(--particle-color) 78%, white),
+    0 0 20px var(--particle-color);
+  transform: translate(-50%, -50%) scale(var(--rhythm-particle-scale, 0.8));
+  transition:
+    opacity 90ms ease-out,
+    transform 90ms ease-out;
 }
-.beat-ring--pulse {
-  animation: player-panel-beat 820ms cubic-bezier(0.14, 0.74, 0.24, 1) both;
+.beat-particles--burst .beat-particle {
+  animation: player-panel-particle-burst var(--particle-burst-duration, 760ms)
+    cubic-bezier(0.14, 0.74, 0.24, 1);
+  animation-delay: var(--particle-delay);
 }
-@keyframes player-panel-beat {
+@keyframes player-panel-particle-burst {
   from {
     opacity: var(--beat-strength);
-    transform: translate(-50%, -50%) scale(0.58);
+    transform: translate(-50%, -50%) scale(0.25);
+  }
+  70% {
+    opacity: calc(var(--beat-strength) * 0.7);
   }
   to {
+    top: calc(50% + var(--particle-origin-y) + var(--particle-y));
+    left: calc(50% + var(--particle-origin-x) + var(--particle-x));
     opacity: 0;
-    transform: translate(-50%, -50%) scale(1.38);
+    transform: translate(-50%, -50%) scale(1.35);
   }
 }
 @keyframes player-panel-ambient-drift {
@@ -1317,8 +1395,7 @@ function changeLyricsOffset(event: WheelEvent): void {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .beat-ring,
-  .beat-ring--pulse,
+  .beat-particles--burst .beat-particle,
   .panel-ambient--animated,
   .panel-orb--animated {
     animation: none;
