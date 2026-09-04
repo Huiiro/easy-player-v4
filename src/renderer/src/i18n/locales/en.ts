@@ -558,6 +558,16 @@ export default {
     recoverMovedFiles: 'Recover Moved Files',
     recoverMovedFilesDescription: 'Choose the new music folder to rematch missing tracks.',
     recover: 'Recover',
+    checkMissingSongs: 'Check Missing Tracks',
+    checkMissingSongsDescription:
+      'Check whether local music files remain available and remove invalid library entries.',
+    check: 'Check',
+    noMissingSongs: 'No missing tracks found',
+    removeMissingSongs: 'Remove Missing Tracks',
+    removeMissingSongsConfirm:
+      'Found {count} missing tracks. Remove these entries from the library? No local files will be deleted.',
+    remove: 'Remove',
+    missingSongsRemoved: 'Removed {count} missing tracks',
     fileOperationDone: 'Operation completed',
     fileOperationFailed: 'Operation failed',
     filesRecovered: 'Recovered {recovered} / {total} tracks',

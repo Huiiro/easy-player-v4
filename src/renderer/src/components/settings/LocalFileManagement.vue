@@ -2,13 +2,17 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import eventBus from '@/utils/eventBus'
 import { useI18n } from 'vue-i18n'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
+import { useMessage } from '@/components/ui/useMessage'
 
 const { t } = useI18n()
+const { success, error } = useMessage()
 const cacheDirectory = ref('')
 const cacheLimitGb = ref(2)
 const cacheUsed = ref(0)
-const message = ref('')
 const importProgress = ref<{ current: number; total: number } | null>(null)
+const missingSongIds = ref<number[]>([])
+const removeMissingDialogOpen = ref(false)
 let offProgress: (() => void) | undefined
 const formatBytes = (bytes: number): string =>
   bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -48,14 +52,46 @@ async function run(action: 'exportLibrary' | 'importLibrary' | 'recoverMovedSong
       : await window.api.files[action]()
   if (result.cancelled) return
   if (!result.success) {
-    message.value = t('settings.fileOperationFailed')
+    error(t('settings.fileOperationFailed'))
     return
   }
-  message.value =
+  success(
     action === 'recoverMovedSongs'
       ? t('settings.filesRecovered', result.data as { recovered: number; total: number })
       : t('settings.fileOperationDone')
+  )
   importProgress.value = null
+  eventBus.emit('scanFinished')
+  eventBus.emit('playlistsChanged')
+  eventBus.emit('tagsChanged')
+}
+async function checkMissingSongs(): Promise<void> {
+  const result = await window.api.database.command('checkMissingSongs')
+  if (!result.success) {
+    error(t('settings.fileOperationFailed'))
+    return
+  }
+  missingSongIds.value = (result.data as { songIds: number[] }).songIds
+  eventBus.emit('scanFinished')
+  if (!missingSongIds.value.length) {
+    success(t('settings.noMissingSongs'))
+    return
+  }
+  removeMissingDialogOpen.value = true
+}
+async function removeMissingSongs(): Promise<void> {
+  const result = await window.api.database.command('deleteSongs', {
+    // Vue wraps ref arrays in a Proxy, which Electron IPC cannot structured-clone.
+    songIds: [...missingSongIds.value],
+    deleteLocalFiles: false
+  })
+  if (!result.success) {
+    error(t('settings.fileOperationFailed'))
+    return
+  }
+  removeMissingDialogOpen.value = false
+  success(t('settings.missingSongsRemoved', { count: missingSongIds.value.length }))
+  missingSongIds.value = []
   eventBus.emit('scanFinished')
   eventBus.emit('playlistsChanged')
   eventBus.emit('tagsChanged')
@@ -126,6 +162,15 @@ onBeforeUnmount(() => offProgress?.())
         {{ t('settings.recover') }}
       </button>
     </div>
+    <div class="file-row">
+      <div>
+        <h3>{{ t('settings.checkMissingSongs') }}</h3>
+        <p>{{ t('settings.checkMissingSongsDescription') }}</p>
+      </div>
+      <button class="btn-hover-base text-sm" type="button" @click="checkMissingSongs">
+        {{ t('settings.check') }}
+      </button>
+    </div>
     <div v-if="importProgress" class="file-progress">
       <div class="file-progress-head">
         <span>{{ t('library.loading') }}</span>
@@ -143,8 +188,27 @@ onBeforeUnmount(() => offProgress?.())
         />
       </div>
     </div>
-    <p v-if="message" class="file-message">{{ message }}</p>
   </div>
+  <BaseDialog
+    v-model="removeMissingDialogOpen"
+    :title="t('settings.removeMissingSongs')"
+    width="max-w-sm"
+  >
+    <p class="text-sm text-text-l">
+      {{ t('settings.removeMissingSongsConfirm', { count: missingSongIds.length }) }}
+    </p>
+    <template #footer>
+      <button class="btn-hover px-3 py-1.5 text-sm" @click="removeMissingDialogOpen = false">
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        class="rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        @click="removeMissingSongs"
+      >
+        {{ t('settings.remove') }}
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <style scoped>
@@ -203,11 +267,5 @@ onBeforeUnmount(() => offProgress?.())
   border-radius: inherit;
   background: var(--color-primary);
   transition: width 160ms ease;
-}
-.file-message {
-  padding: 0.8rem 1.25rem;
-  border-top: 1px solid var(--color-border);
-  color: var(--color-primary);
-  font-size: 0.8125rem;
 }
 </style>

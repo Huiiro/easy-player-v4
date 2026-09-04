@@ -395,6 +395,23 @@ export function refreshMissingSongStatus(): void {
   }>)
     if (existsSync(row.audio)) update.run(row.id)
 }
+/** Checks local library paths and synchronizes their availability status. */
+export function checkMissingSongs(): { songIds: number[] } {
+  const db = getDatabase()
+  const localSongs = db
+    .prepare('SELECT id, audio FROM song WHERE source_id IS NULL')
+    .all() as Array<{ id: number; audio: string }>
+  const checkedSongs = localSongs.map((song) => ({ ...song, available: existsSync(song.audio) }))
+  const missingIds = checkedSongs.filter((song) => !song.available).map((song) => song.id)
+  const availableIds = checkedSongs.filter((song) => song.available).map((song) => song.id)
+
+  db.transaction(() => {
+    const update = db.prepare('UPDATE song SET song_status = ? WHERE id = ?')
+    missingIds.forEach((id) => update.run(0, id))
+    availableIds.forEach((id) => update.run(1, id))
+  })()
+  return { songIds: missingIds }
+}
 export function savePlayHistory(songId: number): void {
   const db = getDatabase()
   db.transaction(() => {

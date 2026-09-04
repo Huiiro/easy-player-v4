@@ -39,6 +39,7 @@ const handlers = {
   setSongStatus: ({ id, status }: { id: number; status: number }) =>
     library.setSongStatus(id, status),
   refreshMissingSongStatus: () => library.refreshMissingSongStatus(),
+  checkMissingSongs: () => library.checkMissingSongs(),
   savePlayHistory: ({ songId }: { songId: number }) => library.savePlayHistory(songId),
   queryRecentPlayedSongs: (params: Parameters<typeof library.queryRecentPlayedSongs>[0]) =>
     library.queryRecentPlayedSongs(params),
