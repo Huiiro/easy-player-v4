@@ -85,6 +85,9 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let trayTrack = { title: '', artist: '', isPlaying: false }
 let isQuitting = false
+let trafficLightPositionTimer: ReturnType<typeof setTimeout> | undefined
+
+const TRAFFIC_LIGHT_POSITION = { x: 16, y: 14 }
 
 function supportsWindowsMica(): boolean {
   if (process.platform !== 'win32') return false
@@ -102,7 +105,25 @@ function setWindowsMica(enabled: boolean): boolean {
 
 function setPlayerWindowControlsVisible(visible: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
-  if (process.platform === 'darwin') mainWindow.setWindowButtonVisibility(visible)
+  if (process.platform !== 'darwin') return
+
+  if (trafficLightPositionTimer) {
+    clearTimeout(trafficLightPositionTimer)
+    trafficLightPositionTimer = undefined
+  }
+
+  mainWindow.setWindowButtonVisibility(visible)
+  if (!visible) return
+
+  // AppKit can recalculate the traffic-light origin while the player panel is
+  // still finishing its leave transition. Reapply the intended position now
+  // and once more after that transition settles.
+  mainWindow.setWindowButtonPosition(TRAFFIC_LIGHT_POSITION)
+  trafficLightPositionTimer = setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    mainWindow.setWindowButtonPosition(TRAFFIC_LIGHT_POSITION)
+    trafficLightPositionTimer = undefined
+  }, 300)
 }
 
 function showMainWindow(): void {
@@ -334,7 +355,7 @@ function createWindow(): void {
     ...(process.platform === 'darwin'
       ? {
           titleBarStyle: 'hiddenInset' as const,
-          trafficLightPosition: { x: 16, y: 14 }
+          trafficLightPosition: TRAFFIC_LIGHT_POSITION
         }
       : {}),
     backgroundColor: '#111614',

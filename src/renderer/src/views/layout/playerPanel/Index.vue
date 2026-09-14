@@ -126,9 +126,13 @@ watch(
   },
   { immediate: true }
 )
-onMounted(applyRhythmStyles)
+onMounted(() => {
+  applyRhythmStyles()
+  window.addEventListener('keydown', handleKeyDown)
+})
 onUnmounted(() => {
   if (rhythmStyleFrame) cancelAnimationFrame(rhythmStyleFrame)
+  window.removeEventListener('keydown', handleKeyDown)
 })
 
 /**
@@ -137,6 +141,11 @@ onUnmounted(() => {
 const liquidUnavailable = ref(false)
 const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
 const liquidDebug = ref({ width: 0, height: 0, time: 0, flowSpeed: 0, warpStrength: 0, beat: 0 })
+const defaultLiquidColors = {
+  primary: '77 136 220',
+  secondary: '205 78 165',
+  tertiary: '73 186 165'
+}
 const useAlbumArtwork = computed(
   () => ui.playerBgType === PlayerBgType.ALBUM || ui.playerBgType === PlayerBgType.DEFAULT
 )
@@ -145,6 +154,9 @@ const useAmbientBackground = computed(
 )
 const useLiquidBackground = computed(
   () => (ui.playerBgType as PlayerBgType) === PlayerBgType.LIQUID
+)
+const liquidCoverSource = computed(() =>
+  coverColorSource.value === 'failed' ? null : coverUrl.value
 )
 const backgroundSource = computed(() => {
   if (useAlbumArtwork.value && coverUrl.value && !coverFailed.value) return coverUrl.value
@@ -159,10 +171,7 @@ watch(useLiquidBackground, () => {
  * colors
  */
 const coverColors = ref({
-  primary: '77 136 220',
-  secondary: '205 78 165',
-  tertiary: '73 186 165',
-  quaternary: '120 95 214'
+  ...defaultLiquidColors
 })
 const lyricsContrastDebug = ref({
   averageLuminance: 0,
@@ -273,13 +282,22 @@ function extractCoverColors(event: Event): void {
       })
     }
   })
+  if (useLiquidBackground.value && result.source === 'failed') {
+    resetLiquidBackground('failed')
+    return
+  }
   coverColors.value = result.palette
   useDarkLyrics.value = result.useDarkLyrics
   coverColorSource.value = result.source
   lyricsContrastDebug.value = result.result
 }
+function resetLiquidBackground(source: 'idle' | 'failed'): void {
+  coverColors.value = { ...defaultLiquidColors }
+  useDarkLyrics.value = false
+  coverColorSource.value = source
+}
 function handleLiquidCoverError(): void {
-  coverColorSource.value = 'failed'
+  resetLiquidBackground('failed')
 }
 watch(coverUrl, () => {
   coverFailed.value = false
@@ -288,9 +306,10 @@ watch(backgroundSource, (source) => {
   if (!source) useDarkLyrics.value = false
 })
 watch(
-  coverUrl,
-  (url) => {
-    if (useLiquidBackground.value && url) coverColorSource.value = 'loading'
+  [coverUrl, useLiquidBackground],
+  ([url, useLiquid]) => {
+    if (useLiquid && url) coverColorSource.value = 'loading'
+    else if (useLiquid) resetLiquidBackground('idle')
     else coverColorSource.value = 'idle'
   },
   { immediate: true }
@@ -392,6 +411,11 @@ function close(): void {
   performance.clearMarks()
   performance.clearMeasures()
   ui.showPlayer = false
+}
+function handleKeyDown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || event.isComposing) return
+  event.preventDefault()
+  close()
 }
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value
@@ -498,11 +522,11 @@ function changeLyricsOffset(event: WheelEvent): void {
       />
       <LiquidBackground
         v-if="useLiquidBackground && !liquidUnavailable"
+        :key="liquidCoverSource ? 'cover-liquid-background' : 'default-liquid-background'"
         :primary="coverColors.primary"
         :secondary="coverColors.secondary"
         :tertiary="coverColors.tertiary"
-        :quaternary="coverColors.quaternary"
-        :cover-src="coverUrl"
+        :cover-src="liquidCoverSource"
         :energy="liquidEnergy"
         :bass="liquidBass"
         :beat="liquidBeat"
@@ -568,13 +592,10 @@ function changeLyricsOffset(event: WheelEvent): void {
         {{ coverColors.secondary }}
       </span>
       <span>
-        <i :style="{ background: `rgb(${coverColors.tertiary})` }" />三色
+        <i :style="{ background: `rgb(${coverColors.tertiary})` }" />牵制色
         {{ coverColors.tertiary }}
       </span>
-      <span>
-        <i :style="{ background: `rgb(${coverColors.quaternary})` }" />四色
-        {{ coverColors.quaternary }}
-      </span>
+      <span>首尾相邻色由 Shader 实时计算</span>
       <span>RMS {{ liquidEnergy.toFixed(3) }} · Bass {{ liquidBass.toFixed(3) }}</span>
       <span>Beat {{ liquidDebug.beat.toFixed(3) }}</span>
       <span>
@@ -589,6 +610,7 @@ function changeLyricsOffset(event: WheelEvent): void {
     <!-- content -->
     <section
       class="relative z-10 size-full overflow-hidden bg-transparent"
+      :class="useLiquidBackground && 'player-panel-content--liquid'"
       :aria-label="t('playerPanel.label')"
     >
       <header
@@ -991,7 +1013,10 @@ function changeLyricsOffset(event: WheelEvent): void {
         <!-- lyrics -->
         <section
           class="panel-lyrics flex min-w-0 flex-col py-8 max-[760px]:min-h-[250px] max-[760px]:border-t max-[760px]:border-text/10 max-[760px]:py-6"
-          :class="collapsed && 'panel-lyrics--collapsed'"
+          :class="[
+            collapsed && 'panel-lyrics--collapsed',
+            useLiquidBackground && !liquidUnavailable && 'panel-lyrics--liquid'
+          ]"
           :aria-label="t('playerPanel.lyrics')"
         >
           <PlayerLyrics
@@ -1005,7 +1030,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             :auto-search-network="ui.autoSearchNetworkLyrics"
             :reload-token="lyricReloadToken"
             :layout-token="collapsed ? 1 : 0"
-            :dark-text="useDarkLyrics"
+            :dark-text="useDarkLyrics && !useLiquidBackground"
             @seek="seekTo"
           />
         </section>
@@ -1041,8 +1066,8 @@ function changeLyricsOffset(event: WheelEvent): void {
   transition: opacity 500ms ease;
 }
 .liquid-background-soften {
-  background: rgb(8 11 20 / 10%);
-  backdrop-filter: blur(16px) saturate(1.92);
+  background: rgb(8 11 20 / 48%);
+  backdrop-filter: blur(6px) brightness(0.9) saturate(1.62) contrast(1.14);
 }
 .liquid-debug {
   position: absolute;

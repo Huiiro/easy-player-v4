@@ -60,3 +60,12 @@ fix pre-wrap lyrics
 
 #### v3.0.11
 add  liquid background
+
+
+#### v3.0.13
+fix traffic light position
+update liquid background shader
+fix liquid background black screen when first open
+fix reusing liquid background when missing cover
+fix parent folders display count
+now can exit player screen with esc

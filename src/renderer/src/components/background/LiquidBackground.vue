@@ -7,7 +7,6 @@ const props = defineProps<{
   primary: string
   secondary: string
   tertiary: string
-  quaternary: string
   coverSrc: string | null
   energy: number
   bass: number
@@ -60,15 +59,28 @@ let uniforms: {
   colorA: WebGLUniformLocation | null
   colorB: WebGLUniformLocation | null
   colorC: WebGLUniformLocation | null
-  colorD: WebGLUniformLocation | null
   cover: WebGLUniformLocation | null
   coverBlurred: WebGLUniformLocation | null
   coverLoaded: WebGLUniformLocation | null
 } | null = null
 
 function colour(value: string): [number, number, number] {
-  const [r = 77, g = 136, b = 220] = value.split(/\s+/).map(Number)
-  return [r / 255, g / 255, b / 255]
+  const fallback: [number, number, number] = [77, 136, 220]
+  const hex = value.trim().match(/^#([\da-f]{3}|[\da-f]{6})$/i)
+  const values = hex
+    ? hex[1].length === 3
+      ? hex[1].split('').map((channel) => Number.parseInt(channel + channel, 16))
+      : [hex[1].slice(0, 2), hex[1].slice(2, 4), hex[1].slice(4, 6)].map((channel) =>
+          Number.parseInt(channel, 16)
+        )
+    : value.split(/\s+/).map(Number)
+  const [r, g, b] = values
+  const channels = [r, g, b].every((channel) => Number.isFinite(channel)) ? [r, g, b] : fallback
+  return channels.map((channel) => Math.max(0, Math.min(255, channel)) / 255) as [
+    number,
+    number,
+    number
+  ]
 }
 
 function loadCover(source: string | null): void {
@@ -83,30 +95,36 @@ function loadCover(source: string | null): void {
   image.crossOrigin = 'anonymous'
   image.onload = () => {
     if (!gl || !coverTexture || !blurredCoverTexture || token !== coverLoadToken) return
-    gl.bindTexture(gl.TEXTURE_2D, coverTexture)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
-    const size = 128
-    const overscan = 16
-    const c = document.createElement('canvas')
-    c.width = size
-    c.height = size
-
-    const ctx = c.getContext('2d')
-    if (ctx) {
-      ctx.fillStyle = '#10141c'
-      ctx.fillRect(0, 0, size, size)
-      ctx.filter = 'blur(15px) saturate(1.25)'
-      ctx.drawImage(image, -overscan, -overscan, size + overscan * 2, size + overscan * 2)
-      ctx.filter = 'none'
-      gl.bindTexture(gl.TEXTURE_2D, blurredCoverTexture)
+    try {
+      gl.bindTexture(gl.TEXTURE_2D, coverTexture)
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
+      const size = 128
+      const overscan = 16
+      const c = document.createElement('canvas')
+      c.width = size
+      c.height = size
+
+      const ctx = c.getContext('2d')
+      if (ctx) {
+        ctx.fillStyle = '#10141c'
+        ctx.fillRect(0, 0, size, size)
+        ctx.filter = 'blur(15px) saturate(1.25)'
+        ctx.drawImage(image, -overscan, -overscan, size + overscan * 2, size + overscan * 2)
+        ctx.filter = 'none'
+        gl.bindTexture(gl.TEXTURE_2D, blurredCoverTexture)
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, c)
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
+      }
+      coverFade = 0
+      coverTargetLoaded = true
+    } catch (error) {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
+      coverTargetLoaded = false
+      console.warn('[FluidBackground] Unable to upload cover texture', error)
     }
-    coverFade = 0
-    coverTargetLoaded = true
   }
   image.onerror = () => {
     if (token === coverLoadToken) coverTargetLoaded = false
@@ -168,7 +186,6 @@ function render(now: number): void {
   gl.uniform3fv(uniforms.colorA!, colour(props.primary))
   gl.uniform3fv(uniforms.colorB!, colour(props.secondary))
   gl.uniform3fv(uniforms.colorC!, colour(props.tertiary))
-  gl.uniform3fv(uniforms.colorD!, colour(props.quaternary))
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, coverTexture)
   gl.uniform1i(uniforms.cover!, 0)
@@ -183,17 +200,24 @@ function render(now: number): void {
       width: drawingWidth || canvas.value.width,
       height: drawingHeight || canvas.value.height,
       time: (now - startedAt) / 1000,
-      flowSpeed: 0.78 + smoothedEnergy * 0.12,
-      warpStrength: 0.055 + smoothedEnergy * 0.035 + smoothedBass * 0.025,
+      flowSpeed: 0.12 + smoothedEnergy * 0.018,
+      warpStrength: 1 + smoothedEnergy * 0.055 + smoothedBass * 0.085 + beatEnvelope * 0.055,
       beat: beatEnvelope
     })
   }
 }
 
 function start(): void {
-  if (!frame && !document.hidden && props.active && !props.reducedMotion) {
+  if (!frame && !document.hidden) {
     frame = requestAnimationFrame(render)
   }
+}
+
+function handleContextLost(event: Event): void {
+  event.preventDefault()
+  if (frame) cancelAnimationFrame(frame)
+  frame = 0
+  emit('unavailable')
 }
 
 function handleVisibility(): void {
@@ -267,7 +291,6 @@ onMounted(() => {
     colorA: getUniform('u_color_a'),
     colorB: getUniform('u_color_b'),
     colorC: getUniform('u_color_c'),
-    colorD: getUniform('u_color_d'),
     cover: getUniform('u_cover'),
     coverBlurred: getUniform('u_cover_blurred'),
     coverLoaded: getUniform('u_cover_loaded')
@@ -314,6 +337,7 @@ onMounted(() => {
   loadCover(props.coverSrc)
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(target)
+  target.addEventListener('webglcontextlost', handleContextLost)
   document.addEventListener('visibilitychange', handleVisibility)
   start()
 })
@@ -324,6 +348,7 @@ watch(
     if (!props.active || props.reducedMotion) {
       if (frame) cancelAnimationFrame(frame)
       frame = 0
+      start()
       return
     }
     lastAnimationAt = 0
@@ -332,11 +357,13 @@ watch(
 )
 
 watch(() => props.coverSrc, loadCover)
+watch(() => [props.primary, props.secondary, props.tertiary, props.coverSrc], start)
 
 onBeforeUnmount(() => {
   if (frame) cancelAnimationFrame(frame)
   if (resizeTimer) window.clearTimeout(resizeTimer)
   resizeObserver?.disconnect()
+  canvas.value?.removeEventListener('webglcontextlost', handleContextLost)
   document.removeEventListener('visibilitychange', handleVisibility)
   if (gl) {
     if (coverTexture) gl.deleteTexture(coverTexture)
@@ -354,7 +381,7 @@ onBeforeUnmount(() => {
 <template>
   <canvas
     ref="canvas"
-    class="absolute inset-0 size-full pointer-events-none blur-xs brightness-80 saturate-90"
+    class="absolute inset-0 size-full pointer-events-none brightness-80 saturate-110"
     aria-hidden="true"
   />
 </template>

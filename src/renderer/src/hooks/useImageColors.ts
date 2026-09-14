@@ -2,7 +2,6 @@ interface Palette {
   primary: string
   secondary: string
   tertiary: string
-  quaternary: string
 }
 
 interface RgbColor {
@@ -92,7 +91,7 @@ export class CoverAnalyzer {
 
     try {
       const pixelData = this.sampleImageData(image)
-      const palette = this.extractVibrantColors(pixelData)
+      const palette = this.extractVibrantColors(pixelData, this.SAMPLE_SIZE, useLiquidBackground)
 
       let useDarkLyrics = false
       let result: LyricsAnalysis = null
@@ -207,11 +206,15 @@ export class CoverAnalyzer {
   /**
    * 提取鲜明颜色
    */
-  private static extractVibrantColors(data: Uint8ClampedArray, size = this.SAMPLE_SIZE): Palette {
+  private static extractVibrantColors(
+    data: Uint8ClampedArray,
+    size = this.SAMPLE_SIZE,
+    preserveVibrancy = false
+  ): Palette {
     const fallbackPrimary = this.averageColor(data, 0, size / 2, size)
     const fallbackSecondary = this.averageColor(data, size / 2, size, size)
     const swatches = new Map<string, { red: number; green: number; blue: number; weight: number }>()
-    for (let index = 0; index < data.length; index += 16) {
+    for (let index = 0; index < data.length; index += 4) {
       const red = data[index]
       const green = data[index + 1]
       const blue = data[index + 2]
@@ -222,7 +225,9 @@ export class CoverAnalyzer {
       const saturation = maximum - minimum
       const key = `${Math.floor(red / 32)}-${Math.floor(green / 32)}-${Math.floor(blue / 32)}`
       const swatch = swatches.get(key) ?? { red: 0, green: 0, blue: 0, weight: 0 }
-      const weight = 0.18 + (saturation / 255) * 1.8 + (maximum / 255) * 0.25
+      const weight = preserveVibrancy
+        ? 0.42 + (saturation / 255) * 1.05 + (maximum / 255) * 0.22
+        : 0.18 + (saturation / 255) * 1.8 + (maximum / 255) * 0.25
       swatch.red += red * weight
       swatch.green += green * weight
       swatch.blue += blue * weight
@@ -238,7 +243,7 @@ export class CoverAnalyzer {
       }))
     const chosen = candidates.reduce<typeof candidates>((selected, candidate) => {
       if (
-        selected.length < 4 &&
+        selected.length < 3 &&
         selected.every(
           (existing) =>
             Math.hypot(
@@ -251,24 +256,19 @@ export class CoverAnalyzer {
         selected.push(candidate)
       return selected
     }, [])
-    const primary = this.smartSoftenColor(chosen[0])
+    const primary = preserveVibrancy ? chosen[0] : this.smartSoftenColor(chosen[0])
     if (!primary) return this.createPalette(fallbackPrimary, fallbackSecondary)
-    const secondary = this.smartSoftenColor(chosen[1])
+    const secondary = preserveVibrancy ? chosen[1] : this.smartSoftenColor(chosen[1])
     // console.log(`primary ${JSON.stringify(chosen[0])} : ${JSON.stringify(primary)}`)
     // console.log(`secondary ${JSON.stringify(chosen[1])} : ${JSON.stringify(secondary)}`)
     const palette = this.createPalette(
       `${primary.red} ${primary.green} ${primary.blue}`,
       secondary ? `${secondary.red} ${secondary.green} ${secondary.blue}` : fallbackSecondary
     )
-    return {
-      ...palette,
-      tertiary: chosen[2]
-        ? `${chosen[2].red} ${chosen[2].green} ${chosen[2].blue}`
-        : palette.tertiary,
-      quaternary: chosen[3]
-        ? `${chosen[3].red} ${chosen[3].green} ${chosen[3].blue}`
-        : palette.quaternary
-    }
+    const tertiary = preserveVibrancy ? chosen[2] : this.smartSoftenColor(chosen[2])
+    return tertiary
+      ? { ...palette, tertiary: `${tertiary.red} ${tertiary.green} ${tertiary.blue}` }
+      : palette
   }
 
   /**
@@ -413,23 +413,17 @@ export class CoverAnalyzer {
    * 创建调色板
    */
   private static createPalette(primary: string, secondary: string): Palette {
-    const first = primary.split(/\s+/).map(Number)
-    const second = secondary.split(/\s+/).map(Number)
-    const colour = (values: number[]): string =>
-      values.map((value) => Math.round(Math.max(0, Math.min(255, value)))).join(' ')
+    const [red, green, blue] = secondary.split(/\s+/).map(Number)
+    const [hue, saturation, lightness] = this.rgbToHsl(red, green, blue)
+    const tertiary = this.hslToRgb(
+      (hue + (hue < 0.5 ? 0.085 : -0.085) + 1) % 1,
+      Math.min(0.82, saturation * 0.9 + 0.08),
+      Math.max(0.22, Math.min(0.76, lightness))
+    ).join(' ')
     return {
       primary,
       secondary,
-      tertiary: colour([
-        first[0] * 0.58 + second[0] * 0.42 + 16,
-        first[1] * 0.58 + second[1] * 0.42 + 28,
-        first[2] * 0.58 + second[2] * 0.42 + 8
-      ]),
-      quaternary: colour([
-        second[0] * 0.68 + first[0] * 0.32 + 28,
-        second[1] * 0.68 + first[1] * 0.32 + 4,
-        second[2] * 0.68 + first[2] * 0.32 + 34
-      ])
+      tertiary
     }
   }
 
@@ -466,10 +460,9 @@ export class CoverAnalyzer {
   private static fallbackResult(): AnalysisResult {
     return {
       palette: {
-        primary: '#666666',
-        secondary: '#888888',
-        quaternary: '#666666',
-        tertiary: '#888888'
+        primary: '102 102 102',
+        secondary: '136 136 136',
+        tertiary: '112 126 151'
       },
       useDarkLyrics: false,
       source: 'failed'

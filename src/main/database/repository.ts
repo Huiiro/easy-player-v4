@@ -250,10 +250,21 @@ export function getSongsByArtist(artist: string): Song[] {
 export function listLocalFolders(): LibraryFolder[] {
   return getDatabase()
     .prepare(
-      `SELECT f.id, f.pid, f.name, f.full_path AS fullPath, f.is_root_path AS isRootPath,
+      `WITH RECURSIVE folder_descendants(folder_id, descendant_id) AS (
+        SELECT id, id
+        FROM folder
+        WHERE full_path NOT LIKE 'remote://%'
+        UNION ALL
+        SELECT fd.folder_id, child.id
+        FROM folder_descendants fd
+        JOIN folder child ON child.pid = fd.descendant_id
+        WHERE child.full_path NOT LIKE 'remote://%'
+       )
+       SELECT f.id, f.pid, f.name, f.full_path AS fullPath, f.is_root_path AS isRootPath,
         COUNT(s.id) AS songCount
        FROM folder f
-       LEFT JOIN song s ON s.folder_id = f.id AND s.source_id IS NULL
+       LEFT JOIN folder_descendants fd ON fd.folder_id = f.id
+       LEFT JOIN song s ON s.folder_id = fd.descendant_id AND s.source_id IS NULL
        WHERE f.full_path NOT LIKE 'remote://%'
        GROUP BY f.id
        ORDER BY f.is_root_path DESC, f.name COLLATE NOCASE`
