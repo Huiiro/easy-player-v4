@@ -114,6 +114,12 @@ const desktopLyricsFontOptions = computed(() => [
   { label: t('settings.desktopLyricsFontInherit'), value: '' },
   ...fontOptions.value.filter((opt) => opt.value !== '')
 ])
+const desktopLyricsPreviewFontFamily = computed(() =>
+  ui.resolveFontStack(ui.desktopLyricsStyles.fontFamily || ui.customFontFamily)
+)
+const desktopLyricsPreviewFontSize = computed(() =>
+  Math.max(13, Math.round(ui.desktopLyricsStyles.fontSize * 0.55))
+)
 function navigateTo(sectionId: string): void {
   activeSection.value = sectionId
   const container = settingsScroller.value
@@ -629,7 +635,8 @@ onBeforeUnmount(() => {
                 :style="{
                   '--desktop-active': ui.desktopLyricsStyles.activeColor,
                   '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
-                  '--desktop-size': `${Math.round(ui.desktopLyricsStyles.fontSize * 0.55)}px`
+                  '--desktop-size': `${desktopLyricsPreviewFontSize}px`,
+                  fontFamily: desktopLyricsPreviewFontFamily
                 }"
               >
                 <strong
@@ -642,10 +649,13 @@ onBeforeUnmount(() => {
                   :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
                   >{{ t('settings.desktopLyricsPreviewLine') }}</strong
                 >
-                <span v-if="ui.desktopLyricsStyles.showTranslation">
+                <span
+                  v-if="ui.desktopLyricsStyles.showTranslation"
+                  :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+                >
                   {{ t('settings.desktopLyricsPreviewTranslation') }}
                 </span>
-                <span>
+                <span v-else :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }">
                   {{ t('settings.desktopLyricsPreviewNext') }}
                 </span>
               </div>
@@ -1134,9 +1144,10 @@ onBeforeUnmount(() => {
 .desktop-lyrics-preview strong {
   color: var(--desktop-active);
   font-size: var(--desktop-size);
+  line-height: 1.3;
 }
 .desktop-lyrics-preview--glow {
-  text-shadow: 0 0 15px var(--desktop-active);
+  text-shadow: 0 0 8px var(--desktop-active);
 }
 .desktop-lyrics-preview--sweep {
   color: transparent;
@@ -1146,7 +1157,8 @@ onBeforeUnmount(() => {
 }
 .desktop-lyrics-preview span {
   color: var(--desktop-inactive);
-  font-size: 0.8125rem;
+  font-size: var(--desktop-size);
+  line-height: 1.3;
 }
 .background-row {
   border-bottom: 1px solid var(--color-border);

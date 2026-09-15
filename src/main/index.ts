@@ -80,6 +80,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow: BrowserWindow | null = null
 let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
+let desktopLyricsBoundsTimer: ReturnType<typeof setTimeout> | undefined
 let audioEngine: AudioEngineManager | null = null
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
@@ -137,6 +138,7 @@ function quitApplication(): void {
   isQuitting = true
   audioEngine?.stop()
   audioEngine?.flushDspSettings()
+  saveDesktopLyricsWindowState()
   globalShortcut.unregisterAll()
   tray?.destroy()
   tray = null
@@ -247,6 +249,16 @@ interface WindowState {
   maximized: boolean
 }
 
+interface DesktopLyricsWindowState {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+const DESKTOP_LYRICS_MIN_FONT_SIZE = 24
+const DESKTOP_LYRICS_MIN_HEIGHT = Math.ceil(DESKTOP_LYRICS_MIN_FONT_SIZE * 2.6 + 74.4)
+
 const defaultWindowState: WindowState = { x: 80, y: 80, width: 1280, height: 780, maximized: false }
 
 function loadWindowState(): WindowState {
@@ -280,6 +292,63 @@ function loadWindowState(): WindowState {
 function saveWindowState(window: BrowserWindow): void {
   const bounds = window.isMaximized() ? window.getNormalBounds() : window.getBounds()
   setAppSetting('window.main', { ...bounds, maximized: window.isMaximized() })
+}
+
+function defaultDesktopLyricsWindowState(): DesktopLyricsWindowState {
+  const bounds = screen.getPrimaryDisplay().workArea
+  const width = 760
+  const height = 170
+  return {
+    x: Math.round(bounds.x + (bounds.width - width) / 2),
+    y: Math.max(bounds.y, bounds.y + bounds.height - 220),
+    width,
+    height
+  }
+}
+
+function loadDesktopLyricsWindowState(): DesktopLyricsWindowState {
+  const fallback = defaultDesktopLyricsWindowState()
+  const saved = getAppSetting('window.desktop-lyrics')
+  if (!saved || typeof saved !== 'object') return fallback
+
+  const state = saved as Partial<DesktopLyricsWindowState>
+  if (
+    !Number.isFinite(state.x) ||
+    !Number.isFinite(state.y) ||
+    !Number.isFinite(state.width) ||
+    !Number.isFinite(state.height)
+  )
+    return fallback
+
+  const restored = {
+    x: Math.round(state.x as number),
+    y: Math.round(state.y as number),
+    width: Math.max(420, Math.round(state.width as number)),
+    height: Math.max(DESKTOP_LYRICS_MIN_HEIGHT, Math.min(360, Math.round(state.height as number)))
+  }
+  const visible = screen.getAllDisplays().some((display) => {
+    const bounds = display.workArea
+    return (
+      restored.x + restored.width > bounds.x &&
+      restored.x < bounds.x + bounds.width &&
+      restored.y + restored.height > bounds.y &&
+      restored.y < bounds.y + bounds.height
+    )
+  })
+  return visible ? restored : fallback
+}
+
+function saveDesktopLyricsWindowState(): void {
+  if (!desktopLyricsWindow || desktopLyricsWindow.isDestroyed()) return
+  setAppSetting('window.desktop-lyrics', desktopLyricsWindow.getBounds())
+}
+
+function scheduleDesktopLyricsWindowStateSave(): void {
+  if (desktopLyricsBoundsTimer) clearTimeout(desktopLyricsBoundsTimer)
+  desktopLyricsBoundsTimer = setTimeout(() => {
+    saveDesktopLyricsWindowState()
+    desktopLyricsBoundsTimer = undefined
+  }, 200)
 }
 
 function registerMediaProtocol(): void {
@@ -483,14 +552,11 @@ function createMiniPlayerWindow(): BrowserWindow {
 
 function createDesktopLyricsWindow(): BrowserWindow {
   if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) return desktopLyricsWindow
-  const display = screen.getPrimaryDisplay().workArea
+  const savedBounds = loadDesktopLyricsWindowState()
   desktopLyricsWindow = new BrowserWindow({
-    width: 760,
-    height: 170,
-    x: Math.round(display.x + (display.width - 760) / 2),
-    y: Math.max(display.y, display.y + display.height - 220),
+    ...savedBounds,
     minWidth: 420,
-    minHeight: 110,
+    minHeight: DESKTOP_LYRICS_MIN_HEIGHT,
     maxHeight: 360,
     show: false,
     frame: false,
@@ -513,6 +579,14 @@ function createDesktopLyricsWindow(): BrowserWindow {
   desktopLyricsWindow.setAlwaysOnTop(true, 'screen-saver')
   desktopLyricsWindow.setIgnoreMouseEvents(true, { forward: true })
   desktopLyricsWindow.on('ready-to-show', () => desktopLyricsWindow?.showInactive())
+  desktopLyricsWindow.on('move', scheduleDesktopLyricsWindowStateSave)
+  desktopLyricsWindow.on('close', () => {
+    if (desktopLyricsBoundsTimer) {
+      clearTimeout(desktopLyricsBoundsTimer)
+      desktopLyricsBoundsTimer = undefined
+    }
+    saveDesktopLyricsWindowState()
+  })
   desktopLyricsWindow.on('closed', () => {
     desktopLyricsWindow = null
     mainWindow?.webContents.send('desktop-lyrics:closed')
@@ -520,6 +594,18 @@ function createDesktopLyricsWindow(): BrowserWindow {
   desktopLyricsWindow.on('resize', () => {
     const bounds = desktopLyricsWindow?.getBounds()
     if (bounds) desktopLyricsWindow?.webContents.send('desktop-lyrics:bounds', bounds)
+    scheduleDesktopLyricsWindowStateSave()
+  })
+  // `resize` fires continuously while the user is dragging. Syncing the font
+  // setting on every frame makes the settings update resize the native window
+  // in the opposite direction. `resized` fires once after the gesture ends.
+  desktopLyricsWindow.on('resized', () => {
+    const bounds = desktopLyricsWindow?.getBounds()
+    if (bounds)
+      desktopLyricsWindow?.webContents.send('desktop-lyrics:bounds', {
+        ...bounds,
+        syncFontSize: true
+      })
   })
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     void desktopLyricsWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/lyric`)
@@ -790,6 +876,13 @@ app.whenReady().then(() => {
   ipcMain.on('desktop-lyrics:update', (_event, data: unknown) =>
     desktopLyricsWindow?.webContents.send('desktop-lyrics:update', data)
   )
+  ipcMain.on('desktop-lyrics:sync-font-size', (_event, fontSize: unknown) => {
+    if (typeof fontSize !== 'number' || !Number.isFinite(fontSize)) return
+    mainWindow?.webContents.send(
+      'desktop-lyrics:font-size-changed',
+      Math.max(24, Math.min(64, Math.round(fontSize)))
+    )
+  })
   ipcMain.on('desktop-lyrics:action', (_event, action: 'previous' | 'toggle' | 'next') =>
     mainWindow?.webContents.send('desktop-lyrics:action', action)
   )
@@ -797,18 +890,31 @@ app.whenReady().then(() => {
     if (!desktopLyricsWindow) return
     desktopLyricsWindow.setIgnoreMouseEvents(locked === true, { forward: true })
   })
-  ipcMain.on('desktop-lyrics:resize-for-font', (_event, fontSize: unknown) => {
-    if (!desktopLyricsWindow || typeof fontSize !== 'number') return
-    const bounds = desktopLyricsWindow.getBounds()
-    const width = Math.max(420, Math.min(1120, Math.round(760 + (fontSize - 34) * 11)))
-    const height = Math.max(110, Math.min(360, Math.round(fontSize * 3.75 + 34)))
-    desktopLyricsWindow.setBounds({
-      x: Math.round(bounds.x - (width - bounds.width) / 2),
-      y: bounds.y,
-      width,
-      height
-    })
-  })
+  ipcMain.on(
+    'desktop-lyrics:resize-for-font',
+    (_event, fontSize: unknown, preserveSavedBounds: unknown) => {
+      if (!desktopLyricsWindow || typeof fontSize !== 'number') return
+      if (preserveSavedBounds === true && getAppSetting('window.desktop-lyrics')) {
+        desktopLyricsWindow.webContents.send('desktop-lyrics:bounds', {
+          ...desktopLyricsWindow.getBounds(),
+          syncFontSize: true
+        })
+        return
+      }
+      const bounds = desktopLyricsWindow.getBounds()
+      const width = Math.max(420, Math.min(1120, Math.round(760 + (fontSize - 34) * 11)))
+      const height = Math.max(
+        DESKTOP_LYRICS_MIN_HEIGHT,
+        Math.min(360, Math.ceil(Math.max(fontSize * 3.75 + 34, fontSize * 2.6 + 74.4)))
+      )
+      desktopLyricsWindow.setBounds({
+        x: Math.round(bounds.x - (width - bounds.width) / 2),
+        y: bounds.y,
+        width,
+        height
+      })
+    }
+  )
 
   createWindow()
 

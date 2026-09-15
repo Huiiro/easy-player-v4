@@ -63,7 +63,7 @@ function publish(): void {
     isPlaying: player.isPlaying,
     styles: {
       ...ui.desktopLyricsStyles,
-      fontFamily: ui.desktopLyricsStyles.fontFamily || ui.customFontFamily
+      fontFamily: ui.resolveFontStack(ui.desktopLyricsStyles.fontFamily || ui.customFontFamily)
     }
   })
 }
@@ -88,6 +88,11 @@ const cleanups: Array<() => void> = []
 onMounted(() => {
   cleanups.push(window.api.desktopLyrics.onAction(handleAction))
   cleanups.push(window.api.desktopLyrics.onRequestState(publish))
+  cleanups.push(
+    window.api.desktopLyrics.onFontSizeChanged((fontSize) => {
+      if (fontSize !== ui.desktopLyricsStyles.fontSize) ui.desktopLyricsStyles.fontSize = fontSize
+    })
+  )
   cleanups.push(
     window.api.desktopLyrics.onClosed(() => {
       ui.useDesktopLyrics = false

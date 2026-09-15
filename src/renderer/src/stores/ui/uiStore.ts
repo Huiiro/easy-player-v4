@@ -147,14 +147,14 @@ export const useUIStore = defineStore(
       'Source Han Sans SC': '"Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", sans-serif',
       'Noto Sans SC': '"Noto Sans SC", "Microsoft YaHei", "Segoe UI", sans-serif'
     }
-    const fontStack = computed(() => {
-      const family = customFontFamily.value
+    function resolveFontStack(family: string): string {
       if (!family) return 'inherit'
       return (
         presetFontStacks[family] ||
         `"${family}", Inter, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
       )
-    })
+    }
+    const fontStack = computed(() => resolveFontStack(customFontFamily.value))
     function normalizeLyricsFontPadding(value: number): number {
       return Math.max(3, Math.min(78, Math.round(value / 3) * 3))
     }
@@ -574,6 +574,7 @@ export const useUIStore = defineStore(
       musicSourceId,
       useDesktopLyrics,
       desktopLyricsStyles,
+      resolveFontStack,
       useGlobalShortcutKeys,
       shortcutKeys,
       globalShortcutKeys,

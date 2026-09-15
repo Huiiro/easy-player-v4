@@ -320,7 +320,9 @@ const desktopLyricsAPI = {
   action: (action: 'previous' | 'toggle' | 'next') =>
     ipcRenderer.send('desktop-lyrics:action', action),
   setLocked: (locked: boolean) => ipcRenderer.send('desktop-lyrics:set-locked', locked),
-  resizeForFont: (fontSize: number) => ipcRenderer.send('desktop-lyrics:resize-for-font', fontSize),
+  syncFontSize: (fontSize: number) => ipcRenderer.send('desktop-lyrics:sync-font-size', fontSize),
+  resizeForFont: (fontSize: number, preserveSavedBounds = false) =>
+    ipcRenderer.send('desktop-lyrics:resize-for-font', fontSize, preserveSavedBounds),
   onUpdate: (callback: (data: unknown) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown): void => callback(data)
     ipcRenderer.on('desktop-lyrics:update', handler)
@@ -344,10 +346,18 @@ const desktopLyricsAPI = {
     ipcRenderer.on('desktop-lyrics:closed', handler)
     return () => ipcRenderer.removeListener('desktop-lyrics:closed', handler)
   },
-  onBounds: (callback: (bounds: { width: number; height: number }) => void): (() => void) => {
+  onFontSizeChanged: (callback: (fontSize: number) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, fontSize: number): void =>
+      callback(fontSize)
+    ipcRenderer.on('desktop-lyrics:font-size-changed', handler)
+    return () => ipcRenderer.removeListener('desktop-lyrics:font-size-changed', handler)
+  },
+  onBounds: (
+    callback: (bounds: { width: number; height: number; syncFontSize?: boolean }) => void
+  ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
-      bounds: { width: number; height: number }
+      bounds: { width: number; height: number; syncFontSize?: boolean }
     ): void => callback(bounds)
     ipcRenderer.on('desktop-lyrics:bounds', handler)
     return () => ipcRenderer.removeListener('desktop-lyrics:bounds', handler)

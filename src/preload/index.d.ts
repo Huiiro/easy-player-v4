@@ -404,8 +404,6 @@ declare global {
         ready(): void
         update(data: unknown): void
         action(action: 'previous' | 'toggle' | 'next'): void
-        setLocked(locked: boolean): void
-        resizeForFont(fontSize: number): void
         onUpdate(callback: (data: unknown) => void): () => void
         onAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
         onRequestState(callback: () => void): () => void
@@ -416,11 +414,17 @@ declare global {
         ready(): void
         update(data: unknown): void
         action(action: 'previous' | 'toggle' | 'next'): void
+        setLocked(locked: boolean): void
+        syncFontSize(fontSize: number): void
+        resizeForFont(fontSize: number, preserveSavedBounds?: boolean): void
         onUpdate(callback: (data: unknown) => void): () => void
         onAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
         onRequestState(callback: () => void): () => void
         onClosed(callback: () => void): () => void
-        onBounds(callback: (bounds: { width: number; height: number }) => void): () => void
+        onFontSizeChanged(callback: (fontSize: number) => void): () => void
+        onBounds(
+          callback: (bounds: { width: number; height: number; syncFontSize?: boolean }) => void
+        ): () => void
       }
       remoteSource: {
         test(config: {

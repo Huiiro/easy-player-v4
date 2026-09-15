@@ -43,6 +43,8 @@ const displayedSecond = ref('')
 let previousCurrent = ''
 let previousSongId: number | undefined
 let previousRevision: number | undefined
+let hasReceivedState = false
+let lastReportedFontSize: number | undefined
 let replaceFirst = true
 const activeSlot = ref<'first' | 'second'>('first')
 const animatedSweepProgress = ref(0)
@@ -70,26 +72,19 @@ let lockButtonCapturesMouse = false
 const backgroundVisible = computed(
   () => !locked.value && (hovering.value || !state.value.styles.autoHideBackground)
 )
-const lyricFontSize = computed(() => {
-  const configuredSize = state.value.styles.fontSize
-  // Must match the native auto-size formula below. Scaling against a fixed
-  // 170px baseline caused a larger window (created for a larger font) to
-  // enlarge that font a second time and clip both lyric rows.
-  const expectedWindowHeight = configuredSize * 3.75 + 34
-  const resizedSize = configuredSize * (windowHeight.value / expectedWindowHeight)
-
+function fontSizeForWindowHeight(height: number): number {
+  const resizedSize = (height - 34) / 3.75
   // 24px vertical padding + the 26.4px toolbar / 4px margin + lyric gap and
   // an additional glow-safe buffer. Two equal lyric rows must always fit.
-  const availableLyricsHeight = Math.max(0, windowHeight.value - 24 - 30.4 - 4 - 16)
+  const availableLyricsHeight = Math.max(0, height - 24 - 30.4 - 4 - 16)
   const maxFittingSize = availableLyricsHeight / (2 * 1.3)
-  return Math.max(1, Math.round(Math.min(resizedSize, maxFittingSize)))
-})
+  return Math.max(24, Math.min(64, Math.round(Math.min(resizedSize, maxFittingSize))))
+}
+const lyricFontSize = computed(() => fontSizeForWindowHeight(windowHeight.value))
 const fontFamilyStyle = computed(() => {
   const family = state.value.styles.fontFamily
   if (!family) return undefined
-  return family === 'inherit'
-    ? 'inherit'
-    : `"${family}", Inter, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif`
+  return family
 })
 const currentStyle = computed(() => ({
   fontSize: `${lyricFontSize.value}px`,
@@ -230,6 +225,8 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   const fontSizeChanged =
     typeof next.styles?.fontSize === 'number' &&
     next.styles.fontSize !== previousState.styles.fontSize
+  const fontSizeCameFromWindow =
+    typeof next.styles?.fontSize === 'number' && next.styles.fontSize === lastReportedFontSize
   // Playback progress arrives frequently while sweep mode is active. Measuring
   // scroll widths forces layout, so reserve that work for text/metric changes
   // rather than every gradient-progress update.
@@ -280,11 +277,25 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   previousCurrent = state.value.current
   previousSongId = state.value.songId
   previousRevision = state.value.revision
-  if (fontSizeChanged) window.api.desktopLyrics.resizeForFont(state.value.styles.fontSize)
+  // On the first update, keep restored bounds when they exist; a brand-new
+  // window can still auto-size for a non-default persisted font. Later font
+  // changes resize the window and are saved normally.
+  if (!hasReceivedState) window.api.desktopLyrics.resizeForFont(state.value.styles.fontSize, true)
+  else if (fontSizeChanged && !fontSizeCameFromWindow)
+    window.api.desktopLyrics.resizeForFont(state.value.styles.fontSize)
+  if (fontSizeCameFromWindow) lastReportedFontSize = undefined
+  hasReceivedState = true
   if (needsOverflowCheck) void checkOverflow()
 })
 const removeBounds = window.api.desktopLyrics.onBounds((bounds) => {
   windowHeight.value = bounds.height
+  if (bounds.syncFontSize) {
+    const fontSize = fontSizeForWindowHeight(bounds.height)
+    if (fontSize !== state.value.styles.fontSize) {
+      lastReportedFontSize = fontSize
+      window.api.desktopLyrics.syncFontSize(fontSize)
+    }
+  }
   void checkOverflow()
 })
 const handleResize = (): void => {
