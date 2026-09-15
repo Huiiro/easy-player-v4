@@ -192,6 +192,21 @@
 }
 
 /* Built-in backgrounds remain expressive, while these tokens keep content readable. */
+:root[data-system-theme='blackhole'] {
+  --color-bg: rgb(10 10 18);
+  --color-bg-l: rgb(23 21 33);
+  --color-bg-l2: rgb(33 28 43);
+  --color-bg-d: rgb(5 5 11);
+  --color-border: rgb(193 157 118 / 0.4);
+  --color-border-l: rgb(236 197 152 / 0.6);
+  --color-hover: rgb(241 183 116 / 0.1);
+  --color-hover-bg: rgb(202 149 92 / 0.18);
+  --color-icon: rgb(244 225 203);
+  --color-icon-l: rgb(183 164 151);
+  --scrollbar-thumb: rgb(183 140 98 / 0.45);
+  --scrollbar-thumb-hover: rgb(236 190 135 / 0.68);
+}
+
 :root[data-system-theme='aurora'] {
   /*--color-text: rgb(239 255 252);*/
   /*--color-text-l: rgb(185 224 217);*/

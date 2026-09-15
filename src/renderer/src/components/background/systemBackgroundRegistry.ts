@@ -1,11 +1,13 @@
 import type { Component } from 'vue'
 import AuroraBackground from './themes/AuroraBackground.vue'
+import BlackHoleBackground from './themes/BlackHoleBackground.vue'
 import ForestBackground from './themes/ForestBackground.vue'
 import MatrixBackground from './themes/MatrixBackground.vue'
 import OceanBackground from './themes/OceanBackground.vue'
 import SunsetBackground from './themes/SunsetBackground.vue'
 
-export type SystemBackground = 'none' | 'aurora' | 'ocean' | 'sunset' | 'forest' | 'matrix'
+export type SystemBackground =
+  'none' | 'aurora' | 'ocean' | 'sunset' | 'forest' | 'matrix' | 'blackhole'
 
 export interface SystemBackgroundTheme {
   id: SystemBackground
@@ -77,6 +79,16 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
     footerBackground: 'rgb(4 28 17 / 0.9)',
     chromeBorder: 'rgb(103 255 169 / 0.28)',
     component: MatrixBackground
+  },
+  {
+    id: 'blackhole',
+    labelKey: 'settings.systemBackgroundBlackHole',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.78 0.13 65)',
+    headerBackground: 'rgb(12 11 19 / 0.86)',
+    footerBackground: 'rgb(18 14 22 / 0.88)',
+    chromeBorder: 'rgb(241 183 116 / 0.26)',
+    component: BlackHoleBackground
   }
 ]
 

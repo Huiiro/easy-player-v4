@@ -1061,6 +1061,16 @@ onBeforeUnmount(() => {
     linear-gradient(90deg, rgb(104 255 168 / 0.16) 1px, transparent 1px), #06150e;
   background-size: 9px 9px;
 }
+.system-background-preview--blackhole .preview-window {
+  background:
+    radial-gradient(circle at 58% 48%, #04040a 0 14%, transparent 16%),
+    radial-gradient(ellipse at 58% 52%, transparent 20%, #ffd6a0 23%, #b77347 27%, transparent 37%),
+    radial-gradient(circle at 58% 48%, transparent 19%, #e6ab76 22%, transparent 31%), #090914;
+}
+.system-background-preview--blackhole i,
+.system-background-preview--blackhole b {
+  background: rgb(255 255 255 / 7%);
+}
 .system-background-preview--aurora i,
 .system-background-preview--aurora b,
 .system-background-preview--ocean i,

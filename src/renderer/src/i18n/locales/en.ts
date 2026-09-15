@@ -436,6 +436,7 @@ export default {
     systemBackgroundSunset: 'Sunset',
     systemBackgroundForest: 'Forest',
     systemBackgroundMatrix: 'Matrix',
+    systemBackgroundBlackHole: 'Black Hole',
     themeColor: 'Theme Color',
     themeColorDescription: 'Used for progress, selection states, and primary actions.',
     customBackground: 'Custom Background',

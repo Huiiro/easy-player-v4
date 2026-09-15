@@ -37,7 +37,12 @@ onBeforeUnmount(() => {
     :class="(!isBackgroundActive || ui.showPlayer) && 'app-background-host--paused'"
     aria-hidden="true"
   >
-    <component :is="activeTheme.component" />
+    <component
+      :is="activeTheme.component"
+      v-bind="
+        activeTheme.id === 'blackhole' ? { paused: !isBackgroundActive || ui.showPlayer } : {}
+      "
+    />
   </div>
 </template>
 
