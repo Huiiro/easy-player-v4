@@ -630,6 +630,11 @@ export default {
     lyricColorPreviewTranslation: 'Translation preview',
     lyricManage: 'Lyrics manager',
     lyricSource: 'Lyrics source',
+    lyricBrowseSource: 'View / edit source',
+    lyricBrowseSourceHint:
+      'Selecting a source only changes the editor; use the bottom-right button to change playback.',
+    lyricSourceApply: 'Switch lyrics source',
+    lyricSourceCurrentSelection: 'Current lyrics source',
     lyricSourceAuto: 'Auto (priority order)',
     lyricSearch: 'Search network lyrics',
     lyricSearching: 'Searching…',

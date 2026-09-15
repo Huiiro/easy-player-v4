@@ -28,11 +28,12 @@ const romanization = ref('')
 const romanizationFormat = ref<LyricFormat | undefined>()
 const query = ref({ title: '', artist: '', album: '' })
 const resolvedSource = ref<LyricSource | null>(null)
+const previewSource = ref<'auto' | LyricSource>('auto')
 const sourceLabel = computed(() => {
   if (!resolvedSource.value) return t('playerPanel.lyricSourceNone')
   return t(`lyrics.source.${resolvedSource.value}`)
 })
-const isAutoPreview = computed(() => ui.lyricSourceMode === 'auto')
+const isAutoPreview = computed(() => previewSource.value === 'auto')
 const sources = computed(() => [
   { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
   { value: 'embedded', label: t('lyrics.source.embedded') },
@@ -40,7 +41,7 @@ const sources = computed(() => [
   { value: 'local', label: t('lyrics.source.local') },
   { value: 'network', label: t('lyrics.source.network') }
 ])
-async function loadDraft(source = ui.lyricSourceMode): Promise<void> {
+async function loadDraft(source = previewSource.value): Promise<void> {
   const song = player.currentQueueSong
   lyric.value = ''
   translation.value = ''
@@ -102,7 +103,8 @@ async function initializeDraft(): Promise<void> {
   candidates.value = []
   selected.value = 0
   error.value = ''
-  await loadDraft()
+  previewSource.value = ui.lyricSourceMode
+  await loadDraft(previewSource.value)
 }
 function updateVisible(value: boolean): void {
   emit('update:modelValue', value)
@@ -114,13 +116,17 @@ watch(
   }
 )
 async function selectSource(source: 'auto' | LyricSource): Promise<void> {
-  ui.lyricSourceMode = source
+  previewSource.value = source
   await loadDraft(source)
+}
+function applyPlaybackSource(): void {
+  ui.lyricSourceMode = previewSource.value
 }
 function selectCandidate(index: number): void {
   selected.value = index
   const item = candidates.value[index]
   if (item) {
+    previewSource.value = 'network'
     resolvedSource.value = 'network'
     lyric.value = item.lrc
     lyricFormat.value = item.format
@@ -177,14 +183,17 @@ async function save(): Promise<void> {
     <div class="grid h-[min(64vh,42rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
       <div class="custom-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
         <div>
-          <p class="mb-2 text-xs text-text-l">{{ t('playerPanel.lyricSource') }}</p>
+          <p class="text-xs text-text-l">{{ t('playerPanel.lyricBrowseSource') }}</p>
+          <p class="mb-2 mt-1 text-[10px] leading-relaxed text-text-l/70">
+            {{ t('playerPanel.lyricBrowseSourceHint') }}
+          </p>
           <div class="grid gap-1">
             <button
               v-for="source in sources"
               :key="source.value"
               class="manager-button rounded-lg px-3 py-2 text-left text-sm"
               :class="
-                ui.lyricSourceMode === source.value
+                previewSource === source.value
                   ? 'bg-primary/25 text-primary'
                   : 'bg-text/5 hover:bg-text/10'
               "
@@ -192,7 +201,7 @@ async function save(): Promise<void> {
             >
               <span>{{ source.label }}</span>
               <span
-                v-if="source.value === 'auto' && ui.lyricSourceMode === 'auto'"
+                v-if="source.value === 'auto' && previewSource === 'auto'"
                 class="ml-1 text-[10px] opacity-75"
                 >· {{ sourceLabel }}
               </span>
@@ -279,6 +288,18 @@ async function save(): Promise<void> {
         @click="emit('update:modelValue', false)"
       >
         {{ t('common.cancel') }}
+      </button>
+      <button
+        class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
+        type="button"
+        :disabled="previewSource === ui.lyricSourceMode"
+        @click="applyPlaybackSource"
+      >
+        {{
+          previewSource === ui.lyricSourceMode
+            ? t('playerPanel.lyricSourceCurrentSelection')
+            : t('playerPanel.lyricSourceApply')
+        }}
       </button>
       <button
         class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
