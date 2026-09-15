@@ -87,7 +87,7 @@ export const useUIStore = defineStore(
     const showLyricsEditor = ref(false)
     const showLyricsTranslation = ref(false)
     const showLyricsRomanization = ref(false)
-    const autoLyricsFontResizer = ref(true)
+    const autoAdjustLyricsDisplay = ref(false)
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
     const playerBgType = ref(PlayerBgType.ALBUM)
@@ -556,7 +556,7 @@ export const useUIStore = defineStore(
       showLyricsEditor,
       showLyricsTranslation,
       showLyricsRomanization,
-      autoLyricsFontResizer,
+      autoAdjustLyricsDisplay,
       lyricSourceOrder,
       playerBgType,
       playerDisplayMode,
@@ -639,7 +639,7 @@ export const useUIStore = defineStore(
         'lyricsFontSizeIndex',
         'showLyricsTranslation',
         'showLyricsRomanization',
-        'autoLyricsFontResizer',
+        'autoAdjustLyricsDisplay',
         'lyricSourceOrder',
         'playerBgType',
         'playerDisplayMode',

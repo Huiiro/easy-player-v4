@@ -31,6 +31,14 @@ const openFooterAnywhere = computed({
 
     <div class="setting-row">
       <div>
+        <h3>{{ t('settings.autoAdjustLyricsDisplay') }}</h3>
+        <p>{{ t('settings.autoAdjustLyricsDisplayDescription') }}</p>
+      </div>
+      <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
+    </div>
+
+    <div class="setting-row">
+      <div>
         <h3>{{ t('settings.reduceMotion') }}</h3>
         <p>{{ t('settings.reduceMotionDescription') }}</p>
       </div>

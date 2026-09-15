@@ -68,6 +68,48 @@ const currentScrollTop = ref(0)
 const scrollVelocity = ref(0)
 let lastScrollTop = 0
 let lastTime = performance.now()
+const MIN_PLAYER_WIDTH = 1280
+const MIN_PLAYER_HEIGHT = 780
+const MIN_LYRICS_FONT_SIZE = 2.4
+const MAX_LYRICS_FONT_SIZE = 4.8
+const LYRICS_FONT_SIZE_STEP = 0.24
+const MIN_LYRICS_PADDING = 30
+const MAX_LYRICS_PADDING = 78
+const LYRICS_PADDING_STEP = 3
+
+function getWindowSizeProgress(current: number, minimum: number, maximum: number): number {
+  if (maximum <= minimum) return 1
+  const range = maximum - minimum
+  return Math.max(0, Math.min(1, (current - minimum) / range))
+}
+
+function updateAutomaticLyricsMetrics(): void {
+  if (!ui.autoAdjustLyricsDisplay) return
+  const widthProgress = getWindowSizeProgress(
+    window.outerWidth,
+    MIN_PLAYER_WIDTH,
+    window.screen.availWidth
+  )
+  const heightProgress = getWindowSizeProgress(
+    window.outerHeight,
+    MIN_PLAYER_HEIGHT,
+    window.screen.availHeight
+  )
+  const progress = Math.min(widthProgress, heightProgress)
+  const fontSteps = Math.round(
+    ((MAX_LYRICS_FONT_SIZE - MIN_LYRICS_FONT_SIZE) / LYRICS_FONT_SIZE_STEP) * progress
+  )
+  const paddingSteps = Math.round(
+    ((MAX_LYRICS_PADDING - MIN_LYRICS_PADDING) / LYRICS_PADDING_STEP) * progress
+  )
+  ui.setLyricsFontSize(MIN_LYRICS_FONT_SIZE + fontSteps * LYRICS_FONT_SIZE_STEP)
+  ui.setLyricsFontPadding(MIN_LYRICS_PADDING + paddingSteps * LYRICS_PADDING_STEP)
+}
+
+function handleWindowResize(): void {
+  updateAutomaticLyricsMetrics()
+  requestSnapToCurrent()
+}
 
 function findCurrentLineIndex(lyrics: LyricLine[], currentTime: number): number {
   for (let i = lyrics.length - 1; i >= 0; i--) {
@@ -302,6 +344,14 @@ watch([() => ui.lyricsFontSize, () => ui.lyricsFontPadding, () => ui.showLyricsT
 })
 
 watch(
+  () => ui.autoAdjustLyricsDisplay,
+  (enabled) => {
+    if (enabled) updateAutomaticLyricsMetrics()
+    scheduleSnapToCurrent()
+  }
+)
+
+watch(
   () => props.alignMode,
   () => scheduleSnapToCurrent()
 )
@@ -311,12 +361,13 @@ watch(
 )
 
 onMounted(() => {
+  updateAutomaticLyricsMetrics()
   snapToCurrent()
   const viewport = viewportRef.value
   viewport?.addEventListener('scroll', handleScroll, {
     passive: true
   })
-  window.addEventListener('resize', snapToCurrent)
+  window.addEventListener('resize', handleWindowResize)
   raf = requestAnimationFrame(update)
 })
 
@@ -325,7 +376,7 @@ onUnmounted(() => {
   lyricLoadId += 1
   const viewport = viewportRef.value
   viewport?.removeEventListener('scroll', handleScroll)
-  window.removeEventListener('resize', snapToCurrent)
+  window.removeEventListener('resize', handleWindowResize)
   cancelAnimationFrame(raf)
   if (snapRaf) cancelAnimationFrame(snapRaf)
   if (scrollTimer) clearTimeout(scrollTimer)

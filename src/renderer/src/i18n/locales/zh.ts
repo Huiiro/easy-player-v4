@@ -486,6 +486,9 @@ export default {
     autoPlayOnRestore: '启动后自动播放',
     autoPlayOnRestoreDescription:
       '开启后，仅当上次退出前正在播放时自动继续播放；关闭时只恢复歌曲和位置。',
+    autoAdjustLyricsDisplay: '自动调整歌词大小与间距',
+    autoAdjustLyricsDisplayDescription:
+      '最小窗口使用 1.0× 默认字号和间距，随窗口增大至全屏最大值；手动调节仍可生效。',
     footerOpenMode: '播放器打开方式',
     footerOpenAnywhere: '点击播放控制器任意位置打开',
     footerOpenModeDescription: '选择打开播放器面板的点击区域。',

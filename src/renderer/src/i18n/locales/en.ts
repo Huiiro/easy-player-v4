@@ -497,6 +497,9 @@ export default {
     autoPlayOnRestore: 'Autoplay on startup',
     autoPlayOnRestoreDescription:
       'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.',
+    autoAdjustLyricsDisplay: 'Automatically size lyrics and spacing',
+    autoAdjustLyricsDisplayDescription:
+      'Use the default 1.0× size and spacing at the minimum window, scaling to their maximum values at full screen; manual adjustments still work.',
     footerOpenMode: 'Player Open Mode',
     footerOpenAnywhere: 'Click anywhere on the player controls to open',
     footerOpenModeDescription: 'Choose which part of the footer opens the player panel.',
