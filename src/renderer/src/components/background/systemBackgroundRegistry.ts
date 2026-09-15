@@ -84,10 +84,10 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
     id: 'blackhole',
     labelKey: 'settings.systemBackgroundBlackHole',
     colorMode: 'dark',
-    accentColor: 'oklch(0.78 0.13 65)',
-    headerBackground: 'rgb(12 11 19 / 0.86)',
-    footerBackground: 'rgb(18 14 22 / 0.88)',
-    chromeBorder: 'rgb(241 183 116 / 0.26)',
+    accentColor: 'oklch(0.69 0.105 83)',
+    headerBackground: 'rgb(15 13 9 / 0.86)',
+    footerBackground: 'rgb(21 18 12 / 0.88)',
+    chromeBorder: 'rgb(177 140 66 / 0.28)',
     component: BlackHoleBackground
   }
 ]

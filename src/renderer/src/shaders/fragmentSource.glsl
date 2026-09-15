@@ -68,9 +68,10 @@ void main() {
   float energy = clamp(u_energy, 0.0, 1.0);
   float bass = clamp(u_bass, 0.0, 1.0);
   float beat = clamp(u_beat, 0.0, 1.0);
-  float time = u_time * (0.28 + energy * 0.035);
-  float strength = 1.0 + energy * 0.055 + bass * 0.085 + beat * 0.055;
-  float beatPhase = beat * 0.10;
+  // u_time is an integrated phase: audio changes speed without jumping position.
+  float time = u_time;
+  float strength = 1.0 + energy * 0.04 + bass * 0.055 + beat * 0.025;
+  float beatPhase = beat * 0.04;
 
   vec3 support = neighbourColour(u_color_c);
   vec3 accumulated = vec3(0.0);

@@ -2,6 +2,12 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import fragmentSource from '@/shaders/fragmentSource.glsl?raw'
 import vertexSource from '@/shaders/vertexSource.glsl?raw'
+import {
+  advanceLiquidMotion,
+  createLiquidMotion,
+  LIQUID_BASE_SPEED,
+  LIQUID_ENERGY_SPEED
+} from './liquidMotion'
 
 const props = defineProps<{
   primary: string
@@ -35,7 +41,6 @@ let program: WebGLProgram | null = null
 let frame = 0,
   lastFrameAt = 0,
   lastAnimationAt = 0,
-  startedAt = 0,
   lastDebugAt = 0
 let resizeObserver: ResizeObserver | undefined
 let resizeTimer: number | undefined
@@ -44,9 +49,9 @@ let blurredCoverTexture: WebGLTexture | null = null
 let coverTargetLoaded = false
 let coverFade = 0
 let coverLoadToken = 0
-let smoothedEnergy = 0
-let smoothedBass = 0
-let beatEnvelope = 0
+const motion = createLiquidMotion()
+const frameInterval = 1000 / 60
+let vertexBuffer: WebGLBuffer | null = null
 let drawingWidth = 0
 let drawingHeight = 0
 
@@ -120,6 +125,7 @@ function loadCover(source: string | null): void {
       }
       coverFade = 0
       coverTargetLoaded = true
+      start()
     } catch (error) {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
       coverTargetLoaded = false
@@ -137,7 +143,11 @@ function applyResize(): void {
   const rect = canvas.value.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0) return
   const dpr = window.devicePixelRatio || 1
-  const scale = Math.min(dpr, 1.15) * 0.82
+  const scale = Math.min(
+    Math.min(dpr, 1.15) * 0.82,
+    Math.sqrt(850_000 / (rect.width * rect.height)),
+    1440 / Math.max(rect.width, rect.height)
+  )
   const width = Math.max(1, Math.round(rect.width * scale))
   const height = Math.max(1, Math.round(rect.height * scale))
   if (canvas.value.width === width && canvas.value.height === height) return
@@ -153,6 +163,7 @@ function resize(): void {
   resizeTimer = window.setTimeout(() => {
     resizeTimer = undefined
     applyResize()
+    start()
   }, 80)
 }
 
@@ -160,18 +171,18 @@ function render(now: number): void {
   if (!gl || !program || !canvas.value || !uniforms) return
   const animate = props.active && !props.reducedMotion && !document.hidden
   frame = animate ? requestAnimationFrame(render) : 0
-  if (animate && now - lastFrameAt < 1000 / 30) return
-  const elapsed = lastAnimationAt ? Math.min((now - lastAnimationAt) / 1000, 0.1) : 0
-  lastAnimationAt = now
-  lastFrameAt = now
+  if (animate && lastFrameAt && now - lastFrameAt < frameInterval) return
+  const elapsed = animate && lastAnimationAt ? Math.min((now - lastAnimationAt) / 1000, 0.1) : 0
+  lastAnimationAt = animate ? now : 0
+  // Retain the remainder so slightly early RAFs don't turn a 60 Hz screen into 30 Hz.
+  lastFrameAt = animate ? now - (lastFrameAt ? (now - lastFrameAt) % frameInterval : 0) : 0
 
-  const eb = 1 - Math.exp(-elapsed * 2.4)
-  const bb = 1 - Math.exp(-elapsed * 1.7)
-  smoothedEnergy += (props.energy - smoothedEnergy) * eb
-  smoothedBass += (props.bass - smoothedBass) * bb
-  const beatBlend = 1 - Math.exp(-elapsed * (props.beat > beatEnvelope ? 17 : 2))
-  beatEnvelope += (props.beat - beatEnvelope) * beatBlend
-  if (coverTargetLoaded) coverFade = Math.min(1, coverFade + elapsed * 1.5)
+  advanceLiquidMotion(motion, props, elapsed)
+  const smoothedEnergy = motion.energy.value
+  const smoothedBass = motion.bass.value
+  const beatEnvelope = motion.beat.value
+  if (!animate) coverFade = coverTargetLoaded ? 1 : 0
+  else if (coverTargetLoaded) coverFade = Math.min(1, coverFade + elapsed * 1.5)
   else coverFade = Math.max(0, coverFade - elapsed * 2)
   gl.useProgram(program)
   gl.uniform2f(
@@ -179,7 +190,7 @@ function render(now: number): void {
     drawingWidth || canvas.value.width,
     drawingHeight || canvas.value.height
   )
-  gl.uniform1f(uniforms.time!, (now - startedAt) / 1000)
+  gl.uniform1f(uniforms.time!, motion.phase)
   gl.uniform1f(uniforms.energy!, smoothedEnergy)
   gl.uniform1f(uniforms.bass!, smoothedBass)
   gl.uniform1f(uniforms.beat!, beatEnvelope)
@@ -199,9 +210,9 @@ function render(now: number): void {
     emit('debug', {
       width: drawingWidth || canvas.value.width,
       height: drawingHeight || canvas.value.height,
-      time: (now - startedAt) / 1000,
-      flowSpeed: 0.12 + smoothedEnergy * 0.018,
-      warpStrength: 1 + smoothedEnergy * 0.055 + smoothedBass * 0.085 + beatEnvelope * 0.055,
+      time: motion.time,
+      flowSpeed: LIQUID_BASE_SPEED + smoothedEnergy * LIQUID_ENERGY_SPEED,
+      warpStrength: 1 + smoothedEnergy * 0.04 + smoothedBass * 0.055 + beatEnvelope * 0.025,
       beat: beatEnvelope
     })
   }
@@ -247,7 +258,7 @@ onMounted(() => {
     return
   }
 
-  const compile = (type: number, source: string): WebGLShader => {
+  const compile = (type: number, source: string): WebGLShader | null => {
     const shader = gl!.createShader(type)
     if (!shader) return null
     gl!.shaderSource(shader, source)
@@ -262,11 +273,15 @@ onMounted(() => {
   const vertex = compile(gl.VERTEX_SHADER, vertexSource)
   const fragment = compile(gl.FRAGMENT_SHADER, fragmentSource)
   if (!vertex || !fragment) {
+    if (vertex) gl.deleteShader(vertex)
+    if (fragment) gl.deleteShader(fragment)
     emit('unavailable')
     return
   }
   program = gl.createProgram()
   if (!program) {
+    gl.deleteShader(vertex)
+    gl.deleteShader(fragment)
     emit('unavailable')
     return
   }
@@ -281,7 +296,8 @@ onMounted(() => {
     return
   }
   gl.useProgram(program)
-  const getUniform = (name: string): WebGLUniformLocation => gl!.getUniformLocation(program!, name)
+  const getUniform = (name: string): WebGLUniformLocation | null =>
+    gl!.getUniformLocation(program!, name)
   uniforms = {
     resolution: getUniform('u_resolution'),
     time: getUniform('u_time'),
@@ -296,16 +312,16 @@ onMounted(() => {
     coverLoaded: getUniform('u_cover_loaded')
   }
   const position = gl.getAttribLocation(program, 'a_position')
-  const buffer = gl.createBuffer()
-  if (position < 0 || !buffer) {
+  vertexBuffer = gl.createBuffer()
+  if (position < 0 || !vertexBuffer) {
     emit('unavailable')
     return
   }
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer)
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
   gl.enableVertexAttribArray(position)
   gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
-  const createTexture = (): WebGLTexture => {
+  const createTexture = (): WebGLTexture | null => {
     const texture = gl!.createTexture()
     if (!texture) return null
     gl!.bindTexture(gl!.TEXTURE_2D, texture)
@@ -332,7 +348,6 @@ onMounted(() => {
     emit('unavailable')
     return
   }
-  startedAt = performance.now()
   applyResize()
   loadCover(props.coverSrc)
   resizeObserver = new ResizeObserver(resize)
@@ -345,6 +360,8 @@ onMounted(() => {
 watch(
   () => [props.active, props.reducedMotion],
   () => {
+    lastAnimationAt = 0
+    lastFrameAt = 0
     if (!props.active || props.reducedMotion) {
       if (frame) cancelAnimationFrame(frame)
       frame = 0
@@ -366,11 +383,13 @@ onBeforeUnmount(() => {
   canvas.value?.removeEventListener('webglcontextlost', handleContextLost)
   document.removeEventListener('visibilitychange', handleVisibility)
   if (gl) {
+    if (vertexBuffer) gl.deleteBuffer(vertexBuffer)
     if (coverTexture) gl.deleteTexture(coverTexture)
     if (blurredCoverTexture) gl.deleteTexture(blurredCoverTexture)
     if (program) gl.deleteProgram(program)
   }
   coverTexture = null
+  vertexBuffer = null
   blurredCoverTexture = null
   program = null
   uniforms = null
