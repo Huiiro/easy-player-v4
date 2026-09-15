@@ -646,6 +646,7 @@ export default {
   },
   footer: {
     playerControls: '播放器控制栏，点击打开播放器面板',
+    swipeToChangeTrack: '收起状态下，向左滑动播放下一首，向右滑动播放上一首',
     openPlayer: '打开播放器面板',
     noTrack: '未选择音乐',
     defaultArtist: 'Easy Player',

@@ -665,6 +665,8 @@ export default {
   },
   footer: {
     playerControls: 'Player controls, click to open the player panel',
+    swipeToChangeTrack:
+      'When collapsed, swipe left for the next track or right for the previous track',
     openPlayer: 'Open player panel',
     noTrack: 'No track selected',
     defaultArtist: 'Easy Player',

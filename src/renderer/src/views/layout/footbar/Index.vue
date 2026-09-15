@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
@@ -14,6 +14,7 @@ import SongTagDialog from '@/components/tag/SongTagDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
+import type { LibrarySong } from '@/types/library'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -27,6 +28,20 @@ const moreVisible = ref(false)
 const detailsVisible = ref(false)
 const tagVisible = ref(false)
 const playlistVisible = ref(false)
+const SWIPE_DISTANCE = 56
+const SWIPE_DIRECTION_RATIO = 1.25
+const SWIPE_SETTLE_DURATION = 240
+const swipeOffset = ref(0)
+const swipeTransitioning = ref(false)
+const swipeCommitting = ref(false)
+const collapsedCarouselRef = ref<HTMLElement | null>(null)
+let swipePointerId: number | null = null
+let swipeStartX = 0
+let swipeStartY = 0
+let swipeWasDragged = false
+let suppressSwipeClick = false
+let swipeSettleTimer: ReturnType<typeof setTimeout> | null = null
+let pendingSwipeTargetIndex: number | null = null
 
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
@@ -42,6 +57,47 @@ const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
 })
+function getCoverUrl(song: LibrarySong | null): string | null {
+  return song?.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
+}
+
+function getSwipeTargetIndex(direction: -1 | 1): number | null {
+  const length = player.queue.length
+  const currentIndex = player.currentQueueIndex
+  if (!length || currentIndex < 0) return null
+  const targetIndex = currentIndex + direction
+  if (targetIndex >= 0 && targetIndex < length) return targetIndex
+  if (player.playMode === PlayMode.List && length > 1) return direction < 0 ? length - 1 : 0
+  return null
+}
+
+interface CollapsedSongCard {
+  slot: 'previous' | 'current' | 'next'
+  song: LibrarySong | null
+}
+
+const frozenSwipeCards = ref<CollapsedSongCard[] | null>(null)
+const collapsedSongCards = computed<CollapsedSongCard[]>(() => {
+  const previousIndex = getSwipeTargetIndex(-1)
+  const nextIndex = getSwipeTargetIndex(1)
+  return [
+    {
+      slot: 'previous',
+      song: previousIndex === null ? null : player.queue[previousIndex]
+    },
+    { slot: 'current', song: player.currentQueueSong },
+    { slot: 'next', song: nextIndex === null ? null : player.queue[nextIndex] }
+  ]
+})
+const renderedCollapsedSongCards = computed(
+  () => frozenSwipeCards.value ?? collapsedSongCards.value
+)
+const collapsedTrackStyle = computed(() => ({
+  transform: `translate3d(calc(-33.333333% + ${swipeOffset.value}px), 0, 0)`,
+  transition: swipeTransitioning.value
+    ? `transform ${ui.reduceMotion ? 0 : SWIPE_SETTLE_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`
+    : 'none'
+}))
 const audioSummary = computed(() => {
   const info = player.trackInfo
   if (!info) return ''
@@ -88,6 +144,116 @@ function playPrevious(): void {
 
 function playNext(): void {
   void player.playNext()
+}
+
+function resetSwipe(): void {
+  swipePointerId = null
+  swipeStartX = 0
+  swipeStartY = 0
+  swipeWasDragged = false
+}
+
+function handleSwipePointerDown(event: PointerEvent): void {
+  if (
+    !collapsed.value ||
+    swipeTransitioning.value ||
+    swipeCommitting.value ||
+    !event.isPrimary ||
+    event.button !== 0
+  )
+    return
+  swipePointerId = event.pointerId
+  swipeStartX = event.clientX
+  swipeStartY = event.clientY
+  swipeOffset.value = 0
+  swipeWasDragged = false
+}
+
+function handleSwipePointerMove(event: PointerEvent): void {
+  if (!collapsed.value || swipePointerId !== event.pointerId) return
+  const deltaX = event.clientX - swipeStartX
+  const deltaY = event.clientY - swipeStartY
+  if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 4) return
+  if (!swipeWasDragged) {
+    frozenSwipeCards.value = collapsedSongCards.value.map((card) => ({ ...card }))
+    const footer = event.currentTarget
+    if (footer instanceof HTMLElement) footer.setPointerCapture(event.pointerId)
+  }
+  swipeWasDragged = true
+  const targetIndex = getSwipeTargetIndex(deltaX < 0 ? 1 : -1)
+  swipeOffset.value = targetIndex === null ? deltaX * 0.2 : deltaX
+}
+
+async function finishSwipeTransition(): Promise<void> {
+  if (!swipeTransitioning.value) return
+  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
+  swipeSettleTimer = null
+  const targetIndex = pendingSwipeTargetIndex
+  pendingSwipeTargetIndex = null
+  swipeTransitioning.value = false
+  swipeCommitting.value = true
+  await nextTick()
+  try {
+    if (targetIndex !== null) await player.playQueueItem(targetIndex)
+  } finally {
+    swipeOffset.value = 0
+    frozenSwipeCards.value = null
+    swipeCommitting.value = false
+  }
+}
+
+function settleSwipe(targetIndex: number | null, direction: -1 | 0 | 1): void {
+  swipeTransitioning.value = true
+  pendingSwipeTargetIndex = targetIndex
+  const width = collapsedCarouselRef.value?.clientWidth || 448
+  swipeOffset.value = direction === 0 ? 0 : direction < 0 ? width : -width
+  if (ui.reduceMotion) {
+    void finishSwipeTransition()
+    return
+  }
+  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
+  swipeSettleTimer = setTimeout(() => void finishSwipeTransition(), SWIPE_SETTLE_DURATION + 100)
+}
+
+function handleSwipeTransitionEnd(event: TransitionEvent): void {
+  if (event.target === event.currentTarget && event.propertyName === 'transform')
+    void finishSwipeTransition()
+}
+
+function handleSwipePointerUp(event: PointerEvent): void {
+  if (!collapsed.value || swipePointerId !== event.pointerId) return
+  const deltaX = event.clientX - swipeStartX
+  const deltaY = event.clientY - swipeStartY
+  const isHorizontalSwipe =
+    Math.abs(deltaX) >= SWIPE_DISTANCE &&
+    Math.abs(deltaX) > Math.abs(deltaY) * SWIPE_DIRECTION_RATIO
+  const direction = deltaX < 0 ? 1 : -1
+  const targetIndex = getSwipeTargetIndex(direction)
+  const wasDragged = swipeWasDragged
+  resetSwipe()
+  if (!wasDragged) return
+  suppressSwipeClick = true
+  settleSwipe(
+    isHorizontalSwipe ? targetIndex : null,
+    isHorizontalSwipe && targetIndex !== null ? direction : 0
+  )
+  window.setTimeout(() => {
+    suppressSwipeClick = false
+  }, 0)
+}
+
+function handleSwipePointerCancel(event: PointerEvent): void {
+  if (swipePointerId !== event.pointerId) return
+  const wasDragged = swipeWasDragged
+  resetSwipe()
+  if (wasDragged) settleSwipe(null, 0)
+}
+
+function handleFooterClickCapture(event: MouseEvent): void {
+  if (!suppressSwipeClick) return
+  suppressSwipeClick = false
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function cyclePlayMode(): void {
@@ -188,6 +354,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   window.removeEventListener('click', closeMoreMenu)
+  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
 })
 </script>
 
@@ -203,9 +370,54 @@ onBeforeUnmount(() => {
           : 'app-footer--expanded grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
       "
       :aria-label="t('footer.playerControls')"
+      :aria-description="collapsed ? t('footer.swipeToChangeTrack') : undefined"
+      @pointerdown="handleSwipePointerDown"
+      @pointermove="handleSwipePointerMove"
+      @pointerup="handleSwipePointerUp"
+      @pointercancel="handleSwipePointerCancel"
+      @click.capture="handleFooterClickCapture"
       @click="openPlayerPanel"
     >
-      <div class="flex min-w-0 items-center gap-3">
+      <div v-if="collapsed" ref="collapsedCarouselRef" class="collapsed-song-carousel">
+        <div
+          class="collapsed-song-track"
+          :style="collapsedTrackStyle"
+          @transitionend="handleSwipeTransitionEnd"
+        >
+          <article
+            v-for="card in renderedCollapsedSongCards"
+            :key="card.slot"
+            class="collapsed-song-card"
+            :aria-hidden="card.slot !== 'current'"
+          >
+            <button
+              class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+              :title="card.song ? t('footer.openPlayer') : undefined"
+              :disabled="!card.song"
+              :tabindex="card.slot === 'current' ? 0 : -1"
+              @click.stop="openPlayerPanelFromCover"
+            >
+              <img
+                v-if="getCoverUrl(card.song)"
+                :src="getCoverUrl(card.song) || ''"
+                class="size-full object-cover"
+                :alt="card.song?.title || ''"
+                draggable="false"
+              />
+              <SvgIcon v-else name="common-music" class-name="size-6" />
+            </button>
+            <div class="min-w-0">
+              <p class="truncate text-sm font-semibold text-text">
+                {{ card.song?.title || t('footer.noTrack') }}
+              </p>
+              <p class="truncate text-xs text-text-l">
+                {{ card.song?.artist || t('footer.defaultArtist') }}
+              </p>
+            </div>
+          </article>
+        </div>
+      </div>
+      <div v-else class="flex min-w-0 items-center gap-3">
         <button
           class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
           :title="t('footer.openPlayer')"
@@ -223,7 +435,7 @@ onBeforeUnmount(() => {
         <div class="min-w-0">
           <p class="truncate text-sm font-semibold text-text">{{ trackTitle }}</p>
           <p class="truncate text-xs text-text-l">{{ trackArtist }}</p>
-          <p v-if="!collapsed && audioSummary" class="truncate text-[10px] text-text-l">
+          <p v-if="audioSummary" class="truncate text-[10px] text-text-l">
             {{ audioSummary }}
           </p>
         </div>
@@ -381,7 +593,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="collapsed" class="flex items-center gap-2 text-[11px] tabular-nums text-text-l">
+      <div
+        v-if="collapsed"
+        class="collapsed-footer-controls relative z-10 flex items-center gap-2 text-[11px] tabular-nums text-text-l"
+      >
         <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
         <button
           class="grid size-7 place-items-center rounded-full bg-primary text-white"
@@ -395,6 +610,7 @@ onBeforeUnmount(() => {
 
       <button
         class="grid size-8 place-items-center rounded-full bg-text/[0.07] text-text-l transition hover:scale-105 hover:bg-text/[0.13] hover:text-text"
+        :class="collapsed && 'relative z-10'"
         :title="collapsed ? t('footer.expand') : t('footer.collapse')"
         :aria-label="collapsed ? t('footer.expand') : t('footer.collapse')"
         @click.stop="toggleCollapsed"
@@ -436,7 +652,34 @@ onBeforeUnmount(() => {
     border-color 0.3s ease;
 }
 .app-footer--collapsed {
+  position: relative;
+  overflow: hidden;
+  touch-action: pan-y;
   animation: footer-collapse-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.collapsed-song-carousel {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+.collapsed-song-track {
+  display: flex;
+  width: 300%;
+  height: 100%;
+  will-change: transform;
+}
+.collapsed-song-card {
+  display: flex;
+  width: 33.333333%;
+  min-width: 0;
+  flex: 0 0 33.333333%;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 9.5rem 0.625rem 1rem;
+}
+.collapsed-footer-controls {
+  grid-column: 2;
 }
 .app-footer--expanded {
   animation: footer-expand-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
