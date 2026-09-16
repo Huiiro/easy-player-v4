@@ -17,6 +17,7 @@ const props = withDefaults(
     } | null
     sourceOrder: LyricSource[]
     currentTime: number
+    isPlaying?: boolean
     forcedSource?: LyricSource | 'auto'
     autoSearchNetwork?: boolean
     reloadToken?: number
@@ -32,7 +33,8 @@ const props = withDefaults(
     autoSearchNetwork: true,
     reloadToken: 0,
     layoutToken: 0,
-    darkText: false
+    darkText: false,
+    isPlaying: false
   }
 )
 const emit = defineEmits<{ seek: [positionMs: number] }>()
@@ -70,10 +72,20 @@ const clock = new LyricClock()
 let sweepRaf = 0
 interface SweepElement {
   element: HTMLElement
+  width: number
   start?: number
   duration: number
+  emphasisStart?: number
+  emphasisDuration: number
+  settleDuration: number
   previous: number
+  previousEmphasis: number
+  previousLift: number
 }
+const MAX_CHARACTER_BLEND_MS = 120
+const MAX_BLENDABLE_GAP_MS = 80
+const MIN_CHARACTER_OVERLAP_MS = 40
+const DISTRIBUTED_CHARACTER_SPAN = 1.65
 let sweepElements: SweepElement[] = []
 let interludeElement: HTMLElement | null = null
 const MIN_PLAYER_WIDTH = 1280
@@ -316,16 +328,85 @@ function paintSweep(now: number): void {
     })
     return
   }
+  const hasTimedCharacters = sweepElements.some((entry) => entry.start !== undefined)
+  let waveCenter = hasTimedCharacters ? -1 : lineFill * sweepElements.length - 1
+  if (hasTimedCharacters) {
+    for (let index = 0; index < sweepElements.length; index += 1) {
+      const entry = sweepElements[index]
+      if (entry.start === undefined || time < entry.start) break
+      const characterProgress = Math.max(0, Math.min(1, (time - entry.start) / entry.duration))
+      waveCenter = index - 1 + characterProgress
+      if (characterProgress < 1) break
+    }
+  }
   sweepElements.forEach((entry, index) => {
+    const distributedEmphasisProgress =
+      (lineFill *
+        Math.max(
+          DISTRIBUTED_CHARACTER_SPAN,
+          sweepElements.length - 1 + DISTRIBUTED_CHARACTER_SPAN
+        ) -
+        index) /
+      DISTRIBUTED_CHARACTER_SPAN
     const progress =
       entry.start !== undefined
         ? Math.max(0, Math.min(1, (time - entry.start) / entry.duration))
         : Math.max(0, Math.min(1, lineFill * sweepElements.length - index))
+    const emphasisProgress =
+      entry.emphasisStart !== undefined
+        ? Math.max(0, Math.min(1, (time - entry.emphasisStart) / entry.emphasisDuration))
+        : Math.max(0, Math.min(1, distributedEmphasisProgress))
     if (entry.start === undefined && ui.lyricsStyle !== 'follow') return
-    if (entry.previous === progress) return
+    let leadProgress = progress
+    let highlightProgress = progress
+    // Precisely timed lyrics use a two-stage sweep. The leading color lifts
+    // the glyph group first, then the final highlight catches up.
+    let emphasis: number
+    if (entry.start !== undefined) {
+      const riseDuration = Math.max(1, entry.emphasisDuration - entry.settleDuration)
+      leadProgress = Math.max(
+        0,
+        Math.min(1, (time - (entry.emphasisStart ?? entry.start)) / riseDuration)
+      )
+      highlightProgress = progress
+      emphasis = leadProgress
+    } else {
+      emphasis = emphasisProgress + 2.2 * emphasisProgress ** 3 * (1 - emphasisProgress)
+    }
+    // One asymmetric Dock-like wave affects several neighboring glyphs. Its
+    // narrow leading edge rises quickly, while the wider trailing edge lets
+    // highlighted glyphs settle slowly as one coherent group.
+    const distanceFromWave = index - waveCenter
+    const waveWidth = distanceFromWave < 0 ? 1.9 : 0.82
+    const lift =
+      distanceFromWave < -5 || distanceFromWave > 3
+        ? 0
+        : Math.exp(-0.5 * (distanceFromWave / waveWidth) ** 2)
+    if (
+      entry.previous === progress &&
+      entry.previousEmphasis === emphasisProgress &&
+      entry.previousLift === lift
+    )
+      return
     entry.previous = progress
-    // One write per changing character; completed/upcoming glyphs remain untouched.
-    entry.element.style.setProperty('--progress', String(progress))
+    entry.previousEmphasis = emphasisProgress
+    entry.previousLift = lift
+    const edgeEnvelope = Math.max(
+      0,
+      Math.min(1, highlightProgress / 0.18, (1 - highlightProgress) / 0.18)
+    )
+    const edgeWidth = Math.min(entry.width, Math.max(6, entry.width * 0.34)) * edgeEnvelope
+    const sweepPosition = highlightProgress * entry.width
+    const seamOverlap = edgeWidth > 0 ? 1.5 : 0
+    entry.element.style.setProperty('--progress', String(highlightProgress))
+    entry.element.style.setProperty(
+      '--fill-size',
+      `${Math.min(entry.width, Math.max(0, sweepPosition - edgeWidth / 2 + seamOverlap))}px`
+    )
+    entry.element.style.setProperty('--edge-size', `${edgeWidth}px`)
+    entry.element.style.setProperty('--edge-position', `${sweepPosition - edgeWidth / 2}px`)
+    entry.element.style.setProperty('--emphasis', String(emphasis))
+    entry.element.style.setProperty('--lift', String(lift))
   })
 }
 
@@ -344,20 +425,50 @@ function animateSweep(now: number): void {
 function refreshSweepElements(): void {
   const line = lineRefs.value[currentIndex.value]
   interludeElement = line?.querySelector<HTMLElement>('.lyric-interlude') ?? null
-  sweepElements = Array.from(
+  const elements = Array.from(
     line?.querySelectorAll<HTMLElement>('.lyric-karaoke-char, .lyric-char, .interlude-dot') ?? []
-  ).map((element) => ({
-    element,
-    start: element.dataset.start === undefined ? undefined : Number(element.dataset.start),
-    duration: Math.max(1, Number(element.dataset.duration) || 1),
-    previous: -1
-  }))
+  )
+  sweepElements = elements.map((element, index) => {
+    const start = element.dataset.start === undefined ? undefined : Number(element.dataset.start)
+    const sourceDuration = Math.max(1, Number(element.dataset.duration) || 1)
+    const previous = elements[index - 1]
+    const previousStart = Number(previous?.dataset.start)
+    const previousDuration = Math.max(1, Number(previous?.dataset.duration) || 1)
+    const gap =
+      start === undefined || !Number.isFinite(previousStart)
+        ? Number.POSITIVE_INFINITY
+        : start - (previousStart + previousDuration)
+    // Run adjacent glyphs as a continuous wave instead of isolated pops. A
+    // following glyph becomes visible while its predecessor is still settling;
+    // explicit pauses in the timed source remain untouched.
+    const blend =
+      index > 0 && start !== undefined && gap <= MAX_BLENDABLE_GAP_MS
+        ? Math.min(
+            MAX_CHARACTER_BLEND_MS,
+            Math.max(sourceDuration * 0.55, gap + MIN_CHARACTER_OVERLAP_MS)
+          )
+        : 0
+    const settleDuration =
+      start === undefined ? 0 : Math.min(280, Math.max(160, sourceDuration * 1.2))
+    return {
+      element,
+      width: element.offsetWidth,
+      start,
+      duration: sourceDuration,
+      emphasisStart: start === undefined ? undefined : start - blend,
+      emphasisDuration: sourceDuration + blend + settleDuration,
+      settleDuration,
+      previous: -1,
+      previousEmphasis: -1,
+      previousLift: -1
+    }
+  })
   paintSweep(performance.now())
 }
 
 const updatePlayback = (): void => {
   const time = Number.isFinite(props.currentTime) ? props.currentTime : 0
-  clock.sample(time, performance.now())
+  clock.sample(time, performance.now(), props.isPlaying)
   if (!sweepRaf) sweepRaf = requestAnimationFrame(animateSweep)
 }
 
@@ -366,21 +477,18 @@ const getLineStyle = (idx: number) => {
   if (lyrics.value[idx]?.untimed) {
     return {
       transform: 'none',
-      scale: 1,
       filter: 'none',
       opacity: 1
     }
   }
   const distance = idx - currentIndex.value
   const abs = Math.abs(distance)
-  const scale = Math.max(1 - abs * 0.02, 0.65)
   const blur = Math.min(abs * 1.2, 6)
   const opacity = 1 - Math.min(abs * 0.22, 0.75)
 
   if (isUserScrolling.value) {
     return {
       transform: 'none',
-      scale: 1,
       filter: 'none',
       opacity: idx === currentIndex.value ? 1 : 0.6
     }
@@ -389,7 +497,6 @@ const getLineStyle = (idx: number) => {
     return {
       transform:
         props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none',
-      scale: props.allowTransform && !ui.reduceMotion ? 1.06 : 1,
       filter: 'blur(0px)',
       opacity: 1,
       zIndex: 10
@@ -399,7 +506,6 @@ const getLineStyle = (idx: number) => {
   return {
     transform:
       props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none',
-    scale: props.allowTransform && !ui.reduceMotion ? scale : 1,
     filter: `blur(${blur}px)`,
     opacity
   }
@@ -436,11 +542,27 @@ watch(
 
 watch(
   currentIndex,
-  () => {
-    void nextTick(refreshSweepElements)
-    if (enableAutoScroll.value) {
-      requestSnapToCurrent()
-    }
+  (index, oldIndex) => {
+    const collapsedHeight =
+      oldIndex !== undefined &&
+      index > oldIndex &&
+      !lyrics.value[oldIndex]?.untimed &&
+      !lyrics.value[oldIndex]?.text.trim()
+        ? (lineRefs.value[oldIndex]?.offsetHeight ?? 0)
+        : 0
+    void nextTick(() => {
+      if (collapsedHeight > 0 && viewportRef.value) {
+        stopMotion()
+        writeScroll(Math.max(0, viewportRef.value.scrollTop - collapsedHeight))
+        scrollSpring.reset(viewportRef.value.scrollTop)
+        lineRefs.value.forEach((element) => element.style.setProperty('--scroll-y', '0px'))
+        rowSprings = []
+        rowTarget = Number.NaN
+        rowFocus = -1
+      }
+      refreshSweepElements()
+      if (enableAutoScroll.value) requestSnapToCurrent()
+    })
   },
   {
     immediate: true
@@ -498,7 +620,7 @@ watch(
 )
 
 watch([() => ui.reduceMotion, () => props.allowTransform], () => requestSnapToCurrent())
-watch(() => props.currentTime, updatePlayback, { immediate: true })
+watch([() => props.currentTime, () => props.isPlaying], updatePlayback, { immediate: true })
 
 onMounted(() => {
   updateAutomaticLyricsMetrics()
@@ -560,6 +682,11 @@ onUnmounted(() => {
           alignMode
         ]"
         class="lyric-line group hover:bg-white/2"
+        :class="{
+          'lyric-line--interlude': !line.untimed && !line.text.trim(),
+          'lyric-line--pending-interlude':
+            !line.untimed && !line.text.trim() && currentIndex !== idx
+        }"
         :style="lineStyles[idx]"
       >
         <div
@@ -704,10 +831,22 @@ onUnmounted(() => {
   position: relative;
   padding: var(--lrc-padding) 40px;
   transition:
-    scale 350ms ease,
     opacity 350ms ease,
     filter 400ms ease;
   transform-origin: center center;
+}
+
+.lyric-line--interlude {
+  max-height: calc(var(--lrc-size) * 2.8 + var(--lrc-padding) * 2);
+  overflow: hidden;
+}
+
+.lyric-line--pending-interlude {
+  min-height: 0;
+  max-height: 0;
+  padding-block: 0;
+  opacity: 0 !important;
+  pointer-events: none;
 }
 
 .reduce-motion .lyric-line,
@@ -768,7 +907,7 @@ onUnmounted(() => {
 .lyric-interlude {
   display: flex;
   align-items: center;
-  gap: 0.3em;
+  gap: 0.38em;
   min-height: calc(var(--lrc-size) * 1.5);
   padding: 0 calc(var(--lrc-padding) + 40px);
   font-size: var(--lrc-size);
@@ -778,44 +917,47 @@ onUnmounted(() => {
   opacity: var(--interlude-exit, 1);
 }
 .interlude-dot {
-  width: 0.24em;
-  height: 0.24em;
+  width: 0.32em;
+  height: 0.32em;
   border-radius: 50%;
   background: var(--lrc-highlight);
   opacity: 0.3;
   will-change: transform, opacity;
 }
-.lyric-char {
+.lyric-char,
+.lyric-karaoke-char {
   display: inline-block;
   white-space: pre;
   color: transparent;
-  background-image: linear-gradient(
-    to right,
-    var(--lrc-highlight) calc(var(--progress, 0) * 100%),
-    var(--lrc-default) calc(var(--progress, 0) * 100%)
-  );
+  background-image:
+    linear-gradient(
+      to right,
+      var(--lrc-highlight) 0%,
+      var(--lrc-highlight) 12%,
+      color-mix(in srgb, var(--lrc-highlight) 72%, var(--lrc-default)) 38%,
+      color-mix(in srgb, var(--lrc-highlight) 32%, var(--lrc-default)) 72%,
+      var(--lrc-default) 100%
+    ),
+    linear-gradient(to right, var(--lrc-highlight), var(--lrc-highlight)),
+    linear-gradient(to right, var(--lrc-default), var(--lrc-default));
+  background-size:
+    var(--edge-size, 0px) 100%,
+    var(--fill-size, 0px) 100%,
+    100% 100%;
+  background-position:
+    var(--edge-position, 0px) center,
+    left center,
+    left center;
+  background-repeat: no-repeat;
   background-clip: text;
   -webkit-background-clip: text;
 }
 .lyric-karaoke-char {
-  display: inline-block;
-  white-space: pre;
   font-size: inherit;
-  color: transparent;
-  background-image:
-    linear-gradient(to right, var(--lrc-highlight), var(--lrc-highlight)),
-    linear-gradient(to right, var(--lrc-default), var(--lrc-default));
-  background-size:
-    calc(var(--progress, 0) * 100%) 100%,
-    100% 100%;
-  background-position: left center;
-  background-repeat: no-repeat;
-  background-clip: text;
-  -webkit-background-clip: text;
-  transform: translateY(calc(var(--progress, 0) * -2px))
-    scale(calc(0.98 + var(--progress, 0) * 0.05));
-  opacity: calc(0.25 + var(--progress, 0) * 0.75);
+  transform: translateY(calc(var(--lift, 0) * -4px)) scale(calc(1.03 + var(--lift, 0) * 0.08));
+  opacity: clamp(0.25, calc(0.25 + var(--emphasis, 0) * 0.75), 1);
   transform-origin: center bottom;
+  will-change: transform, opacity;
   scale: 1.06;
   letter-spacing: 3px;
 }

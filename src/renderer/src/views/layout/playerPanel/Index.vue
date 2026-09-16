@@ -1024,6 +1024,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             :style="lyricColorStyle"
             :song="player.currentQueueSong"
             :current-time="player.positionMs + ui.lyricsOffsetMs"
+            :is-playing="player.isPlaying"
             :source-order="ui.lyricSourceOrder"
             :align-mode="collapsed ? 'center' : ui.lyricsAlignment"
             :forced-source="ui.lyricSourceMode"

@@ -36,6 +36,12 @@ clock.sample(45000, 5100)
 assert.equal(clock.read(5100), 45000, 'forward seek must be immediate')
 clock.sample(500, 5200)
 assert.equal(clock.read(5200), 500, 'backward seek must be immediate')
+const playingClock = new LyricClock()
+playingClock.sample(1000, 0, true)
+assert.equal(playingClock.read(250), 1250, 'playing clock must advance between sparse samples')
+assert.equal(playingClock.isMoving(5000), true)
+playingClock.sample(1250, 250, false)
+assert.equal(playingClock.read(1000), 1250, 'paused clock must remain fixed')
 console.log('PASS: spring rebound/convergence at 30/60/144 FPS, interpolation, pause, seeks')
 const slowClock = new LyricClock()
 slowClock.sample(0, 0)
@@ -45,18 +51,52 @@ assert.equal(slowClock.read(450), 200, '250ms inputs must still interpolate afte
 assert(slowClock.isMoving(450))
 assert.equal(slowClock.read(500), 250)
 const { withLyricInterludes } = await load('lyricInterlude')
+const sourceBlank = {
+  timeMs: 5000,
+  endMs: 11000,
+  text: '',
+  translation: 'source timing marker'
+}
 const lines = withLyricInterludes([
   { timeMs: 3000, endMs: 5000, text: 'First' },
+  sourceBlank,
   { timeMs: 11000, endMs: 13000, text: 'Next' }
 ])
 assert.deepEqual(
   lines.map((line) => [line.timeMs, line.text]),
   [
-    [0, ''],
     [3000, 'First'],
     [5000, ''],
     [11000, 'Next']
   ]
+)
+assert.notEqual(
+  lines.find((line) => !line.text),
+  sourceBlank
+)
+assert.equal(lines.find((line) => !line.text)?.translation, undefined)
+assert.deepEqual(
+  withLyricInterludes([
+    { timeMs: 0, endMs: 2000, text: 'First' },
+    { timeMs: 5000, endMs: 7000, text: 'Next' }
+  ]).map((line) => [line.timeMs, line.text]),
+  [
+    [0, 'First'],
+    [5000, 'Next']
+  ],
+  'an exact three-second gap must not create an interlude'
+)
+assert.deepEqual(
+  withLyricInterludes([
+    { timeMs: 0, endMs: 115443, text: 'Previous' },
+    { timeMs: 115443, endMs: 115648, text: '' },
+    { timeMs: 115648, endMs: 118000, text: '为理云鬓 为簪银钩' }
+  ]).map((line) => [line.timeMs, line.text]),
+  [
+    [0, 'Previous'],
+    [115648, '为理云鬓 为簪银钩']
+  ],
+  'a timestamp-only line less than three seconds before text must stay hidden'
 )
 assert.equal(
   withLyricInterludes([

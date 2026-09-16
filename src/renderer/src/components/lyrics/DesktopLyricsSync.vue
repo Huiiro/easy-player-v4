@@ -55,7 +55,7 @@ function publish(): void {
     songId: player.currentQueueSong?.id,
     revision: lyricRevision,
     current: current?.text || player.currentQueueSong?.title || '',
-    next: next?.text || player.currentQueueSong?.artist || '',
+    next: next?.text || '',
     translation: ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
     positionMs: player.positionMs,
     sweepStartMs: sweepRange?.startMs,
