@@ -349,10 +349,12 @@ const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
 }
 onMounted(() => {
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
+  eventBus.on('openAudioControls', openAudioControls)
   window.addEventListener('click', closeMoreMenu)
 })
 onBeforeUnmount(() => {
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
+  eventBus.off('openAudioControls', openAudioControls)
   window.removeEventListener('click', closeMoreMenu)
   if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
 })

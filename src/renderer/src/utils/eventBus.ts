@@ -7,6 +7,7 @@ type Events = {
   tagsChanged: void
   songActionsMenuOpened: 'footer' | 'songlist'
   locateCurrentSong: void
+  openAudioControls: void
 }
 
 const eventBus = mitt<Events>()

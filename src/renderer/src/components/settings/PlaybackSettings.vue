@@ -4,15 +4,29 @@ import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SleepTimerSettings from './SleepTimerSettings.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import eventBus from '@/utils/eventBus'
 const ui = useUIStore()
 const { t } = useI18n()
 const openFooterAnywhere = computed({
   get: () => ui.footerOpenMode === 'all',
   set: (enabled: boolean) => (ui.footerOpenMode = enabled ? 'all' : 'cover')
 })
+
+function openAudioControls(): void {
+  eventBus.emit('openAudioControls')
+}
 </script>
 <template>
   <div class="settings-card">
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.audioControlPanel') }}</h3>
+        <p>{{ t('settings.audioControlPanelDescription') }}</p>
+      </div>
+      <button class="secondary-button" type="button" @click="openAudioControls">
+        {{ t('settings.openAudioControlPanel') }}
+      </button>
+    </div>
     <SleepTimerSettings />
     <div class="setting-row">
       <div>
@@ -72,5 +86,25 @@ const openFooterAnywhere = computed({
   color: var(--color-text-l);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 0.45rem 0.7rem;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s,
+    color 0.2s;
+}
+.secondary-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-hover);
+  color: var(--color-primary);
 }
 </style>

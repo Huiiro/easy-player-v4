@@ -1,15 +1,109 @@
 <script setup lang="ts">
 import { usePlayerStore } from '@/stores/player/playerStore'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
+import DspParameterField from '@/components/player/DspParameterField.vue'
+import { BUILT_IN_EQ_PRESETS, useEqPresetStore } from '@/stores/player/eqPresetStore'
+import { useMessage } from '@/components/ui/useMessage'
+import type { EqBand } from '@/types/audio'
 
 const player = usePlayerStore()
+const eqPresets = useEqPresetStore()
 const { t } = useI18n()
+const { success, warning } = useMessage()
 let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
 let draggingNodeIndex: number | null = null
+const savePresetDialogOpen = ref(false)
+const presetName = ref('')
+const editingPresetId = ref<string | undefined>()
+const lastSelectedEqPresetId = ref<string>()
+
+const eqPresetOptions = computed(() => [
+  ...BUILT_IN_EQ_PRESETS.map((preset) => ({
+    value: preset.id,
+    label: t(`ap.eqPresets.${preset.name}`)
+  })),
+  ...eqPresets.customPresets.map((preset) => ({ value: preset.id, label: preset.name })),
+  { value: 'modified', label: t('ap.eqPresetModified'), disabled: true }
+])
+
+const selectedEqPreset = computed(() => {
+  const match = eqPresets.allPresets.find((preset) => bandsMatch(player.eqBands, preset.bands))
+  return match?.id ?? 'modified'
+})
+
+function bandsMatch(left: EqBand[], right: EqBand[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((band, index) => {
+      const other = right[index]
+      return (
+        other !== undefined &&
+        band.enabled === other.enabled &&
+        Math.abs(band.frequencyHz - other.frequencyHz) < 0.001 &&
+        Math.abs(band.gainDb - other.gainDb) < 0.001 &&
+        Math.abs(band.q - other.q) < 0.001
+      )
+    })
+  )
+}
+
+function selectEqPreset(value: string | number | (string | number)[]): void {
+  if (typeof value !== 'string' || value === 'modified') return
+  const preset = eqPresets.allPresets.find((item) => item.id === value)
+  if (!preset) return
+  player.eqBands.splice(0, player.eqBands.length, ...preset.bands.map((band) => ({ ...band })))
+  lastSelectedEqPresetId.value = preset.id
+  commitEqBands()
+}
+
+function openSavePresetDialog(): void {
+  const selectedCustomId = eqPresets.customPresets.some(
+    (preset) => preset.id === selectedEqPreset.value
+  )
+    ? selectedEqPreset.value
+    : lastSelectedEqPresetId.value
+  const currentCustom = eqPresets.customPresets.find((preset) => preset.id === selectedCustomId)
+  editingPresetId.value = currentCustom?.id
+  presetName.value = currentCustom?.name ?? ''
+  savePresetDialogOpen.value = true
+}
+
+function saveCustomPreset(): void {
+  const name = presetName.value.trim()
+  if (!name) {
+    warning(t('ap.eqPresetNameRequired'))
+    return
+  }
+  if (name.length > 40) {
+    warning(t('ap.eqPresetNameTooLong'))
+    return
+  }
+  const duplicate = eqPresets.customPresets.some(
+    (preset) =>
+      preset.id !== editingPresetId.value &&
+      preset.name.toLocaleLowerCase() === name.toLocaleLowerCase()
+  )
+  if (duplicate) {
+    warning(t('ap.eqPresetNameExists'))
+    return
+  }
+  lastSelectedEqPresetId.value = eqPresets.savePreset(name, player.eqBands, editingPresetId.value)
+  savePresetDialogOpen.value = false
+  success(t(editingPresetId.value ? 'ap.eqPresetUpdated' : 'ap.eqPresetSaved', { name }))
+}
+
+function deleteSelectedEqPreset(): void {
+  const preset = eqPresets.customPresets.find((item) => item.id === selectedEqPreset.value)
+  if (!preset) return
+  eqPresets.deletePreset(preset.id)
+  lastSelectedEqPresetId.value = undefined
+  success(t('ap.eqPresetDeleted', { name: preset.name }))
+}
 
 async function initializeAudioControls(): Promise<void> {
   const results = await Promise.allSettled([
@@ -51,6 +145,7 @@ function resetEqBands(): void {
     band.gainDb = 0
     band.q = 1
   }
+  lastSelectedEqPresetId.value = 'flat'
   commitEqBands()
 }
 function commitEqBands(): void {
@@ -316,7 +411,7 @@ const backendLabel: Record<string, string> = {
 const currentBackendLabel = computed(
   () => backendLabel[player.currentBackend] ?? player.currentBackend
 )
-const deviceKey = (backend: string, id: string) => `${backend}\u0000${id}`
+const deviceKey = (backend: string, id: string): string => `${backend}\u0000${id}`
 const selectedOutputDeviceKey = computed(() =>
   deviceKey(player.currentBackend, player.currentDeviceId)
 )
@@ -326,7 +421,8 @@ const deviceOptions = computed(() =>
     value: deviceKey(dev.backend, dev.id)
   }))
 )
-async function onDeviceChange(val: string | number): Promise<void> {
+async function onDeviceChange(val: string | number | (string | number)[]): Promise<void> {
+  if (Array.isArray(val)) return
   const device = player.devices.find((item) => deviceKey(item.backend, item.id) === val)
   if (device) await player.selectOutputDevice(device)
 }
@@ -788,6 +884,32 @@ function refreshOutputDevices(): void {
         </div>
       </div>
 
+      <div class="mb-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-text-l">{{ t('ap.eqPreset') }}</span>
+        <BaseSelect
+          :model-value="selectedEqPreset"
+          :options="eqPresetOptions"
+          size="sm"
+          class="w-44"
+          @change="selectEqPreset"
+        />
+        <button
+          class="rounded border border-border px-2 py-1 text-xs transition-colors hover:border-primary hover:text-primary"
+          type="button"
+          @click="openSavePresetDialog"
+        >
+          {{ t('ap.saveEqPreset') }}
+        </button>
+        <button
+          v-if="eqPresets.customPresets.some((preset) => preset.id === selectedEqPreset)"
+          class="rounded border border-danger/60 px-2 py-1 text-xs text-danger transition-opacity hover:opacity-80"
+          type="button"
+          @click="deleteSelectedEqPreset"
+        >
+          {{ t('ap.deleteEqPreset') }}
+        </button>
+      </div>
+
       <div class="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
         <div
           v-for="(band, index) in player.eqBands"
@@ -835,7 +957,7 @@ function refreshOutputDevices(): void {
     <!-- DSP -->
     <section class="mt-5 rounded-xl border border-border p-3">
       <div class="mb-3 text-xs font-medium text-text">{{ t('ap.dspNode') }}</div>
-      <div class="space-y-2">
+      <div class="space-y-6">
         <div
           v-for="(node, index) in player.dspNodes"
           :key="node.id"
@@ -872,296 +994,261 @@ function refreshOutputDevices(): void {
           </div>
           <div v-if="node.enabled" class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
             <template v-if="node.id === 'compressor'">
-              <label>
-                {{ t('ap.threshold') }}
-                <input
-                  v-model.number="player.compressorConfig.thresholdDb"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="-60"
-                  max="0"
-                  @change="updateCompressor"
-                />
-              </label>
-              <label>
-                {{ t('ap.ratio') }}
-                <input
-                  v-model.number="player.compressorConfig.ratio"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="1"
-                  max="20"
-                  step=".1"
-                  @change="updateCompressor"
-                />
-              </label>
-              <label>
-                {{ t('ap.attack') }}
-                <input
-                  v-model.number="player.compressorConfig.attackMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".1"
-                  min=".1"
-                  max="500"
-                  @change="updateCompressor"
-                />
-              </label>
-              <label>
-                {{ t('ap.release') }}
-                <input
-                  v-model.number="player.compressorConfig.releaseMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="5"
-                  max="2000"
-                  @change="updateCompressor"
-                />
-              </label>
-              <label>
-                {{ t('ap.makeupGain') }}
-                <input
-                  v-model.number="player.compressorConfig.makeupDb"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".1"
-                  min="-12"
-                  max="24"
-                  @change="updateCompressor"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.compressorConfig.thresholdDb"
+                :label="t('ap.threshold')"
+                :description="t('ap.dspHelp.compressorThreshold')"
+                :min="-60"
+                :max="0"
+                :step="0.1"
+                :decimals="1"
+                unit="dB"
+                @change="updateCompressor"
+              />
+              <DspParameterField
+                v-model="player.compressorConfig.ratio"
+                :label="t('ap.ratio')"
+                :description="t('ap.dspHelp.compressorRatio')"
+                :min="1"
+                :max="20"
+                :step="0.1"
+                :decimals="1"
+                unit=":1"
+                @change="updateCompressor"
+              />
+              <DspParameterField
+                v-model="player.compressorConfig.attackMs"
+                :label="t('ap.attack')"
+                :description="t('ap.dspHelp.compressorAttack')"
+                :min="0.1"
+                :max="500"
+                :step="0.1"
+                :decimals="1"
+                unit="ms"
+                @change="updateCompressor"
+              />
+              <DspParameterField
+                v-model="player.compressorConfig.releaseMs"
+                :label="t('ap.release')"
+                :description="t('ap.dspHelp.compressorRelease')"
+                :min="5"
+                :max="2000"
+                unit="ms"
+                @change="updateCompressor"
+              />
+              <DspParameterField
+                v-model="player.compressorConfig.makeupDb"
+                :label="t('ap.makeupGain')"
+                :description="t('ap.dspHelp.compressorMakeup')"
+                :min="-12"
+                :max="24"
+                :step="0.1"
+                :decimals="1"
+                unit="dB"
+                @change="updateCompressor"
+              />
             </template>
             <template v-else-if="node.id === 'delay'">
-              <label>
-                {{ t('ap.time') }}
-                <input
-                  v-model.number="player.delayConfig.delayMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="1"
-                  max="2000"
-                  @change="updateDelay"
-                />
-              </label>
-              <label>
-                {{ t('ap.feedback') }}
-                <input
-                  v-model.number="player.delayConfig.feedback"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".01"
-                  min="0"
-                  max=".95"
-                  @change="updateDelay"
-                />
-              </label>
-              <label>
-                {{ t('ap.mix') }}
-                <input
-                  v-model.number="player.delayConfig.mix"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".01"
-                  min="0"
-                  max="1"
-                  @change="updateDelay"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.delayConfig.delayMs"
+                :label="t('ap.time')"
+                :description="t('ap.dspHelp.delayTime')"
+                :min="1"
+                :max="2000"
+                unit="ms"
+                @change="updateDelay"
+              />
+              <DspParameterField
+                v-model="player.delayConfig.feedback"
+                :label="t('ap.feedback')"
+                :description="t('ap.dspHelp.delayFeedback')"
+                :min="0"
+                :max="0.95"
+                :step="0.01"
+                :decimals="2"
+                @change="updateDelay"
+              />
+              <DspParameterField
+                v-model="player.delayConfig.mix"
+                :label="t('ap.mix')"
+                :description="t('ap.dspHelp.wetDryMix')"
+                :min="0"
+                :max="1"
+                :step="0.01"
+                :decimals="2"
+                @change="updateDelay"
+              />
             </template>
             <template v-else-if="node.id === 'reverb'">
-              <label>
-                {{ t('ap.roomSize') }}
-                <input
-                  v-model.number="player.reverbConfig.roomSize"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="0"
-                  max="1"
-                  @change="updateReverb"
-                />
-              </label>
-              <label>
-                {{ t('ap.decay') }}
-                <input
-                  v-model.number="player.reverbConfig.decay"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="0"
-                  max="1"
-                  @change="updateReverb"
-                />
-              </label>
-              <label>
-                {{ t('ap.mix') }}
-                <input
-                  v-model.number="player.reverbConfig.mix"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="0"
-                  max="1"
-                  @change="updateReverb"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.reverbConfig.roomSize"
+                :label="t('ap.roomSize')"
+                :description="t('ap.dspHelp.reverbRoomSize')"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :decimals="2"
+                @change="updateReverb"
+              />
+              <DspParameterField
+                v-model="player.reverbConfig.decay"
+                :label="t('ap.decay')"
+                :description="t('ap.dspHelp.reverbDecay')"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :decimals="2"
+                @change="updateReverb"
+              />
+              <DspParameterField
+                v-model="player.reverbConfig.mix"
+                :label="t('ap.mix')"
+                :description="t('ap.dspHelp.wetDryMix')"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :decimals="2"
+                @change="updateReverb"
+              />
             </template>
             <template v-else-if="node.id === 'chorus'">
-              <label>
-                {{ t('ap.rate') }}
-                <input
-                  v-model.number="player.chorusConfig.rateHz"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min=".05"
-                  max="10"
-                  @change="updateChorus"
-                />
-              </label>
-              <label>
-                {{ t('ap.depth') }}
-                <input
-                  v-model.number="player.chorusConfig.depthMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".1"
-                  min=".1"
-                  max="15"
-                  @change="updateChorus"
-                />
-              </label>
-              <label>
-                {{ t('ap.mix') }}
-                <input
-                  v-model.number="player.chorusConfig.mix"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".01"
-                  min="0"
-                  max="1"
-                  @change="updateChorus"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.chorusConfig.rateHz"
+                :label="t('ap.rate')"
+                :description="t('ap.dspHelp.chorusRate')"
+                :min="0.05"
+                :max="10"
+                :step="0.05"
+                :decimals="2"
+                unit="Hz"
+                @change="updateChorus"
+              />
+              <DspParameterField
+                v-model="player.chorusConfig.depthMs"
+                :label="t('ap.depth')"
+                :description="t('ap.dspHelp.chorusDepth')"
+                :min="0.1"
+                :max="15"
+                :step="0.1"
+                :decimals="1"
+                unit="ms"
+                @change="updateChorus"
+              />
+              <DspParameterField
+                v-model="player.chorusConfig.mix"
+                :label="t('ap.mix')"
+                :description="t('ap.dspHelp.wetDryMix')"
+                :min="0"
+                :max="1"
+                :step="0.01"
+                :decimals="2"
+                @change="updateChorus"
+              />
             </template>
             <template v-else-if="node.id === 'noise_gate'">
-              <label>
-                {{ t('ap.threshold') }}
-                <input
-                  v-model.number="player.noiseGateConfig.thresholdDb"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="-80"
-                  max="0"
-                  @change="updateNoiseGate"
-                />
-              </label>
-              <label>
-                {{ t('ap.attack') }}
-                <input
-                  v-model.number="player.noiseGateConfig.attackMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".1"
-                  min=".1"
-                  max="200"
-                  @change="updateNoiseGate"
-                />
-              </label>
-              <label>
-                {{ t('ap.hold') }}
-                <input
-                  v-model.number="player.noiseGateConfig.holdMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="0"
-                  max="2000"
-                  @change="updateNoiseGate"
-                />
-              </label>
-              <label>
-                {{ t('ap.release') }}
-                <input
-                  v-model.number="player.noiseGateConfig.releaseMs"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="5"
-                  max="2000"
-                  @change="updateNoiseGate"
-                />
-              </label>
-              <label>
-                {{ t('ap.attenuationRange') }}
-                <input
-                  v-model.number="player.noiseGateConfig.rangeDb"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="-100"
-                  max="0"
-                  @change="updateNoiseGate"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.noiseGateConfig.thresholdDb"
+                :label="t('ap.threshold')"
+                :description="t('ap.dspHelp.gateThreshold')"
+                :min="-80"
+                :max="0"
+                :step="0.1"
+                :decimals="1"
+                unit="dB"
+                @change="updateNoiseGate"
+              />
+              <DspParameterField
+                v-model="player.noiseGateConfig.attackMs"
+                :label="t('ap.attack')"
+                :description="t('ap.dspHelp.gateAttack')"
+                :min="0.1"
+                :max="200"
+                :step="0.1"
+                :decimals="1"
+                unit="ms"
+                @change="updateNoiseGate"
+              />
+              <DspParameterField
+                v-model="player.noiseGateConfig.holdMs"
+                :label="t('ap.hold')"
+                :description="t('ap.dspHelp.gateHold')"
+                :min="0"
+                :max="2000"
+                unit="ms"
+                @change="updateNoiseGate"
+              />
+              <DspParameterField
+                v-model="player.noiseGateConfig.releaseMs"
+                :label="t('ap.release')"
+                :description="t('ap.dspHelp.gateRelease')"
+                :min="5"
+                :max="2000"
+                unit="ms"
+                @change="updateNoiseGate"
+              />
+              <DspParameterField
+                v-model="player.noiseGateConfig.rangeDb"
+                :label="t('ap.attenuationRange')"
+                :description="t('ap.dspHelp.gateRange')"
+                :min="-100"
+                :max="0"
+                :step="0.1"
+                :decimals="1"
+                unit="dB"
+                @change="updateNoiseGate"
+              />
             </template>
             <template v-else>
-              <label>
-                {{ t('ap.rate') }}
-                <input
-                  v-model.number="player.phaserConfig.rateHz"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min=".05"
-                  max="10"
-                  @change="updatePhaser"
-                />
-              </label>
-              <label>
-                {{ t('ap.depth') }}
-                <input
-                  v-model.number="player.phaserConfig.depth"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="0"
-                  max="1"
-                  @change="updatePhaser"
-                />
-              </label>
-              <label>
-                {{ t('ap.centerFrequency') }}
-                <input
-                  v-model.number="player.phaserConfig.centerHz"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  min="100"
-                  max="5000"
-                  @change="updatePhaser"
-                />
-              </label>
-              <label>
-                {{ t('ap.feedback') }}
-                <input
-                  v-model.number="player.phaserConfig.feedback"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="-.95"
-                  max=".95"
-                  @change="updatePhaser"
-                />
-              </label>
-              <label>
-                {{ t('ap.mix') }}
-                <input
-                  v-model.number="player.phaserConfig.mix"
-                  class="input-base h-6 mt-1"
-                  type="number"
-                  step=".05"
-                  min="0"
-                  max="1"
-                  @change="updatePhaser"
-                />
-              </label>
+              <DspParameterField
+                v-model="player.phaserConfig.rateHz"
+                :label="t('ap.rate')"
+                :description="t('ap.dspHelp.phaserRate')"
+                :min="0.05"
+                :max="10"
+                :step="0.05"
+                :decimals="2"
+                unit="Hz"
+                @change="updatePhaser"
+              />
+              <DspParameterField
+                v-model="player.phaserConfig.depth"
+                :label="t('ap.depth')"
+                :description="t('ap.dspHelp.phaserDepth')"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :decimals="2"
+                @change="updatePhaser"
+              />
+              <DspParameterField
+                v-model="player.phaserConfig.centerHz"
+                :label="t('ap.centerFrequency')"
+                :description="t('ap.dspHelp.phaserCenter')"
+                :min="100"
+                :max="5000"
+                unit="Hz"
+                @change="updatePhaser"
+              />
+              <DspParameterField
+                v-model="player.phaserConfig.feedback"
+                :label="t('ap.feedback')"
+                :description="t('ap.dspHelp.phaserFeedback')"
+                :min="-0.95"
+                :max="0.95"
+                :step="0.05"
+                :decimals="2"
+                @change="updatePhaser"
+              />
+              <DspParameterField
+                v-model="player.phaserConfig.mix"
+                :label="t('ap.mix')"
+                :description="t('ap.dspHelp.wetDryMix')"
+                :min="0"
+                :max="1"
+                :step="0.05"
+                :decimals="2"
+                @change="updatePhaser"
+              />
             </template>
           </div>
         </div>
@@ -1189,32 +1276,58 @@ function refreshOutputDevices(): void {
             v-if="player.limiterConfig.enabled"
             class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2"
           >
-            <label>
-              {{ t('ap.ceiling') }}
-              <input
-                v-model.number="player.limiterConfig.ceilingDb"
-                class="input-base h-6 mt-1"
-                type="number"
-                step=".1"
-                min="-12"
-                max="0"
-                @change="updateLimiter"
-              />
-            </label>
-            <label>
-              {{ t('ap.release') }}
-              <input
-                v-model.number="player.limiterConfig.releaseMs"
-                class="input-base h-6 mt-1"
-                type="number"
-                min="5"
-                max="2000"
-                @change="updateLimiter"
-              />
-            </label>
+            <DspParameterField
+              v-model="player.limiterConfig.ceilingDb"
+              :label="t('ap.ceiling')"
+              :description="t('ap.dspHelp.limiterCeiling')"
+              :min="-12"
+              :max="0"
+              :step="0.1"
+              :decimals="1"
+              unit="dB"
+              @change="updateLimiter"
+            />
+            <DspParameterField
+              v-model="player.limiterConfig.releaseMs"
+              :label="t('ap.release')"
+              :description="t('ap.dspHelp.limiterRelease')"
+              :min="5"
+              :max="2000"
+              unit="ms"
+              @change="updateLimiter"
+            />
           </div>
         </div>
       </div>
     </section>
+
+    <BaseDialog
+      v-model="savePresetDialogOpen"
+      :title="editingPresetId ? t('ap.updateEqPreset') : t('ap.saveEqPreset')"
+      width="max-w-sm"
+    >
+      <label class="block text-sm">
+        {{ t('ap.eqPresetName') }}
+        <input
+          v-model="presetName"
+          autofocus
+          maxlength="40"
+          class="input-base mt-2 h-9 w-full"
+          :placeholder="t('ap.eqPresetNamePlaceholder')"
+          @keyup.enter="saveCustomPreset"
+        />
+      </label>
+      <template #footer>
+        <button class="btn-hover px-3 py-1.5 text-sm" @click="savePresetDialogOpen = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white"
+          @click="saveCustomPreset"
+        >
+          {{ editingPresetId ? t('ap.updateEqPreset') : t('ap.saveEqPreset') }}
+        </button>
+      </template>
+    </BaseDialog>
   </div>
 </template>
