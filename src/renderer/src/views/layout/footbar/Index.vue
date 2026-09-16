@@ -42,6 +42,8 @@ let swipeWasDragged = false
 let suppressSwipeClick = false
 let swipeSettleTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSwipeTargetIndex: number | null = null
+const swipePreviousIndex = ref<number | null>(null)
+const swipeNextIndex = ref<number | null>(null)
 
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
@@ -61,14 +63,15 @@ function getCoverUrl(song: LibrarySong | null): string | null {
   return song?.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
 }
 
+function refreshSwipeTargetIndices(): void {
+  const previousIndex = player.getPreviousQueueIndex()
+  const nextIndex = player.getNextQueueIndex()
+  swipePreviousIndex.value = previousIndex >= 0 ? previousIndex : null
+  swipeNextIndex.value = nextIndex >= 0 ? nextIndex : null
+}
+
 function getSwipeTargetIndex(direction: -1 | 1): number | null {
-  const length = player.queue.length
-  const currentIndex = player.currentQueueIndex
-  if (!length || currentIndex < 0) return null
-  const targetIndex = currentIndex + direction
-  if (targetIndex >= 0 && targetIndex < length) return targetIndex
-  if (player.playMode === PlayMode.List && length > 1) return direction < 0 ? length - 1 : 0
-  return null
+  return direction < 0 ? swipePreviousIndex.value : swipeNextIndex.value
 }
 
 interface CollapsedSongCard {
@@ -111,6 +114,15 @@ const audioSummary = computed(() => {
 watch(coverUrl, () => {
   coverFailed.value = false
 })
+watch(
+  [
+    () => player.currentQueueIndex,
+    () => player.playMode,
+    () => player.queue.map((song) => song.id).join('|')
+  ],
+  refreshSwipeTargetIndices,
+  { immediate: true }
+)
 const playModeIcon = computed(() => {
   const icons: Record<PlayMode, string> = {
     [PlayMode.Sequential]: 'control-order',

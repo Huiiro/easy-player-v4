@@ -377,19 +377,20 @@ export const usePlayerStore = defineStore('player', () => {
     return playMode.value === PlayMode.List ? 0 : -1
   }
 
+  function previousIndex(): number {
+    if (!queue.value.length || currentQueueIndex.value < 0) return -1
+    if (currentQueueIndex.value > 0) return currentQueueIndex.value - 1
+    return playMode.value === PlayMode.List ? queue.value.length - 1 : 0
+  }
+
   async function playNext(): Promise<boolean> {
     const index = nextIndex()
     return index >= 0 ? playQueueItem(index) : false
   }
 
   async function playPrevious(): Promise<boolean> {
-    if (!queue.value.length || currentQueueIndex.value < 0) return false
-    const index =
-      currentQueueIndex.value > 0
-        ? currentQueueIndex.value - 1
-        : playMode.value === PlayMode.List
-          ? queue.value.length - 1
-          : 0
+    const index = previousIndex()
+    if (index < 0) return false
     return playQueueItem(index)
   }
 
@@ -1189,6 +1190,8 @@ export const usePlayerStore = defineStore('player', () => {
     clearQueue,
     playNext,
     playPrevious,
+    getNextQueueIndex: nextIndex,
+    getPreviousQueueIndex: previousIndex,
     pause,
     stop,
     setStopAfterCurrent,
