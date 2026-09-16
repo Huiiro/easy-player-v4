@@ -39,6 +39,26 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ seek: [positionMs: number] }>()
 
+function groupCharacters<T>(characters: T[], valueOf: (character: T) => string): T[][] {
+  const groups: T[][] = []
+  let current: T[] = []
+  for (const character of characters) {
+    current.push(character)
+    if (/\s/u.test(valueOf(character))) {
+      groups.push(current)
+      current = []
+    }
+  }
+  if (current.length) groups.push(current)
+  return groups
+}
+
+const groupTimedCharacters = (characters: LyricLine['chars']): NonNullable<LyricLine['chars']>[] =>
+  groupCharacters(characters ?? [], (character) => character.char)
+
+const groupTextCharacters = (text: string): string[][] =>
+  groupCharacters(Array.from(text), (character) => character)
+
 const ui = useUIStore()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
@@ -338,6 +358,20 @@ function paintSweep(now: number): void {
       waveCenter = index - 1 + characterProgress
       if (characterProgress < 1) break
     }
+    let lastTimedIndex = sweepElements.length - 1
+    while (lastTimedIndex >= 0 && sweepElements[lastTimedIndex].start === undefined)
+      lastTimedIndex -= 1
+    const lastTimedEntry = sweepElements[lastTimedIndex]
+    if (lastTimedEntry?.start !== undefined) {
+      const lastCharacterEnd = lastTimedEntry.start + lastTimedEntry.duration
+      if (time > lastCharacterEnd) {
+        const exitProgress = Math.min(
+          1,
+          (time - lastCharacterEnd) / Math.max(1, lastTimedEntry.settleDuration)
+        )
+        waveCenter = lastTimedIndex + exitProgress * 5
+      }
+    }
   }
   sweepElements.forEach((entry, index) => {
     const distributedEmphasisProgress =
@@ -379,7 +413,7 @@ function paintSweep(now: number): void {
     const distanceFromWave = index - waveCenter
     const waveWidth = distanceFromWave < 0 ? 1.9 : 0.82
     const lift =
-      distanceFromWave < -5 || distanceFromWave > 3
+      distanceFromWave <= -5 || distanceFromWave > 3
         ? 0
         : Math.exp(-0.5 * (distanceFromWave / waveWidth) ** 2)
     if (
@@ -733,24 +767,36 @@ onUnmounted(() => {
               <!-- 逐字歌词 -->
               <template v-if="line.chars?.length">
                 <span
-                  v-for="(char, charIdx) in line.chars"
-                  :key="charIdx"
-                  class="lyric-karaoke-char"
-                  :data-start="char.start"
-                  :data-duration="char.duration"
+                  v-for="(group, groupIndex) in groupTimedCharacters(line.chars)"
+                  :key="groupIndex"
+                  class="lyric-word"
                 >
-                  {{ char.char }}
+                  <span
+                    v-for="(char, charIdx) in group"
+                    :key="charIdx"
+                    class="lyric-karaoke-char"
+                    :data-start="char.start"
+                    :data-duration="char.duration"
+                  >
+                    {{ char.char }}
+                  </span>
                 </span>
               </template>
               <!-- 普通歌词 -->
               <template v-else>
                 <span
-                  v-for="(char, charIdx) in line.text"
-                  :key="charIdx"
-                  :class="['lyric-char', ui.lyricsStyle == 'glow' ? 'lyric-glow' : '']"
-                  :style="ui.lyricsStyle == 'follow' ? undefined : `color: var(--lrc-highlight)`"
+                  v-for="(group, groupIndex) in groupTextCharacters(line.text)"
+                  :key="groupIndex"
+                  class="lyric-word"
                 >
-                  {{ char }}
+                  <span
+                    v-for="(char, charIdx) in group"
+                    :key="charIdx"
+                    :class="['lyric-char', ui.lyricsStyle == 'glow' ? 'lyric-glow' : '']"
+                    :style="ui.lyricsStyle == 'follow' ? undefined : `color: var(--lrc-highlight)`"
+                  >
+                    {{ char }}
+                  </span>
                 </span>
               </template>
             </div>
@@ -951,6 +997,10 @@ onUnmounted(() => {
   background-repeat: no-repeat;
   background-clip: text;
   -webkit-background-clip: text;
+}
+.lyric-word {
+  display: inline-block;
+  white-space: pre;
 }
 .lyric-karaoke-char {
   font-size: inherit;
