@@ -21,11 +21,16 @@ const handlers = {
   getSongsByAlbum: ({ album, artist }: { album: string; artist?: string }) =>
     library.getSongsByAlbum(album, artist),
   getSongsByGenre: ({ genre }: { genre: string }) => library.getSongsByGenre(genre),
-  getSongsByArtist: ({ artist }: { artist: string }) => library.getSongsByArtist(artist),
+  getSongsByArtist: ({ artist, separator }: { artist: string; separator?: string }) =>
+    library.getSongsByArtist(artist, separator),
   queryAlbums: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
     library.queryAlbums(sort, search),
-  queryArtists: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
-    library.queryArtists(sort, search),
+  queryArtists: ({
+    sort,
+    search,
+    separator
+  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string } = {}) =>
+    library.queryArtists(sort, search, separator),
   queryGenres: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
     library.queryGenres(sort, search),
   countSongsByAlbum: ({ album, artist }: { album: string; artist: string | null }) =>

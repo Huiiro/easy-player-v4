@@ -105,6 +105,8 @@ export const useUIStore = defineStore(
     const tagSelected = ref<number[]>([])
     const musicSource = ref<'all' | 'local' | 'remote'>('all')
     const musicSourceId = ref(0)
+    const normalizeArtistSeparator = ref(false)
+    const artistSeparator = ref('/；;、')
     // ========== 桌面歌词 ==========
     const useDesktopLyrics = ref(false)
     const desktopLyricsStyles = reactive({
@@ -572,6 +574,8 @@ export const useUIStore = defineStore(
       tagSelected,
       musicSource,
       musicSourceId,
+      normalizeArtistSeparator,
+      artistSeparator,
       useDesktopLyrics,
       desktopLyricsStyles,
       resolveFontStack,
@@ -651,6 +655,8 @@ export const useUIStore = defineStore(
         'tagStyle',
         'musicSource',
         'musicSourceId',
+        'normalizeArtistSeparator',
+        'artistSeparator',
         'useDesktopLyrics',
         'desktopLyricsStyles',
         'useGlobalShortcutKeys',

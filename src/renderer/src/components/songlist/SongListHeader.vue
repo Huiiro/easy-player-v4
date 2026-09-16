@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 
-type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt' | 'playTime'
+type SortField = 'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime'
 interface SourceOption {
   label: string
   value: string
@@ -206,8 +206,8 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     <div
       class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
     >
-      <button class="text-left" @click="emit('sort', 'createdAt')">
-        # <span v-if="sortBy === 'createdAt'">{{ direction }}</span>
+      <button class="text-left" @click="emit('sort', 'id')">
+        # <span v-if="sortBy === 'id'">{{ direction }}</span>
       </button>
       <button class="text-left" @click="emit('sort', 'title')">
         {{ showFileName ? t('songList.fileName') : t('songList.title') }}

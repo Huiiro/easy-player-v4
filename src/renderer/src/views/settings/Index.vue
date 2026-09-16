@@ -29,6 +29,7 @@ let navigatingBySidebar = false
 let sidebarScrollTimer: number | undefined
 const navigationSections = computed(() => [
   { id: 'playback', label: t('settings.playback') },
+  { id: 'library', label: t('settings.library') },
   { id: 'fonts', label: t('settings.fonts') },
   { id: 'language', label: t('settings.language') },
   { id: 'background', label: t('settings.playerBackground') },
@@ -239,6 +240,36 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <PlaybackSettings />
+        </section>
+        <!-- library -->
+        <section id="library" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.library') }}</h2>
+              <p>{{ t('settings.libraryDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row border-b border-border">
+              <div>
+                <h3>{{ t('settings.normalizeArtistSeparator') }}</h3>
+                <p>{{ t('settings.normalizeArtistSeparatorDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.normalizeArtistSeparator" size="md" />
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.artistSeparator') }}</h3>
+                <p>{{ t('settings.artistSeparatorDescription') }}</p>
+              </div>
+              <input
+                v-model="ui.artistSeparator"
+                class="input-base h-9 w-28 text-center"
+                :placeholder="t('settings.artistSeparatorPlaceholder')"
+                maxlength="8"
+              />
+            </div>
+          </div>
         </section>
         <!-- font -->
         <section id="fonts" class="settings-section">

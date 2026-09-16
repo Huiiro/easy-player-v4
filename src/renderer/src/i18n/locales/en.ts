@@ -259,6 +259,7 @@ export default {
     unknown: 'Unknown',
     search: 'Search {type}',
     clearSearch: 'Clear search',
+    refresh: 'Refresh',
     sort: 'Sort alphabetically',
     cardSize: 'Adjust card size',
     cardSizeSmall: 'Small',
@@ -458,6 +459,8 @@ export default {
     globalBorder: 'Global borders',
     playback: 'Playback',
     playbackDescription: 'Control how the previous playback session is restored at startup.',
+    library: 'Library',
+    libraryDescription: 'Configure how songs, artists, and other library content are identified.',
     audioControlPanel: 'Audio control panel',
     audioControlPanelDescription:
       'Adjust the equalizer, DSP, output device, and other audio processing options.',
@@ -556,6 +559,13 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    normalizeArtistSeparator: 'Normalize artist separators',
+    normalizeArtistSeparatorDescription:
+      'Display recognized separators uniformly as /. Turn this off to preserve the original song text.',
+    artistSeparator: 'Multiple-artist separator',
+    artistSeparatorDescription:
+      'Enter multiple separator characters to recognize different formats. For example, /; splits both aaa/bbb and aaa;bbb. Leave empty to disable.',
+    artistSeparatorPlaceholder: 'For example /;',
     localFileManagement: 'Local File Management',
     localFileManagementDescription:
       'Manage remote cache, library backups, and moved-file recovery.',

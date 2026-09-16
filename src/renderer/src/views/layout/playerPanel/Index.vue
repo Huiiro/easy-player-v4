@@ -14,6 +14,7 @@ import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/LiquidBackground.vue'
+import { formatArtists } from '@/utils/artists'
 
 const showLyricsSamplingRegion = import.meta.env.DEV && false
 const showLiquidDebug = import.meta.env.DEV && false
@@ -41,12 +42,13 @@ const trackTitle = computed(
   () =>
     player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('playerPanel.noTrack')
 )
-const trackArtist = computed(
-  () =>
-    player.trackInfo?.metadata?.artist ||
-    player.currentQueueSong?.artist ||
+const trackArtist = computed(() => {
+  const artist = player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist
+  return (
+    formatArtists(artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
     t('playerPanel.defaultArtist')
-)
+  )
+})
 const playModeIcon = computed(
   () => ['control-order', 'control-loop', 'control-single', 'control-shuffle'][player.playMode]
 )

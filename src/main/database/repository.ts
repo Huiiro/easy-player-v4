@@ -109,7 +109,7 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : ''
   const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
-  const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
+  const order = query.sortOrder ? (query.sortOrder === 'desc' ? 'DESC' : 'ASC') : 'DESC'
   const size =
     query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
   if (size) {
@@ -174,18 +174,18 @@ export function getSongsByAlbum(album: string, artist?: string): Song[] {
     const rows = unknownArtist
       ? db
           .prepare(
-            `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND (artist IS NULL OR TRIM(artist) = '') ORDER BY title COLLATE NOCASE`
+            `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND (artist IS NULL OR TRIM(artist) = '') ORDER BY id DESC`
           )
           .all()
       : artist
         ? db
             .prepare(
-              `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND artist = ? ORDER BY title COLLATE NOCASE`
+              `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND artist = ? ORDER BY id DESC`
             )
             .all(artist)
         : db
             .prepare(
-              `SELECT ${songColumns} FROM song WHERE album IS NULL OR TRIM(album) = '' ORDER BY title COLLATE NOCASE`
+              `SELECT ${songColumns} FROM song WHERE album IS NULL OR TRIM(album) = '' ORDER BY id DESC`
             )
             .all()
     return attachTags(rows.map((row) => mapSong(row as SongRow)))
@@ -194,7 +194,7 @@ export function getSongsByAlbum(album: string, artist?: string): Song[] {
     return attachTags(
       db
         .prepare(
-          `SELECT ${songColumns} FROM song WHERE album = ? AND (artist IS NULL OR TRIM(artist) = '') ORDER BY title COLLATE NOCASE`
+          `SELECT ${songColumns} FROM song WHERE album = ? AND (artist IS NULL OR TRIM(artist) = '') ORDER BY id DESC`
         )
         .all(album)
         .map((row) => mapSong(row as SongRow))
@@ -202,13 +202,9 @@ export function getSongsByAlbum(album: string, artist?: string): Song[] {
   }
   const rows = artist
     ? db
-        .prepare(
-          `SELECT ${songColumns} FROM song WHERE album = ? AND artist = ? ORDER BY title COLLATE NOCASE`
-        )
+        .prepare(`SELECT ${songColumns} FROM song WHERE album = ? AND artist = ? ORDER BY id DESC`)
         .all(album, artist)
-    : db
-        .prepare(`SELECT ${songColumns} FROM song WHERE album = ? ORDER BY title COLLATE NOCASE`)
-        .all(album)
+    : db.prepare(`SELECT ${songColumns} FROM song WHERE album = ? ORDER BY id DESC`).all(album)
   return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
 export function getSongsByGenre(genre: string): Song[] {
@@ -216,7 +212,7 @@ export function getSongsByGenre(genre: string): Song[] {
     return attachTags(
       getDatabase()
         .prepare(
-          `SELECT ${songColumns} FROM song WHERE genre IS NULL OR TRIM(genre) = '' ORDER BY title COLLATE NOCASE`
+          `SELECT ${songColumns} FROM song WHERE genre IS NULL OR TRIM(genre) = '' ORDER BY id DESC`
         )
         .all()
         .map((row) => mapSong(row as SongRow))
@@ -224,25 +220,43 @@ export function getSongsByGenre(genre: string): Song[] {
   }
   return attachTags(
     getDatabase()
-      .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY title COLLATE NOCASE`)
+      .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY id DESC`)
       .all(genre)
       .map((row) => mapSong(row as SongRow))
   )
 }
-export function getSongsByArtist(artist: string): Song[] {
+function splitArtistNames(value: string | null, separators = ''): string[] {
+  const artist = value?.trim()
+  if (!artist) return []
+  if (!separators) return [artist]
+  const parts = [...new Set(separators)].reduce(
+    (values, separator) => values.flatMap((part) => part.split(separator)),
+    [artist]
+  )
+  return [...new Set(parts.map((part) => part.trim()).filter(Boolean))]
+}
+
+export function getSongsByArtist(artist: string, separator = ''): Song[] {
   if (artist === '__easy_player_unknown_artist__') {
     return attachTags(
       getDatabase()
         .prepare(
-          `SELECT ${songColumns} FROM song WHERE artist IS NULL OR TRIM(artist) = '' ORDER BY title COLLATE NOCASE`
+          `SELECT ${songColumns} FROM song WHERE artist IS NULL OR TRIM(artist) = '' ORDER BY id DESC`
         )
         .all()
         .map((row) => mapSong(row as SongRow))
     )
   }
+  if (separator) {
+    const rows = getDatabase()
+      .prepare(`SELECT ${songColumns} FROM song ORDER BY id DESC`)
+      .all()
+      .filter((row) => splitArtistNames((row as SongRow).artist, separator).includes(artist))
+    return attachTags(rows.map((row) => mapSong(row as SongRow)))
+  }
   return attachTags(
     getDatabase()
-      .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY title COLLATE NOCASE`)
+      .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY id DESC`)
       .all(artist)
       .map((row) => mapSong(row as SongRow))
   )
@@ -316,7 +330,7 @@ export function getLocalFolderSongs(folderId: number): Song[] {
       )
       SELECT ${songColumns} FROM song
       WHERE source_id IS NULL AND folder_id IN (SELECT id FROM descendants)
-      ORDER BY title COLLATE NOCASE`
+      ORDER BY id DESC`
     )
     .all(folderId)
   return attachTags(rows.map((row) => mapSong(row as SongRow)))
@@ -330,7 +344,46 @@ export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] 
     )
     .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
 }
-export function queryArtists(sort: 'asc' | 'desc' = 'asc', search = ''): Artist[] {
+export function queryArtists(sort: 'asc' | 'desc' = 'asc', search = '', separator = ''): Artist[] {
+  if (separator) {
+    const rows = getDatabase()
+      .prepare('SELECT artist, cover FROM song ORDER BY id DESC')
+      .all() as Array<{ artist: string | null; cover: string | null }>
+    const artists = new Map<string, Artist>()
+    let unknownCount = 0
+    let unknownCover: string | null = null
+    for (const row of rows) {
+      const names = splitArtistNames(row.artist, separator)
+      if (!names.length) {
+        unknownCount += 1
+        unknownCover ||= row.cover
+        continue
+      }
+      for (const name of names) {
+        const current = artists.get(name)
+        if (current) current.songCount += 1
+        else artists.set(name, { artistName: name, songCount: 1, artistCover: row.cover })
+      }
+    }
+    if (unknownCount) {
+      artists.set('__easy_player_unknown_artist__', {
+        artistName: null,
+        songCount: unknownCount,
+        artistCover: unknownCover
+      })
+    }
+    const keyword = search.trim().toLocaleLowerCase()
+    const direction = sort === 'desc' ? -1 : 1
+    return [...artists.values()]
+      .filter((item) => !keyword || item.artistName?.toLocaleLowerCase().includes(keyword))
+      .sort(
+        (left, right) =>
+          String(left.artistName ?? '').localeCompare(String(right.artistName ?? ''), undefined, {
+            sensitivity: 'base',
+            numeric: true
+          }) * direction
+      )
+  }
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
   const keyword = search.trim()
   return getDatabase()
@@ -774,8 +827,8 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   }
   const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
-  const order = query.sortOrder === 'desc' ? 'DESC' : 'ASC'
-  const column = sort === 'id' ? 'sli.id' : `s.${sort}`
+  const order = query.sortOrder ? (query.sortOrder === 'desc' ? 'DESC' : 'ASC') : 'DESC'
+  const column = `s.${sort}`
   const size =
     query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
   if (size) {

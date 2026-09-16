@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import { useUIStore } from '@/stores/ui/uiStore'
 
 type LibraryKind = 'album' | 'artist' | 'genre'
 type SortOrder = 'asc' | 'desc'
@@ -35,6 +36,7 @@ interface GridItem {
 const props = defineProps<{ kind: LibraryKind }>()
 const { t } = useI18n()
 const router = useRouter()
+const ui = useUIStore()
 const keyword = ref('')
 const order = ref<SortOrder>('asc')
 const cardSize = ref(176)
@@ -91,7 +93,8 @@ async function load(): Promise<void> {
           : 'queryGenres'
     const response = await window.api.database.command(action, {
       sort: order.value,
-      search: keyword.value
+      search: keyword.value,
+      separator: props.kind === 'artist' ? ui.artistSeparator : undefined
     })
     if (!response.success) {
       items.value = []
@@ -136,8 +139,12 @@ function open(item: GridItem): void {
       : { name: item.value, cover: item.cover || '' }
   void router.push({ path: `/${props.kind}/detail`, query })
 }
+function refresh(): void {
+  visibleCoverKeys.value = new Set()
+  void load()
+}
 
-watch([keyword, order], () => {
+watch([keyword, order, () => ui.artistSeparator], () => {
   visibleCoverKeys.value = new Set()
   void load()
 })
@@ -196,6 +203,14 @@ onBeforeUnmount(() => coverObserver?.disconnect())
         </div>
       </div>
       <div class="flex items-center gap-2">
+        <button
+          class="btn-hover grid size-8 place-items-center"
+          :title="t('library.refresh')"
+          :aria-label="t('library.refresh')"
+          @click="refresh"
+        >
+          <SvgIcon name="common-refresh" class-name="size-4" />
+        </button>
         <button
           class="btn-hover grid size-8 place-items-center"
           :title="t('library.sort')"

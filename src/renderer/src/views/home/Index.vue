@@ -7,6 +7,7 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
+import { formatArtists } from '@/utils/artists'
 
 interface OverviewStats {
   songCount: number
@@ -308,7 +309,11 @@ onMounted(() => void load())
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm">{{ song.title }}</span>
                 <span class="block truncate text-xs text-text-l">{{
-                  song.artist || t('songList.unknownArtist')
+                  formatArtists(
+                    song.artist,
+                    uiStore.artistSeparator,
+                    uiStore.normalizeArtistSeparator
+                  ) || t('songList.unknownArtist')
                 }}</span>
               </span>
               <span class="text-xs text-text-l">{{
@@ -342,7 +347,11 @@ onMounted(() => void load())
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm">{{ song.title }}</span>
                 <span class="block truncate text-xs text-text-l">{{
-                  song.artist || t('songList.unknownArtist')
+                  formatArtists(
+                    song.artist,
+                    uiStore.artistSeparator,
+                    uiStore.normalizeArtistSeparator
+                  ) || t('songList.unknownArtist')
                 }}</span>
               </span>
               <span class="text-xs text-text-l">{{ formatDuration(song.value) }}</span>

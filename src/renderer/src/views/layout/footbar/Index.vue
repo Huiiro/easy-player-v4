@@ -15,6 +15,7 @@ import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDi
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
+import { formatArtists, splitArtists } from '@/utils/artists'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -48,12 +49,13 @@ const swipeNextIndex = ref<number | null>(null)
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
 )
-const trackArtist = computed(
-  () =>
-    player.trackInfo?.metadata?.artist ||
-    player.currentQueueSong?.artist ||
+const trackArtist = computed(() => {
+  const artist = player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist
+  return (
+    formatArtists(artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
     t('footer.defaultArtist')
-)
+  )
+})
 const coverFailed = ref(false)
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
@@ -306,6 +308,7 @@ function openDesktopLyrics(): void {
   ui.useDesktopLyrics = !ui.useDesktopLyrics
 }
 const currentSong = computed(() => player.currentQueueSong)
+const currentArtists = computed(() => splitArtists(currentSong.value?.artist, ui.artistSeparator))
 function openPlaylistPicker(): void {
   if (!currentSong.value) return
   playlistVisible.value = true
@@ -319,11 +322,11 @@ function openTags(): void {
   tagVisible.value = true
   moreVisible.value = false
 }
-function openArtist(): void {
-  if (currentSong.value?.artist)
+function openArtist(artist: string): void {
+  if (artist)
     void router.push({
       path: '/artist/detail',
-      query: { name: currentSong.value.artist, cover: currentSong.value.cover || '' }
+      query: { name: artist, cover: currentSong.value?.cover || '' }
     })
   moreVisible.value = false
 }
@@ -579,12 +582,13 @@ onBeforeUnmount(() => {
               <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
             </button>
             <button
+              v-for="artist in currentArtists"
+              :key="artist"
               class="menu-item flex items-center gap-2"
-              :disabled="!currentSong.artist"
-              @click="openArtist"
+              @click="openArtist(artist)"
             >
               <SvgIcon name="common-user" class-name="size-4" />
-              {{ t('footer.goArtist') }}
+              <span class="truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
             </button>
             <button
               class="menu-item flex items-center gap-2"

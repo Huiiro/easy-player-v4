@@ -6,6 +6,7 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
+import { formatArtists } from '@/utils/artists'
 
 interface Playlist {
   id: number
@@ -393,7 +394,10 @@ onBeforeUnmount(() => {
               {{ item.song.title }}
             </p>
             <p class="mt-1 truncate text-sm text-text-l">
-              {{ item.song.artist || t('playerPanel.defaultArtist') }}
+              {{
+                formatArtists(item.song.artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
+                t('playerPanel.defaultArtist')
+              }}
             </p>
           </div>
         </article>

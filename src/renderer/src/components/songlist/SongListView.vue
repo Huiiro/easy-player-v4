@@ -23,7 +23,7 @@ type SongListSource =
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
-type SortField = 'title' | 'artist' | 'album' | 'duration' | 'createdAt' | 'playTime'
+type SortField = 'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime'
 interface MusicSourceOption {
   id: number
   name: string
@@ -41,8 +41,8 @@ const songs = ref<LibrarySong[]>([])
 const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
 const loading = ref(false)
 const keyword = ref('')
-const sortBy = ref<SortField>(props.source.type === 'history' ? 'playTime' : 'title')
-const sortOrder = ref<'asc' | 'desc'>(props.source.type === 'history' ? 'desc' : 'asc')
+const sortBy = ref<SortField>(props.source.type === 'history' ? 'playTime' : 'id')
+const sortOrder = ref<'asc' | 'desc'>('desc')
 const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
@@ -91,9 +91,32 @@ const sourceFilter = computed({
   }
 })
 
+const songTextCollator = new Intl.Collator(undefined, {
+  usage: 'sort',
+  sensitivity: 'base',
+  numeric: true
+})
+
+function compareSongs(left: LibrarySong, right: LibrarySong): number {
+  const field = sortBy.value
+  let result = 0
+
+  if (field === 'id' || field === 'duration') {
+    result = Number(left[field] ?? 0) - Number(right[field] ?? 0)
+  } else {
+    const leftValue =
+      field === 'title' && showFileName.value ? left.fileName || left.title : left[field]
+    const rightValue =
+      field === 'title' && showFileName.value ? right.fileName || right.title : right[field]
+    result = songTextCollator.compare(String(leftValue ?? ''), String(rightValue ?? ''))
+  }
+
+  if (result !== 0) return result * (sortOrder.value === 'asc' ? 1 : -1)
+  return right.id - left.id
+}
+
 const filteredSongs = computed(() => {
   const search = keyword.value.trim().toLocaleLowerCase()
-  const multiplier = sortOrder.value === 'asc' ? 1 : -1
   return songs.value
     .filter(
       (song) =>
@@ -102,14 +125,7 @@ const filteredSongs = computed(() => {
           value?.toLocaleLowerCase().includes(search)
         )
     )
-    .sort(
-      (left, right) =>
-        String(left[sortBy.value] ?? '').localeCompare(
-          String(right[sortBy.value] ?? ''),
-          undefined,
-          { numeric: true }
-        ) * multiplier
-    )
+    .sort(compareSongs)
 })
 const allSelected = computed(
   () =>
@@ -147,7 +163,10 @@ const getSongs = async (): Promise<LibrarySong[]> => {
       case 'artist':
         return {
           name: 'getSongsByArtist',
-          params: { artist: source.artist }
+          params: {
+            artist: source.artist,
+            separator: uiStore.artistSeparator
+          }
         }
       case 'genre':
         return {

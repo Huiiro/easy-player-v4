@@ -6,6 +6,8 @@ import type { LibrarySong } from '@/types/library'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useFriendlyTime } from '@/hooks/useTimeFormatter'
 import { getHighlightParts } from '@/utils/highlight'
+import { artistDisplayTokens } from '@/utils/artists'
+import { useUIStore } from '@/stores/ui/uiStore'
 
 const props = defineProps<{
   song: LibrarySong
@@ -25,6 +27,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
+const ui = useUIStore()
 const { format: formatPlayTime } = useFriendlyTime()
 const coverFailed = ref(false)
 const coverUrl = computed(() =>
@@ -38,8 +41,8 @@ const displayedTitle = computed(() =>
   props.showFileName ? props.song.fileName || props.song.title : props.song.title
 )
 const highlightedTitle = computed(() => getHighlightParts(displayedTitle.value, props.keyword))
-const highlightedArtist = computed(() =>
-  getHighlightParts(props.song.artist || t('songList.unknownArtist'), props.keyword)
+const artistTokens = computed(() =>
+  artistDisplayTokens(props.song.artist, ui.artistSeparator, ui.normalizeArtistSeparator)
 )
 const highlightedAlbum = computed(() =>
   getHighlightParts(props.song.album || t('songList.unknownAlbum'), props.keyword)
@@ -60,11 +63,11 @@ const requestMenu = (event: MouseEvent): void => {
     top: `${window.innerHeight - rect.bottom < menuHeight ? Math.max(8, rect.top - menuHeight) : rect.bottom + 6}px`
   })
 }
-function openArtist(): void {
-  if (props.song.artist?.trim()) {
+function openArtist(artist: string): void {
+  if (artist) {
     void router.push({
       path: '/artist/detail',
-      query: { name: props.song.artist, cover: props.song.cover || '' }
+      query: { name: artist, cover: props.song.cover || '' }
     })
   }
 }
@@ -149,16 +152,22 @@ function openAlbum(): void {
         </span>
       </span>
       <span class="min-w-0 truncate text-sm text-text-l">
-        <button
-          v-if="song.artist?.trim()"
-          class="max-w-full truncate text-left hover:text-primary"
-          @click.stop="openArtist"
-        >
-          <template v-for="(part, partIndex) in highlightedArtist" :key="partIndex">
-            <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{ part.text }}</mark>
-            <template v-else>{{ part.text }}</template>
+        <span v-if="artistTokens.length" class="max-w-full truncate">
+          <template v-for="(token, tokenIndex) in artistTokens" :key="tokenIndex">
+            <span v-if="token.type === 'separator'">{{ token.text }}</span>
+            <button v-else class="hover:text-primary" @click.stop="openArtist(token.artist)">
+              <template
+                v-for="(part, partIndex) in getHighlightParts(token.text, keyword)"
+                :key="partIndex"
+              >
+                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{
+                  part.text
+                }}</mark>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </button>
           </template>
-        </button>
+        </span>
         <template v-else>{{ t('songList.unknownArtist') }}</template>
       </span>
       <span class="min-w-0 truncate text-sm text-text-l">
