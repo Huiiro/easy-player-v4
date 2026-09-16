@@ -107,6 +107,16 @@ export const useUIStore = defineStore(
     const musicSourceId = ref(0)
     const normalizeArtistSeparator = ref(false)
     const artistSeparator = ref('/；;、')
+    const librarySortOrder = reactive<Record<'album' | 'artist' | 'genre', 'asc' | 'desc'>>({
+      album: 'asc',
+      artist: 'asc',
+      genre: 'asc'
+    })
+    const libraryCardSize = reactive<Record<'album' | 'artist' | 'genre', number>>({
+      album: 176,
+      artist: 176,
+      genre: 176
+    })
     // ========== 桌面歌词 ==========
     const useDesktopLyrics = ref(false)
     const desktopLyricsStyles = reactive({
@@ -576,6 +586,8 @@ export const useUIStore = defineStore(
       musicSourceId,
       normalizeArtistSeparator,
       artistSeparator,
+      librarySortOrder,
+      libraryCardSize,
       useDesktopLyrics,
       desktopLyricsStyles,
       resolveFontStack,
@@ -657,6 +669,8 @@ export const useUIStore = defineStore(
         'musicSourceId',
         'normalizeArtistSeparator',
         'artistSeparator',
+        'librarySortOrder',
+        'libraryCardSize',
         'useDesktopLyrics',
         'desktopLyricsStyles',
         'useGlobalShortcutKeys',

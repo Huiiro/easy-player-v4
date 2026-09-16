@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -38,12 +38,27 @@ const { t } = useI18n()
 const router = useRouter()
 const ui = useUIStore()
 const keyword = ref('')
-const order = ref<SortOrder>('asc')
-const cardSize = ref(176)
+const order = computed<SortOrder>({
+  get: () => (ui.librarySortOrder[props.kind] === 'desc' ? 'desc' : 'asc'),
+  set: (value) => {
+    ui.librarySortOrder[props.kind] = value
+  }
+})
+const cardSize = computed<number>({
+  get: () => {
+    const value = ui.libraryCardSize[props.kind]
+    return [144, 176, 224].includes(value) ? value : 176
+  },
+  set: (value) => {
+    ui.libraryCardSize[props.kind] = value
+  }
+})
 const loading = ref(false)
 const items = ref<GridItem[]>([])
 const visibleCoverKeys = ref(new Set<string>())
+const scrollContainer = ref<HTMLElement | null>(null)
 let coverObserver: IntersectionObserver | null = null
+let scrollSaveFrame = 0
 
 const title = computed(() => t(`library.${props.kind}s`))
 const icon = computed(() =>
@@ -57,6 +72,49 @@ const cardSizeOptions = computed(() => [
   { label: t('library.cardSizeMedium'), value: 176 },
   { label: t('library.cardSizeLarge'), value: 224 }
 ])
+const scrollStorageKey = computed(() => `library-scroll-position:${props.kind}`)
+
+function savedScrollTop(): number {
+  try {
+    const value = Number(sessionStorage.getItem(scrollStorageKey.value))
+    return Number.isFinite(value) && value > 0 ? value : 0
+  } catch {
+    return 0
+  }
+}
+function saveScrollPosition(): void {
+  const container = scrollContainer.value
+  if (!container) return
+  try {
+    sessionStorage.setItem(scrollStorageKey.value, String(container.scrollTop))
+  } catch {
+    // Scroll restoration is optional when session storage is unavailable.
+  }
+}
+function scheduleScrollPositionSave(): void {
+  if (scrollSaveFrame) return
+  scrollSaveFrame = requestAnimationFrame(() => {
+    scrollSaveFrame = 0
+    saveScrollPosition()
+  })
+}
+function clearSavedScrollPosition(): void {
+  if (scrollSaveFrame) {
+    cancelAnimationFrame(scrollSaveFrame)
+    scrollSaveFrame = 0
+  }
+  try {
+    sessionStorage.removeItem(scrollStorageKey.value)
+  } catch {
+    // Scroll restoration is optional when session storage is unavailable.
+  }
+}
+async function restoreScrollPosition(): Promise<void> {
+  const top = savedScrollTop()
+  if (!top) return
+  await nextTick()
+  requestAnimationFrame(() => scrollContainer.value?.scrollTo({ top, behavior: 'auto' }))
+}
 
 function valueOrUnknown(value: string | null, kind: LibraryKind): string {
   if (value?.trim()) return value
@@ -82,7 +140,7 @@ function observeCover(element: unknown, item: GridItem): void {
   element.setAttribute('data-cover-key', key)
   coverObserver?.observe(element)
 }
-async function load(): Promise<void> {
+async function load(restoreScroll = false): Promise<void> {
   loading.value = true
   try {
     const action =
@@ -126,9 +184,11 @@ async function load(): Promise<void> {
     }
   } finally {
     loading.value = false
+    if (restoreScroll) await restoreScrollPosition()
   }
 }
 function open(item: GridItem): void {
+  saveScrollPosition()
   const query =
     props.kind === 'album'
       ? {
@@ -140,16 +200,20 @@ function open(item: GridItem): void {
   void router.push({ path: `/${props.kind}/detail`, query })
 }
 function refresh(): void {
+  saveScrollPosition()
   visibleCoverKeys.value = new Set()
-  void load()
+  void load(true)
 }
 
 watch([keyword, order, () => ui.artistSeparator], () => {
   visibleCoverKeys.value = new Set()
+  clearSavedScrollPosition()
   void load()
 })
 watch(cardSize, () => {
   visibleCoverKeys.value = new Set()
+  clearSavedScrollPosition()
+  scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
 })
 onMounted(() => {
   coverObserver = new IntersectionObserver(
@@ -163,9 +227,13 @@ onMounted(() => {
     },
     { rootMargin: '320px 0px' }
   )
-  void load()
+  void load(true)
 })
-onBeforeUnmount(() => coverObserver?.disconnect())
+onBeforeUnmount(() => {
+  if (scrollSaveFrame) cancelAnimationFrame(scrollSaveFrame)
+  saveScrollPosition()
+  coverObserver?.disconnect()
+})
 </script>
 
 <template>
@@ -235,8 +303,10 @@ onBeforeUnmount(() => coverObserver?.disconnect())
     </p>
     <div
       v-else
+      ref="scrollContainer"
       class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pb-20 pr-1"
       :style="gridStyle"
+      @scroll.passive="scheduleScrollPositionSave"
     >
       <div
         v-for="item in items"
