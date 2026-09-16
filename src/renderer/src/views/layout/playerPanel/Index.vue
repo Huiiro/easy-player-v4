@@ -7,7 +7,7 @@ import { CoverAnalyzer } from '@/hooks/useImageColors'
 import { PlayerBgType } from '@/consts'
 import { PlayMode } from '@/consts'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import PlayerLyrics from '@/components/lyrics/PlayerLyrics.vue'
+import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
@@ -1300,6 +1300,7 @@ function changeLyricsOffset(event: WheelEvent): void {
 }
 .player-panel-layout {
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  grid-template-rows: minmax(0, 1fr);
   transition: grid-template-columns 520ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 .player-panel-layout--collapsed {
@@ -1317,6 +1318,8 @@ function changeLyricsOffset(event: WheelEvent): void {
   transform: translateX(-45vw);
 }
 .panel-lyrics {
+  min-height: 0;
+  overflow: hidden;
   padding-right: 0;
   padding-left: 0;
   transition:

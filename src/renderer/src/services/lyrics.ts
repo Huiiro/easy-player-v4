@@ -152,13 +152,16 @@ function parseLrcTrack(source: string): ParsedLrcTrack {
     const content = line.replace(LRC_TIME_TAG, '').trim()
     LRC_TIME_TAG.lastIndex = 0
     const parsed = parseEnhancedWords(content)
-    if (!parsed.text) continue
+    // Timestamp-only entries mark instrumental breaks and must retain timing.
     for (const stamp of stamps) {
       const timeMs = parseTimestamp(stamp[1], stamp[2])
       if (timeMs !== null) lines.push({ timeMs, ...parsed })
     }
   }
 
+  // A file containing only timing markers is still an empty source, so source
+  // fallback can continue. Retain blanks when they delimit actual lyric text.
+  if (!lines.some((entry) => entry.text.trim())) lines.length = 0
   if (!lines.length && plainLines.length)
     lines.push(...plainLines.map((text) => ({ timeMs: 0, text, untimed: true })))
   return { metadata, lines }
