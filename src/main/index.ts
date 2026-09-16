@@ -169,11 +169,9 @@ function updateTrayMenu(): void {
     : 'Easy Player'
   tray.setToolTip(tooltip)
   if (process.platform === 'darwin') {
-    const compactTitle =
-      trayTrack.title.length > 24 ? `${trayTrack.title.slice(0, 23)}…` : trayTrack.title
-    // Keep a compact, persistent now-playing entry on the right side of the
-    // macOS menu bar. Its assigned menu opens only when the entry is clicked.
-    tray.setTitle(` ${compactTitle || 'Easy Player'}`)
+    // Keep the macOS menu-bar item compact; track details remain available in
+    // the tooltip and context menu.
+    tray.setTitle('')
   }
   trayMenu = Menu.buildFromTemplate([
     { label: trackLabel, enabled: false },
