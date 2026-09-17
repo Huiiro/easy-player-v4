@@ -71,7 +71,6 @@ function reset(): void {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
-  border-bottom: 1px solid var(--color-border);
   padding: 1.1rem 1.25rem;
 }
 .toolbar h3,
@@ -109,10 +108,6 @@ function reset(): void {
   text-align: left;
   color: var(--color-text);
   font-size: 0.9rem;
-}
-.shortcut-grid > :nth-child(-n + 3),
-.shortcut-grid > :nth-child(n + 4) {
-  border-bottom: 1px solid var(--color-border);
 }
 .shortcut-grid > :nth-child(n + 4) {
   min-height: 54px;

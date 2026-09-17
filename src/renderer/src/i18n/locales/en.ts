@@ -387,10 +387,9 @@ export default {
   settings: {
     title: 'Settings',
     navigation: 'Navigation',
-    description: 'Adjust the interface appearance and theme to suit your listening environment.',
+    description: 'Configure player behavior and preferences.',
     fonts: 'Fonts',
-    fontsDescription:
-      'Fonts apply globally. Add font files to player_data/ttf, then refresh to load them.',
+    fontsDescription: 'Set the global font style, custom fonts supported.',
     interfaceFont: 'Interface font',
     interfaceFontDescription: 'Choose a system font or an imported custom font.',
     fontSystemDefault: 'System default',
@@ -407,16 +406,16 @@ export default {
     refreshFonts: 'Refresh fonts',
     openFontDirectory: 'Open font directory',
     language: 'Language',
-    languageDescription: 'Choose the language used by the player interface.',
+    languageDescription: 'Set the display language used in the player interface.',
     interfaceLanguage: 'Interface language',
     interfaceLanguageDescription: 'Applies to the current player session immediately.',
     languageChinese: 'Simplified Chinese',
     languageEnglish: 'English',
     theme: 'Theme',
-    themeDescription: 'Choose the light or dark scheme and interface accent color.',
+    themeDescription: 'Set System Theme.',
     followSystemTheme: 'Follow system theme',
     followSystemThemeDescription:
-      'Uses the Windows or macOS light/dark appearance and disables custom theme backgrounds.',
+      'Automatically follows the system light/dark appearance and disables other theme effects.',
     micaEffect: 'Windows Mica effect',
     micaEffectDescription:
       'Uses native Windows 11 Mica, follows the system automatically, and disables other theme effects.',
@@ -441,8 +440,7 @@ export default {
     themeColor: 'Theme Color',
     themeColorDescription: 'Used for progress, selection states, and primary actions.',
     customBackground: 'Custom Background',
-    customBackgroundDescription:
-      'Use your own images and adjust effects without sacrificing readability.',
+    customBackgroundDescription: 'Supports custom background images and system styles.',
     backgroundImage: 'Background Image',
     noImageSelected: 'No image selected',
     enabled: 'Enabled',
@@ -458,7 +456,7 @@ export default {
     footerBackground: 'Footer background',
     globalBorder: 'Global borders',
     playback: 'Playback',
-    playbackDescription: 'Control how the previous playback session is restored at startup.',
+    playbackDescription: 'Adjust playback behavior and related settings.',
     library: 'Library',
     libraryDescription: 'Configure how songs, artists, and other library content are identified.',
     audioControlPanel: 'Audio control panel',
@@ -504,13 +502,13 @@ export default {
     shortcutVolumeDown: 'Volume −',
     autoPlayOnRestore: 'Autoplay on startup',
     autoPlayOnRestoreDescription:
-      'When enabled, playback resumes only if music was playing before exit; otherwise the track and position are restored paused.',
+      'When enabled, playback will resume from where it left off after startup.',
     autoAdjustLyricsDisplay: 'Automatically size lyrics and spacing',
     autoAdjustLyricsDisplayDescription:
-      'Use the default 1.0× size and spacing at the minimum window, scaling to their maximum values at full screen; manual adjustments still work.',
+      'When enabled, the lyrics font size and line spacing on the player page will be adjusted automatically.',
     footerOpenMode: 'Player Open Mode',
-    footerOpenAnywhere: 'Click anywhere on the player controls to open',
-    footerOpenModeDescription: 'Choose which part of the footer opens the player panel.',
+    footerOpenAnywhere: 'Open player only via album cover',
+    footerOpenModeDescription: 'When disabled, the player can be opened from anywhere.',
     footerOpenAll: 'Anywhere',
     footerOpenCover: 'Cover only',
     sleepTimer: 'Sleep timer',
@@ -521,8 +519,8 @@ export default {
     stopAfterCurrent: 'Stop after current track',
     stopAfterCurrentDescription:
       'When the timer expires, finish the current track before stopping.',
-    playerBackground: 'Player background',
-    playerBackgroundDescription: 'Choose the immersive backdrop for the player panel.',
+    playerBackground: 'Player',
+    playerBackgroundDescription: 'Configure effects related to the player page.',
     playerBackgroundStyle: 'Background style',
     playerBackgroundStyleDescription:
       'Album artwork automatically receives blur, gradients, and rhythm effects.',
@@ -531,7 +529,10 @@ export default {
     playerBackgroundLiquid: 'Liquid flow',
     playerBackgroundDefault: 'Solid',
     lyrics: 'Lyrics',
-    lyricsDescription: 'Adjust the lyric loading priority.',
+    lyricsDescription: 'Set the lyrics loading method.',
+    lyricsPriority: 'Lyrics Priority',
+    lyricsPriorityDescription:
+      'Set the lyrics priority order. When the current source is unavailable, it automatically searches the next one.',
     lyricsDrag: 'Drag to change priority',
     lyricsFirst: 'Preferred source',
     lyricsFallback: 'Used when earlier sources are unavailable',
@@ -539,8 +540,7 @@ export default {
     autoSearchNetworkLyricsDescription:
       'Only in Auto mode, when embedded, database, and local lyrics are unavailable, use the first match.',
     desktopLyrics: 'Desktop lyrics',
-    desktopLyricsDescription:
-      'Configure desktop lyric appearance; changes are applied to the separate window immediately.',
+    desktopLyricsDescription: 'Configure the display effects of desktop lyrics.',
     desktopLyricsEnabled: 'Enable desktop lyrics',
     desktopLyricsEnabledDescription:
       'Show an always-on-top lyric window that can be resized and dragged.',
@@ -559,16 +559,14 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
-    normalizeArtistSeparator: 'Normalize artist separators',
+    normalizeArtistSeparator: 'Normalize separators',
     normalizeArtistSeparatorDescription:
-      'Display recognized separators uniformly as /. Turn this off to preserve the original song text.',
-    artistSeparator: 'Multiple-artist separator',
-    artistSeparatorDescription:
-      'Enter multiple separator characters to recognize different formats. For example, /; splits both aaa/bbb and aaa;bbb. Leave empty to disable.',
+      'When enabled, separators will be uniformly replaced with / .',
+    artistSeparator: 'Artist separator',
+    artistSeparatorDescription: 'Multiple separators supported, format: -/:;&.',
     artistSeparatorPlaceholder: 'For example /;',
-    localFileManagement: 'Local File Management',
-    localFileManagementDescription:
-      'Manage remote cache, library backups, and moved-file recovery.',
+    cacheManagement: 'Cache Management',
+    cacheManagementDescription: 'Manage the remote music cache location and storage limit.',
     libraryBackup: 'Library Backup',
     libraryBackupDescription: 'Export or import songs, playlists, tags, and settings.',
     exportLibrary: 'Export Backup',

@@ -117,9 +117,6 @@ watch(
   gap: 2rem;
   padding: 1.1rem 1.25rem;
 }
-.system-row + .system-row {
-  border-top: 1px solid var(--color-border);
-}
 .system-row h3 {
   color: var(--color-text);
   font-size: 0.9rem;

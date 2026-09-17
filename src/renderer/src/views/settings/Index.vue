@@ -16,7 +16,8 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
 import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
-import LocalFileManagement from '@/components/settings/LocalFileManagement.vue'
+import CacheSettings from '@/components/settings/CacheSettings.vue'
+import LibrarySettings from '@/components/settings/LibrarySettings.vue'
 import Draggable from 'vuedraggable'
 
 const ui = useUIStore()
@@ -29,16 +30,16 @@ let navigatingBySidebar = false
 let sidebarScrollTimer: number | undefined
 const navigationSections = computed(() => [
   { id: 'playback', label: t('settings.playback') },
-  { id: 'library', label: t('settings.library') },
   { id: 'fonts', label: t('settings.fonts') },
   { id: 'language', label: t('settings.language') },
   { id: 'background', label: t('settings.playerBackground') },
   { id: 'theme', label: t('settings.theme') },
   { id: 'customBackground', label: t('settings.customBackground') },
-  { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
   { id: 'lyrics', label: t('settings.lyrics') },
+  { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
   { id: 'shortcuts', label: t('settings.shortcuts') },
-  { id: 'local-files', label: t('settings.localFileManagement') },
+  { id: 'library', label: t('settings.library') },
+  { id: 'cache', label: t('settings.cacheManagement') },
   { id: 'system', label: t('settings.system') },
   { id: 'other', label: t('settings.other') }
 ])
@@ -71,6 +72,10 @@ const themeBackgroundOptions = computed(() => [
       label: t(background.labelKey)
     }))
 ])
+const openFooterAnywhere = computed({
+  get: () => ui.footerOpenMode === 'cover',
+  set: (enabled: boolean) => (ui.footerOpenMode = enabled ? 'cover' : 'all')
+})
 function isThemeBackgroundSelected(value: ThemeBackgroundChoice): boolean {
   if (value === 'custom') return ui.useCustomBg
   if (ui.useCustomBg) return false
@@ -241,36 +246,6 @@ onBeforeUnmount(() => {
           </div>
           <PlaybackSettings />
         </section>
-        <!-- library -->
-        <section id="library" class="settings-section">
-          <div class="section-heading">
-            <div>
-              <h2>{{ t('settings.library') }}</h2>
-              <p>{{ t('settings.libraryDescription') }}</p>
-            </div>
-          </div>
-          <div class="settings-card">
-            <div class="setting-row border-b border-border">
-              <div>
-                <h3>{{ t('settings.normalizeArtistSeparator') }}</h3>
-                <p>{{ t('settings.normalizeArtistSeparatorDescription') }}</p>
-              </div>
-              <BaseSwitch v-model="ui.normalizeArtistSeparator" size="md" />
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.artistSeparator') }}</h3>
-                <p>{{ t('settings.artistSeparatorDescription') }}</p>
-              </div>
-              <input
-                v-model="ui.artistSeparator"
-                class="input-base h-9 w-28 text-center"
-                :placeholder="t('settings.artistSeparatorPlaceholder')"
-                maxlength="8"
-              />
-            </div>
-          </div>
-        </section>
         <!-- font -->
         <section id="fonts" class="settings-section">
           <div class="section-heading">
@@ -378,6 +353,20 @@ onBeforeUnmount(() => {
                   <span>{{ t('settings.playerBackgroundLiquid') }}</span>
                 </button>
               </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.autoAdjustLyricsDisplay') }}</h3>
+                <p>{{ t('settings.autoAdjustLyricsDisplayDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.footerOpenAnywhere') }}</h3>
+                <p>{{ t('settings.footerOpenModeDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="openFooterAnywhere" size="md" />
             </div>
           </div>
         </section>
@@ -579,6 +568,51 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </section>
+        <!-- lyrics -->
+        <section id="lyrics" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.lyrics') }}</h2>
+              <p>{{ t('settings.lyricsDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.lyricsPriority') }}</h3>
+                <p>{{ t('settings.lyricsPriorityDescription') }}</p>
+              </div>
+            </div>
+            <Draggable
+              v-model="ui.lyricSourceOrder"
+              :item-key="lyricSourceKey"
+              handle=".lyric-drag-handle"
+            >
+              <template #item="{ element: source, index }">
+                <div class="setting-row">
+                  <div class="flex items-center gap-3">
+                    <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
+                      <SvgIcon name="common-drag" class-name="size-4" />
+                    </button>
+                    <div>
+                      <h3>{{ t(`lyrics.source.${source}`) }}</h3>
+                      <p>
+                        {{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </Draggable>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
+                <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
+            </div>
+          </div>
+        </section>
         <!-- desktop lyrics -->
         <section id="desktop-lyrics" class="settings-section">
           <div class="section-heading">
@@ -693,45 +727,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </section>
-        <!-- lyrics -->
-        <section id="lyrics" class="settings-section">
-          <div class="section-heading">
-            <div>
-              <h2>{{ t('settings.lyrics') }}</h2>
-              <p>{{ t('settings.lyricsDescription') }}</p>
-            </div>
-          </div>
-          <div class="settings-card">
-            <Draggable
-              v-model="ui.lyricSourceOrder"
-              :item-key="lyricSourceKey"
-              handle=".lyric-drag-handle"
-            >
-              <template #item="{ element: source, index }">
-                <div class="setting-row border-border border-b">
-                  <div class="flex items-center gap-3">
-                    <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
-                      <SvgIcon name="common-drag" class-name="size-4" />
-                    </button>
-                    <div>
-                      <h3>{{ t(`lyrics.source.${source}`) }}</h3>
-                      <p>
-                        {{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </Draggable>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
-                <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
-              </div>
-              <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-            </div>
-          </div>
-        </section>
         <!-- shortcuts -->
         <section id="shortcuts" class="settings-section">
           <div class="section-heading">
@@ -742,15 +737,27 @@ onBeforeUnmount(() => {
           </div>
           <ShortcutSettings />
         </section>
-        <!-- local file -->
-        <section id="local-files" class="settings-section">
+        <!-- library -->
+        <section id="library" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.localFileManagement') }}</h2>
-              <p>{{ t('settings.localFileManagementDescription') }}</p>
+              <h2>{{ t('settings.library') }}</h2>
+              <p>{{ t('settings.libraryDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card"><LocalFileManagement /></div>
+          <div class="settings-card">
+            <LibrarySettings />
+          </div>
+        </section>
+        <!-- cache -->
+        <section id="cache" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>{{ t('settings.cacheManagement') }}</h2>
+              <p>{{ t('settings.cacheManagementDescription') }}</p>
+            </div>
+          </div>
+          <div class="settings-card"><CacheSettings /></div>
         </section>
         <!-- system -->
         <section id="system" class="settings-section">
