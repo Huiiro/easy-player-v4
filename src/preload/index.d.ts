@@ -301,6 +301,11 @@ declare global {
         ): () => void
       }
       lyrics: {
+        openInEditor(request: {
+          songId: number
+          lyrics: string
+          lyricFormat?: string
+        }): Promise<{ success: boolean; error?: string }>
         loadSource(
           audioPath: string,
           source: 'embedded' | 'local' | 'network'

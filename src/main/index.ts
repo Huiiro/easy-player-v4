@@ -14,6 +14,7 @@ import {
 } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import { release as osRelease } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AudioEngineManager } from './audioEngine'
@@ -772,6 +773,44 @@ app.whenReady().then(() => {
     }
     shell.showItemInFolder(audioPath)
     return { success: true }
+  })
+  ipcMain.handle('lyrics:open-in-editor', async (_event, request: unknown) => {
+    const value = request as { songId?: unknown; lyrics?: unknown; lyricFormat?: unknown }
+    if (!Number.isInteger(value?.songId)) return { success: false, error: 'Invalid song id' }
+    if (typeof value.lyrics !== 'string' || value.lyrics.length > 1_000_000)
+      return { success: false, error: 'Invalid lyrics' }
+    const song = getSong(value.songId as number)
+    if (!song) return { success: false, error: 'Song not found' }
+
+    let audioPath = song.audio
+    if (!existsSync(audioPath) && song.sourceId) {
+      try {
+        audioPath = await cacheRemoteSong(song.id)
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
+    }
+    if (!existsSync(audioPath)) return { success: false, error: 'Song file is unavailable' }
+
+    const payloadPath = join(app.getPath('temp'), `lyric-timeline-${randomUUID()}.json`)
+    const payload = {
+      version: 1,
+      audioPath,
+      title: song.title,
+      artist: song.artist || '',
+      album: song.album || '',
+      lyrics: value.lyrics,
+      ...(typeof value.lyricFormat === 'string' ? { lyricFormat: value.lyricFormat } : {})
+    }
+    try {
+      await fs.writeFile(payloadPath, JSON.stringify(payload), { encoding: 'utf8', flag: 'wx' })
+      await shell.openExternal(`lyric-timeline://open?payload=${encodeURIComponent(payloadPath)}`)
+      setTimeout(() => void fs.unlink(payloadPath).catch(() => undefined), 60_000)
+      return { success: true }
+    } catch (error) {
+      await fs.unlink(payloadPath).catch(() => undefined)
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   })
   ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
     const value = config as { type?: unknown; baseUrl?: unknown; user?: unknown; secret?: unknown }

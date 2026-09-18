@@ -418,6 +418,11 @@ const appUpdateAPI = {
 }
 
 const lyricsAPI = {
+  openInEditor: (request: { songId: number; lyrics: string; lyricFormat?: string }) =>
+    ipcRenderer.invoke('lyrics:open-in-editor', request) as Promise<{
+      success: boolean
+      error?: string
+    }>,
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
   searchNetwork: ({

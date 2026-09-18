@@ -901,11 +901,15 @@ onUnmounted(() => {
 }
 
 .lyric-main {
+  min-width: 0;
+  max-width: 100%;
   padding: 0 calc(var(--lrc-padding) + 40px);
   color: var(--lrc-default);
   font-size: var(--lrc-size);
   line-height: var(--lrc-height);
   font-weight: 700;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .lyric-plain {
@@ -1000,7 +1004,9 @@ onUnmounted(() => {
 }
 .lyric-word {
   display: inline-block;
-  white-space: pre;
+  max-width: 100%;
+  white-space: normal;
+  vertical-align: bottom;
 }
 .lyric-karaoke-char {
   font-size: inherit;
@@ -1009,7 +1015,6 @@ onUnmounted(() => {
   transform-origin: center bottom;
   will-change: transform, opacity;
   scale: 1.06;
-  letter-spacing: 3px;
 }
 .reduce-motion .lyric-karaoke-char,
 .no-transform .lyric-karaoke-char {

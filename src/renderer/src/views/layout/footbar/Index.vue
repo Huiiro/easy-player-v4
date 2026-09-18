@@ -16,6 +16,7 @@ import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
 import { formatArtists, splitArtists } from '@/utils/artists'
+import { isLyricFormat, parseLyrics, type LyricFormat, type LyricSource } from '@/services/lyrics'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -29,6 +30,11 @@ const moreVisible = ref(false)
 const detailsVisible = ref(false)
 const tagVisible = ref(false)
 const playlistVisible = ref(false)
+const lyricSourceVisible = ref(false)
+const lyricSourcesLoading = ref(false)
+const lyricSourceOptions = ref<
+  Array<{ source: LyricSource; content: string; format?: LyricFormat }>
+>([])
 const SWIPE_DISTANCE = 56
 const SWIPE_DIRECTION_RATIO = 1.25
 const SWIPE_SETTLE_DURATION = 240
@@ -352,6 +358,91 @@ function locateSong(): void {
   eventBus.emit('locateCurrentSong')
   moreVisible.value = false
 }
+function hasUsableLyrics(content: string, format?: LyricFormat): boolean {
+  try {
+    return parseLyrics({ content, format, source: 'database' }).lines.length > 0
+  } catch {
+    return false
+  }
+}
+async function sendToLyricEditor(option?: {
+  content: string
+  format?: LyricFormat
+}): Promise<void> {
+  if (!currentSong.value) return
+  const response = await window.api.lyrics.openInEditor({
+    songId: currentSong.value.id,
+    lyrics: option?.content || '',
+    lyricFormat: option?.format
+  })
+  if (response.success) {
+    if (player.isPlaying) await player.pause()
+  } else {
+    error(response.error || t('footer.openInLyricEditorFailed'))
+  }
+  lyricSourceVisible.value = false
+  moreVisible.value = false
+}
+async function loadLyricSourceOptions(): Promise<
+  Array<{ source: LyricSource; content: string; format?: LyricFormat }>
+> {
+  const song = currentSong.value
+  if (!song) return []
+  const [embedded, local, database, network] = await Promise.all([
+    window.api.lyrics.loadSource(song.audio, 'embedded'),
+    window.api.lyrics.loadSource(song.audio, 'local'),
+    window.api.database.command('getSong', { id: song.id }),
+    window.api.lyrics.searchNetwork({
+      title: song.title,
+      artist: song.artist,
+      album: song.album
+    })
+  ])
+  const databaseSong = database.success
+    ? (database.data as { lrc?: string | null; lyricFormat?: unknown })
+    : null
+  const networkCandidate = network.success ? network.data?.[0] : null
+  const candidates = [
+    {
+      source: 'embedded' as const,
+      content: embedded.success ? embedded.data?.content || '' : '',
+      format: embedded.success ? embedded.data?.format : undefined
+    },
+    {
+      source: 'database' as const,
+      content: databaseSong?.lrc || '',
+      format: isLyricFormat(databaseSong?.lyricFormat) ? databaseSong.lyricFormat : undefined
+    },
+    {
+      source: 'local' as const,
+      content: local.success ? local.data?.content || '' : '',
+      format: local.success ? local.data?.format : undefined
+    },
+    {
+      source: 'network' as const,
+      content: networkCandidate?.lrc || '',
+      format: networkCandidate?.format
+    }
+  ]
+  return candidates.filter((item) => hasUsableLyrics(item.content, item.format))
+}
+async function openInLyricEditor(): Promise<void> {
+  if (!currentSong.value || lyricSourcesLoading.value) return
+  lyricSourcesLoading.value = true
+  moreVisible.value = false
+  try {
+    lyricSourceOptions.value = await loadLyricSourceOptions()
+    if (lyricSourceOptions.value.length <= 1) {
+      await sendToLyricEditor(lyricSourceOptions.value[0])
+    } else {
+      lyricSourceVisible.value = true
+    }
+  } catch (reason) {
+    error(reason instanceof Error ? reason.message : t('footer.openInLyricEditorFailed'))
+  } finally {
+    lyricSourcesLoading.value = false
+  }
+}
 function toggleMoreMenu(): void {
   moreVisible.value = !moreVisible.value
   if (moreVisible.value) eventBus.emit('songActionsMenuOpened', 'footer')
@@ -607,6 +698,10 @@ onBeforeUnmount(() => {
             <button class="menu-item flex items-center gap-2" @click="locateSong">
               <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
             </button>
+            <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
+              <SvgIcon name="common-lyrics" class-name="size-4" />
+              {{ t('footer.openInLyricEditor') }}
+            </button>
           </div>
         </div>
       </div>
@@ -654,6 +749,23 @@ onBeforeUnmount(() => {
       v-model="playlistVisible"
       :song-ids="currentSong ? [currentSong.id] : []"
     />
+    <BaseDialog
+      v-model="lyricSourceVisible"
+      class="pointer-events-auto"
+      :title="t('footer.chooseLyricSource')"
+      width="max-w-sm"
+    >
+      <div class="grid gap-2">
+        <button
+          v-for="option in lyricSourceOptions"
+          :key="option.source"
+          class="menu-item rounded-xl border border-border px-4 py-3 text-left"
+          @click="sendToLyricEditor(option)"
+        >
+          {{ t(`lyrics.source.${option.source}`) }}
+        </button>
+      </div>
+    </BaseDialog>
   </div>
 </template>
 
