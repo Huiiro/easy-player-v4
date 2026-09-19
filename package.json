@@ -1,6 +1,6 @@
 {
   "name": "easy-player",
-  "version": "3.0.18",
+  "version": "3.0.19",
   "description": "Easy Player V4",
   "main": "./out/main/index.js",
   "author": "huiiro",
@@ -50,7 +50,7 @@
     "@vitejs/plugin-vue": "^6.0.2",
     "cmake-js": "^8.0.0",
     "electron": "^39.2.6",
-    "electron-builder": "^26.0.12",
+    "electron-builder": "^26.16.1",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.1",
     "eslint-plugin-vue": "^10.6.2",
