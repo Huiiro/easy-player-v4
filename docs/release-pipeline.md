@@ -1,17 +1,21 @@
 # Desktop release pipeline
 
-Pushing a tag named `v<package-version>` (for example `v3.0.9`) builds the
-Windows x64 installer and the macOS arm64 DMG/ZIP, then creates a GitHub
-Release containing the installers, blockmaps and update manifests. The tag is
-checked against `package.json` before either platform starts building.
+Pushing a tag named `v<package-version>` (for example `v3.0.17`) builds the
+Windows x64 installer, macOS arm64 DMG/ZIP, and Linux x64
+AppImage/DEB/Snap packages. It then creates a GitHub Release containing the
+installers, blockmaps, and update manifests. The tag is checked against
+`package.json` before any platform starts building.
 
-Pull requests and ordinary pushes run the platform CI workflows. They build
-the application but do not publish a release. A manual run of **Release
-desktop apps** also packages both platforms without publishing.
+Pull requests and ordinary branch pushes run the Windows, macOS, and Linux CI
+workflows. They build the application but do not publish a release. Release
+tags skip these duplicate CI builds. A manual run of **Release desktop apps**
+packages all three platforms and retains the packages as workflow artifacts,
+without creating a GitHub Release.
 
-The packaging workflows intentionally use `build:nocheck`. The current
-renderer type-check target has pre-existing errors outside the desktop build
-and must be repaired before it can become a required release gate.
+The packaging workflows intentionally use `build:nocheck`, including the
+`build:linux` script. The current renderer type-check target has pre-existing
+errors outside the desktop build and must be repaired before it can become a
+required release gate.
 
 ## Repository secrets
 

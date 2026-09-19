@@ -1,4 +1,4 @@
-name: macOS build
+name: Linux build
 
 on:
   push:
@@ -10,22 +10,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: macos-ci-${{ github.ref }}
+  group: linux-ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify:
-    runs-on: macos-14
-    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install native dependencies
-        run: brew install ffmpeg libsamplerate sound-touch
       - name: Install JavaScript dependencies
         run: npm ci
-      - name: Build macOS package
-        run: npm run build:mac -- --publish never
+      - name: Build unpacked Linux application
+        run: npm run build:nocheck && npx electron-builder --linux --dir --publish never

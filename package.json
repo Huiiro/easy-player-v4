@@ -1,6 +1,6 @@
 {
   "name": "easy-player",
-  "version": "3.0.16",
+  "version": "3.0.17",
   "description": "Easy Player V4",
   "main": "./out/main/index.js",
   "author": "huiiro",
@@ -25,7 +25,7 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build:native && npm run build:nocheck && electron-builder --win",
     "build:mac": "npm run build:native && node scripts/bundle-macos-native-deps.js && npm run build:nocheck && electron-builder --mac",
-    "build:linux": "npm run build && electron-builder --linux"
+    "build:linux": "npm run build:nocheck && electron-builder --linux"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

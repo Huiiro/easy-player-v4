@@ -5,6 +5,10 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -15,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: Ensure the tag matches package.json
         if: github.ref_type == 'tag'
         run: test "v$(node -p \"require('./package.json').version\")" = "$GITHUB_REF_NAME"
@@ -23,6 +27,7 @@ jobs:
   package-windows:
     needs: verify-version
     runs-on: windows-latest
+    timeout-minutes: 90
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       # Leave these secrets unset to produce an unsigned test/release build.
@@ -32,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
@@ -56,6 +61,7 @@ jobs:
   package-macos:
     needs: verify-version
     runs-on: macos-14
+    timeout-minutes: 45
     env:
       # Leave signing/notarization secrets unset to produce an unsigned build.
       CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
@@ -67,7 +73,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - name: Install native dependencies
         run: brew install ffmpeg libsamplerate sound-touch
@@ -86,8 +92,34 @@ jobs:
             dist/*-mac.zip.blockmap
             dist/latest-mac.yml
 
+  package-linux:
+    needs: verify-version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install Linux packaging dependencies
+        run: sudo snap install snapcraft --classic
+      - name: Install JavaScript dependencies
+        run: npm ci
+      - name: Build Linux packages
+        run: npm run build:linux -- --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-release
+          if-no-files-found: error
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.snap
+            dist/latest-linux.yml
+
   publish:
-    needs: [package-windows, package-macos]
+    needs: [package-windows, package-macos, package-linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref_type == 'tag'
     steps:
