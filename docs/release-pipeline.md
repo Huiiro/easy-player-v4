@@ -1,6 +1,6 @@
 # Desktop release pipeline
 
-Pushing a tag named `v<package-version>` (for example `v3.0.17`) builds the
+Pushing a tag named `v<package-version>` (for example `v3.0.18`) builds the
 Windows x64 installer, macOS arm64 DMG/ZIP, and Linux x64
 AppImage/DEB/Snap packages. It then creates a GitHub Release containing the
 installers, blockmaps, and update manifests. The tag is checked against

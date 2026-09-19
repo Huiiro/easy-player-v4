@@ -22,7 +22,8 @@ jobs:
           node-version-file: .nvmrc
       - name: Ensure the tag matches package.json
         if: github.ref_type == 'tag'
-        run: test "v$(node -p \"require('./package.json').version\")" = "$GITHUB_REF_NAME"
+        run: |
+          node -e "const actual = 'v' + require('./package.json').version; if (actual !== process.env.GITHUB_REF_NAME) { console.error('Version mismatch: expected ' + actual + ', got ' + process.env.GITHUB_REF_NAME); process.exit(1) }"
 
   package-windows:
     needs: verify-version
