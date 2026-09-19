@@ -1,8 +1,8 @@
 # Desktop release pipeline
 
-Pushing a tag named `v<package-version>` (for example `v3.0.19`) builds the
+Pushing a tag named `v<package-version>` (for example `v3.0.20`) builds the
 Windows x64 installer, macOS arm64 DMG/ZIP, and Linux x64
-AppImage/DEB/Snap packages. It then creates a GitHub Release containing the
+AppImage/DEB packages. It then creates a GitHub Release containing the
 installers, blockmaps, and update manifests. The tag is checked against
 `package.json` before any platform starts building.
 
@@ -19,8 +19,9 @@ required release gate.
 
 ## Repository secrets
 
-The workflows build unsigned packages when these secrets are absent. Add the
-following repository secrets before distributing signed binaries:
+The workflows build unsigned packages by default. Add the following repository
+secrets before distributing signed binaries, then set the repository variable
+`ENABLE_WINDOWS_SIGNING` or `ENABLE_MACOS_SIGNING` to `true` for that platform:
 
 | Platform           | Secret                        | Value                                                                            |
 | ------------------ | ----------------------------- | -------------------------------------------------------------------------------- |

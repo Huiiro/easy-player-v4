@@ -31,9 +31,9 @@ jobs:
     timeout-minutes: 90
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
-      # Leave these secrets unset to produce an unsigned test/release build.
-      CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+      # Signing is opt-in so stale or partial secrets cannot block a release.
+      CSC_LINK: ${{ vars.ENABLE_WINDOWS_SIGNING == 'true' && secrets.WINDOWS_CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ vars.ENABLE_WINDOWS_SIGNING == 'true' && secrets.WINDOWS_CSC_KEY_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -64,12 +64,12 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 45
     env:
-      # Leave signing/notarization secrets unset to produce an unsigned build.
-      CSC_LINK: ${{ secrets.MACOS_CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.MACOS_CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Signing is opt-in so stale or partial secrets cannot block a release.
+      CSC_LINK: ${{ vars.ENABLE_MACOS_SIGNING == 'true' && secrets.MACOS_CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ vars.ENABLE_MACOS_SIGNING == 'true' && secrets.MACOS_CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ vars.ENABLE_MACOS_SIGNING == 'true' && secrets.APPLE_ID || '' }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ vars.ENABLE_MACOS_SIGNING == 'true' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ vars.ENABLE_MACOS_SIGNING == 'true' && secrets.APPLE_TEAM_ID || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -103,8 +103,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install Linux packaging dependencies
-        run: sudo snap install snapcraft --classic
       - name: Install JavaScript dependencies
         run: npm ci
       - name: Build Linux packages
@@ -116,7 +114,6 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
-            dist/*.snap
             dist/latest-linux.yml
 
   publish:

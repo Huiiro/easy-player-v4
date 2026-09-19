@@ -84,7 +84,6 @@ linux:
       to: 'tools/yt-dlp/yt-dlp'
   target:
     - AppImage
-    - snap
     - deb
   maintainer: electronjs.org
   category: Utility
