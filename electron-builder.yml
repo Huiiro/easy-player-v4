@@ -78,7 +78,7 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
-  icon: resources/easy-player.ico
+  icon: resources/easy-player.png
   extraResources:
     - from: 'resources/tools/yt-dlp/linux/${arch}/yt-dlp'
       to: 'tools/yt-dlp/yt-dlp'
