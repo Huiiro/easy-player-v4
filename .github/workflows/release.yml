@@ -47,7 +47,14 @@ jobs:
           & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
           & "$env:VCPKG_ROOT/vcpkg.exe" install ffmpeg libsamplerate soundtouch --triplet x64-windows
       - name: Build Windows installer
-        run: npm run build:win -- --publish never
+        shell: pwsh
+        run: |
+          $env:ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
+          npm run build:win -- --publish never --config.compression=maximum
+          $installer = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          if ($null -eq $installer) { throw 'Windows installer was not generated' }
+          Write-Host "Windows installer size: $([math]::Round($installer.Length / 1MB, 1)) MiB"
+          if ($installer.Length -gt 250MB) { throw 'Windows installer exceeds 250 MiB; refusing to publish' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release

@@ -37,4 +37,8 @@ jobs:
       - name: Build native addon
         run: npm run build:native
       - name: Build unpacked Windows application
-        run: npm run build:nocheck && npx electron-builder --win --dir --publish never
+        shell: pwsh
+        run: |
+          $env:ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
+          npm run build:nocheck
+          npx electron-builder --win --dir --publish never --config.compression=maximum
