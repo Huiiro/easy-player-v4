@@ -18,7 +18,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 90
     env:
-      VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      VCPKG_ROOT: ${{ runner.temp }}\easy-player-vcpkg
       ELECTRON_BUILDER_7Z_FILTER: BCJ
       ELECTRON_BUILDER_COMPRESSION_LEVEL: '9'
     steps:
@@ -33,7 +33,9 @@ jobs:
         shell: pwsh
         run: |
           git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT/vcpkg.exe" install ffmpeg libsamplerate soundtouch --triplet x64-windows
       - name: Build native addon
         run: npm run build:native
@@ -43,4 +45,7 @@ jobs:
           $env:ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
           $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '9'
           npm run build:nocheck
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npx electron-builder --win --dir --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/verify-windows-package.cjs

@@ -4,6 +4,7 @@ compression: maximum
 directories:
   buildResources: build
 files:
+  - '!vcpkg{,/**/*}'
   # The desktop package runs the compiled Electron output only. Keep mobile
   # projects, native source trees and build artifacts out of app.asar.
   - '!{android-app,engine-android,mobile}/**/*'
@@ -50,8 +51,7 @@ win:
       to: 'tools/yt-dlp/yt-dlp.exe'
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
-  # Prefer a compact solid archive. Differential-aware NSIS packaging forces
-  # non-solid 1 MiB blocks and produced a 523 MiB installer in GitHub Actions.
+  # Prefer a compact solid archive for the full installer.
   differentialPackage: false
   installerIcon: resources/easy-player.ico
   uninstallerIcon: resources/easy-player.ico
