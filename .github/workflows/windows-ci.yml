@@ -20,6 +20,7 @@ jobs:
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
       ELECTRON_BUILDER_7Z_FILTER: BCJ
+      ELECTRON_BUILDER_COMPRESSION_LEVEL: '9'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,5 +41,6 @@ jobs:
         shell: pwsh
         run: |
           $env:ELECTRON_BUILDER_7Z_FILTER = 'BCJ'
+          $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '9'
           npm run build:nocheck
-          npx electron-builder --win --dir --publish never --config.compression=maximum
+          npx electron-builder --win --dir --publish never
