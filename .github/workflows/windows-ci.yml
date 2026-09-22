@@ -19,6 +19,7 @@ jobs:
     timeout-minutes: 90
     env:
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+      ELECTRON_BUILDER_7Z_FILTER: BCJ
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
