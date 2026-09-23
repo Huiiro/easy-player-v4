@@ -120,9 +120,9 @@ onUnmounted(removeUpdateListener)
   border-radius: 9999px;
   color: var(--color-text-l);
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    transform 0.15s ease;
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .mini-action:hover {
   color: var(--color-text);

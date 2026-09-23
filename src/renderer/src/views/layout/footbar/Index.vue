@@ -549,11 +549,11 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="footerRoot"
-    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 transition-transform duration-300 max-[700px]:px-3 max-[700px]:pb-3 select-none"
+    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 transition-transform duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:pb-3 select-none"
     :style="{ transform: autoHideActive && footerHidden ? 'translateY(100%)' : '' }"
   >
     <section
-      class="app-footer pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
+      class="app-footer pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-[var(--motion-duration-slow)] max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
       :class="
         collapsed
           ? 'app-footer--collapsed grid-cols-[minmax(0,1fr)_auto_auto] max-w-md gap-3'
@@ -698,7 +698,7 @@ onBeforeUnmount(() => {
             />
           </button>
           <div
-            class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+            class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-[var(--motion-duration-fast)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
           >
             <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
             <input
@@ -925,17 +925,15 @@ onBeforeUnmount(() => {
   background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));
   will-change: max-width, grid-template-columns;
   transition:
-    max-width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-    grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    gap 0.32s cubic-bezier(0.22, 1, 0.36, 1),
-    background-color 0.3s ease,
-    border-color 0.3s ease;
+    max-width var(--motion-duration-emphasized) var(--motion-ease-spring),
+    grid-template-columns var(--motion-duration-slow) var(--motion-ease-emphasized),
+    gap var(--motion-duration-slow) var(--motion-ease-emphasized);
 }
 .app-footer--collapsed {
   position: relative;
   overflow: hidden;
   touch-action: pan-y;
-  animation: footer-collapse-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: footer-collapse-settle var(--motion-duration-emphasized) var(--motion-ease-spring);
 }
 .collapsed-song-carousel {
   position: absolute;
@@ -962,7 +960,7 @@ onBeforeUnmount(() => {
   grid-column: 2;
 }
 .app-footer--expanded {
-  animation: footer-expand-settle 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: footer-expand-settle var(--motion-duration-emphasized) var(--motion-ease-spring);
 }
 @keyframes footer-collapse-settle {
   0% {

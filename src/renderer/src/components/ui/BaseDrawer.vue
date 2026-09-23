@@ -158,10 +158,10 @@ const leaveTo = computed(() => {
 
       <TransitionChild
         as="template"
-        enter="transition-opacity duration-200 ease-out"
+        enter="transition-opacity duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
         enter-from="opacity-0"
         enter-to="opacity-100"
-        leave="transition-opacity duration-150 ease-in"
+        leave="transition-opacity duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
@@ -174,8 +174,8 @@ const leaveTo = computed(() => {
         as="template"
         enter="
     transition-transform
-    duration-200
-    ease-out
+    duration-[var(--motion-duration-standard)]
+    ease-[var(--motion-ease-enter)]
   "
         :enter-from="enterFrom"
         enter-to="
@@ -184,8 +184,8 @@ const leaveTo = computed(() => {
   "
         leave="
     transition-transform
-    duration-200
-    ease-in
+    duration-[var(--motion-duration-fast)]
+    ease-[var(--motion-ease-exit)]
   "
         leave-from="
     translate-x-0

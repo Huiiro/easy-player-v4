@@ -202,10 +202,7 @@ async function uploadLocalFiles(): Promise<void> {
   border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-border) 82%, transparent));
   background: var(--app-header-bg, color-mix(in srgb, var(--color-bg) 82%, transparent));
   backdrop-filter: blur(18px);
-  transition:
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    opacity 0.2s ease;
+  transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
 /* The native macOS traffic lights occupy the left side of the 42px header. */

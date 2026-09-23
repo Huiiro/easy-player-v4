@@ -166,11 +166,11 @@ watch(playlistId, () => void load())
   </section>
   <section v-else class="flex h-full min-h-0 flex-col text-text">
     <header
-      class="flex shrink-0 gap-6 px-6 transition-all duration-200"
+      class="flex shrink-0 gap-6 px-6 transition-all duration-[var(--motion-duration-standard)]"
       :class="headerCollapsed ? 'items-center py-3' : 'items-end py-6'"
     >
       <button
-        class="group relative grid shrink-0 place-items-center overflow-hidden bg-bg-l shadow-lg transition-all duration-200"
+        class="group relative grid shrink-0 place-items-center overflow-hidden bg-bg-l shadow-lg transition-all duration-[var(--motion-duration-standard)]"
         :class="headerCollapsed ? 'size-11 rounded-lg' : 'size-40 rounded-2xl'"
         :title="t('playlist.setCover')"
         @click="coverInput?.click()"

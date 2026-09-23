@@ -71,7 +71,7 @@ const inputAttrs = computed(() => {
       :placeholder="placeholder"
       :disabled="disabled"
       v-bind="inputAttrs"
-      class="py-1 rounded border border-border text-text text-sm w-full bg-transparent outline-none transition-all duration-200 ease-in-out focus:border-primary focus:shadow-[0_0_0_1px] focus:shadow-primary/25"
+      class="py-1 rounded border border-border text-text text-sm w-full bg-transparent outline-none transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] focus:border-primary focus:shadow-[0_0_0_1px] focus:shadow-primary/25"
       :class="inputPaddingClass"
     />
 

@@ -100,7 +100,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
 
 <template>
   <aside
-    class="flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-200"
+    class="flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-[var(--motion-duration-standard)]"
     :class="expanded ? 'w-54' : 'w-14'"
   >
     <nav class="no-scrollbar flex-1 overflow-y-auto px-2 py-2" :aria-label="t('sidebar.ariaLabel')">
@@ -119,7 +119,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           >
             <SvgIcon
               name="arrow-arrow-left-thin"
-              class-name="h-4 w-4 transition-transform duration-200"
+              class-name="h-4 w-4 transition-transform duration-[var(--motion-duration-standard)]"
               :class="{ 'rotate-180': !expanded }"
             />
           </button>

@@ -105,8 +105,8 @@ onBeforeUnmount(clearTimer)
   color: var(--color-text);
   font-size: 0.78rem;
   transition:
-    background-color 0.2s,
-    color 0.2s;
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .secondary-button:hover {
   background: var(--color-hover);

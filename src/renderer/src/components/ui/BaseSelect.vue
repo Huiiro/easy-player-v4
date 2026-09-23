@@ -112,7 +112,7 @@ function updatePanelPosition(event: MouseEvent): void {
     <ListboxButton
       as="div"
       :class="[
-        'flex items-center gap-2 rounded-md border border-border bg-transparent transition-colors duration-200',
+        'flex items-center gap-2 rounded-md border border-border bg-transparent transition-colors duration-[var(--motion-duration-standard)]',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         'hover:border-primary',
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
@@ -138,7 +138,7 @@ function updatePanelPosition(event: MouseEvent): void {
 
       <!-- chevron -->
       <svg
-        class="w-4 h-4 shrink-0 text-text-l transition-transform duration-200"
+        class="w-4 h-4 shrink-0 text-text-l transition-transform duration-[var(--motion-duration-standard)]"
         :class="{ 'rotate-180': false }"
         viewBox="0 0 24 24"
         fill="none"
@@ -152,10 +152,10 @@ function updatePanelPosition(event: MouseEvent): void {
     <!-- dropdown -->
     <Teleport to="body" :disabled="!teleport">
       <transition
-        enter-active-class="transition duration-150 ease-out"
+        enter-active-class="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
         enter-from-class="opacity-0 scale-95"
         enter-to-class="opacity-100 scale-100"
-        leave-active-class="transition duration-100 ease-in"
+        leave-active-class="transition duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
       >

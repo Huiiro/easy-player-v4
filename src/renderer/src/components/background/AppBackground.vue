@@ -25,29 +25,38 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    v-if="ui.useCustomBg"
-    class="pointer-events-none absolute -inset-6 z-0 bg-cover bg-center transition-[filter,opacity] duration-300"
-    :style="ui.getBackgroundStyle"
-    aria-hidden="true"
-  />
-  <div
-    v-else-if="isSystemTheme"
-    class="app-background-host"
-    :class="(!isBackgroundActive || ui.showPlayer) && 'app-background-host--paused'"
-    aria-hidden="true"
-  >
-    <component
-      :is="activeTheme.component"
-      v-bind="
-        activeTheme.id === 'blackhole' ? { paused: !isBackgroundActive || ui.showPlayer } : {}
-      "
-    />
-  </div>
+  <Transition name="app-theme-background">
+    <div v-if="ui.useCustomBg" key="custom" class="app-background-layer" aria-hidden="true">
+      <div
+        class="absolute -inset-6 bg-cover bg-center transition-[filter] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-standard)]"
+        :style="ui.getBackgroundStyle"
+      />
+      <div class="app-background-scrim app-background-scrim--custom" />
+    </div>
+    <div
+      v-else-if="isSystemTheme"
+      :key="ui.systemBackground"
+      class="app-background-layer"
+      aria-hidden="true"
+    >
+      <div
+        class="app-background-host"
+        :class="(!isBackgroundActive || ui.showPlayer) && 'app-background-host--paused'"
+      >
+        <component
+          :is="activeTheme.component"
+          v-bind="
+            activeTheme.id === 'blackhole' ? { paused: !isBackgroundActive || ui.showPlayer } : {}
+          "
+        />
+      </div>
+      <div class="app-background-scrim app-background-scrim--system" />
+    </div>
+  </Transition>
 </template>
 
 <style scoped>
-.app-background-host {
+.app-background-layer {
   position: absolute;
   inset: 0;
   z-index: 0;
@@ -55,7 +64,36 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.app-background-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.app-background-scrim {
+  position: absolute;
+  inset: 0;
+}
+
+.app-background-scrim--custom {
+  background: color-mix(in srgb, var(--color-bg) 76%, transparent);
+}
+
+.app-background-scrim--system {
+  background: color-mix(in srgb, var(--color-bg) 62%, transparent);
+}
+
 .app-background-host--paused :deep(*) {
   animation-play-state: paused !important;
+}
+
+.app-theme-background-enter-active,
+.app-theme-background-leave-active {
+  transition: opacity var(--motion-duration-theme) var(--motion-ease-standard);
+}
+
+.app-theme-background-enter-from,
+.app-theme-background-leave-to {
+  opacity: 0;
 }
 </style>

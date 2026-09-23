@@ -217,6 +217,6 @@ onBeforeUnmount(() => offProgress?.())
   height: 100%;
   border-radius: inherit;
   background: var(--color-primary);
-  transition: width 160ms ease;
+  transition: width var(--motion-duration-standard) var(--motion-ease-standard);
 }
 </style>

@@ -407,8 +407,8 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.8rem;
   font-size: 0.8125rem;
   transition:
-    background-color 0.2s,
-    border-color 0.2s;
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    border-color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .source-button,
 .secondary-button {
@@ -457,7 +457,7 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: inherit;
   background: var(--color-primary);
-  transition: width 0.2s ease;
+  transition: width var(--motion-duration-standard) linear;
 }
 .selection-control {
   min-width: 9rem;

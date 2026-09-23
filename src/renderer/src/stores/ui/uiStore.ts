@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
 import type { LyricSource } from '@/services/lyrics'
 import { hasPersistedStore, playerDataStorage } from '@/stores/persistence'
@@ -53,8 +53,17 @@ export const useUIStore = defineStore(
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
+    let themeInitialized = false
+    let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined
+    let applyingVisualTheme = false
     const customThemeColor = ref('oklch(0.691 0.198 148.262)')
     const systemBackground = ref<SystemBackground>('none')
+    const activeThemeColor = computed(() => {
+      if (!useCustomBg.value && systemBackground.value !== 'none') {
+        return getSystemBackgroundTheme(systemBackground.value).accentColor
+      }
+      return customThemeColor.value
+    })
     const customBg = reactive({
       url: '',
       path: '',
@@ -181,8 +190,7 @@ export const useUIStore = defineStore(
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        filter: `brightness(${brightness}) blur(${blur}px)`,
-        transition: 'filter 0.3s ease'
+        filter: `brightness(${brightness}) blur(${blur}px)`
       }
     })
     const hasBackground = computed(() => useCustomBg.value || systemBackground.value !== 'none')
@@ -200,13 +208,56 @@ export const useUIStore = defineStore(
       root.classList.toggle('mica-enabled', useMica.value)
       document.body.classList.toggle('mica-enabled', useMica.value)
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
-      if (customThemeColor.value) root.style.setProperty('--color-primary', customThemeColor.value)
+      if (activeThemeColor.value) root.style.setProperty('--color-primary', activeThemeColor.value)
       else root.style.removeProperty('--color-primary')
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
       const normalizedPadding = normalizeLyricsFontPadding(lyricsFontPadding.value)
       if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
       root.style.setProperty('--lrc-padding', `${normalizedPadding}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
+    }
+    function beginThemeTransition(): void {
+      if (!themeInitialized || reduceMotion.value || typeof document === 'undefined') return
+      const root = document.documentElement
+      root.classList.add('theme-transitioning')
+      if (themeTransitionTimer) clearTimeout(themeTransitionTimer)
+      const configuredDuration = getComputedStyle(root)
+        .getPropertyValue('--motion-duration-theme')
+        .trim()
+      const durationValue = Number.parseFloat(configuredDuration)
+      const durationMs = Number.isFinite(durationValue)
+        ? configuredDuration.endsWith('ms')
+          ? durationValue
+          : durationValue * 1000
+        : 220
+      themeTransitionTimer = setTimeout(() => {
+        root.classList.remove('theme-transitioning')
+        themeTransitionTimer = undefined
+      }, durationMs + 80)
+    }
+    async function updateVisualTheme(): Promise<void> {
+      applyingVisualTheme = true
+      try {
+        syncSystemBackgroundThemeColor()
+        applyTheme()
+        await nextTick()
+      } finally {
+        applyingVisualTheme = false
+      }
+    }
+    function applyVisualThemeWithTransition(): void {
+      if (applyingVisualTheme) return
+      if (
+        !themeInitialized ||
+        reduceMotion.value ||
+        typeof document === 'undefined' ||
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      ) {
+        void updateVisualTheme()
+        return
+      }
+      beginThemeTransition()
+      void updateVisualTheme()
     }
     function syncFollowSystemTheme(): void {
       if (!followSystemTheme.value || typeof window === 'undefined') return
@@ -248,7 +299,6 @@ export const useUIStore = defineStore(
         systemBackground.value = 'none'
       }
       const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
-      if (!followSystemTheme.value && !useCustomBg.value) customThemeColor.value = theme.accentColor
       if (!useCustomBg.value && systemBackground.value !== 'none') {
         useDarkMode.value = theme.colorMode === 'dark'
       }
@@ -330,6 +380,7 @@ export const useUIStore = defineStore(
         syncFollowSystemTheme()
         syncSystemBackgroundThemeColor()
         applyTheme()
+        themeInitialized = true
         return
       }
       let saved: Record<string, unknown> = {}
@@ -400,6 +451,7 @@ export const useUIStore = defineStore(
       if (useMica.value) applyMicaThemeConstraints()
       syncFollowSystemTheme()
       applyTheme()
+      themeInitialized = true
       if (migratedLegacyTheme) localStorage.removeItem('easy-player.theme-settings')
     }
 
@@ -496,33 +548,16 @@ export const useUIStore = defineStore(
       showLyricsRomanization.value = !showLyricsRomanization.value
     }
     watch(
-      [
-        useDarkMode,
-        followSystemTheme,
-        useMica,
-        customFontFamily,
-        customThemeColor,
-        useCustomBg,
-        reduceMotion,
-        () => customBg.url,
-        () => customBg.blur,
-        () => customBg.brightness,
-        () => customBg.headerBackground,
-        () => customBg.footerBackground,
-        () => customBg.chromeBorder,
-        lyricsFontSize,
-        lyricsFontPadding
-      ],
-      applyTheme
+      [useDarkMode, useMica, customThemeColor, useCustomBg, systemBackground, () => customBg.url],
+      applyVisualThemeWithTransition
     )
+    watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], applyTheme)
     if (typeof window !== 'undefined') {
       const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
       systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
     }
     watch(
       [
-        systemBackground,
-        useCustomBg,
         () => customBg.headerBackground,
         () => customBg.footerBackground,
         () => customBg.chromeBorder
@@ -555,6 +590,7 @@ export const useUIStore = defineStore(
       customFontFamily,
       customFonts,
       customThemeColor,
+      activeThemeColor,
       systemBackground,
       customBg,
       currentDynamicBg,

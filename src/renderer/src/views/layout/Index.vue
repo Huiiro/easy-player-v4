@@ -56,15 +56,6 @@ onBeforeUnmount(() => {
     :style="ui.getCustomFontStyle"
   >
     <AppBackground />
-    <div
-      v-if="ui.hasBackground"
-      class="pointer-events-none absolute inset-0 z-[1]"
-      :class="
-        ui.useCustomBg
-          ? 'bg-[color:color-mix(in_srgb,var(--color-bg)_76%,transparent)]'
-          : 'bg-[color:color-mix(in_srgb,var(--color-bg)_62%,transparent)]'
-      "
-    />
     <!-- 主容器 -->
     <div class="relative z-[2] flex flex-col w-full h-full">
       <!-- 顶栏 -->
@@ -113,17 +104,17 @@ onBeforeUnmount(() => {
 <style scoped>
 .player-panel-enter-active,
 .player-panel-leave-active {
-  transition: opacity 0.24s ease;
+  transition: opacity var(--motion-duration-theme) var(--motion-ease-standard);
 }
 .player-panel-enter-active :deep(.player-panel) {
   transition:
-    transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.24s ease-out;
+    transform var(--motion-duration-emphasized) var(--motion-ease-spring),
+    opacity var(--motion-duration-theme) var(--motion-ease-enter);
 }
 .player-panel-leave-active :deep(.player-panel) {
   transition:
-    transform 0.24s cubic-bezier(0.4, 0, 1, 1),
-    opacity 0.18s ease-in;
+    transform var(--motion-duration-theme) var(--motion-ease-exit),
+    opacity var(--motion-duration-fast) var(--motion-ease-exit);
 }
 .player-panel-enter-from,
 .player-panel-leave-to {
@@ -137,7 +128,7 @@ onBeforeUnmount(() => {
 .footer-motion {
   pointer-events: none;
   transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.18s ease-out;
+    transform var(--motion-duration-slow) var(--motion-ease-spring),
+    opacity var(--motion-duration-fast) var(--motion-ease-enter);
 }
 </style>

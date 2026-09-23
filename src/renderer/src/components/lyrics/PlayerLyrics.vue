@@ -474,7 +474,7 @@ onUnmounted(() => {
         </div>
         <!-- 右侧固定操作按钮轨道 -->
         <div
-          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-200"
+          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-[var(--motion-duration-standard)]"
         >
           <button
             class="flex text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded backdrop-blur"

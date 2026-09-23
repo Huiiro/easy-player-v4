@@ -316,9 +316,9 @@ async function save(): Promise<void> {
 <style scoped>
 .manager-button {
   transition:
-    transform 150ms ease,
-    filter 150ms ease,
-    background-color 150ms ease;
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    filter var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .manager-button:hover:not(:disabled) {
   transform: translateY(-1px);

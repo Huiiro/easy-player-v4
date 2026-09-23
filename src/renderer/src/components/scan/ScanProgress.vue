@@ -59,7 +59,7 @@ const close = (): void => {
   <transition name="slide-fade">
     <div v-if="visible" class="fixed bottom-6 right-6 z-[100] pointer-events-none">
       <div
-        class="bg-bg rounded-xl shadow-lg p-4 w-80 border border-r border-border pointer-events-auto transform transition-all duration-300"
+        class="bg-bg rounded-xl shadow-lg p-4 w-80 border border-r border-border pointer-events-auto transform transition-all duration-[var(--motion-duration-slow)]"
       >
         <!-- header -->
         <div class="flex mb-2 justify-between items-center text-text">
@@ -117,7 +117,7 @@ const close = (): void => {
 
 .slide-fade-enter-active,
 .slide-fade-leave-active {
-  transition: all 0.3s ease;
+  transition: all var(--motion-duration-slow) var(--motion-ease-standard);
 }
 
 /* 条纹动画 */

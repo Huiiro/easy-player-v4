@@ -451,10 +451,10 @@ function onOpenChange(open: boolean): void {
 
       <Teleport to="body" :disabled="!teleport">
         <transition
-          enter-active-class="transition duration-150 ease-out"
+          enter-active-class="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
           enter-from-class="opacity-0 scale-95"
           enter-to-class="opacity-100 scale-100"
-          leave-active-class="transition duration-100 ease-in"
+          leave-active-class="transition duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
           leave-from-class="opacity-100 scale-100"
           leave-to-class="opacity-0 scale-95"
         >

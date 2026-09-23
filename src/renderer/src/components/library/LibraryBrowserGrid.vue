@@ -242,7 +242,7 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">{{ title }}</h1>
         <div
-          class="group relative block h-8 transition-[width] duration-200"
+          class="group relative block h-8 transition-[width] duration-[var(--motion-duration-standard)]"
           :class="keyword ? 'w-56' : 'w-8 hover:w-56 focus-within:w-56'"
         >
           <SvgIcon
@@ -251,7 +251,7 @@ onBeforeUnmount(() => {
           />
           <input
             v-model="keyword"
-            class="input-base library-search absolute inset-0 h-8 w-full transition-opacity duration-150"
+            class="input-base library-search absolute inset-0 h-8 w-full transition-opacity duration-[var(--motion-duration-fast)]"
             :class="
               keyword
                 ? 'opacity-100'
@@ -328,7 +328,7 @@ onBeforeUnmount(() => {
               :src="coverUrl(item.cover)!"
               loading="lazy"
               decoding="async"
-              class="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+              class="size-full object-cover transition-transform duration-[var(--motion-duration-slow)] group-hover:scale-105"
               :alt="item.name"
             />
             <span v-else class="grid size-full place-items-center text-text-l">

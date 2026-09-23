@@ -818,7 +818,7 @@ onUnmounted(() => {
         <!-- 右侧固定操作按钮轨道 -->
         <div
           v-if="line.text.trim()"
-          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200"
+          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-[var(--motion-duration-standard)]"
         >
           <button
             :disabled="line.untimed || !line.text.trim()"

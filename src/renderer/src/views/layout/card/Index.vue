@@ -372,7 +372,7 @@ onBeforeUnmount(() => {
             </span>
             <span class="card-play-overlay grid place-items-center">
               <span
-                class="grid size-14 place-items-center rounded-full bg-white/90 text-black shadow-xl transition-transform duration-200 group-hover:scale-110"
+                class="grid size-14 place-items-center rounded-full bg-white/90 text-black shadow-xl transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110"
               >
                 <SvgIcon
                   :name="
@@ -427,7 +427,7 @@ onBeforeUnmount(() => {
 }
 .card-stage {
   opacity: 0;
-  transition: opacity 380ms ease;
+  transition: opacity var(--motion-duration-emphasized) var(--motion-ease-standard);
 }
 .card-stage.is-ready {
   opacity: 1;
@@ -436,8 +436,8 @@ onBeforeUnmount(() => {
   user-select: none;
   touch-action: pan-y;
   transition:
-    opacity 150ms ease,
-    transform 150ms ease;
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .card-stage.is-switching .card-carousel {
   pointer-events: none;
@@ -447,8 +447,8 @@ onBeforeUnmount(() => {
 .card-item {
   transform-origin: center;
   transition:
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 220ms ease;
+    transform var(--motion-duration-slow) var(--motion-ease-emphasized),
+    opacity var(--motion-duration-theme) var(--motion-ease-standard);
 }
 .card-cover {
   -webkit-box-reflect: below 0.1rem linear-gradient(to bottom, rgb(0 0 0 / 16%), transparent 68%);
@@ -461,7 +461,7 @@ onBeforeUnmount(() => {
   inset: 0;
   background: rgb(0 0 0 / 42%);
   opacity: 0;
-  transition: opacity 180ms ease;
+  transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .card-cover:hover .card-play-overlay,
 .card-cover:focus-visible .card-play-overlay {
@@ -538,9 +538,9 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   transition:
-    color 160ms ease,
-    background-color 160ms ease,
-    transform 160ms ease;
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .playlist-pill:hover {
   color: var(--color-text);

@@ -83,9 +83,9 @@ function openAudioControls(): void {
   color: var(--color-text);
   font-size: 0.78rem;
   transition:
-    border-color 0.2s,
-    background-color 0.2s,
-    color 0.2s;
+    border-color var(--motion-duration-standard) var(--motion-ease-standard),
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
 .secondary-button:hover {

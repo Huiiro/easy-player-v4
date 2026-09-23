@@ -325,7 +325,7 @@ function onMarkClick(v: number) {
       <!-- thumb -->
 
       <div
-        class="absolute rounded-full border-2 border-primary bg-bg cursor-grab transform-gpu transition-shadow duration-150"
+        class="absolute rounded-full border-2 border-primary bg-bg cursor-grab transform-gpu transition-shadow duration-[var(--motion-duration-fast)]"
         :class="
           dragging
             ? 'cursor-grabbing shadow-[0_0_0_4px_var(--color-hover-t-20)]'

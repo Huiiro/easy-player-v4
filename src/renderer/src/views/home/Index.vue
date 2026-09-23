@@ -240,10 +240,10 @@ onMounted(() => void load())
         <article
           v-for="item in statCards"
           :key="item.label"
-          class="home-surface home-stat group flex items-center gap-4 rounded-xl p-4 transition-all duration-200 hover:-translate-y-1"
+          class="home-surface home-stat group flex items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
         >
           <span
-            class="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-200 group-hover:scale-110 group-hover:rotate-3"
+            class="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
           >
             <SvgIcon :name="item.icon" class-name="size-5" />
           </span>

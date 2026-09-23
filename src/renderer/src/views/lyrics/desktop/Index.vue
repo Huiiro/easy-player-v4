@@ -344,11 +344,11 @@ onUnmounted(() => {
       @mousemove="enter"
     />
     <div
-      class="flex h-full flex-col rounded-2xl px-6 py-3 transition-colors duration-500"
+      class="flex h-full flex-col rounded-2xl px-6 py-3 transition-colors duration-[var(--motion-duration-theme)]"
       :class="backgroundVisible ? 'bg-black/30 backdrop-blur-sm' : 'bg-transparent'"
     >
       <div
-        class="mb-1 flex h-[1.65rem] shrink-0 items-center justify-center gap-2 transition-opacity duration-200 [-webkit-app-region:no-drag]"
+        class="mb-1 flex h-[1.65rem] shrink-0 items-center justify-center gap-2 transition-opacity duration-[var(--motion-duration-standard)] [-webkit-app-region:no-drag]"
         :class="hovering || locked ? 'opacity-100' : 'pointer-events-none opacity-0'"
       >
         <button ref="lockButton" class="desktop-action" @click="toggleLock">

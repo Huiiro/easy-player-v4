@@ -566,14 +566,13 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
     <button
       v-if="showBackTop && !loading && filteredSongs.length"
       type="button"
-      class="absolute right-5 bottom-28 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
+      class="absolute right-5 bottom-4 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
       :aria-label="t('songList.backToTop')"
       :title="t('songList.backToTop')"
       @click="backToTop"
     >
       <svgIcon name="arrow-arrow-up" class-name="size-5" />
     </button>
-    <div class="h-24" />
     <!-- menu -->
     <Teleport to="body">
       <div

@@ -51,7 +51,7 @@ const currentSize = computed(() => sizeMap[props.size])
 
 // ==================== 样式 ====================
 const trackClass = computed(() => {
-  return 'relative inline-flex rounded-full transition-colors duration-200 cursor-pointer shrink-0'
+  return 'relative inline-flex rounded-full transition-colors duration-[var(--motion-duration-standard)] cursor-pointer shrink-0'
 })
 
 const trackStyle = computed(() => {
@@ -107,7 +107,7 @@ function toggle(): void {
     <!-- 轨道 + 滑块 -->
     <span :class="trackClass" :style="trackStyle">
       <span
-        class="absolute rounded-full bg-white shadow-sm transition-transform duration-200 ease-out"
+        class="absolute rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
         :style="knobStyle"
       />
     </span>

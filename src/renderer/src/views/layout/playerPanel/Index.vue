@@ -14,6 +14,7 @@ import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/LiquidBackground.vue'
+import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
 import { formatArtists } from '@/utils/artists'
 
 const showLyricsSamplingRegion = import.meta.env.DEV && false
@@ -157,6 +158,9 @@ const useAmbientBackground = computed(
 const useLiquidBackground = computed(
   () => (ui.playerBgType as PlayerBgType) === PlayerBgType.LIQUID
 )
+const useAmbientLayer = computed(
+  () => useAmbientBackground.value || (useLiquidBackground.value && liquidUnavailable.value)
+)
 const liquidCoverSource = computed(() =>
   coverColorSource.value === 'failed' ? null : coverUrl.value
 )
@@ -165,8 +169,10 @@ const backgroundSource = computed(() => {
   if (ui.playerBgType === PlayerBgType.CUSTOM && ui.customBg.url) return ui.customBg.url
   return null
 })
-watch(useLiquidBackground, () => {
+watch(useLiquidBackground, (useLiquid) => {
   liquidUnavailable.value = false
+  if (useLiquid) resetCoverPalette(coverUrl.value ? 'loading' : 'idle')
+  else coverColorSource.value = 'idle'
 })
 
 /**
@@ -191,14 +197,6 @@ const lyricColorStyle = computed(() => {
     '--lrc-translate': ui.lyricsColors.translation
   }
 })
-const glowStyle = computed(() => ({
-  '--cover-primary': `rgb(${coverColors.value.primary} / 58%)`,
-  '--cover-secondary': `rgb(${coverColors.value.secondary} / 52%)`
-}))
-const ambientStyle = computed(() => ({
-  ...glowStyle.value,
-  '--ambient-base-opacity': useAmbientBackground.value ? '1' : '0.58'
-}))
 const coverGlowStyle = computed(() => ({
   '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
   '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
@@ -270,6 +268,9 @@ function getLyricsRegion(image: HTMLImageElement): [number, number, number, numb
 }
 function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
+  const loadedSource = image.getAttribute('src')
+  if (loadedSource && loadedSource !== coverUrl.value && loadedSource !== backgroundSource.value)
+    return
   const result = CoverAnalyzer.analyze({
     image,
     song: player.currentQueueSong,
@@ -285,7 +286,7 @@ function extractCoverColors(event: Event): void {
     }
   })
   if (useLiquidBackground.value && result.source === 'failed') {
-    resetLiquidBackground('failed')
+    resetCoverPalette('failed')
     return
   }
   coverColors.value = result.palette
@@ -293,29 +294,29 @@ function extractCoverColors(event: Event): void {
   coverColorSource.value = result.source
   lyricsContrastDebug.value = result.result
 }
-function resetLiquidBackground(source: 'idle' | 'failed'): void {
+function resetCoverPalette(source: 'idle' | 'loading' | 'failed'): void {
   coverColors.value = { ...defaultLiquidColors }
   useDarkLyrics.value = false
   coverColorSource.value = source
 }
-function handleLiquidCoverError(): void {
-  resetLiquidBackground('failed')
+function handleCoverError(): void {
+  coverFailed.value = true
+  resetCoverPalette('failed')
 }
-watch(coverUrl, () => {
-  coverFailed.value = false
-})
-watch(backgroundSource, (source) => {
-  if (!source) useDarkLyrics.value = false
-})
 watch(
-  [coverUrl, useLiquidBackground],
-  ([url, useLiquid]) => {
-    if (useLiquid && url) coverColorSource.value = 'loading'
-    else if (useLiquid) resetLiquidBackground('idle')
-    else coverColorSource.value = 'idle'
+  coverUrl,
+  (url) => {
+    coverFailed.value = false
+    resetCoverPalette(useLiquidBackground.value && url ? 'loading' : 'idle')
   },
   { immediate: true }
 )
+watch(backgroundSource, (source) => {
+  if (!source) {
+    useDarkLyrics.value = false
+    if (!coverUrl.value) resetCoverPalette('idle')
+  }
+})
 watch(
   analysisPollingRate,
   (rate) => player.setAudioAnalysisPollingRate(rate, ui.showPlayerSpectrum),
@@ -504,12 +505,12 @@ function changeLyricsOffset(event: WheelEvent): void {
           v-if="backgroundSource"
           :key="backgroundSource"
           :src="backgroundSource"
-          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-150"
+          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-[var(--motion-duration-fast)]"
           :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
           alt=""
           crossorigin="anonymous"
           @load="extractCoverColors"
-          @error="coverFailed = true"
+          @error="handleCoverError"
         />
       </Transition>
       <img
@@ -520,7 +521,7 @@ function changeLyricsOffset(event: WheelEvent): void {
         alt=""
         crossorigin="anonymous"
         @load="extractCoverColors"
-        @error="handleLiquidCoverError"
+        @error="handleCoverError"
       />
       <LiquidBackground
         v-if="useLiquidBackground && !liquidUnavailable"
@@ -542,28 +543,23 @@ function changeLyricsOffset(event: WheelEvent): void {
         v-if="useLiquidBackground && !liquidUnavailable"
         class="absolute inset-0 liquid-background-soften"
       />
-      <div
-        v-if="!useLiquidBackground || liquidUnavailable"
-        class="absolute -left-[12%] -top-[16%] size-[58vw] max-h-[76vh] max-w-[76vh] rounded-full panel-orb panel-orb-primary"
-        :class="shouldAnimate ? 'panel-orb--animated' : ''"
-        :style="glowStyle"
+      <AmbientBubbleCanvas
+        v-if="useAmbientLayer"
+        :primary="coverColors.primary"
+        :secondary="coverColors.secondary"
+        :tertiary="coverColors.tertiary"
+        :active="shouldAnimate"
+        :bubbles-enabled="
+          player.rhythmVisualConfig.enabled &&
+          !player.rhythmVisualConfig.reducedMotion &&
+          !ui.reduceMotion
+        "
+        :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
+        :energy="rhythmAmount"
+        :beat-sequence="player.audioAnalysis.beatSequence"
+        :intensity="useAmbientBackground ? 1 : 0.68"
       />
-      <div
-        v-if="!useLiquidBackground || liquidUnavailable"
-        class="absolute -bottom-[22%] -right-[13%] size-[62vw] max-h-[82vh] max-w-[82vh] rounded-full panel-orb panel-orb-secondary"
-        :class="shouldAnimate ? 'panel-orb--animated panel-orb--delayed' : ''"
-        :style="glowStyle"
-      />
-      <div
-        v-if="!useLiquidBackground || liquidUnavailable"
-        class="absolute inset-0 panel-ambient"
-        :class="shouldAnimate ? 'panel-ambient--animated' : ''"
-        :style="ambientStyle"
-      />
-      <div
-        v-if="!useLiquidBackground || liquidUnavailable"
-        class="pointer-events-none absolute inset-0 panel-sheen"
-      />
+      <div v-if="useAmbientLayer" class="pointer-events-none absolute inset-0 panel-sheen" />
       <!-- dev debug -->
       <div
         v-if="showLyricsSamplingRegion"
@@ -654,12 +650,13 @@ function changeLyricsOffset(event: WheelEvent): void {
           :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
-          <div class="cover-frame relative transition-[transform,filter] duration-100">
+          <div
+            class="cover-frame relative transition-[transform,filter] duration-[var(--motion-duration-fast)]"
+          >
             <div
               class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura"
               :style="coverGlowStyle"
             />
-            <div class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura" />
             <div
               v-if="shouldAnimate"
               class="cover-particles-anchor"
@@ -694,7 +691,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                 :alt="trackTitle"
                 crossorigin="anonymous"
                 @load="extractCoverColors"
-                @error="coverFailed = true"
+                @error="handleCoverError"
               />
               <SvgIcon v-else name="common-music" class-name="size-20" />
             </div>
@@ -1062,12 +1059,6 @@ function changeLyricsOffset(event: WheelEvent): void {
 </template>
 
 <style scoped>
-.panel-ambient {
-  overflow: hidden;
-  opacity: calc(var(--rhythm-glow-opacity, 0.68) * var(--ambient-base-opacity, 1));
-  transform: scale(var(--rhythm-glow-scale, 1));
-  transition: opacity 500ms ease;
-}
 .liquid-background-soften {
   background: rgb(8 11 20 / 48%);
   backdrop-filter: blur(6px) brightness(0.9) saturate(1.62) contrast(1.14);
@@ -1110,31 +1101,6 @@ function changeLyricsOffset(event: WheelEvent): void {
   filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
   transform: scale(var(--rhythm-background-scale, 1.1));
 }
-.panel-ambient::before {
-  position: absolute;
-  inset: -12%;
-  background:
-    radial-gradient(circle at 14% 18%, var(--cover-primary), transparent 34%),
-    radial-gradient(circle at 86% 76%, var(--cover-secondary), transparent 38%),
-    radial-gradient(circle at 72% 14%, rgb(70 204 174 / 28%), transparent 30%);
-  filter: blur(24px);
-  content: '';
-}
-.panel-ambient::after {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 42%, transparent 14%, rgb(2 5 12 / 20%) 100%),
-    repeating-linear-gradient(
-      115deg,
-      rgb(255 255 255 / 2%) 0,
-      rgb(255 255 255 / 2%) 1px,
-      transparent 1px,
-      transparent 5px
-    );
-  opacity: 0.42;
-  content: '';
-}
 .panel-tool {
   display: flex;
   align-items: center;
@@ -1145,10 +1111,10 @@ function changeLyricsOffset(event: WheelEvent): void {
   color: rgb(255 255 255 / 0.72);
   background: rgb(255 255 255 / 0.07);
   transition:
-    transform 150ms ease,
-    background-color 150ms ease,
-    color 150ms ease,
-    filter 150ms ease;
+    transform var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    filter var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .panel-tool:hover,
 .panel-tool.active {
@@ -1216,7 +1182,7 @@ function changeLyricsOffset(event: WheelEvent): void {
   transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.15s ease;
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .vertical-popup input {
   position: absolute;
@@ -1246,35 +1212,14 @@ function changeLyricsOffset(event: WheelEvent): void {
   color: rgb(255 255 255 / 0.72);
   background: rgb(255 255 255 / 0.09);
   transition:
-    color 150ms ease,
-    background-color 150ms ease,
-    transform 150ms ease;
+    color var(--motion-duration-fast) var(--motion-ease-standard),
+    background-color var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .lyric-timing-reset:hover {
   color: white;
   background: color-mix(in srgb, var(--color-primary) 38%, transparent);
   transform: rotate(-35deg);
-}
-.panel-orb {
-  filter: blur(42px) saturate(1.35);
-  mix-blend-mode: screen;
-  opacity: var(--rhythm-glow-opacity, 0.68);
-  transform: scale(var(--rhythm-glow-scale, 1));
-  transition:
-    opacity 140ms ease,
-    transform 120ms ease;
-}
-.panel-orb-primary {
-  background: radial-gradient(circle, var(--cover-primary) 0%, transparent 67%);
-}
-.panel-orb-secondary {
-  background: radial-gradient(circle, var(--cover-secondary) 0%, transparent 67%);
-}
-.panel-orb--animated {
-  animation: player-panel-orb-drift 7s ease-in-out infinite alternate;
-}
-.panel-orb--delayed {
-  animation-delay: -3.4s;
 }
 .cover-frame {
   /* Reserve room for the title, metadata, tool strip, progress and controls.
@@ -1355,12 +1300,6 @@ function changeLyricsOffset(event: WheelEvent): void {
     opacity 120ms ease,
     transform 100ms ease;
 }
-.panel-ambient--animated {
-  animation: none;
-}
-.panel-ambient--animated::before {
-  animation: player-panel-ambient-drift 14s ease-in-out infinite alternate;
-}
 .panel-sheen {
   background:
     radial-gradient(ellipse 48% 30% at 72% 8%, rgb(255 255 255 / 15%), transparent 72%),
@@ -1409,26 +1348,8 @@ function changeLyricsOffset(event: WheelEvent): void {
     transform: translate(-50%, -50%) scale(1.35);
   }
 }
-@keyframes player-panel-ambient-drift {
-  from {
-    transform: translate(-2%, -1%) scale(1.02);
-  }
-  to {
-    transform: translate(2%, 1%) scale(1.05);
-  }
-}
-@keyframes player-panel-orb-drift {
-  from {
-    translate: -3% -2%;
-  }
-  to {
-    translate: 5% 4%;
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .beat-particles--burst .beat-particle,
-  .panel-ambient--animated,
-  .panel-orb--animated {
+  .beat-particles--burst .beat-particle {
     animation: none;
   }
 }

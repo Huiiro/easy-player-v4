@@ -1,0 +1,236 @@
+@property --color-primary {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #22c55e;
+}
+
+@property --color-text {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #252a32;
+}
+
+@property --color-text-l {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #68707d;
+}
+
+@property --color-text-l2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #535b67;
+}
+
+@property --color-text-l3 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d8dbe0;
+}
+
+@property --color-danger {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #dc2626;
+}
+
+@property --color-success {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #22c55e;
+}
+
+@property --color-warning {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #eab308;
+}
+
+@property --color-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fafafa;
+}
+
+@property --color-bg-l {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f1f3f2;
+}
+
+@property --color-bg-l2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #f5f6f5;
+}
+
+@property --color-bg-d {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #747985;
+}
+
+@property --color-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 5%);
+}
+
+@property --color-hover-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e7e9e8;
+}
+
+@property --color-hover-danger {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #fce8e8;
+}
+
+@property --color-hover-t-10 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 3%);
+}
+
+@property --color-hover-t-20 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 6%);
+}
+
+@property --color-hover-t-30 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 10%);
+}
+
+@property --color-hover-t-40 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 15%);
+}
+
+@property --color-hover-t-50 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgb(0 0 0 / 20%);
+}
+
+@property --color-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #9fa3a8;
+}
+
+@property --color-border-l {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #bac1c1;
+}
+
+@property --color-border-danger {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #dc2626;
+}
+
+@property --color-border-success {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #22c55e;
+}
+
+@property --color-border-warning {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #eab308;
+}
+
+@property --color-icon {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #3d424c;
+}
+
+@property --color-icon-l {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #a3a6ab;
+}
+
+@property --scrollbar-thumb {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #e8e8e8;
+}
+
+@property --scrollbar-thumb-hover {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #d9d9d9;
+}
+
+@property --app-header-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --app-footer-bg {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+@property --app-chrome-border {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+
+:root {
+  /* Shared motion scale for UI feedback. Long-running ambient and media
+   * animations intentionally keep their own timing. */
+  --motion-duration-fast: 150ms;
+  --motion-duration-standard: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-duration-emphasized: 400ms;
+  --motion-duration-theme: 220ms;
+  --motion-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --motion-ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --motion-ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --motion-ease-emphasized: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Tailwind's unqualified `transition` utilities inherit these defaults. */
+  --default-transition-duration: var(--motion-duration-standard);
+  --default-transition-timing-function: var(--motion-ease-standard);
+}
+
+/* Registered theme tokens are interpolated once at the root instead of
+ * applying a transition to every rendered element. */
+:root.theme-transitioning {
+  transition-property:
+    --color-primary, --color-text, --color-text-l, --color-text-l2, --color-text-l3, --color-danger,
+    --color-success, --color-warning, --color-bg, --color-bg-l, --color-bg-l2, --color-bg-d,
+    --color-hover, --color-hover-bg, --color-hover-danger, --color-hover-t-10, --color-hover-t-20,
+    --color-hover-t-30, --color-hover-t-40, --color-hover-t-50, --color-border, --color-border-l,
+    --color-border-danger, --color-border-success, --color-border-warning, --color-icon,
+    --color-icon-l, --scrollbar-thumb, --scrollbar-thumb-hover, --app-header-bg, --app-footer-bg,
+    --app-chrome-border;
+  transition-duration: var(--motion-duration-theme);
+  transition-timing-function: var(--motion-ease-standard);
+}
+
+:root.reduce-motion,
+:root.reduce-motion.theme-transitioning {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root.theme-transitioning {
+    transition: none !important;
+  }
+}

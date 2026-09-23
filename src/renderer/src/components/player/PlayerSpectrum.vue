@@ -137,7 +137,7 @@ watch(
 <template>
   <canvas
     ref="canvas"
-    class="block h-16 w-full transition-opacity duration-150"
+    class="block h-16 w-full transition-opacity duration-[var(--motion-duration-fast)]"
     :class="ready ? 'opacity-100' : 'opacity-0'"
   />
 </template>

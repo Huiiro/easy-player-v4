@@ -47,10 +47,10 @@ function handleClose(msg: MessageInstance): void {
       class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none"
     >
       <TransitionGroup
-        enter-active-class="transition-all duration-300 ease-out"
+        enter-active-class="transition-all duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)]"
         enter-from-class="opacity-0 -translate-y-4"
         enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition-all duration-200 ease-in"
+        leave-active-class="transition-all duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-2"
       >

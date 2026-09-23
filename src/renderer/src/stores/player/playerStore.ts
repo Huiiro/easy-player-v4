@@ -1116,7 +1116,7 @@ export const usePlayerStore = defineStore('player', () => {
       theme: {
         dark: ui.useDarkMode,
         background: ui.useCustomBg ? 'custom' : ui.systemBackground,
-        accent: ui.customThemeColor,
+        accent: ui.activeThemeColor,
         border: ui.useCustomBg ? ui.customBg.chromeBorder : null
       }
     })

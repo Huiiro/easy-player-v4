@@ -876,7 +876,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--color-bg-l) 24%, transparent);
   box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
   backdrop-filter: blur(8px);
-  transition: opacity 0.2s ease;
+  transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .settings-card.muted {
   opacity: 0.58;
@@ -1012,9 +1012,9 @@ onBeforeUnmount(() => {
   font-size: 0.75rem;
   text-align: left;
   transition:
-    border-color 0.2s,
-    box-shadow 0.2s,
-    color 0.2s;
+    border-color var(--motion-duration-standard) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .theme-option:hover {
   border-color: var(--color-primary);
@@ -1241,8 +1241,8 @@ onBeforeUnmount(() => {
   border-radius: 7px;
   font-size: 0.78rem;
   transition:
-    background-color 0.2s,
-    color 0.2s;
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 .secondary-button {
   border: 1px solid var(--color-border);

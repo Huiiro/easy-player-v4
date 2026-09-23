@@ -60,10 +60,10 @@ const footerClass = computed(() => {
       <!-- overlay -->
       <TransitionChild
         as="template"
-        enter="transition-opacity duration-200"
+        enter="transition-opacity duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
         enter-from="opacity-0"
         enter-to="opacity-100"
-        leave="transition-opacity duration-150"
+        leave="transition-opacity duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
@@ -74,10 +74,10 @@ const footerClass = computed(() => {
       <div class="fixed inset-0 flex items-center justify-center p-4">
         <TransitionChild
           as="template"
-          enter="transition duration-200 ease-out"
+          enter="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
           enter-from="opacity-0 scale-95"
           enter-to="opacity-100 scale-100"
-          leave="transition duration-150 ease-in"
+          leave="transition duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
           leave-from="opacity-100 scale-100"
           leave-to="opacity-0 scale-95"
         >

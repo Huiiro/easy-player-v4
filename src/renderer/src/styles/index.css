@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'theme.css';
+@import 'motion.css';
 
 :root.reduce-motion *,
 :root.reduce-motion *::before,
@@ -127,7 +128,7 @@ textarea,
   background-color: var(--color-bg);
   border: 1px solid var(--color-border);
   color: var(--color-text);
-  transition: all 0.2s ease-in-out;
+  transition: all var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
 .custom-dialog-footer-close-btn:hover {
@@ -154,7 +155,7 @@ textarea,
   w-full
   bg-transparent
   outline-none
-  transition-all duration-200 ease-in-out;
+  transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)];
 }
 
 .input-base:focus {
@@ -189,8 +190,8 @@ textarea,
   border-border border-dashed
   bg-hover-bg
   transition-all
-  duration-200
-  ease-out
+  duration-[var(--motion-duration-standard)]
+  ease-[var(--motion-ease-standard)]
   hover:scale-102
   active:scale-100
   hover:bg-primary
@@ -273,10 +274,10 @@ textarea,
   cursor: pointer;
   transform: translateZ(0);
   transition:
-    background-color 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 260ms cubic-bezier(0.22, 1, 0.36, 1);
+    background-color var(--motion-duration-standard) var(--motion-ease-emphasized),
+    transform var(--motion-duration-standard) var(--motion-ease-emphasized),
+    box-shadow var(--motion-duration-standard) var(--motion-ease-emphasized),
+    border-color var(--motion-duration-standard) var(--motion-ease-emphasized);
   border: 1px solid transparent;
 }
 
@@ -299,11 +300,11 @@ textarea,
 }
 
 .btn-hover {
-  @apply transition-all duration-200 ease-out hover:scale-102 active:scale-100 hover:text-primary;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:scale-102 active:scale-100 hover:text-primary;
 }
 
 .btn-hover-base {
-  @apply transition-all duration-200 ease-out hover:scale-102 active:scale-100;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:scale-102 active:scale-100;
 }
 
 .dsp-input {
