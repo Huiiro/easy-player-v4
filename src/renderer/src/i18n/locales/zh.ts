@@ -517,7 +517,6 @@ export default {
     playerBackgroundAlbum: '专辑封面',
     playerBackgroundAmbient: '氛围光晕',
     playerBackgroundLiquid: '流体氛围',
-    playerBackgroundDefault: '纯色',
     lyrics: '歌词',
     lyricsDescription: '设置歌词加载方式。',
     lyricsPriority: '歌词优先级',

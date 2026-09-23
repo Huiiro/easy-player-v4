@@ -1,6 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { PlayerBgType, PlayerDisplayMode, TagStyle } from '@/consts'
+import {
+  DEFAULT_PLAYER_BG_TYPE,
+  PlayerBgType,
+  PlayerDisplayMode,
+  resolvePlayerBgType,
+  TagStyle
+} from '@/consts'
 import type { LyricSource } from '@/services/lyrics'
 import { hasPersistedStore, playerDataStorage } from '@/stores/persistence'
 import {
@@ -100,7 +106,7 @@ export const useUIStore = defineStore(
     const autoAdjustLyricsDisplay = ref(false)
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
-    const playerBgType = ref(PlayerBgType.ALBUM)
+    const playerBgType = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
     const playerDisplayMode = ref(PlayerDisplayMode.Normal)
     const allowSwitchCoverStyle = ref(true)
     const isCircularCover = ref(false)
@@ -412,8 +418,7 @@ export const useUIStore = defineStore(
       }
       if (typeof saved.autoPlayOnRestore === 'boolean')
         autoPlayOnRestore.value = saved.autoPlayOnRestore
-      if (Object.values(PlayerBgType).includes(saved.playerBgType as PlayerBgType))
-        playerBgType.value = saved.playerBgType as PlayerBgType
+      setPlayerBgType(saved.playerBgType)
       if (
         ['auto', 'embedded', 'database', 'local', 'network'].includes(
           saved.lyricSourceMode as string
@@ -459,6 +464,9 @@ export const useUIStore = defineStore(
       if (followSystemTheme.value) return
       useDarkMode.value = mode === 'dark'
     }
+    function setPlayerBgType(value: unknown): void {
+      playerBgType.value = resolvePlayerBgType(value)
+    }
     async function setMicaEnabled(enabled: boolean): Promise<void> {
       if (!micaAvailable.value) return
       const response = await window.api.system.setMicaEnabled(enabled)
@@ -496,7 +504,7 @@ export const useUIStore = defineStore(
       customThemeColor.value = ''
       useCustomBg.value = false
       systemBackground.value = 'none'
-      playerBgType.value = PlayerBgType.ALBUM
+      setPlayerBgType(DEFAULT_PLAYER_BG_TYPE)
       Object.assign(customBg, {
         url: '',
         path: '',
@@ -552,6 +560,14 @@ export const useUIStore = defineStore(
       applyVisualThemeWithTransition
     )
     watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], applyTheme)
+    watch(
+      playerBgType,
+      (value) => {
+        const resolved = resolvePlayerBgType(value)
+        if (value !== resolved) playerBgType.value = resolved
+      },
+      { immediate: true }
+    )
     if (typeof window !== 'undefined') {
       const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
       systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
@@ -610,6 +626,7 @@ export const useUIStore = defineStore(
       autoAdjustLyricsDisplay,
       lyricSourceOrder,
       playerBgType,
+      setPlayerBgType,
       playerDisplayMode,
       allowSwitchCoverStyle,
       isCircularCover,

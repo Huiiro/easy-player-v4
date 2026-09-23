@@ -58,7 +58,7 @@ type ThemeBackgroundChoice = SystemBackground | 'light' | 'dark' | 'custom'
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
   set: (value) => {
-    ui.playerBgType = value
+    ui.setPlayerBgType(value)
   }
 })
 const themeBackgroundOptions = computed(() => [

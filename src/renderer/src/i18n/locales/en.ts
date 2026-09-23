@@ -532,7 +532,6 @@ export default {
     playerBackgroundAlbum: 'Album artwork',
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundLiquid: 'Liquid flow',
-    playerBackgroundDefault: 'Solid',
     lyrics: 'Lyrics',
     lyricsDescription: 'Set the lyrics loading method.',
     lyricsPriority: 'Lyrics Priority',

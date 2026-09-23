@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { CoverAnalyzer } from '@/hooks/useImageColors'
-import { PlayerBgType } from '@/consts'
+import { PlayerBgType, resolvePlayerBgType } from '@/consts'
 import { PlayMode } from '@/consts'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
@@ -149,29 +149,31 @@ const defaultLiquidColors = {
   secondary: '205 78 165',
   tertiary: '73 186 165'
 }
-const useAlbumArtwork = computed(
-  () => ui.playerBgType === PlayerBgType.ALBUM || ui.playerBgType === PlayerBgType.DEFAULT
+const selectedPlayerBackground = computed(() => resolvePlayerBgType(ui.playerBgType))
+const effectivePlayerBackground = computed(() =>
+  resolvePlayerBgType(selectedPlayerBackground.value, {
+    coverAvailable: Boolean(coverUrl.value && !coverFailed.value),
+    liquidAvailable: !liquidUnavailable.value
+  })
 )
+const useAlbumArtwork = computed(() => effectivePlayerBackground.value === PlayerBgType.ALBUM)
 const useAmbientBackground = computed(
-  () => (ui.playerBgType as PlayerBgType) === PlayerBgType.AMBIENT
+  () => effectivePlayerBackground.value === PlayerBgType.AMBIENT
 )
-const useLiquidBackground = computed(
-  () => (ui.playerBgType as PlayerBgType) === PlayerBgType.LIQUID
-)
-const useAmbientLayer = computed(
-  () => useAmbientBackground.value || (useLiquidBackground.value && liquidUnavailable.value)
+const useLiquidBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.LIQUID)
+const ambientIntensity = computed(() =>
+  selectedPlayerBackground.value === PlayerBgType.AMBIENT ? 1 : 0.68
 )
 const liquidCoverSource = computed(() =>
   coverColorSource.value === 'failed' ? null : coverUrl.value
 )
 const backgroundSource = computed(() => {
   if (useAlbumArtwork.value && coverUrl.value && !coverFailed.value) return coverUrl.value
-  if (ui.playerBgType === PlayerBgType.CUSTOM && ui.customBg.url) return ui.customBg.url
   return null
 })
-watch(useLiquidBackground, (useLiquid) => {
+watch(selectedPlayerBackground, (background) => {
   liquidUnavailable.value = false
-  if (useLiquid) resetCoverPalette(coverUrl.value ? 'loading' : 'idle')
+  if (background === PlayerBgType.LIQUID) resetCoverPalette(coverUrl.value ? 'loading' : 'idle')
   else coverColorSource.value = 'idle'
 })
 
@@ -544,7 +546,7 @@ function changeLyricsOffset(event: WheelEvent): void {
         class="absolute inset-0 liquid-background-soften"
       />
       <AmbientBubbleCanvas
-        v-if="useAmbientLayer"
+        v-if="useAmbientBackground"
         :primary="coverColors.primary"
         :secondary="coverColors.secondary"
         :tertiary="coverColors.tertiary"
@@ -557,9 +559,9 @@ function changeLyricsOffset(event: WheelEvent): void {
         :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
         :energy="rhythmAmount"
         :beat-sequence="player.audioAnalysis.beatSequence"
-        :intensity="useAmbientBackground ? 1 : 0.68"
+        :intensity="ambientIntensity"
       />
-      <div v-if="useAmbientLayer" class="pointer-events-none absolute inset-0 panel-sheen" />
+      <div v-if="useAmbientBackground" class="pointer-events-none absolute inset-0 panel-sheen" />
       <!-- dev debug -->
       <div
         v-if="showLyricsSamplingRegion"

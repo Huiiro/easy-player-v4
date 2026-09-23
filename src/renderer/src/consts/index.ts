@@ -14,12 +14,36 @@ export enum PlayerDisplayMode {
 }
 
 export enum PlayerBgType {
-  AMBIENT = 'ambient',
-  LIQUID = 'liquid',
-  IMMERSE = 'immerse',
   ALBUM = 'album',
-  CUSTOM = 'custom',
-  DEFAULT = 'default'
+  AMBIENT = 'ambient',
+  LIQUID = 'liquid'
+}
+
+export const PLAYER_BG_TYPES = [
+  PlayerBgType.ALBUM,
+  PlayerBgType.AMBIENT,
+  PlayerBgType.LIQUID
+] as const
+
+export const DEFAULT_PLAYER_BG_TYPE = PlayerBgType.ALBUM
+
+export interface PlayerBgAvailability {
+  coverAvailable?: boolean
+  liquidAvailable?: boolean
+}
+
+export function resolvePlayerBgType(
+  value: unknown,
+  availability: PlayerBgAvailability = {}
+): PlayerBgType {
+  const selected = PLAYER_BG_TYPES.includes(value as PlayerBgType)
+    ? (value as PlayerBgType)
+    : DEFAULT_PLAYER_BG_TYPE
+  if (selected === PlayerBgType.ALBUM && availability.coverAvailable === false)
+    return PlayerBgType.AMBIENT
+  if (selected === PlayerBgType.LIQUID && availability.liquidAvailable === false)
+    return PlayerBgType.AMBIENT
+  return selected
 }
 
 export enum TagStyle {
