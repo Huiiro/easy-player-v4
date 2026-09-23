@@ -24,6 +24,16 @@ const { t } = useI18n()
 const router = useRouter()
 const { error } = useMessage()
 const collapsed = ref(false)
+const footerRoot = ref<HTMLElement | null>(null)
+const footerHidden = ref(false)
+const footerPeekVisible = ref(false)
+const pointerNearFooter = ref(false)
+const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
+const hoverPointer = ref(hoverQuery.matches)
+const AUTO_HIDE_DELAY = 1800
+const REVEAL_DISTANCE = 140
+let autoHideTimer: ReturnType<typeof setTimeout> | null = null
+let peekTimer: ReturnType<typeof setTimeout> | null = null
 const queueVisible = ref(false)
 const audioControlsVisible = ref(false)
 const moreVisible = ref(false)
@@ -31,6 +41,67 @@ const detailsVisible = ref(false)
 const tagVisible = ref(false)
 const playlistVisible = ref(false)
 const lyricSourceVisible = ref(false)
+const footerBusy = computed(
+  () =>
+    queueVisible.value ||
+    audioControlsVisible.value ||
+    moreVisible.value ||
+    detailsVisible.value ||
+    tagVisible.value ||
+    playlistVisible.value ||
+    lyricSourceVisible.value
+)
+const autoHideActive = computed(() => ui.autoHideFooter && hoverPointer.value && !ui.showPlayer)
+
+function revealFooter(): void {
+  if (autoHideTimer) clearTimeout(autoHideTimer)
+  if (peekTimer) clearTimeout(peekTimer)
+  autoHideTimer = null
+  peekTimer = null
+  footerPeekVisible.value = false
+  footerHidden.value = false
+}
+
+function scheduleFooterHide(): void {
+  if (!autoHideActive.value || footerBusy.value || pointerNearFooter.value) {
+    revealFooter()
+    return
+  }
+  if (autoHideTimer || footerHidden.value) return
+  autoHideTimer = setTimeout(() => {
+    autoHideTimer = null
+    if (autoHideActive.value && !footerBusy.value && !pointerNearFooter.value) {
+      footerHidden.value = true
+      peekTimer = setTimeout(
+        () => {
+          peekTimer = null
+          footerPeekVisible.value = autoHideActive.value && footerHidden.value
+        },
+        ui.reduceMotion ? 0 : 300
+      )
+    }
+  }, AUTO_HIDE_DELAY)
+}
+
+function onWindowPointerMove(event: PointerEvent): void {
+  pointerNearFooter.value =
+    event.clientY >= window.innerHeight - REVEAL_DISTANCE ||
+    (event.target instanceof Node && footerRoot.value?.contains(event.target) === true)
+  if (pointerNearFooter.value) revealFooter()
+  else scheduleFooterHide()
+}
+
+function onWindowPointerOut(event: PointerEvent): void {
+  if (event.relatedTarget) return
+  pointerNearFooter.value = false
+  scheduleFooterHide()
+}
+
+function onHoverPointerChange(event: MediaQueryListEvent): void {
+  hoverPointer.value = event.matches
+}
+
+watch([autoHideActive, footerBusy], scheduleFooterHide)
 const lyricSourcesLoading = ref(false)
 const lyricSourceOptions = ref<
   Array<{ source: LyricSource; content: string; format?: LyricFormat }>
@@ -457,18 +528,29 @@ onMounted(() => {
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.on('openAudioControls', openAudioControls)
   window.addEventListener('click', closeMoreMenu)
+  window.addEventListener('pointermove', onWindowPointerMove, { passive: true })
+  window.addEventListener('pointerout', onWindowPointerOut)
+  hoverQuery.addEventListener('change', onHoverPointerChange)
+  scheduleFooterHide()
 })
 onBeforeUnmount(() => {
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.off('openAudioControls', openAudioControls)
   window.removeEventListener('click', closeMoreMenu)
+  window.removeEventListener('pointermove', onWindowPointerMove)
+  window.removeEventListener('pointerout', onWindowPointerOut)
+  hoverQuery.removeEventListener('change', onHoverPointerChange)
+  if (autoHideTimer) clearTimeout(autoHideTimer)
+  if (peekTimer) clearTimeout(peekTimer)
   if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
 })
 </script>
 
 <template>
   <div
-    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 max-[700px]:px-3 max-[700px]:pb-3 select-none"
+    ref="footerRoot"
+    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 transition-transform duration-300 max-[700px]:px-3 max-[700px]:pb-3 select-none"
+    :style="{ transform: autoHideActive && footerHidden ? 'translateY(100%)' : '' }"
   >
     <section
       class="app-footer pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-300 max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
@@ -520,6 +602,12 @@ onBeforeUnmount(() => {
               </p>
               <p class="truncate text-xs text-text-l">
                 {{ card.song?.artist || t('footer.defaultArtist') }}
+              </p>
+              <p
+                v-if="card.slot === 'current' && audioSummary"
+                class="truncate text-[10px] text-text-l"
+              >
+                {{ audioSummary }}
               </p>
             </div>
           </article>
@@ -767,9 +855,71 @@ onBeforeUnmount(() => {
       </div>
     </BaseDialog>
   </div>
+  <span
+    v-if="footerPeekVisible"
+    class="footer-peek pointer-events-auto absolute bottom-0 left-1/2 -translate-x-1/2"
+    :class="{ 'footer-peek--playing': player.isPlaying }"
+    role="status"
+    :aria-label="player.isPlaying ? t('footer.playingStatus') : t('footer.pausedStatus')"
+  >
+    <span v-if="player.isPlaying" class="footer-peek-bars" aria-hidden="true">
+      <i /><i /><i /><i />
+    </span>
+    <span v-else class="footer-peek-line" aria-hidden="true" />
+  </span>
 </template>
 
 <style scoped>
+.footer-peek {
+  display: flex;
+  width: 4rem;
+  height: 0.875rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
+  border-radius: 9999px;
+  background: var(--color-bg-l);
+}
+.footer-peek--playing {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
+}
+.footer-peek-line {
+  width: 2rem;
+  height: 2px;
+  border-radius: 9999px;
+  background: var(--color-primary);
+}
+.footer-peek-bars {
+  display: flex;
+  height: 0.5rem;
+  align-items: flex-end;
+  gap: 3px;
+}
+.footer-peek-bars i {
+  width: 2px;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-primary);
+  transform-origin: bottom;
+  animation: footer-peek-level 0.75s ease-in-out infinite alternate;
+}
+.footer-peek-bars i:nth-child(2) {
+  animation-delay: -0.25s;
+}
+.footer-peek-bars i:nth-child(3) {
+  animation-delay: -0.5s;
+}
+.footer-peek-bars i:nth-child(4) {
+  animation-delay: -0.15s;
+}
+@keyframes footer-peek-level {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
 .app-footer {
   border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-text) 10%, transparent));
   background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));

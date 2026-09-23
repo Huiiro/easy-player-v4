@@ -368,6 +368,13 @@ onBeforeUnmount(() => {
               </div>
               <BaseSwitch v-model="openFooterAnywhere" size="md" />
             </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.autoHideFooter') }}</h3>
+                <p>{{ t('settings.autoHideFooterDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.autoHideFooter" size="md" />
+            </div>
           </div>
         </section>
         <!-- theme -->

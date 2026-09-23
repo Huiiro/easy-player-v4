@@ -40,6 +40,7 @@ export const useUIStore = defineStore(
       systemBackground: SystemBackground
     } | null>(null)
     const useCardView = ref(false)
+    const compactSongList = ref(false)
     const useCustomBg = ref(false)
     const useDynamicBg = ref(false)
     const reduceMotion = ref(false)
@@ -100,6 +101,7 @@ export const useUIStore = defineStore(
     const showPlayerSpectrum = ref(false)
     const showPlayer = ref(false)
     const footerOpenMode = ref<'all' | 'cover'>('all')
+    const autoHideFooter = ref(false)
     // ========== 标签与来源 ==========
     const tagStyle = ref(TagStyle.Full)
     const tagSelected = ref<number[]>([])
@@ -540,6 +542,7 @@ export const useUIStore = defineStore(
       themeBeforeMica,
       themeBeforeFollowingSystem,
       useCardView,
+      compactSongList,
       useCustomBg,
       reduceMotion,
       autoPlayOnRestore,
@@ -580,6 +583,7 @@ export const useUIStore = defineStore(
       showPlayerSpectrum,
       showPlayer,
       footerOpenMode,
+      autoHideFooter,
       tagStyle,
       tagSelected,
       musicSource,
@@ -630,6 +634,7 @@ export const useUIStore = defineStore(
         'themeBeforeMica',
         'themeBeforeFollowingSystem',
         'useCardView',
+        'compactSongList',
         'useCustomBg',
         'reduceMotion',
         'useDynamicBg',
@@ -661,6 +666,7 @@ export const useUIStore = defineStore(
         'playerDisplayMode',
         'showPlayerSpectrum',
         'footerOpenMode',
+        'autoHideFooter',
         'allowSwitchCoverStyle',
         'isCircularCover',
         'isCoverSpin',

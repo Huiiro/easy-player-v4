@@ -17,12 +17,13 @@ const props = defineProps<{
   current: boolean
   keyword: string
   showFileName: boolean
+  compact: boolean
 }>()
 
 const emit = defineEmits<{
   play: [song: LibrarySong]
   toggleSelect: [id: number]
-  requestMenu: [song: LibrarySong, position: { left: string; top: string }]
+  requestMenu: [song: LibrarySong, x: number, y: number]
 }>()
 
 const { t } = useI18n()
@@ -56,12 +57,7 @@ watch(
 )
 
 const requestMenu = (event: MouseEvent): void => {
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  const menuHeight = 250
-  emit('requestMenu', props.song, {
-    left: `${Math.max(8, rect.right - 160)}px`,
-    top: `${window.innerHeight - rect.bottom < menuHeight ? Math.max(8, rect.top - menuHeight) : rect.bottom + 6}px`
-  })
+  emit('requestMenu', props.song, event.clientX, event.clientY)
 }
 function openArtist(artist: string): void {
   if (artist) {
@@ -85,15 +81,19 @@ function openAlbum(): void {
 </script>
 
 <template>
-  <div class="h-16 border-b border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]">
+  <div
+    class="border-b border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
+    :class="compact ? 'h-14' : 'h-16'"
+  >
     <div
-      class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 transition-colors hover:bg-hover"
+      class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem] items-center gap-3 px-5 transition-colors hover:bg-hover"
       :class="
         current
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       "
       @dblclick="emit('play', song)"
+      @contextmenu.prevent.stop="requestMenu"
     >
       <span class="flex items-center gap-2 text-sm text-text-l">
         <input
@@ -108,13 +108,16 @@ function openAlbum(): void {
       </span>
       <span class="flex min-w-0 items-center gap-3">
         <img
-          v-if="coverUrl && !coverFailed"
+          v-if="!compact && coverUrl && !coverFailed"
           :src="coverUrl"
           class="size-10 shrink-0 rounded-md object-cover"
           :alt="song.title"
           @error="coverFailed = true"
         />
-        <span v-else class="grid size-10 shrink-0 place-items-center rounded-md bg-bg-l">
+        <span
+          v-else-if="!compact"
+          class="grid size-10 shrink-0 place-items-center rounded-md bg-bg-l"
+        >
           <svgIcon name="common-music" class-name="size-5" />
         </span>
         <span class="min-w-0">
@@ -184,11 +187,6 @@ function openAlbum(): void {
         <template v-else>{{ t('songList.unknownAlbum') }}</template>
       </span>
       <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
-      <span class="text-right flex ml-2">
-        <button class="btn-hover" @click.stop="requestMenu" @dblclick.stop>
-          <svgIcon name="menu-more-horizontal" class-name="size-5" />
-        </button>
-      </span>
     </div>
   </div>
 </template>

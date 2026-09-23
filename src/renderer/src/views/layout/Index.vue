@@ -97,7 +97,7 @@ onBeforeUnmount(() => {
 
       <!-- 底栏 -->
       <footer
-        class="footer-motion absolute inset-x-0 bottom-0 z-20"
+        class="footer-motion pointer-events-none absolute inset-x-0 bottom-0 z-20"
         :class="ui.showPlayer ? 'translate-y-[calc(100%+1rem)] opacity-0 pointer-events-none' : ''"
       >
         <FootBar />

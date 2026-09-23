@@ -19,6 +19,7 @@ const props = defineProps<{
   selectedCount: number
   allSelected: boolean
   showFileName: boolean
+  compact: boolean
   showTagManager?: boolean
   activeTagFilterCount?: number
   sourceFilter?: string
@@ -33,6 +34,7 @@ const emit = defineEmits<{
   toggleAll: []
   selectNewest: []
   toggleFileName: []
+  toggleCompact: []
   batchPlay: []
   batchAddToPlaylist: []
   batchEditTags: []
@@ -92,6 +94,14 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
         </p>
       </div>
       <div class="flex items-center gap-4">
+        <button
+          class="btn-hover px-2 text-xs"
+          :class="compact ? 'text-primary' : 'text-text-l'"
+          :title="compact ? t('songList.normalMode') : t('songList.compactMode')"
+          @click="emit('toggleCompact')"
+        >
+          {{ compact ? t('songList.normalMode') : t('songList.compactMode') }}
+        </button>
         <!-- fileName -->
         <button
           class="btn-hover px-2 text-xs"
@@ -204,7 +214,7 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     </div>
 
     <div
-      class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem_2rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
+      class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
     >
       <button class="text-left" @click="emit('sort', 'id')">
         # <span v-if="sortBy === 'id'">{{ direction }}</span>
@@ -222,7 +232,6 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
       <button class="text-right" @click="emit('sort', 'duration')">
         {{ t('songList.duration') }} <span v-if="sortBy === 'duration'">{{ direction }}</span>
       </button>
-      <span />
     </div>
   </header>
 </template>

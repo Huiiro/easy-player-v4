@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -39,6 +39,7 @@ const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
 const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
+const showBackTop = ref(false)
 const loading = ref(false)
 const keyword = ref('')
 const sortBy = ref<SortField>(props.source.type === 'history' ? 'playTime' : 'id')
@@ -47,6 +48,7 @@ const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
 const activeMenuSong = ref<LibrarySong | null>(null)
+const menuElement = ref<HTMLElement | null>(null)
 const menuPosition = ref({ left: '0px', top: '0px' })
 const playlistDialogOpen = ref(false)
 const playlistSongIds = ref<number[]>([])
@@ -250,13 +252,28 @@ const selectNewest = (): void => {
     filteredSongs.value.filter((song) => song.isNewest).map((song) => song.id)
   )
 }
-const openMenu = (song: LibrarySong, position: { left: string; top: string }): void => {
-  activeMenuSong.value = activeMenuSong.value?.id === song.id ? null : song
-  menuPosition.value = position
-  if (activeMenuSong.value) eventBus.emit('songActionsMenuOpened', 'songlist')
+const openMenu = async (song: LibrarySong, x: number, y: number): Promise<void> => {
+  activeMenuSong.value = song
+  menuPosition.value = { left: `${x}px`, top: `${y}px` }
+  eventBus.emit('songActionsMenuOpened', 'songlist')
+  await nextTick()
+  const menu = menuElement.value
+  if (!menu) return
+  menuPosition.value = {
+    left: `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`,
+    top: `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`
+  }
 }
 const closeMenu = (): void => {
   activeMenuSong.value = null
+}
+const onListScroll = (event: Event): void => {
+  closeMenu()
+  showBackTop.value = (event.target as HTMLElement).scrollTop > 320
+}
+const backToTop = (): void => {
+  scroller.value?.scrollToItem?.(0)
+  showBackTop.value = false
 }
 const playSong = async (song: LibrarySong): Promise<void> => {
   if (song.songStatus === 0) return
@@ -465,6 +482,7 @@ onMounted(() => {
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.on('locateCurrentSong', locateCurrentSong)
   window.addEventListener('click', closeMenu)
+  window.addEventListener('contextmenu', closeMenu)
 })
 onBeforeUnmount(() => {
   eventBus.off('scanFinished', onScanFinished)
@@ -472,6 +490,7 @@ onBeforeUnmount(() => {
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.off('locateCurrentSong', locateCurrentSong)
   window.removeEventListener('click', closeMenu)
+  window.removeEventListener('contextmenu', closeMenu)
 })
 watch(
   () => props.source,
@@ -483,7 +502,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col text-text">
+  <section class="relative flex h-full min-h-0 flex-col text-text">
     <SongListHeader
       v-model:keyword="keyword"
       :total="songs.length"
@@ -493,6 +512,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       :selected-count="selectedIds.size"
       :all-selected="allSelected"
       :show-file-name="showFileName"
+      :compact="uiStore.compactSongList"
       :show-tag-manager="canFilterByTags"
       :active-tag-filter-count="canFilterByTags ? selectedTagIds.length : 0"
       :source-filter="canFilterBySource ? sourceFilter : undefined"
@@ -503,6 +523,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       @toggle-all="toggleAll"
       @select-newest="selectNewest"
       @toggle-file-name="showFileName = !showFileName"
+      @toggle-compact="uiStore.compactSongList = !uiStore.compactSongList"
       @batch-play="playSelected"
       @batch-add-to-playlist="addSelectedToPlaylist"
       @batch-edit-tags="openBatchTags"
@@ -524,8 +545,9 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       v-slot="{ item, index }"
       class="custom-scrollbar min-h-0 flex-1 overflow-y-auto"
       :items="filteredSongs"
-      :item-size="64"
+      :item-size="uiStore.compactSongList ? 56 : 64"
       key-field="id"
+      @scroll.passive="onListScroll"
     >
       <SongListItem
         :song="item"
@@ -535,20 +557,33 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         :current="player.currentQueueSong?.id === item.id"
         :keyword="keyword"
         :show-file-name="showFileName"
+        :compact="uiStore.compactSongList"
         @play="playSong"
         @toggle-select="toggleSelect"
         @request-menu="openMenu"
       />
     </RecycleScroller>
+    <button
+      v-if="showBackTop && !loading && filteredSongs.length"
+      type="button"
+      class="absolute right-5 bottom-28 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
+      :aria-label="t('songList.backToTop')"
+      :title="t('songList.backToTop')"
+      @click="backToTop"
+    >
+      <svgIcon name="arrow-arrow-up" class-name="size-5" />
+    </button>
     <div class="h-24" />
     <!-- menu -->
     <Teleport to="body">
       <div
         v-if="activeMenuSong"
-        class="fixed z-[9999] w-47 rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
+        ref="menuElement"
+        class="fixed z-[9999] w-47 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
         :style="menuPosition"
         @click.stop
         @dblclick.stop
+        @contextmenu.prevent.stop
       >
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
