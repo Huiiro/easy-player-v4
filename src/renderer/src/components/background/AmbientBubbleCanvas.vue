@@ -237,31 +237,22 @@ function draw(): void {
   const drift = props.reducedMotion ? 0 : elapsed
   context.globalCompositeOperation = 'screen'
   drawGlow(
-    width * (0.18 + Math.sin(drift * 0.07) * 0.025),
-    height * 0.2,
-    Math.max(width, height) * 0.46,
-    1.08,
-    0.74,
+    width * (0.2 + Math.sin(drift * 0.07) * 0.02),
+    height * 0.26,
+    Math.max(width, height) * 0.58,
+    1.12,
+    0.82,
     colors[0],
-    0.23 * strength
+    0.2 * strength
   )
   drawGlow(
-    width * (0.82 + Math.cos(drift * 0.055) * 0.025),
-    height * 0.76,
-    Math.max(width, height) * 0.5,
-    1.05,
-    0.78,
+    width * (0.8 + Math.cos(drift * 0.055) * 0.02),
+    height * 0.72,
+    Math.max(width, height) * 0.62,
+    1.1,
+    0.84,
     colors[1],
-    0.21 * strength
-  )
-  drawGlow(
-    width * 0.57,
-    height * (0.12 + Math.sin(drift * 0.045) * 0.035),
-    Math.max(width, height) * 0.38,
-    1.2,
-    0.66,
-    colors[2],
-    0.17 * strength
+    0.19 * strength
   )
   context.globalCompositeOperation = 'source-over'
   if (props.bubblesEnabled) {

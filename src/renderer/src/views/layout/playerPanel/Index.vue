@@ -561,7 +561,6 @@ function changeLyricsOffset(event: WheelEvent): void {
         :beat-sequence="player.audioAnalysis.beatSequence"
         :intensity="ambientIntensity"
       />
-      <div v-if="useAmbientBackground" class="pointer-events-none absolute inset-0 panel-sheen" />
       <!-- dev debug -->
       <div
         v-if="showLyricsSamplingRegion"
@@ -1301,12 +1300,6 @@ function changeLyricsOffset(event: WheelEvent): void {
   transition:
     opacity 120ms ease,
     transform 100ms ease;
-}
-.panel-sheen {
-  background:
-    radial-gradient(ellipse 48% 30% at 72% 8%, rgb(255 255 255 / 15%), transparent 72%),
-    radial-gradient(ellipse 30% 22% at 16% 86%, rgb(180 226 255 / 8%), transparent 76%);
-  box-shadow: inset 0 1px rgb(255 255 255 / 10%);
 }
 .beat-particles {
   position: absolute;
