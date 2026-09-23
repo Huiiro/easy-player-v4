@@ -2,12 +2,21 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import type { SystemBackground } from '@/stores/ui/uiStore'
+
+interface MiniPlayerTheme {
+  dark: boolean
+  background: SystemBackground | 'custom'
+  accent: string
+  border: string | null
+}
 
 interface MiniPlayerState {
   cover: string | null
   title: string
   artist: string
   isPlaying: boolean
+  theme?: MiniPlayerTheme
 }
 
 const { t } = useI18n()
@@ -27,6 +36,16 @@ const removeUpdateListener = window.api.miniPlayer.onUpdate((data) => {
     artist: typeof next.artist === 'string' ? next.artist : '',
     isPlaying: next.isPlaying === true
   }
+  if (next.theme) {
+    const root = document.documentElement
+    root.classList.toggle('dark', next.theme.dark)
+    root.dataset.systemTheme = next.theme.background
+    root.style.colorScheme = next.theme.dark ? 'dark' : 'light'
+    if (next.theme.accent) root.style.setProperty('--color-primary', next.theme.accent)
+    else root.style.removeProperty('--color-primary')
+    if (next.theme.border) root.style.setProperty('--color-border', next.theme.border)
+    else root.style.removeProperty('--color-border')
+  }
 })
 
 function action(type: 'previous' | 'toggle' | 'next'): void {
@@ -42,9 +61,11 @@ onUnmounted(removeUpdateListener)
 </script>
 
 <template>
-  <main class="flex h-screen items-center gap-3 bg-bg px-3 text-text [-webkit-app-region:drag]">
+  <main
+    class="mini-surface flex h-screen items-center gap-3 px-3 text-text [-webkit-app-region:drag]"
+  >
     <div
-      class="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white"
+      class="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-primary-l-20 text-white"
     >
       <img v-if="coverUrl" :src="coverUrl" class="size-full object-cover" alt="" />
       <SvgIcon v-else name="common-music" class-name="size-6" />
@@ -81,6 +102,16 @@ onUnmounted(removeUpdateListener)
 </template>
 
 <style scoped>
+.mini-surface {
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  background:
+    radial-gradient(
+      circle at 12% 50%,
+      color-mix(in srgb, var(--color-primary) 12%, transparent),
+      transparent 55%
+    ),
+    var(--color-bg);
+}
 .mini-action {
   display: grid;
   width: 1.5rem;
@@ -101,5 +132,9 @@ onUnmounted(removeUpdateListener)
 .mini-action--play {
   color: white;
   background: var(--color-primary);
+}
+.mini-action--play:hover {
+  color: white;
+  background: var(--color-primary-l-20);
 }
 </style>

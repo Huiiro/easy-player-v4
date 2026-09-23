@@ -19,6 +19,7 @@ import type {
 } from '../types/audio'
 import { audioBridge } from '@/services/audioBridge'
 import { useLogStore } from '@/stores/log/logStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import { t } from '@/i18n'
 import { PlayMode } from '@/consts'
@@ -26,6 +27,7 @@ import type { LibrarySong } from '@/types/library'
 
 export const usePlayerStore = defineStore('player', () => {
   const { warning } = useMessage()
+  const ui = useUIStore()
   // ── State ──
   const state = ref<PlaybackState>('idle')
   const positionMs = ref(0)
@@ -1110,7 +1112,13 @@ export const usePlayerStore = defineStore('player', () => {
       cover: song?.cover || null,
       title: metadata?.title || song?.title || '',
       artist: metadata?.artist || song?.artist || '',
-      isPlaying: isPlaying.value
+      isPlaying: isPlaying.value,
+      theme: {
+        dark: ui.useDarkMode,
+        background: ui.useCustomBg ? 'custom' : ui.systemBackground,
+        accent: ui.customThemeColor,
+        border: ui.useCustomBg ? ui.customBg.chromeBorder : null
+      }
     })
     window.api.system.updateTray({
       title: metadata?.title || song?.title || '',
@@ -1133,6 +1141,16 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   watch([currentQueueSong, trackInfo, isPlaying], publishMiniPlayerState, { deep: true })
+  watch(
+    [
+      () => ui.useDarkMode,
+      () => ui.useCustomBg,
+      () => ui.systemBackground,
+      () => ui.customThemeColor,
+      () => ui.customBg.chromeBorder
+    ],
+    publishMiniPlayerState
+  )
 
   return {
     // State
