@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml"
+    xmlns:ttp="http://www.w3.org/ns/ttml#parameter"
+    ttp:frameRate="30"
+    ttp:tickRate="1000">
+  <body begin="1s">
+    <div begin="2s" timeContainer="seq">
+      <p begin="3s" dur="4s">
+        <span begin="15f" dur="500t">父子相对时间</span>
+      </p>
+      <p begin="1s" dur="2s">顺序容器中的下一行</p>
+    </div>
+  </body>
+</tt>

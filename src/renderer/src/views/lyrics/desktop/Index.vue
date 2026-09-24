@@ -273,6 +273,9 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
       // The unchanged first slot is the lyric currently being played.
       activeSlot.value = 'first'
     }
+  } else if (next.next !== previousState.next && !state.value.translation) {
+    if (activeSlot.value === 'first') displayedSecond.value = state.value.next
+    else displayedFirst.value = state.value.next
   }
   previousCurrent = state.value.current
   previousSongId = state.value.songId

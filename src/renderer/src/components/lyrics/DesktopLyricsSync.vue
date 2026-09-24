@@ -31,6 +31,14 @@ function currentIndex(): number {
   return 0
 }
 
+function activeLines(): LyricLine[] {
+  return lyrics.value.filter((line, index) => {
+    if (line.untimed || player.positionMs < line.timeMs) return false
+    const endMs = line.endMs ?? lyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
+    return player.positionMs < endMs
+  })
+}
+
 function lyricSweepRange(
   current: LyricLine | undefined,
   next: LyricLine | undefined
@@ -47,16 +55,21 @@ function lyricSweepRange(
 
 function publish(): void {
   if (!ui.useDesktopLyrics) return
-  const index = currentIndex()
-  const current = lyrics.value[index]
-  const next = lyrics.value[index + 1]
+  const active = activeLines()
+  const fallbackIndex = currentIndex()
+  const current =
+    active.find((line) => !line.isBackground) ?? active[0] ?? lyrics.value[fallbackIndex]
+  const index = current ? lyrics.value.indexOf(current) : fallbackIndex
+  const overlapping = active.find((line) => line !== current)
+  const next = overlapping ?? lyrics.value[index + 1]
   const sweepRange = lyricSweepRange(current, next)
   window.api.desktopLyrics.update({
     songId: player.currentQueueSong?.id,
     revision: lyricRevision,
     current: current?.text || player.currentQueueSong?.title || '',
     next: next?.text || '',
-    translation: ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
+    translation:
+      !overlapping && ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
     positionMs: player.positionMs,
     sweepStartMs: sweepRange?.startMs,
     sweepEndMs: sweepRange?.endMs,

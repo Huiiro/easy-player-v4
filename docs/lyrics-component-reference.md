@@ -112,6 +112,10 @@ type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
 
 ```lrc
 [00:10.000]<00:10.000>Hello <00:10.500>world
+[00:13.000][v1:<00:13.000>男声歌词]
+[00:16.000][v2:<00:16.000>女声歌词]
+[00:19.000][group:<00:19.000>合唱歌词]
+[00:22.000][bg:<00:22.000>背景人声]
 ```
 
 规则：
@@ -120,7 +124,12 @@ type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
 - 行内 `<mm:ss.xxx>` 是词片段开始时间。
 - 每个片段可包含空格、标点和 emoji。
 - 未显式给出的片段结束时间由下一片段或整行结束时间推导。
+- 末尾空文本时间标签可以作为前一片段的明确结束时间。
 - 词片段会进一步按 Unicode 字符均分持续时间，供逐字动画使用。
+- `[v1:...]` 和 `[v2:...]` 分别映射到左右演唱角色。
+- `[group:...]` 映射为居中的合唱行。
+- `[bg:...]` 映射为尺寸较小、弱化显示的背景人声行。
+- 同时兼容 `[v1:]...`、`[v2:]...`、`[group:]...` 和 `[bg:]...` 前缀写法。
 
 ELRC 仍使用 LRC 行解析器，因此有效逐词行需要带行级方括号时间标签。
 
@@ -163,14 +172,26 @@ ELRC 仍使用 LRC 行解析器，因此有效逐词行需要带行级方括号�
 - `span` 的 `begin`、`end`、`dur`。
 - `123ms`、`1.5s`。
 - `mm:ss.xxx` 和 `hh:mm:ss.xxx`。
+- `h`、`m`、帧 `f`、tick `t` 以及 `hh:mm:ss:frames.subframes`。
+- `ttp:frameRate`、`frameRateMultiplier`、`subFrameRate` 和 `tickRate`。
+- `body/div/p/span` 的父子相对时间与 `timeContainer="par|seq"`。
+- 对常见音乐 TTML 的绝对 span 时间写法进行兼容检测，避免在父级时间上重复累加。
 - `span` 文本转换为逐词时间。
+- `<br/>` 转换为歌词内换行。
+- 读取 `head/metadata` 中的 `ttm:agent` 定义。
+- 在 `p` 及祖先节点上继承 `ttm:agent`、`ttm:role` 和 `xml:lang`。
+- 保留最近 `div` 的 `xml:id` 作为轨道标识。
+- 单演唱者按首次出现顺序分配左右位置；多 agent 或 `group` agent 作为居中合唱行。
+- 时间重叠的多个歌词行可同时激活并执行逐字动画。
+- `ttm:role="x-bg"`、`x-background` 或 `x-background-vocal` 映射为背景人声；嵌套背景 span 会从主行拆出。
+- `x-translation`/`x-translated` 和 `x-romanization`/`x-romanized` 轨道会自动合并到对应主行。
 
 当前不支持或不保证：
 
 - TTML 样式、布局、动画和外部资源。
-- 基于 `xml:lang`、角色或 agent 的多轨自动拆分。
-- 帧、tick 等高级 TTML 时间表达式。
-- 嵌套结构中的完整继承语义。
+- 仅根据 `xml:lang` 自动推断翻译、音译轨；没有明确角色时语言代码不足以可靠判断轨道用途。
+- wallclock、SMPTE discontinuous marker 等特殊时间基准。
+- repeat、动画时间以及 TTML/SMIL 的全部隐式持续时间边界情况。
 
 ### 5.5 Plain
 
@@ -217,6 +238,19 @@ interface LyricLine {
   romanization?: string
   words?: Array<{ text: string; startMs: number; endMs: number }>
   chars?: Array<{ char: string; start: number; duration: number }>
+  agentIds?: string[]
+  agents?: Array<{
+    id: string
+    name?: string
+    type?: 'person' | 'character' | 'group' | 'organization' | 'other'
+  }>
+  roles?: string[]
+  language?: string
+  trackId?: string
+  trackKind?: 'main' | 'background' | 'translation' | 'romanization' | 'other'
+  vocalPosition?: 'left' | 'right' | 'center'
+  isChorus?: boolean
+  isBackground?: boolean
 }
 ```
 
@@ -232,7 +266,8 @@ interface LyricLine {
 
 当前播放器使用 `PlayerLyricsV2.vue`，主要能力包括：
 
-- 根据播放位置定位当前行。
+- 根据播放位置定位当前行；显式时间重叠时可同时激活多行。
+- TTML 单演唱者按稳定的左右位置显示，多演唱者或 group agent 的合唱行居中显示。
 - 使用插值歌词时钟，在低频播放器位置事件之间保持逐帧连续推进。
 - 播放时通过 `requestAnimationFrame` 更新逐字进度，暂停时停止外推。
 - 精确逐字歌词按源时间扫字；普通 LRC 的“跟随”效果按整行时长均匀分配字符进度。
@@ -283,6 +318,7 @@ interface LyricLine {
 桌面歌词复用同一个 `resolveLyrics()` 结果，支持：
 
 - 当前歌词与下一句歌词。
+- 对唱或背景人声与主行重叠时，第二行优先显示当前重叠人声；重叠结束后恢复下一句。
 - 当前行翻译。
 - 行级扫光范围；优先使用首词开始和末词结束时间。
 - 播放、暂停、上一首、下一首控制。
@@ -314,7 +350,7 @@ interface LyricLine {
 - ELRC 必须具有可解析的 LRC 行级时间标签。
 - YRC 和 ELRC 的词时间会均分给词内字符，不是原生逐字符时间。
 - 翻译与音译仅按时间匹配，不进行文本相似度或语义对齐。
-- TTML 仅支持当前解析器覆盖的基础时间结构，不是完整 TTML/TTML2 实现。
+- TTML 已保留基础 agent、角色、语言和轨道语义，并支持重叠演唱行；仍不是完整 TTML/TTML2 实现。
 - 内嵌歌词只转换同步文本或普通文本，不保留提供方私有的高级逐字结构。
 - 桌面歌词不展示 Ruby 音译和播放器的逐字符波浪动画。
 

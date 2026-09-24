@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tt xmlns="http://www.w3.org/ns/ttml"
+    xmlns:ttm="http://www.w3.org/ns/ttml#metadata">
+  <head>
+    <metadata>
+      <ttm:agent xml:id="v1" type="person"><ttm:name>Vocal 1</ttm:name></ttm:agent>
+      <ttm:agent xml:id="v2" type="person"><ttm:name>Vocal 2</ttm:name></ttm:agent>
+      <ttm:agent xml:id="group" type="group"><ttm:name>Group</ttm:name></ttm:agent>
+    </metadata>
+  </head>
+  <body>
+    <div xml:id="main" ttm:role="lyrics">
+      <p begin="1s" end="4s" ttm:agent="v1"><span begin="1s" end="4s">第一位主唱</span></p>
+      <p begin="4s" end="7s" ttm:agent="v2"><span begin="4s" end="7s">第二位主唱</span></p>
+      <p begin="7s" end="11s" ttm:agent="v1">
+        <span begin="7s" end="11s">主唱持续演唱</span>
+        <span begin="8s" end="10.5s" ttm:role="x-bg">重叠的背景人声</span>
+      </p>
+      <p begin="11s" end="15s" ttm:agent="group"><span begin="11s" end="15s">所有人一起合唱</span></p>
+    </div>
+  </body>
+</tt>

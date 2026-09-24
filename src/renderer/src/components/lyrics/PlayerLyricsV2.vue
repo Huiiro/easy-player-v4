@@ -85,6 +85,8 @@ let snapRaf = 0
 let lyricLoadId = 0
 let isUnmounted = false
 const currentIndex = ref(0)
+const activeIndices = ref<number[]>([0])
+const activeIndexSet = computed(() => new Set(activeIndices.value))
 const hasUntimedLyrics = computed(
   () => lyrics.value.length > 0 && lyrics.value.every((line) => line.untimed)
 )
@@ -102,12 +104,15 @@ interface SweepElement {
   previousEmphasis: number
   previousLift: number
 }
+interface SweepLine {
+  elements: SweepElement[]
+  interludeElement: HTMLElement | null
+}
 const MAX_CHARACTER_BLEND_MS = 120
 const MAX_BLENDABLE_GAP_MS = 80
 const MIN_CHARACTER_OVERLAP_MS = 40
 const DISTRIBUTED_CHARACTER_SPAN = 1.65
-let sweepElements: SweepElement[] = []
-let interludeElement: HTMLElement | null = null
+let sweepLines = new Map<number, SweepLine>()
 const MIN_PLAYER_WIDTH = 1280
 const MIN_PLAYER_HEIGHT = 780
 const MIN_LYRICS_FONT_SIZE = 2.4
@@ -160,17 +165,31 @@ function findCurrentLineIndex(lyrics: LyricLine[], currentTime: number): number 
   return 0
 }
 
+function findActiveLineIndices(lines: LyricLine[], currentTime: number): number[] {
+  const active = lines.flatMap((line, index) => {
+    if (line.untimed || currentTime < line.timeMs) return []
+    const endMs = line.endMs ?? lines[index + 1]?.timeMs ?? line.timeMs + 5000
+    return currentTime < endMs ? [index] : []
+  })
+  return active.length ? active : [findCurrentLineIndex(lines, currentTime)]
+}
+
+function sameIndices(left: number[], right: number[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index])
+}
+
 async function load(): Promise<void> {
   const loadId = ++lyricLoadId
   stopMotion()
   cancelAnimationFrame(sweepRaf)
   sweepRaf = 0
-  sweepElements = []
+  sweepLines.clear()
   writeScroll(0)
   if (scrollTimer) clearTimeout(scrollTimer)
   if (debounceTimer) clearTimeout(debounceTimer)
   isUserScrolling.value = false
   currentIndex.value = 0
+  activeIndices.value = [0]
   rowSprings = []
   rowTarget = Number.NaN
   lyrics.value = []
@@ -327,16 +346,17 @@ function handleKeydown(event: KeyboardEvent): void {
   }
 }
 
-function paintSweep(now: number): void {
+function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void {
   const time = clock.read(now)
-  const line = lyrics.value[currentIndex.value]
+  const line = lyrics.value[index]
   if (!line || line.untimed) return
-  const next = lyrics.value[currentIndex.value + 1]
+  const next = lyrics.value[index + 1]
+  const sweepElements = sweepLine.elements
   const duration = Math.max(1, (line.endMs ?? next?.timeMs ?? line.timeMs + 5000) - line.timeMs)
   const lineFill = Math.max(0, Math.min(1, (time - line.timeMs) / duration))
-  if (interludeElement) {
+  if (sweepLine.interludeElement) {
     const exit = Math.max(0, Math.min(1, (line.timeMs + duration - time) / 400))
-    interludeElement.style.setProperty('--interlude-exit', String(exit))
+    sweepLine.interludeElement.style.setProperty('--interlude-exit', String(exit))
     sweepElements.forEach(({ element }, index) => {
       const progress = Math.max(0, Math.min(1, lineFill * 3 - index))
       const pulse =
@@ -444,8 +464,15 @@ function paintSweep(now: number): void {
   })
 }
 
+function paintSweep(now: number): void {
+  sweepLines.forEach((sweepLine, index) => paintLineSweep(index, sweepLine, now))
+}
+
 function animateSweep(now: number): void {
-  const index = hasUntimedLyrics.value ? 0 : findCurrentLineIndex(lyrics.value, clock.read(now))
+  const time = clock.read(now)
+  const nextActiveIndices = hasUntimedLyrics.value ? [0] : findActiveLineIndices(lyrics.value, time)
+  if (!sameIndices(nextActiveIndices, activeIndices.value)) activeIndices.value = nextActiveIndices
+  const index = nextActiveIndices[0] ?? 0
   if (index !== currentIndex.value) {
     currentIndex.value = index
     // The active character DOM changes after Vue commits; refreshSweepElements
@@ -457,46 +484,52 @@ function animateSweep(now: number): void {
 }
 
 function refreshSweepElements(): void {
-  const line = lineRefs.value[currentIndex.value]
-  interludeElement = line?.querySelector<HTMLElement>('.lyric-interlude') ?? null
-  const elements = Array.from(
-    line?.querySelectorAll<HTMLElement>('.lyric-karaoke-char, .lyric-char, .interlude-dot') ?? []
-  )
-  sweepElements = elements.map((element, index) => {
-    const start = element.dataset.start === undefined ? undefined : Number(element.dataset.start)
-    const sourceDuration = Math.max(1, Number(element.dataset.duration) || 1)
-    const previous = elements[index - 1]
-    const previousStart = Number(previous?.dataset.start)
-    const previousDuration = Math.max(1, Number(previous?.dataset.duration) || 1)
-    const gap =
-      start === undefined || !Number.isFinite(previousStart)
-        ? Number.POSITIVE_INFINITY
-        : start - (previousStart + previousDuration)
-    // Run adjacent glyphs as a continuous wave instead of isolated pops. A
-    // following glyph becomes visible while its predecessor is still settling;
-    // explicit pauses in the timed source remain untouched.
-    const blend =
-      index > 0 && start !== undefined && gap <= MAX_BLENDABLE_GAP_MS
-        ? Math.min(
-            MAX_CHARACTER_BLEND_MS,
-            Math.max(sourceDuration * 0.55, gap + MIN_CHARACTER_OVERLAP_MS)
-          )
-        : 0
-    const settleDuration =
-      start === undefined ? 0 : Math.min(280, Math.max(160, sourceDuration * 1.2))
-    return {
-      element,
-      width: element.offsetWidth,
-      start,
-      duration: sourceDuration,
-      emphasisStart: start === undefined ? undefined : start - blend,
-      emphasisDuration: sourceDuration + blend + settleDuration,
-      settleDuration,
-      previous: -1,
-      previousEmphasis: -1,
-      previousLift: -1
-    }
-  })
+  sweepLines.clear()
+  for (const lineIndex of activeIndices.value) {
+    const line = lineRefs.value[lineIndex]
+    const elements = Array.from(
+      line?.querySelectorAll<HTMLElement>('.lyric-karaoke-char, .lyric-char, .interlude-dot') ?? []
+    )
+    const sweepElements = elements.map((element, index) => {
+      const start = element.dataset.start === undefined ? undefined : Number(element.dataset.start)
+      const sourceDuration = Math.max(1, Number(element.dataset.duration) || 1)
+      const previous = elements[index - 1]
+      const previousStart = Number(previous?.dataset.start)
+      const previousDuration = Math.max(1, Number(previous?.dataset.duration) || 1)
+      const gap =
+        start === undefined || !Number.isFinite(previousStart)
+          ? Number.POSITIVE_INFINITY
+          : start - (previousStart + previousDuration)
+      // Run adjacent glyphs as a continuous wave instead of isolated pops. A
+      // following glyph becomes visible while its predecessor is still settling;
+      // explicit pauses in the timed source remain untouched.
+      const blend =
+        index > 0 && start !== undefined && gap <= MAX_BLENDABLE_GAP_MS
+          ? Math.min(
+              MAX_CHARACTER_BLEND_MS,
+              Math.max(sourceDuration * 0.55, gap + MIN_CHARACTER_OVERLAP_MS)
+            )
+          : 0
+      const settleDuration =
+        start === undefined ? 0 : Math.min(280, Math.max(160, sourceDuration * 1.2))
+      return {
+        element,
+        width: element.offsetWidth,
+        start,
+        duration: sourceDuration,
+        emphasisStart: start === undefined ? undefined : start - blend,
+        emphasisDuration: sourceDuration + blend + settleDuration,
+        settleDuration,
+        previous: -1,
+        previousEmphasis: -1,
+        previousLift: -1
+      }
+    })
+    sweepLines.set(lineIndex, {
+      elements: sweepElements,
+      interludeElement: line?.querySelector<HTMLElement>('.lyric-interlude') ?? null
+    })
+  }
   paintSweep(performance.now())
 }
 
@@ -515,7 +548,11 @@ const getLineStyle = (idx: number) => {
       opacity: 1
     }
   }
-  const distance = idx - currentIndex.value
+  const distance = activeIndices.value.reduce(
+    (closest, activeIndex) =>
+      Math.abs(idx - activeIndex) < Math.abs(closest) ? idx - activeIndex : closest,
+    idx - currentIndex.value
+  )
   const abs = Math.abs(distance)
   const blur = Math.min(abs * 1.2, 6)
   const opacity = 1 - Math.min(abs * 0.22, 0.75)
@@ -524,10 +561,10 @@ const getLineStyle = (idx: number) => {
     return {
       transform: 'none',
       filter: 'none',
-      opacity: idx === currentIndex.value ? 1 : 0.6
+      opacity: activeIndexSet.value.has(idx) ? 1 : 0.6
     }
   }
-  if (idx === currentIndex.value) {
+  if (activeIndexSet.value.has(idx)) {
     return {
       transform:
         props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none',
@@ -549,6 +586,10 @@ const getLineStyle = (idx: number) => {
 // complete lyric list stable between line/scroll changes so that update does
 // not allocate a new object for every off-screen line on each render.
 const lineStyles = computed(() => lyrics.value.map((_line, idx) => getLineStyle(idx)))
+
+function getLineAlignment(line: LyricLine): 'left' | 'center' | 'right' {
+  return line.vocalPosition ?? props.alignMode
+}
 
 const onClickLyric = (line: number): void => {
   if (line == null) return
@@ -602,6 +643,8 @@ watch(
     immediate: true
   }
 )
+
+watch(activeIndices, () => void nextTick(refreshSweepElements), { flush: 'post' })
 
 watch(
   [lyrics, source],
@@ -681,7 +724,7 @@ onUnmounted(() => {
   if (snapTimer) clearTimeout(snapTimer)
   stopMotion()
   cancelAnimationFrame(sweepRaf)
-  sweepElements = []
+  sweepLines.clear()
   resizeObserver?.disconnect()
   lineRefs.value = []
 })
@@ -709,7 +752,7 @@ onUnmounted(() => {
         v-memo="[
           line,
           lineStyles[idx],
-          currentIndex === idx,
+          activeIndexSet.has(idx),
           ui.showLyricsTranslation,
           ui.showLyricsRomanization,
           ui.lyricsStyle,
@@ -719,17 +762,25 @@ onUnmounted(() => {
         :class="{
           'lyric-line--interlude': !line.untimed && !line.text.trim(),
           'lyric-line--pending-interlude':
-            !line.untimed && !line.text.trim() && currentIndex !== idx
+            !line.untimed && !line.text.trim() && !activeIndexSet.has(idx),
+          'lyric-line--voice-left': line.vocalPosition === 'left',
+          'lyric-line--voice-right': line.vocalPosition === 'right',
+          'lyric-line--chorus': line.isChorus,
+          'lyric-line--background': line.isBackground
         }"
         :style="lineStyles[idx]"
       >
         <div
           v-if="!line.untimed && !line.text.trim()"
           class="lyric-interlude"
-          :class="{ 'is-active': currentIndex === idx }"
+          :class="{ 'is-active': activeIndexSet.has(idx) }"
           :style="{
             justifyContent:
-              alignMode === 'left' ? 'flex-start' : alignMode === 'right' ? 'flex-end' : 'center'
+              getLineAlignment(line) === 'left'
+                ? 'flex-start'
+                : getLineAlignment(line) === 'right'
+                  ? 'flex-end'
+                  : 'center'
           }"
           role="status"
           aria-label="间奏"
@@ -737,14 +788,14 @@ onUnmounted(() => {
           <span v-for="dot in 3" :key="dot" class="interlude-dot" aria-hidden="true" />
         </div>
         <!-- 主歌词 -->
-        <div v-else class="lyric-main" :style="{ textAlign: alignMode }">
+        <div v-else class="lyric-main" :style="{ textAlign: getLineAlignment(line) }">
           <template v-if="ui.showLyricsRomanization && line.rubySegments?.length">
             <ruby
               v-for="(segment, segmentIndex) in line.rubySegments"
               :key="segmentIndex"
               class="lyric-ruby"
             >
-              <template v-if="currentIndex == idx">
+              <template v-if="activeIndexSet.has(idx)">
                 <span
                   v-for="(char, charIdx) in segment.chars"
                   :key="charIdx"
@@ -763,7 +814,7 @@ onUnmounted(() => {
             <div v-if="line.untimed" class="lyric-plain">
               {{ line.text }}
             </div>
-            <div v-else-if="currentIndex == idx">
+            <div v-else-if="activeIndexSet.has(idx)">
               <!-- 逐字歌词 -->
               <template v-if="line.chars?.length">
                 <span
@@ -818,7 +869,7 @@ onUnmounted(() => {
         <!-- 右侧固定操作按钮轨道 -->
         <div
           v-if="line.text.trim()"
-          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-[var(--motion-duration-standard)]"
+          class="absolute left-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 group-focus-within:opacity-50 transition-all duration-[var(--motion-duration-standard)]"
         >
           <button
             :disabled="line.untimed || !line.text.trim()"
@@ -887,6 +938,21 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
+.lyric-line--background {
+  min-height: calc(var(--lrc-size) * 2.15);
+}
+
+.lyric-line--background .lyric-main {
+  padding-inline: calc(var(--lrc-padding) + 72px);
+  font-size: calc(var(--lrc-size) * 0.72);
+  font-weight: 600;
+  opacity: 0.82;
+}
+
+.lyric-line--chorus .lyric-main {
+  letter-spacing: 0.02em;
+}
+
 .lyric-line--pending-interlude {
   min-height: 0;
   max-height: 0;
@@ -910,6 +976,7 @@ onUnmounted(() => {
   font-weight: 700;
   overflow-wrap: anywhere;
   word-break: normal;
+  white-space: pre-line;
 }
 
 .lyric-plain {
