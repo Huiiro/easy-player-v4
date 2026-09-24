@@ -126,6 +126,7 @@ export const usePlayerStore = defineStore('player', () => {
   const shufflePlayedSongIds = new Set<number>()
   const shuffleHistory: number[] = []
   let shuffleHistoryIndex = -1
+  const shuffleNavigationRevision = ref(0)
   const stopAfterCurrent = ref(false)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let deferredRestore: { filePath: string; positionMs: number } | null = null
@@ -218,6 +219,7 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleHistory.push(currentQueueSong.value.id)
       shuffleHistoryIndex = 0
     }
+    shuffleNavigationRevision.value++
     schedulePlaybackSessionSave()
   }
 
@@ -245,6 +247,7 @@ export const usePlayerStore = defineStore('player', () => {
     shufflePlayedSongIds.clear()
     shuffleHistory.length = 0
     shuffleHistoryIndex = -1
+    shuffleNavigationRevision.value++
     savePlaybackSessionSync()
   }
 
@@ -315,6 +318,7 @@ export const usePlayerStore = defineStore('player', () => {
             shuffleHistory.push(songId)
             shuffleHistoryIndex = shuffleHistory.length - 1
           }
+          shuffleNavigationRevision.value++
           savePlaybackSessionSync()
         }
         return true
@@ -360,6 +364,7 @@ export const usePlayerStore = defineStore('player', () => {
         shuffleHistory.splice(i, 1)
         if (i <= shuffleHistoryIndex) shuffleHistoryIndex--
       }
+      shuffleNavigationRevision.value++
     }
     if (index < currentQueueIndex.value) currentQueueIndex.value--
     if (!isCurrent) {
@@ -382,6 +387,7 @@ export const usePlayerStore = defineStore('player', () => {
     shufflePlayedSongIds.clear()
     shuffleHistory.length = 0
     shuffleHistoryIndex = -1
+    shuffleNavigationRevision.value++
     schedulePlaybackSessionSave()
   }
 
@@ -424,13 +430,27 @@ export const usePlayerStore = defineStore('player', () => {
     return playMode.value === PlayMode.List ? queue.value.length - 1 : 0
   }
 
-  async function playNext(): Promise<boolean> {
+  function previewNextIndex(): number {
+    if (playMode.value === PlayMode.Random && shuffleHistoryIndex < shuffleHistory.length - 1) {
+      return queue.value.findIndex((song) => song.id === shuffleHistory[shuffleHistoryIndex + 1])
+    }
+    return nextIndex()
+  }
+
+  async function playNext(previewIndex?: number): Promise<boolean> {
     if (playMode.value === PlayMode.Random && shuffleHistoryIndex < shuffleHistory.length - 1) {
       const historyIndex = shuffleHistoryIndex + 1
       const index = queue.value.findIndex((song) => song.id === shuffleHistory[historyIndex])
       if (index >= 0) return playQueueItem(index, historyIndex)
     }
-    const index = nextIndex()
+    const index =
+      playMode.value === PlayMode.Random &&
+      previewIndex !== undefined &&
+      previewIndex >= 0 &&
+      previewIndex < queue.value.length &&
+      previewIndex !== currentQueueIndex.value
+        ? previewIndex
+        : nextIndex()
     return index >= 0 ? playQueueItem(index) : false
   }
 
@@ -611,6 +631,7 @@ export const usePlayerStore = defineStore('player', () => {
           }
         }
         for (const id of shuffleHistory) shufflePlayedSongIds.add(id)
+        shuffleNavigationRevision.value++
       }
       if (typeof checkpoint.currentFile !== 'string' || !checkpoint.currentFile) return
       currentFile.value = checkpoint.currentFile
@@ -1288,7 +1309,8 @@ export const usePlayerStore = defineStore('player', () => {
     clearQueue,
     playNext,
     playPrevious,
-    getNextQueueIndex: nextIndex,
+    shuffleNavigationRevision,
+    getNextQueueIndex: previewNextIndex,
     getPreviousQueueIndex: previousIndex,
     pause,
     stop,

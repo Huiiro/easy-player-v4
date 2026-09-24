@@ -11,3 +11,5 @@ CI优化
 [12504:0812/050519.934:ERROR:cc\tiles\tile_manager.cc:1003] WARNING: tile memory limits exceeded, some content may not draw
 ✔ 新增默认字体
 ✔ 无时间轴歌词bug
+日志完善
+歌词 副行 对唱

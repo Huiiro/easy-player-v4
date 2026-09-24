@@ -121,6 +121,7 @@ let swipeWasDragged = false
 let suppressSwipeClick = false
 let swipeSettleTimer: ReturnType<typeof setTimeout> | null = null
 let pendingSwipeTargetIndex: number | null = null
+let pendingSwipeDirection: -1 | 0 | 1 = 0
 const swipePreviousIndex = ref<number | null>(null)
 const swipeNextIndex = ref<number | null>(null)
 
@@ -198,6 +199,7 @@ watch(
   [
     () => player.currentQueueIndex,
     () => player.playMode,
+    () => player.shuffleNavigationRevision,
     () => player.queue.map((song) => song.id).join('|')
   ],
   refreshSwipeTargetIndices,
@@ -281,22 +283,27 @@ async function finishSwipeTransition(): Promise<void> {
   if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
   swipeSettleTimer = null
   const targetIndex = pendingSwipeTargetIndex
+  const direction = pendingSwipeDirection
   pendingSwipeTargetIndex = null
+  pendingSwipeDirection = 0
   swipeTransitioning.value = false
   swipeCommitting.value = true
   await nextTick()
   try {
-    if (targetIndex !== null) await player.playQueueItem(targetIndex)
+    if (targetIndex !== null && direction < 0) await player.playPrevious()
+    else if (targetIndex !== null && direction > 0) await player.playNext(targetIndex)
   } finally {
     swipeOffset.value = 0
     frozenSwipeCards.value = null
     swipeCommitting.value = false
+    refreshSwipeTargetIndices()
   }
 }
 
 function settleSwipe(targetIndex: number | null, direction: -1 | 0 | 1): void {
   swipeTransitioning.value = true
   pendingSwipeTargetIndex = targetIndex
+  pendingSwipeDirection = direction
   const width = collapsedCarouselRef.value?.clientWidth || 448
   swipeOffset.value = direction === 0 ? 0 : direction < 0 ? width : -width
   if (ui.reduceMotion) {
@@ -604,11 +611,8 @@ onBeforeUnmount(() => {
               <p class="truncate text-xs text-text-l">
                 {{ card.song?.artist || t('footer.defaultArtist') }}
               </p>
-              <p
-                v-if="card.slot === 'current' && audioSummary"
-                class="truncate text-[10px] text-text-l"
-              >
-                {{ audioSummary }}
+              <p class="truncate text-[10px] text-text-l">
+                {{ card.slot === 'current' ? audioSummary || '-' : '-' }}
               </p>
             </div>
           </article>
