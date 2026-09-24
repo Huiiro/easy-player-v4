@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col py-6 text-text">
+  <section class="flex h-full min-h-0 flex-col pt-6 text-text">
     <header class="mb-5 flex flex-wrap items-center justify-between gap-3 px-6">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">{{ title }}</h1>
@@ -304,7 +304,7 @@ onBeforeUnmount(() => {
     <div
       v-else
       ref="scrollContainer"
-      class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pb-20 pr-1"
+      class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pb-24 pr-1"
       :style="gridStyle"
       @scroll.passive="scheduleScrollPositionSave"
     >

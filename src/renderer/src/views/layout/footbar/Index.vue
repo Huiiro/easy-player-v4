@@ -30,8 +30,8 @@ const footerPeekVisible = ref(false)
 const pointerNearFooter = ref(false)
 const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
 const hoverPointer = ref(hoverQuery.matches)
-const AUTO_HIDE_DELAY = 1800
-const REVEAL_DISTANCE = 140
+const AUTO_HIDE_DELAY = 5000
+const REVEAL_MARGIN = 8
 let autoHideTimer: ReturnType<typeof setTimeout> | null = null
 let peekTimer: ReturnType<typeof setTimeout> | null = null
 const queueVisible = ref(false)
@@ -84,8 +84,9 @@ function scheduleFooterHide(): void {
 }
 
 function onWindowPointerMove(event: PointerEvent): void {
+  const revealDistance = (footerRoot.value?.offsetHeight ?? 96) + REVEAL_MARGIN
   pointerNearFooter.value =
-    event.clientY >= window.innerHeight - REVEAL_DISTANCE ||
+    event.clientY >= window.innerHeight - revealDistance ||
     (event.target instanceof Node && footerRoot.value?.contains(event.target) === true)
   if (pointerNearFooter.value) revealFooter()
   else scheduleFooterHide()
@@ -857,7 +858,7 @@ onBeforeUnmount(() => {
   </div>
   <span
     v-if="footerPeekVisible"
-    class="footer-peek pointer-events-auto absolute bottom-0 left-1/2 -translate-x-1/2"
+    class="footer-peek pointer-events-auto absolute bottom-0 left-1/2"
     :class="{ 'footer-peek--playing': player.isPlaying }"
     role="status"
     :aria-label="player.isPlaying ? t('footer.playingStatus') : t('footer.pausedStatus')"
@@ -879,6 +880,18 @@ onBeforeUnmount(() => {
   border: 1px solid color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
   border-radius: 9999px;
   background: var(--color-bg-l);
+  transform: translateX(-50%);
+  animation: footer-peek-rise var(--motion-duration-slow) var(--motion-ease-emphasized) both;
+}
+@keyframes footer-peek-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 100%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 .footer-peek--playing {
   box-shadow: 0 0 12px color-mix(in srgb, var(--color-primary) 35%, transparent);
