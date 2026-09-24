@@ -44,13 +44,12 @@ let frame = 0,
   lastDebugAt = 0
 let resizeObserver: ResizeObserver | undefined
 let resizeTimer: number | undefined
-let coverTexture: WebGLTexture | null = null
 let blurredCoverTexture: WebGLTexture | null = null
 let coverTargetLoaded = false
 let coverFade = 0
 let coverLoadToken = 0
 const motion = createLiquidMotion()
-const frameInterval = 1000 / 60
+const frameInterval = 1000 / 30
 let vertexBuffer: WebGLBuffer | null = null
 let drawingWidth = 0
 let drawingHeight = 0
@@ -64,7 +63,6 @@ let uniforms: {
   colorA: WebGLUniformLocation | null
   colorB: WebGLUniformLocation | null
   colorC: WebGLUniformLocation | null
-  cover: WebGLUniformLocation | null
   coverBlurred: WebGLUniformLocation | null
   coverLoaded: WebGLUniformLocation | null
 } | null = null
@@ -88,8 +86,12 @@ function colour(value: string): [number, number, number] {
   ]
 }
 
+let primaryColor = colour(props.primary)
+let secondaryColor = colour(props.secondary)
+let tertiaryColor = colour(props.tertiary)
+
 function loadCover(source: string | null): void {
-  if (!gl || !coverTexture || !blurredCoverTexture) return
+  if (!gl || !blurredCoverTexture) return
   const token = ++coverLoadToken
   coverTargetLoaded = false
   if (!source) {
@@ -99,12 +101,8 @@ function loadCover(source: string | null): void {
   const image = new Image()
   image.crossOrigin = 'anonymous'
   image.onload = () => {
-    if (!gl || !coverTexture || !blurredCoverTexture || token !== coverLoadToken) return
+    if (!gl || !blurredCoverTexture || token !== coverLoadToken) return
     try {
-      gl.bindTexture(gl.TEXTURE_2D, coverTexture)
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image)
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
       const size = 128
       const overscan = 16
       const c = document.createElement('canvas')
@@ -194,15 +192,12 @@ function render(now: number): void {
   gl.uniform1f(uniforms.energy!, smoothedEnergy)
   gl.uniform1f(uniforms.bass!, smoothedBass)
   gl.uniform1f(uniforms.beat!, beatEnvelope)
-  gl.uniform3fv(uniforms.colorA!, colour(props.primary))
-  gl.uniform3fv(uniforms.colorB!, colour(props.secondary))
-  gl.uniform3fv(uniforms.colorC!, colour(props.tertiary))
+  gl.uniform3fv(uniforms.colorA!, primaryColor)
+  gl.uniform3fv(uniforms.colorB!, secondaryColor)
+  gl.uniform3fv(uniforms.colorC!, tertiaryColor)
   gl.activeTexture(gl.TEXTURE0)
-  gl.bindTexture(gl.TEXTURE_2D, coverTexture)
-  gl.uniform1i(uniforms.cover!, 0)
-  gl.activeTexture(gl.TEXTURE1)
   gl.bindTexture(gl.TEXTURE_2D, blurredCoverTexture)
-  gl.uniform1i(uniforms.coverBlurred!, 1)
+  gl.uniform1i(uniforms.coverBlurred!, 0)
   gl.uniform1f(uniforms.coverLoaded!, coverFade)
   gl.drawArrays(gl.TRIANGLES, 0, 3)
   if (props.debug && now - lastDebugAt >= 200) {
@@ -307,7 +302,6 @@ onMounted(() => {
     colorA: getUniform('u_color_a'),
     colorB: getUniform('u_color_b'),
     colorC: getUniform('u_color_c'),
-    cover: getUniform('u_cover'),
     coverBlurred: getUniform('u_cover_blurred'),
     coverLoaded: getUniform('u_cover_loaded')
   }
@@ -342,9 +336,8 @@ onMounted(() => {
     )
     return texture
   }
-  coverTexture = createTexture()
   blurredCoverTexture = createTexture()
-  if (!coverTexture || !blurredCoverTexture) {
+  if (!blurredCoverTexture) {
     emit('unavailable')
     return
   }
@@ -373,8 +366,22 @@ watch(
   }
 )
 
-watch(() => props.coverSrc, loadCover)
-watch(() => [props.primary, props.secondary, props.tertiary, props.coverSrc], start)
+watch(
+  () => props.coverSrc,
+  (source) => {
+    loadCover(source)
+    start()
+  }
+)
+watch(
+  () => [props.primary, props.secondary, props.tertiary],
+  () => {
+    primaryColor = colour(props.primary)
+    secondaryColor = colour(props.secondary)
+    tertiaryColor = colour(props.tertiary)
+    start()
+  }
+)
 
 onBeforeUnmount(() => {
   if (frame) cancelAnimationFrame(frame)
@@ -384,11 +391,9 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibility)
   if (gl) {
     if (vertexBuffer) gl.deleteBuffer(vertexBuffer)
-    if (coverTexture) gl.deleteTexture(coverTexture)
     if (blurredCoverTexture) gl.deleteTexture(blurredCoverTexture)
     if (program) gl.deleteProgram(program)
   }
-  coverTexture = null
   vertexBuffer = null
   blurredCoverTexture = null
   program = null

@@ -9,7 +9,7 @@ import {
   systemBackgroundThemes,
   type SystemBackground
 } from '@/components/background/systemBackgroundRegistry'
-import { ENGINE_VERSION, PlayerBgType, VERSION } from '@/consts'
+import { ENGINE_VERSION, PlayerBgType, PlayerCoverStyle, VERSION } from '@/consts'
 import { presetColors } from '@/consts/color'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -60,6 +60,10 @@ const playerBackground = computed<PlayerBgType>({
   set: (value) => {
     ui.setPlayerBgType(value)
   }
+})
+const playerCoverStyle = computed<PlayerCoverStyle>({
+  get: () => ui.playerCoverStyle,
+  set: (value) => ui.setPlayerCoverStyle(value)
 })
 const themeBackgroundOptions = computed(() => [
   { id: 'light' as const, label: t('settings.appearanceModeLight') },
@@ -351,6 +355,50 @@ onBeforeUnmount(() => {
                 >
                   <span class="preview-window"><i /><b /><em /></span>
                   <span>{{ t('settings.playerBackgroundLiquid') }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="setting-row setting-row-stack">
+              <div>
+                <h3>{{ t('settings.playerCoverStyle') }}</h3>
+                <p>{{ t('settings.playerCoverStyleDescription') }}</p>
+              </div>
+              <div
+                class="theme-options"
+                role="radiogroup"
+                :aria-label="t('settings.playerCoverStyle')"
+              >
+                <button
+                  type="button"
+                  class="theme-option standard-cover-preview"
+                  :class="{ selected: playerCoverStyle === PlayerCoverStyle.STANDARD }"
+                  :aria-checked="playerCoverStyle === PlayerCoverStyle.STANDARD"
+                  role="radio"
+                  @click="playerCoverStyle = PlayerCoverStyle.STANDARD"
+                >
+                  <span class="preview-window">
+                    <span class="cover-preview-artwork" aria-hidden="true" />
+                    <span class="cover-preview-lyrics" aria-hidden="true">
+                      <span /><span /><span /><span />
+                    </span>
+                  </span>
+                  <span>{{ t('settings.playerCoverStyleStandard') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="theme-option vinyl-cover-preview"
+                  :class="{ selected: playerCoverStyle === PlayerCoverStyle.VINYL }"
+                  :aria-checked="playerCoverStyle === PlayerCoverStyle.VINYL"
+                  role="radio"
+                  @click="playerCoverStyle = PlayerCoverStyle.VINYL"
+                >
+                  <span class="preview-window">
+                    <span class="cover-preview-artwork" aria-hidden="true" />
+                    <span class="cover-preview-lyrics" aria-hidden="true">
+                      <span /><span /><span /><span />
+                    </span>
+                  </span>
+                  <span>{{ t('settings.playerCoverStyleVinyl') }}</span>
                 </button>
               </div>
             </div>
@@ -1136,6 +1184,65 @@ onBeforeUnmount(() => {
 }
 .album-background-preview b {
   background: rgb(255 255 255 / 15%);
+}
+.standard-cover-preview .preview-window,
+.vinyl-cover-preview .preview-window {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  align-items: center;
+  gap: 5px;
+  background: radial-gradient(circle at 25% 45%, rgb(111 73 121 / 0.35), transparent 55%), #161923;
+}
+.cover-preview-artwork {
+  position: relative;
+  display: block;
+  width: min(100%, 30px);
+  aspect-ratio: 1;
+  justify-self: center;
+}
+.standard-cover-preview .cover-preview-artwork {
+  border-radius: 4px;
+  background: linear-gradient(135deg, #df9fa7, #594272);
+}
+.vinyl-cover-preview .cover-preview-artwork {
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(circle, rgb(255 255 255 / 0.045) 0 1px, transparent 2px 4px),
+    radial-gradient(circle, #282b31, #111318 75%);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.13);
+}
+.vinyl-cover-preview .cover-preview-artwork::after {
+  position: absolute;
+  inset: 29%;
+  border: 2px solid #171a20;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #df9fa7, #594272);
+  content: '';
+}
+.cover-preview-lyrics {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+.cover-preview-lyrics span {
+  display: block;
+  width: 78%;
+  height: 3px;
+  border-radius: 999px;
+  background: rgb(231 224 236 / 0.32);
+}
+.cover-preview-lyrics span:nth-child(2) {
+  width: 96%;
+  height: 4px;
+  background: rgb(248 241 250 / 0.9);
+}
+.cover-preview-lyrics span:nth-child(3) {
+  width: 88%;
+}
+.cover-preview-lyrics span:nth-child(4) {
+  width: 60%;
 }
 .ambient-background-preview .preview-window {
   background:

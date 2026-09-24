@@ -124,6 +124,8 @@ export const usePlayerStore = defineStore('player', () => {
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
   const shufflePlayedSongIds = new Set<number>()
+  const shuffleHistory: number[] = []
+  let shuffleHistoryIndex = -1
   const stopAfterCurrent = ref(false)
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let deferredRestore: { filePath: string; positionMs: number } | null = null
@@ -209,8 +211,12 @@ export const usePlayerStore = defineStore('player', () => {
   function setPlayMode(mode: PlayMode): void {
     playMode.value = mode
     shufflePlayedSongIds.clear()
+    shuffleHistory.length = 0
+    shuffleHistoryIndex = -1
     if (mode === PlayMode.Random && currentQueueSong.value) {
       shufflePlayedSongIds.add(currentQueueSong.value.id)
+      shuffleHistory.push(currentQueueSong.value.id)
+      shuffleHistoryIndex = 0
     }
     schedulePlaybackSessionSave()
   }
@@ -237,6 +243,8 @@ export const usePlayerStore = defineStore('player', () => {
     })
     currentQueueIndex.value = -1
     shufflePlayedSongIds.clear()
+    shuffleHistory.length = 0
+    shuffleHistoryIndex = -1
     savePlaybackSessionSync()
   }
 
@@ -290,14 +298,27 @@ export const usePlayerStore = defineStore('player', () => {
    * Starts the requested queue item, then keeps advancing through distinct candidates
    * when a local file is missing or a remote source cannot provide its cached stream.
    */
-  async function playQueueItem(index: number): Promise<boolean> {
+  async function playQueueItem(index: number, historyIndex = -1): Promise<boolean> {
     if (index < 0 || index >= queue.value.length) return false
     await stop()
     const attempted = new Set<number>()
     let candidate = index
     while (candidate >= 0 && !attempted.has(candidate) && attempted.size < queue.value.length) {
       attempted.add(candidate)
-      if (await tryPlayQueueItem(candidate)) return true
+      if (await tryPlayQueueItem(candidate)) {
+        if (playMode.value === PlayMode.Random) {
+          const songId = queue.value[candidate].id
+          if (historyIndex >= 0 && shuffleHistory[historyIndex] === songId) {
+            shuffleHistoryIndex = historyIndex
+          } else {
+            shuffleHistory.splice(shuffleHistoryIndex + 1)
+            shuffleHistory.push(songId)
+            shuffleHistoryIndex = shuffleHistory.length - 1
+          }
+          savePlaybackSessionSync()
+        }
+        return true
+      }
       candidate = nextIndex()
     }
     currentFile.value = null
@@ -332,9 +353,19 @@ export const usePlayerStore = defineStore('player', () => {
     if (index < 0 || index >= queue.value.length) return
     const isCurrent = index === currentQueueIndex.value
     const [removed] = queue.value.splice(index, 1)
-    if (removed) shufflePlayedSongIds.delete(removed.id)
+    if (removed) {
+      shufflePlayedSongIds.delete(removed.id)
+      for (let i = shuffleHistory.length - 1; i >= 0; i--) {
+        if (shuffleHistory[i] !== removed.id) continue
+        shuffleHistory.splice(i, 1)
+        if (i <= shuffleHistoryIndex) shuffleHistoryIndex--
+      }
+    }
     if (index < currentQueueIndex.value) currentQueueIndex.value--
-    if (!isCurrent) return
+    if (!isCurrent) {
+      schedulePlaybackSessionSave()
+      return
+    }
     if (!queue.value.length) {
       currentQueueIndex.value = -1
       await stop()
@@ -349,6 +380,8 @@ export const usePlayerStore = defineStore('player', () => {
     queue.value = []
     currentQueueIndex.value = -1
     shufflePlayedSongIds.clear()
+    shuffleHistory.length = 0
+    shuffleHistoryIndex = -1
     schedulePlaybackSessionSave()
   }
 
@@ -381,11 +414,22 @@ export const usePlayerStore = defineStore('player', () => {
 
   function previousIndex(): number {
     if (!queue.value.length || currentQueueIndex.value < 0) return -1
+    if (playMode.value === PlayMode.Random) {
+      const previousId = shuffleHistory[shuffleHistoryIndex - 1]
+      return previousId === undefined
+        ? currentQueueIndex.value
+        : queue.value.findIndex((song) => song.id === previousId)
+    }
     if (currentQueueIndex.value > 0) return currentQueueIndex.value - 1
     return playMode.value === PlayMode.List ? queue.value.length - 1 : 0
   }
 
   async function playNext(): Promise<boolean> {
+    if (playMode.value === PlayMode.Random && shuffleHistoryIndex < shuffleHistory.length - 1) {
+      const historyIndex = shuffleHistoryIndex + 1
+      const index = queue.value.findIndex((song) => song.id === shuffleHistory[historyIndex])
+      if (index >= 0) return playQueueItem(index, historyIndex)
+    }
     const index = nextIndex()
     return index >= 0 ? playQueueItem(index) : false
   }
@@ -393,7 +437,10 @@ export const usePlayerStore = defineStore('player', () => {
   async function playPrevious(): Promise<boolean> {
     const index = previousIndex()
     if (index < 0) return false
-    return playQueueItem(index)
+    return playQueueItem(
+      index,
+      playMode.value === PlayMode.Random ? Math.max(0, shuffleHistoryIndex - 1) : -1
+    )
   }
 
   async function pause(): Promise<boolean> {
@@ -423,6 +470,9 @@ export const usePlayerStore = defineStore('player', () => {
     queue: PersistedQueueSong[]
     currentQueueIndex: number
     playMode: PlayMode
+    shuffleHistory?: number[]
+    shuffleHistoryIndex?: number
+    shufflePlayedSongIds?: number[]
   }
 
   interface PlaybackCheckpoint {
@@ -492,7 +542,10 @@ export const usePlayerStore = defineStore('player', () => {
       trackInfo: toPlainData(trackInfo.value),
       queue: queue.value.map(serializeQueueSong),
       currentQueueIndex: currentQueueIndex.value,
-      playMode: playMode.value
+      playMode: playMode.value,
+      shuffleHistory: shuffleHistory,
+      shuffleHistoryIndex,
+      shufflePlayedSongIds: [...shufflePlayedSongIds]
     }
     try {
       const result = window.api.database.saveSync('player.playback-session', session)
@@ -531,6 +584,33 @@ export const usePlayerStore = defineStore('player', () => {
       }
       if (typeof session.playMode === 'number' && session.playMode >= 0 && session.playMode <= 3) {
         playMode.value = session.playMode as PlayMode
+      }
+      if (playMode.value === PlayMode.Random) {
+        const queueIds = new Set(queue.value.map((song) => song.id))
+        if (Array.isArray(session.shuffleHistory)) {
+          shuffleHistory.push(
+            ...session.shuffleHistory.filter(
+              (id): id is number => typeof id === 'number' && queueIds.has(id)
+            )
+          )
+        }
+        shuffleHistoryIndex =
+          typeof session.shuffleHistoryIndex === 'number' &&
+          Number.isInteger(session.shuffleHistoryIndex)
+            ? Math.max(-1, Math.min(session.shuffleHistoryIndex, shuffleHistory.length - 1))
+            : shuffleHistory.length - 1
+        const currentId = currentQueueSong.value?.id
+        if (currentId !== undefined && shuffleHistory[shuffleHistoryIndex] !== currentId) {
+          shuffleHistory.splice(shuffleHistoryIndex + 1)
+          shuffleHistory.push(currentId)
+          shuffleHistoryIndex = shuffleHistory.length - 1
+        }
+        if (Array.isArray(session.shufflePlayedSongIds)) {
+          for (const id of session.shufflePlayedSongIds) {
+            if (typeof id === 'number' && queueIds.has(id)) shufflePlayedSongIds.add(id)
+          }
+        }
+        for (const id of shuffleHistory) shufflePlayedSongIds.add(id)
       }
       if (typeof checkpoint.currentFile !== 'string' || !checkpoint.currentFile) return
       currentFile.value = checkpoint.currentFile

@@ -2,9 +2,12 @@ import { defineStore } from 'pinia'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
+  DEFAULT_PLAYER_COVER_STYLE,
   PlayerBgType,
+  PlayerCoverStyle,
   PlayerDisplayMode,
   resolvePlayerBgType,
+  resolvePlayerCoverStyle,
   TagStyle
 } from '@/consts'
 import type { LyricSource } from '@/services/lyrics'
@@ -107,6 +110,7 @@ export const useUIStore = defineStore(
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
     const playerBgType = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
+    const playerCoverStyle = ref<PlayerCoverStyle>(DEFAULT_PLAYER_COVER_STYLE)
     const playerDisplayMode = ref(PlayerDisplayMode.Normal)
     const allowSwitchCoverStyle = ref(true)
     const isCircularCover = ref(false)
@@ -419,6 +423,7 @@ export const useUIStore = defineStore(
       if (typeof saved.autoPlayOnRestore === 'boolean')
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       setPlayerBgType(saved.playerBgType)
+      setPlayerCoverStyle(saved.playerCoverStyle)
       if (
         ['auto', 'embedded', 'database', 'local', 'network'].includes(
           saved.lyricSourceMode as string
@@ -467,6 +472,9 @@ export const useUIStore = defineStore(
     function setPlayerBgType(value: unknown): void {
       playerBgType.value = resolvePlayerBgType(value)
     }
+    function setPlayerCoverStyle(value: unknown): void {
+      playerCoverStyle.value = resolvePlayerCoverStyle(value)
+    }
     async function setMicaEnabled(enabled: boolean): Promise<void> {
       if (!micaAvailable.value) return
       const response = await window.api.system.setMicaEnabled(enabled)
@@ -505,6 +513,7 @@ export const useUIStore = defineStore(
       useCustomBg.value = false
       systemBackground.value = 'none'
       setPlayerBgType(DEFAULT_PLAYER_BG_TYPE)
+      setPlayerCoverStyle(DEFAULT_PLAYER_COVER_STYLE)
       Object.assign(customBg, {
         url: '',
         path: '',
@@ -568,6 +577,14 @@ export const useUIStore = defineStore(
       },
       { immediate: true }
     )
+    watch(
+      playerCoverStyle,
+      (value) => {
+        const resolved = resolvePlayerCoverStyle(value)
+        if (value !== resolved) playerCoverStyle.value = resolved
+      },
+      { immediate: true }
+    )
     if (typeof window !== 'undefined') {
       const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
       systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
@@ -627,6 +644,8 @@ export const useUIStore = defineStore(
       lyricSourceOrder,
       playerBgType,
       setPlayerBgType,
+      playerCoverStyle,
+      setPlayerCoverStyle,
       playerDisplayMode,
       allowSwitchCoverStyle,
       isCircularCover,
@@ -716,6 +735,7 @@ export const useUIStore = defineStore(
         'autoAdjustLyricsDisplay',
         'lyricSourceOrder',
         'playerBgType',
+        'playerCoverStyle',
         'playerDisplayMode',
         'showPlayerSpectrum',
         'footerOpenMode',

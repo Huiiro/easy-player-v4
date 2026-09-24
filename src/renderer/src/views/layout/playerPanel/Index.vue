@@ -15,6 +15,7 @@ import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDi
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/LiquidBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
+import PlayerCover from '@/components/player/PlayerCover.vue'
 import { formatArtists } from '@/utils/artists'
 
 const showLyricsSamplingRegion = import.meta.env.DEV && false
@@ -39,6 +40,7 @@ const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
   return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
 })
+const displayedCoverUrl = ref<string | null>(null)
 const trackTitle = computed(
   () =>
     player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('playerPanel.noTrack')
@@ -70,51 +72,26 @@ const lyricsOffsetLabel = computed(() => {
  * rhythm
  */
 const rhythmAmount = ref(0)
+const isPanelVisible = ref(!document.hidden && document.hasFocus())
 let lastVisualUpdateAt = 0
-const panelRoot = ref<HTMLElement>()
-let rhythmStyleFrame = 0
+
+function syncPanelVisibility(): void {
+  isPanelVisible.value = !document.hidden && document.hasFocus()
+}
 
 const targetRhythmAmount = computed(() => {
   if (
     !player.isPlaying ||
+    !isPanelVisible.value ||
     !player.rhythmVisualConfig.enabled ||
-    player.rhythmVisualConfig.reducedMotion
+    player.rhythmVisualConfig.reducedMotion ||
+    ui.reduceMotion
   )
     return 0
   const { rms, lowEnergy, onsetStrength } = player.audioAnalysis
   const energy = Math.max(0, Math.min(1, Math.max(rms, lowEnergy, onsetStrength)))
   return Math.min(1, energy * player.rhythmVisualConfig.intensity * 1.8)
 })
-function applyRhythmStyles(): void {
-  rhythmStyleFrame = 0
-  const root = panelRoot.value
-  if (!root) return
-  const amount = rhythmAmount.value
-  root.style.setProperty('--rhythm-background-scale', String(1.1 + amount * 0.1))
-  root.style.setProperty('--rhythm-glow-scale', String(1 + amount * 0.62))
-  root.style.setProperty('--rhythm-glow-opacity', String(0.68 + amount * 0.32))
-  root.style.setProperty('--rhythm-aura-scale', String(1 + amount * 0.5))
-  root.style.setProperty('--rhythm-aura-opacity', String(0.62 + amount * 0.38))
-  root.style.setProperty('--rhythm-cover-scale', String(1 + amount * 0.085))
-  root.style.setProperty('--rhythm-particle-scale', String(0.8 + amount * 0.55))
-  root.style.setProperty('--rhythm-particle-opacity', String(0.16 + amount * 0.52))
-  root.style.setProperty('--beat-strength', String(0.35 + amount * 0.65))
-  const bpm = player.audioAnalysis.bpm
-  const beatInterval = bpm >= 40 && bpm <= 240 ? 60000 / bpm : 700
-  const beatEnergy = Math.min(
-    1,
-    Math.max(amount, player.audioAnalysis.onsetStrength * player.rhythmVisualConfig.intensity)
-  )
-  const burstDuration = Math.max(380, Math.min(1300, beatInterval * (1.12 - beatEnergy * 0.38)))
-  root.style.setProperty('--particle-burst-duration', `${Math.round(burstDuration)}ms`)
-}
-watch(
-  [rhythmAmount, () => player.audioAnalysis.bpm],
-  () => {
-    if (!rhythmStyleFrame) rhythmStyleFrame = requestAnimationFrame(applyRhythmStyles)
-  },
-  { immediate: true }
-)
 watch(
   targetRhythmAmount,
   (target) => {
@@ -130,12 +107,16 @@ watch(
   { immediate: true }
 )
 onMounted(() => {
-  applyRhythmStyles()
   window.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('visibilitychange', syncPanelVisibility)
+  window.addEventListener('focus', syncPanelVisibility)
+  window.addEventListener('blur', syncPanelVisibility)
 })
 onUnmounted(() => {
-  if (rhythmStyleFrame) cancelAnimationFrame(rhythmStyleFrame)
   window.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('visibilitychange', syncPanelVisibility)
+  window.removeEventListener('focus', syncPanelVisibility)
+  window.removeEventListener('blur', syncPanelVisibility)
 })
 
 /**
@@ -168,21 +149,27 @@ const liquidCoverSource = computed(() =>
   coverColorSource.value === 'failed' ? null : coverUrl.value
 )
 const backgroundSource = computed(() => {
-  if (useAlbumArtwork.value && coverUrl.value && !coverFailed.value) return coverUrl.value
+  if (useAlbumArtwork.value && displayedCoverUrl.value && !coverFailed.value)
+    return displayedCoverUrl.value
   return null
 })
 watch(selectedPlayerBackground, (background) => {
   liquidUnavailable.value = false
-  if (background === PlayerBgType.LIQUID) resetCoverPalette(coverUrl.value ? 'loading' : 'idle')
+  if (background === PlayerBgType.LIQUID)
+    coverColorSource.value = coverUrl.value ? 'loading' : 'idle'
   else coverColorSource.value = 'idle'
 })
 
 /**
  * colors
  */
-const coverColors = ref({
-  ...defaultLiquidColors
-})
+const initialPalette = CoverAnalyzer.getCachedPalette(
+  player.currentQueueSong,
+  COVER_ANALYSIS_VERSION,
+  useLiquidBackground.value
+)
+const coverColors = ref(initialPalette ?? { ...defaultLiquidColors })
+const paletteReady = ref(!coverUrl.value || Boolean(initialPalette))
 const lyricsContrastDebug = ref({
   averageLuminance: 0,
   brightRatio: 0,
@@ -199,21 +186,13 @@ const lyricColorStyle = computed(() => {
     '--lrc-translate': ui.lyricsColors.translation
   }
 })
-const coverGlowStyle = computed(() => ({
-  '--cover-primary-solid': `rgb(${coverColors.value.primary})`,
-  '--cover-secondary-solid': `rgb(${coverColors.value.secondary})`
-}))
-const coverCardStyle = computed(() => {
-  const primary = coverColors.value.primary
-  return {
-    '--cover-shadow-rgb': primary
-  }
-})
 const shouldAnimate = computed(
   () =>
     player.isPlaying &&
+    isPanelVisible.value &&
     player.rhythmVisualConfig.enabled &&
-    !player.rhythmVisualConfig.reducedMotion
+    !player.rhythmVisualConfig.reducedMotion &&
+    !ui.reduceMotion
 )
 const liquidEnergy = computed(() => {
   if (!player.rhythmVisualConfig.enabled) return 0
@@ -234,7 +213,7 @@ const liquidBeat = computed(() =>
     : 0
 )
 const analysisPollingRate = computed(() => {
-  if (!ui.showPlayer) return 0
+  if (!ui.showPlayer || !isPanelVisible.value) return 0
   if (ui.showPlayerSpectrum) return 20
   return shouldAnimate.value ? 12 : 0
 })
@@ -271,8 +250,7 @@ function getLyricsRegion(image: HTMLImageElement): [number, number, number, numb
 function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
   const loadedSource = image.getAttribute('src')
-  if (loadedSource && loadedSource !== coverUrl.value && loadedSource !== backgroundSource.value)
-    return
+  if (loadedSource && loadedSource !== coverUrl.value) return
   const result = CoverAnalyzer.analyze({
     image,
     song: player.currentQueueSong,
@@ -289,27 +267,70 @@ function extractCoverColors(event: Event): void {
   })
   if (useLiquidBackground.value && result.source === 'failed') {
     resetCoverPalette('failed')
+    paletteReady.value = true
     return
   }
   coverColors.value = result.palette
+  paletteReady.value = true
   useDarkLyrics.value = result.useDarkLyrics
   coverColorSource.value = result.source
   lyricsContrastDebug.value = result.result
 }
-function resetCoverPalette(source: 'idle' | 'loading' | 'failed'): void {
-  coverColors.value = { ...defaultLiquidColors }
+function resetCoverPalette(source: 'idle' | 'loading' | 'failed', preserveColors = false): void {
+  if (!preserveColors) coverColors.value = { ...defaultLiquidColors }
   useDarkLyrics.value = false
   coverColorSource.value = source
 }
-function handleCoverError(): void {
+function handleCoverError(event: Event): void {
+  if ((event.currentTarget as HTMLImageElement).getAttribute('src') !== coverUrl.value) return
   coverFailed.value = true
+  displayedCoverUrl.value = null
   resetCoverPalette('failed')
+  paletteReady.value = true
 }
 watch(
   coverUrl,
-  (url) => {
+  (url, _, onCleanup) => {
     coverFailed.value = false
-    resetCoverPalette(useLiquidBackground.value && url ? 'loading' : 'idle')
+    const cached = CoverAnalyzer.getCachedPalette(
+      player.currentQueueSong,
+      COVER_ANALYSIS_VERSION,
+      useLiquidBackground.value
+    )
+    const preserveColors = Boolean(url && paletteReady.value)
+    resetCoverPalette(url ? 'loading' : 'idle', preserveColors)
+    if (cached) {
+      coverColors.value = cached
+      coverColorSource.value = 'cache'
+    }
+    paletteReady.value = !url || preserveColors || Boolean(cached)
+    if (!url) {
+      displayedCoverUrl.value = null
+      return
+    }
+    const image = new Image()
+    let active = true
+    onCleanup(() => {
+      active = false
+      image.onload = null
+      image.onerror = null
+    })
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      void image
+        .decode()
+        .catch(() => {})
+        .then(() => {
+          if (active) displayedCoverUrl.value = url
+        })
+    }
+    image.onerror = () => {
+      if (!active) return
+      coverFailed.value = true
+      displayedCoverUrl.value = null
+      resetCoverPalette('failed')
+    }
+    image.src = url
   },
   { immediate: true }
 )
@@ -325,55 +346,6 @@ watch(
   { immediate: true }
 )
 onUnmounted(() => player.setAudioAnalysisPollingRate(0))
-
-/**
- * Beat particles
- */
-const beatRingRef = ref<HTMLElement>()
-const particleColors = ['#ffffff', '#7dd3fc', '#c4b5fd', '#f9a8d4', '#fde68a', '#86efac']
-function randomizeParticle(particle: HTMLElement, index: number): void {
-  const angle = (Math.PI * 2 * index) / 42 - Math.PI / 2 + (Math.random() - 0.5) * 0.38
-  const originDistance = 45 + Math.random() * 10
-  const travelDistance = 44 + Math.random() * 28
-  particle.style.setProperty('--particle-x', `${Math.cos(angle) * travelDistance}%`)
-  particle.style.setProperty('--particle-y', `${Math.sin(angle) * travelDistance}%`)
-  particle.style.setProperty('--particle-origin-x', `${Math.cos(angle) * originDistance}%`)
-  particle.style.setProperty('--particle-origin-y', `${Math.sin(angle) * originDistance}%`)
-  particle.style.setProperty('--particle-delay', `${Math.round(Math.random() * 95)}ms`)
-  particle.style.setProperty('--particle-size', `${4 + Math.round(Math.random() * 5)}px`)
-  particle.style.setProperty(
-    '--particle-color',
-    particleColors[Math.floor(Math.random() * particleColors.length)]
-  )
-}
-const beatParticles = Array.from({ length: 42 }, (_, index) => {
-  const angle = (Math.PI * 2 * index) / 18 - Math.PI / 2
-  const originDistance = 47 + (index % 2) * 4
-  const travelDistance = 52 + (index % 3) * 11
-  return {
-    originX: `${Math.cos(angle) * originDistance}%`,
-    originY: `${Math.sin(angle) * originDistance}%`,
-    x: `${Math.cos(angle) * travelDistance}%`,
-    y: `${Math.sin(angle) * travelDistance}%`,
-    delay: `${(index % 4) * 18}ms`,
-    size: `${5 + (index % 3) * 2}px`,
-    color: particleColors[index % particleColors.length]
-  }
-})
-
-function restartBeatRing(): void {
-  const ring = beatRingRef.value
-  if (!ring || !shouldAnimate.value) return
-  Array.from(ring.children).forEach((particle, index) =>
-    randomizeParticle(particle as HTMLElement, index)
-  )
-  ring.classList.remove('beat-particles--burst')
-  void ring.offsetWidth
-  ring.classList.add('beat-particles--burst')
-}
-watch(() => [player.audioAnalysis.beatSequence, shouldAnimate.value], restartBeatRing, {
-  flush: 'post'
-})
 
 /**
  * controls
@@ -497,16 +469,14 @@ function changeLyricsOffset(event: WheelEvent): void {
 </script>
 
 <template>
-  <div
-    ref="panelRoot"
-    class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none"
-  >
+  <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
     <div class="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
       <Transition name="panel-background">
         <img
           v-if="backgroundSource"
           :key="backgroundSource"
           :src="backgroundSource"
+          :style="{ transform: `scale(${1.1 + rhythmAmount * 0.1})` }"
           class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-[var(--motion-duration-fast)]"
           :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
           alt=""
@@ -525,42 +495,47 @@ function changeLyricsOffset(event: WheelEvent): void {
         @load="extractCoverColors"
         @error="handleCoverError"
       />
-      <LiquidBackground
-        v-if="useLiquidBackground && !liquidUnavailable"
-        :key="liquidCoverSource ? 'cover-liquid-background' : 'default-liquid-background'"
-        :primary="coverColors.primary"
-        :secondary="coverColors.secondary"
-        :tertiary="coverColors.tertiary"
-        :cover-src="liquidCoverSource"
-        :energy="liquidEnergy"
-        :bass="liquidBass"
-        :beat="liquidBeat"
-        :active="player.isPlaying"
-        :reduced-motion="player.rhythmVisualConfig.reducedMotion"
-        :debug="showLiquidDebug"
-        @unavailable="liquidUnavailable = true"
-        @debug="liquidDebug = $event"
-      />
-      <div
-        v-if="useLiquidBackground && !liquidUnavailable"
-        class="absolute inset-0 liquid-background-soften"
-      />
-      <AmbientBubbleCanvas
-        v-if="useAmbientBackground"
-        :primary="coverColors.primary"
-        :secondary="coverColors.secondary"
-        :tertiary="coverColors.tertiary"
-        :active="shouldAnimate"
-        :bubbles-enabled="
-          player.rhythmVisualConfig.enabled &&
-          !player.rhythmVisualConfig.reducedMotion &&
-          !ui.reduceMotion
-        "
-        :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
-        :energy="rhythmAmount"
-        :beat-sequence="player.audioAnalysis.beatSequence"
-        :intensity="ambientIntensity"
-      />
+      <Transition name="panel-background">
+        <div
+          v-if="useLiquidBackground && !liquidUnavailable && paletteReady"
+          class="absolute inset-0"
+        >
+          <LiquidBackground
+            :key="liquidCoverSource ? 'cover-liquid-background' : 'default-liquid-background'"
+            :primary="coverColors.primary"
+            :secondary="coverColors.secondary"
+            :tertiary="coverColors.tertiary"
+            :cover-src="liquidCoverSource"
+            :energy="liquidEnergy"
+            :bass="liquidBass"
+            :beat="liquidBeat"
+            :active="player.isPlaying && isPanelVisible"
+            :reduced-motion="player.rhythmVisualConfig.reducedMotion"
+            :debug="showLiquidDebug"
+            @unavailable="liquidUnavailable = true"
+            @debug="liquidDebug = $event"
+          />
+          <div class="absolute inset-0 liquid-background-soften" />
+        </div>
+      </Transition>
+      <Transition name="panel-background">
+        <AmbientBubbleCanvas
+          v-if="useAmbientBackground && paletteReady"
+          :primary="coverColors.primary"
+          :secondary="coverColors.secondary"
+          :tertiary="coverColors.tertiary"
+          :active="shouldAnimate"
+          :bubbles-enabled="
+            player.rhythmVisualConfig.enabled &&
+            !player.rhythmVisualConfig.reducedMotion &&
+            !ui.reduceMotion
+          "
+          :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
+          :energy="rhythmAmount"
+          :beat-sequence="player.audioAnalysis.beatSequence"
+          :intensity="ambientIntensity"
+        />
+      </Transition>
       <!-- dev debug -->
       <div
         v-if="showLyricsSamplingRegion"
@@ -651,52 +626,21 @@ function changeLyricsOffset(event: WheelEvent): void {
           :class="collapsed && 'panel-side--collapsed'"
         >
           <!-- cover -->
-          <div
-            class="cover-frame relative transition-[transform,filter] duration-[var(--motion-duration-fast)]"
-          >
-            <div
-              class="pointer-events-none absolute -inset-10 rounded-[2.75rem] cover-aura"
-              :style="coverGlowStyle"
-            />
-            <div
-              v-if="shouldAnimate"
-              class="cover-particles-anchor"
-              :style="coverGlowStyle"
-              aria-hidden="true"
-            >
-              <div ref="beatRingRef" class="beat-particles">
-                <i
-                  v-for="(particle, index) in beatParticles"
-                  :key="index"
-                  class="beat-particle"
-                  :style="{
-                    '--particle-x': particle.x,
-                    '--particle-y': particle.y,
-                    '--particle-origin-x': particle.originX,
-                    '--particle-origin-y': particle.originY,
-                    '--particle-delay': particle.delay,
-                    '--particle-size': particle.size,
-                    '--particle-color': particle.color
-                  }"
-                />
-              </div>
-            </div>
-            <div
-              class="cover-card relative z-10 grid aspect-square w-full place-items-center overflow-hidden rounded-[2rem] bg-gradient-to-br from-primary to-violet-500 text-white"
-              :style="coverCardStyle"
-            >
-              <img
-                v-if="coverUrl && !coverFailed"
-                :src="coverUrl"
-                class="size-full object-cover"
-                :alt="trackTitle"
-                crossorigin="anonymous"
-                @load="extractCoverColors"
-                @error="handleCoverError"
-              />
-              <SvgIcon v-else name="common-music" class-name="size-20" />
-            </div>
-          </div>
+          <PlayerCover
+            :cover-style="ui.playerCoverStyle"
+            :cover-url="coverFailed ? null : displayedCoverUrl"
+            :title="trackTitle"
+            :primary="coverColors.primary"
+            :secondary="coverColors.secondary"
+            :rhythm-amount="rhythmAmount"
+            :visual-enabled="player.rhythmVisualConfig.enabled && paletteReady"
+            :active="shouldAnimate"
+            :playing="player.isPlaying && isPanelVisible"
+            :reduce-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
+            :spin="ui.isCoverSpin"
+            @load="extractCoverColors"
+            @error="handleCoverError"
+          />
           <!-- title && artist -->
           <div class="min-w-0 text-center cursor-pointer">
             <h2
@@ -1052,7 +996,7 @@ function changeLyricsOffset(event: WheelEvent): void {
         <PlayerSpectrum
           :spectrum="player.audioAnalysis.spectrum"
           :color="coverColors.primary"
-          :active="player.isPlaying"
+          :active="player.isPlaying && isPanelVisible"
         />
       </div>
     </section>
@@ -1100,7 +1044,6 @@ function changeLyricsOffset(event: WheelEvent): void {
 }
 .panel-background-item {
   filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
-  transform: scale(var(--rhythm-background-scale, 1.1));
 }
 .panel-tool {
   display: flex;
@@ -1222,31 +1165,6 @@ function changeLyricsOffset(event: WheelEvent): void {
   background: color-mix(in srgb, var(--color-primary) 38%, transparent);
   transform: rotate(-35deg);
 }
-.cover-frame {
-  /* Reserve room for the title, metadata, tool strip, progress and controls.
-   * This keeps the lower controls visible at the 780px minimum window height. */
-  width: min(520px, 36vw, calc(100dvh - 30rem));
-  max-width: 100%;
-  isolation: isolate;
-  transform: scale(var(--rhythm-cover-scale, 1));
-  transform-origin: center;
-}
-@media (max-width: 760px) {
-  .cover-frame {
-    width: min(320px, 62vw, calc(100dvh - 24rem));
-  }
-}
-@media (max-width: 700px) {
-  .cover-frame {
-    width: min(230px, 44vh);
-  }
-}
-.cover-particles-anchor {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-}
 .player-panel-layout {
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
   grid-template-rows: minmax(0, 1fr);
@@ -1279,9 +1197,6 @@ function changeLyricsOffset(event: WheelEvent): void {
   padding-right: 2rem;
   padding-left: 2rem;
 }
-.cover-card {
-  box-shadow: 0 22px 42px rgb(var(--cover-shadow-rgb) / 42%);
-}
 .panel-background-enter-active,
 .panel-background-leave-active {
   transition: opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -1289,63 +1204,5 @@ function changeLyricsOffset(event: WheelEvent): void {
 .panel-background-enter-from,
 .panel-background-leave-to {
   opacity: 0 !important;
-}
-.cover-aura {
-  background:
-    radial-gradient(circle at 25% 22%, var(--cover-primary-solid), transparent 51%),
-    radial-gradient(circle at 76% 78%, var(--cover-secondary-solid), transparent 58%);
-  filter: blur(24px) saturate(1.25);
-  opacity: var(--rhythm-aura-opacity, 0.62);
-  transform: scale(var(--rhythm-aura-scale, 1));
-  transition:
-    opacity 120ms ease,
-    transform 100ms ease;
-}
-.beat-particles {
-  position: absolute;
-  inset: 0;
-  overflow: visible;
-}
-.beat-particle {
-  position: absolute;
-  top: calc(50% + var(--particle-origin-y));
-  left: calc(50% + var(--particle-origin-x));
-  width: var(--particle-size);
-  height: var(--particle-size);
-  border-radius: 50%;
-  background: var(--particle-color);
-  opacity: var(--rhythm-particle-opacity, 0.2);
-  box-shadow:
-    0 0 9px color-mix(in srgb, var(--particle-color) 78%, white),
-    0 0 20px var(--particle-color);
-  transform: translate(-50%, -50%) scale(var(--rhythm-particle-scale, 0.8));
-  transition:
-    opacity 90ms ease-out,
-    transform 90ms ease-out;
-}
-.beat-particles--burst .beat-particle {
-  animation: player-panel-particle-burst var(--particle-burst-duration, 760ms)
-    cubic-bezier(0.14, 0.74, 0.24, 1);
-  animation-delay: var(--particle-delay);
-}
-@keyframes player-panel-particle-burst {
-  from {
-    opacity: var(--beat-strength);
-    transform: translate(-50%, -50%) scale(0.25);
-  }
-  70% {
-    opacity: calc(var(--beat-strength) * 0.7);
-  }
-  to {
-    top: calc(50% + var(--particle-origin-y) + var(--particle-y));
-    left: calc(50% + var(--particle-origin-x) + var(--particle-x));
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(1.35);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .beat-particles--burst .beat-particle {
-    animation: none;
-  }
 }
 </style>

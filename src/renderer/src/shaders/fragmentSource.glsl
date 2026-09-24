@@ -8,7 +8,6 @@ uniform float u_beat;
 uniform vec3 u_color_a;
 uniform vec3 u_color_b;
 uniform vec3 u_color_c;
-uniform sampler2D u_cover;
 uniform sampler2D u_cover_blurred;
 uniform float u_cover_loaded;
 
@@ -51,13 +50,7 @@ float angularWave(vec2 point, float frequency) {
 
 vec3 sampleArtwork(vec2 uv) {
   vec2 q = clamp(uv, 0.03, 0.97);
-  vec2 offset = vec2(0.045, 0.0);
-  vec3 color = texture2D(u_cover_blurred, q).rgb * 0.60;
-  color += texture2D(u_cover_blurred, q + offset).rgb * 0.10;
-  color += texture2D(u_cover_blurred, q - offset).rgb * 0.10;
-  color += texture2D(u_cover_blurred, q + offset.yx).rgb * 0.10;
-  color += texture2D(u_cover_blurred, q - offset.yx).rgb * 0.10;
-  return color;
+  return texture2D(u_cover_blurred, q).rgb;
 }
 
 void main() {

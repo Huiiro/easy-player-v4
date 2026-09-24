@@ -60,6 +60,40 @@ interface AnalyzeOptions {
 
 export class CoverAnalyzer {
   private static readonly SAMPLE_SIZE = 32
+  private static readonly recentPalettes = new Map<string, Palette>()
+
+  static getCachedPalette(
+    song: AnalyzeOptions['song'],
+    version: number,
+    useLiquidBackground: boolean
+  ): Palette | null {
+    if (!song?.cover) return null
+    const key = `${version}:${useLiquidBackground}:${song.cover}`
+    const recent = this.recentPalettes.get(key)
+    if (recent) return recent
+    if (
+      useLiquidBackground ||
+      song.coverAnalysisPath !== song.cover ||
+      song.coverAnalysisVersion !== version ||
+      !song.coverPrimary ||
+      !song.coverSecondary
+    )
+      return null
+    return this.createPalette(song.coverPrimary, song.coverSecondary)
+  }
+
+  private static rememberPalette(
+    song: AnalyzeOptions['song'],
+    version: number,
+    useLiquidBackground: boolean,
+    palette: Palette
+  ): void {
+    if (!song?.cover) return
+    const key = `${version}:${useLiquidBackground}:${song.cover}`
+    this.recentPalettes.set(key, palette)
+    if (this.recentPalettes.size > 20)
+      this.recentPalettes.delete(this.recentPalettes.keys().next().value!)
+  }
 
   /**
    * entry - 分析封面颜色
@@ -82,8 +116,10 @@ export class CoverAnalyzer {
 
     const cached = this.getCachedAnalysis(song, coverAnalysisVersion, isPanelBackground)
     if (cached) {
+      const palette = this.createPalette(cached.primary, cached.secondary)
+      this.rememberPalette(song, coverAnalysisVersion, useLiquidBackground, palette)
       return {
-        palette: this.createPalette(cached.primary, cached.secondary),
+        palette,
         useDarkLyrics: cached.lyricsDark === 1,
         source: 'cache'
       }
@@ -92,6 +128,7 @@ export class CoverAnalyzer {
     try {
       const pixelData = this.sampleImageData(image)
       const palette = this.extractVibrantColors(pixelData, this.SAMPLE_SIZE, useLiquidBackground)
+      this.rememberPalette(song, coverAnalysisVersion, useLiquidBackground, palette)
 
       let useDarkLyrics = false
       let result: LyricsAnalysis = null

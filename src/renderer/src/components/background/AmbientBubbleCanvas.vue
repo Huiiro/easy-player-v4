@@ -42,16 +42,20 @@ interface Bubble {
 }
 
 const canvasRef = ref<HTMLCanvasElement>()
+const bubblesCanvasRef = ref<HTMLCanvasElement>()
 let context: CanvasRenderingContext2D | null = null
+let bubblesContext: CanvasRenderingContext2D | null = null
 let resizeObserver: ResizeObserver | undefined
 let animationFrame = 0
 let lastFrameAt = 0
-let elapsed = 0
 let width = 0
 let height = 0
 let dpr = 1
 let noisePattern: CanvasPattern | null = null
 const bubbles: Bubble[] = []
+type RgbColor = [number, number, number]
+type Palette = [RgbColor, RgbColor, RgbColor]
+const PALETTE_TRANSITION_MS = 700
 
 function parseColor(value: string): [number, number, number] {
   const parts = value
@@ -61,10 +65,32 @@ function parseColor(value: string): [number, number, number] {
   return parts?.length === 3 ? [parts[0], parts[1], parts[2]] : [110, 160, 220]
 }
 
-function colorAt(index: number): [number, number, number] {
-  return [parseColor(props.primary), parseColor(props.secondary), parseColor(props.tertiary)][
-    index % 3
-  ]
+function readPalette(): Palette {
+  return [parseColor(props.primary), parseColor(props.secondary), parseColor(props.tertiary)]
+}
+
+let palette = readPalette()
+let paletteFrom = palette
+let paletteTo = palette
+let paletteTransitionAt: number | null = null
+
+function updatePalette(timestamp: number): void {
+  if (paletteTransitionAt === null) return
+  const progress = Math.max(
+    0,
+    Math.min(1, (timestamp - paletteTransitionAt) / PALETTE_TRANSITION_MS)
+  )
+  const eased = 1 - (1 - progress) ** 3
+  palette = paletteFrom.map((color, index) =>
+    color.map((channel, channelIndex) =>
+      Math.round(channel + (paletteTo[index][channelIndex] - channel) * eased)
+    )
+  ) as Palette
+  if (progress === 1) paletteTransitionAt = null
+}
+
+function colorAt(index: number): RgbColor {
+  return palette[index % 3]
 }
 
 function resetBubble(bubble: Bubble, initial = false): void {
@@ -117,18 +143,28 @@ function createNoisePattern(): void {
 
 function resize(): void {
   const canvas = canvasRef.value
-  if (!canvas) return
+  const bubblesCanvas = bubblesCanvasRef.value
+  if (!canvas || !bubblesCanvas) return
   const bounds = canvas.getBoundingClientRect()
-  width = Math.max(1, bounds.width)
-  height = Math.max(1, bounds.height)
-  dpr = Math.min(window.devicePixelRatio || 1, 1.5)
+  const nextWidth = Math.max(1, bounds.width)
+  const nextHeight = Math.max(1, bounds.height)
+  const nextDpr = Math.min(window.devicePixelRatio || 1, 1)
+  if (width === nextWidth && height === nextHeight && dpr === nextDpr) return
+  width = nextWidth
+  height = nextHeight
+  dpr = nextDpr
   canvas.width = Math.round(width * dpr)
   canvas.height = Math.round(height * dpr)
+  bubblesCanvas.width = canvas.width
+  bubblesCanvas.height = canvas.height
   context = canvas.getContext('2d', { alpha: true })
+  bubblesContext = bubblesCanvas.getContext('2d', { alpha: true })
   context?.setTransform(dpr, 0, 0, dpr, 0, 0)
+  bubblesContext?.setTransform(dpr, 0, 0, dpr, 0, 0)
   createNoisePattern()
   createBubbles()
-  draw()
+  drawBase()
+  drawBubbles()
 }
 
 function drawGlow(
@@ -155,6 +191,7 @@ function drawGlow(
 }
 
 function drawBubble(bubble: Bubble): void {
+  const context = bubblesContext
   if (!context) return
   const [red, green, blue] = colorAt(bubble.colorIndex)
   if (bubble.state === 'popping') {
@@ -224,40 +261,31 @@ function update(deltaSeconds: number): void {
   }
 }
 
-function draw(): void {
+function drawBase(timestamp = performance.now()): void {
   if (!context || !width || !height) return
+  updatePalette(timestamp)
   context.clearRect(0, 0, width, height)
-  const energy = Math.max(0, Math.min(1, props.energy))
-  const strength = props.intensity * (1 + energy * 0.18)
-  const colors = [
-    parseColor(props.primary),
-    parseColor(props.secondary),
-    parseColor(props.tertiary)
-  ]
-  const drift = props.reducedMotion ? 0 : elapsed
+  const strength = props.intensity
   context.globalCompositeOperation = 'screen'
   drawGlow(
-    width * (0.2 + Math.sin(drift * 0.07) * 0.02),
+    width * 0.2,
     height * 0.26,
     Math.max(width, height) * 0.58,
     1.12,
     0.82,
-    colors[0],
+    palette[0],
     0.2 * strength
   )
   drawGlow(
-    width * (0.8 + Math.cos(drift * 0.055) * 0.02),
+    width * 0.8,
     height * 0.72,
     Math.max(width, height) * 0.62,
     1.1,
     0.84,
-    colors[1],
+    palette[1],
     0.19 * strength
   )
   context.globalCompositeOperation = 'source-over'
-  if (props.bubblesEnabled) {
-    for (const bubble of bubbles) drawBubble(bubble)
-  }
   if (noisePattern) {
     context.globalAlpha = 0.12
     context.fillStyle = noisePattern
@@ -266,35 +294,76 @@ function draw(): void {
   }
 }
 
+function drawBubbles(): void {
+  if (!bubblesContext || !width || !height) return
+  bubblesContext.clearRect(0, 0, width, height)
+  if (props.bubblesEnabled) {
+    for (const bubble of bubbles) drawBubble(bubble)
+  }
+}
+
 function animate(timestamp: number): void {
   animationFrame = 0
-  if (!props.active || props.reducedMotion || !props.bubblesEnabled) {
-    draw()
+  const animateBubbles = props.active && !props.reducedMotion && props.bubblesEnabled
+  if (!animateBubbles && paletteTransitionAt === null) {
+    drawBubbles()
     return
   }
-  if (timestamp - lastFrameAt < 1000 / 30) {
+  if (timestamp - lastFrameAt < 1000 / 24) {
     animationFrame = requestAnimationFrame(animate)
     return
   }
   const deltaSeconds = Math.min(0.05, Math.max(0, (timestamp - (lastFrameAt || timestamp)) / 1000))
   lastFrameAt = timestamp
-  elapsed += deltaSeconds
-  update(deltaSeconds)
-  draw()
-  animationFrame = requestAnimationFrame(animate)
+  if (animateBubbles) {
+    update(deltaSeconds)
+  }
+  if (paletteTransitionAt !== null) drawBase(timestamp)
+  drawBubbles()
+  if (animateBubbles || paletteTransitionAt !== null)
+    animationFrame = requestAnimationFrame(animate)
 }
 
 function startAnimation(): void {
   if (animationFrame) cancelAnimationFrame(animationFrame)
   animationFrame = 0
   lastFrameAt = 0
-  if (props.active && props.bubblesEnabled && !props.reducedMotion)
+  if (props.reducedMotion && paletteTransitionAt !== null) {
+    palette = paletteTo
+    paletteTransitionAt = null
+    drawBase()
+  }
+  if (
+    (props.active && props.bubblesEnabled && !props.reducedMotion) ||
+    paletteTransitionAt !== null
+  )
     animationFrame = requestAnimationFrame(animate)
-  else draw()
+  else drawBubbles()
 }
 
 watch(() => [props.active, props.bubblesEnabled, props.reducedMotion], startAnimation)
-watch(() => [props.primary, props.secondary, props.tertiary, props.intensity], draw)
+watch(
+  () => [props.primary, props.secondary, props.tertiary],
+  () => {
+    const now = performance.now()
+    updatePalette(now)
+    paletteFrom = palette
+    paletteTo = readPalette()
+    if (props.reducedMotion) {
+      palette = paletteTo
+      paletteTransitionAt = null
+      drawBase(now)
+      drawBubbles()
+    } else {
+      paletteTransitionAt = now
+      if (!animationFrame) animationFrame = requestAnimationFrame(animate)
+    }
+  }
+)
+watch(
+  () => props.intensity,
+  () => drawBase()
+)
 watch(
   () => props.beatSequence,
   () => {
@@ -315,7 +384,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas)
   resize()
-  startAnimation()
+  if (props.active && props.bubblesEnabled && !props.reducedMotion) startAnimation()
 })
 
 onBeforeUnmount(() => {
@@ -325,15 +394,26 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <canvas ref="canvasRef" class="ambient-bubble-canvas" aria-hidden="true" />
+  <div class="ambient-bubble-layer" aria-hidden="true">
+    <canvas
+      ref="canvasRef"
+      class="ambient-bubble-canvas ambient-bubble-base"
+      :style="{ transform: `scale(${1.1 + energy * 0.1})` }"
+    />
+    <canvas ref="bubblesCanvasRef" class="ambient-bubble-canvas" />
+  </div>
 </template>
 
 <style scoped>
+.ambient-bubble-layer,
 .ambient-bubble-canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+.ambient-bubble-base {
+  transition: transform var(--motion-duration-fast) ease;
 }
 </style>

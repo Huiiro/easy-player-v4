@@ -27,6 +27,17 @@ export const PLAYER_BG_TYPES = [
 
 export const DEFAULT_PLAYER_BG_TYPE = PlayerBgType.ALBUM
 
+export enum PlayerCoverStyle {
+  STANDARD = 'standard',
+  VINYL = 'vinyl'
+}
+
+export const DEFAULT_PLAYER_COVER_STYLE = PlayerCoverStyle.STANDARD
+
+export function resolvePlayerCoverStyle(value: unknown): PlayerCoverStyle {
+  return value === PlayerCoverStyle.VINYL ? PlayerCoverStyle.VINYL : DEFAULT_PLAYER_COVER_STYLE
+}
+
 export interface PlayerBgAvailability {
   coverAvailable?: boolean
   liquidAvailable?: boolean
