@@ -38,6 +38,9 @@ let lastTime = 0
 let velocity = 0
 let settleTimer: ReturnType<typeof setTimeout> | undefined
 let inertiaFrame = 0
+let motionFrame = 0
+let motionTarget: number | null = null
+let motionLastTime = 0
 let resizeObserver: ResizeObserver | undefined
 let isPlaylistDragging = false
 let isPlaylistPointerDown = false
@@ -70,7 +73,11 @@ function updateCardWidth(): void {
 function getCardStyle(virtualIndex: number): Record<string, string | number> {
   const offset = virtualIndex - centerIndex.value
   const distance = Math.abs(offset)
-  const scale = distance < 0.35 ? 1.24 : distance < 1.45 ? 0.86 : 0.64
+  const smoothstep = (start: number, end: number): number => {
+    const progress = Math.max(0, Math.min(1, (distance - start) / (end - start)))
+    return progress * progress * (3 - 2 * progress)
+  }
+  const scale = 0.64 + 0.22 * (1 - smoothstep(1.2, 2.2)) + 0.38 * (1 - smoothstep(0, 1))
   return {
     width: `${cardWidth.value}px`,
     transform: `translate(-50%, -50%) translateX(${offset * cardWidth.value * 0.88}px) scale(${scale})`,
@@ -83,10 +90,55 @@ function centerOnSong(songId: number | undefined): void {
   const index = songs.value.findIndex((song) => song.id === songId)
   if (index >= 0) centerIndex.value = index
 }
+function stopMotion(): void {
+  if (motionFrame) cancelAnimationFrame(motionFrame)
+  motionFrame = 0
+  motionTarget = null
+  if (settleTimer) clearTimeout(settleTimer)
+  settleTimer = undefined
+}
+function moveTo(target: number): void {
+  if (ui.reduceMotion) {
+    stopMotion()
+    centerIndex.value = target
+    return
+  }
+  motionTarget = target
+  if (motionFrame) return
+  motionLastTime = performance.now()
+  const step = (now: number): void => {
+    const elapsed = Math.min(now - motionLastTime, 64)
+    motionLastTime = now
+    const difference = (motionTarget ?? centerIndex.value) - centerIndex.value
+    centerIndex.value += difference * (1 - Math.exp(-elapsed / 95))
+    if (Math.abs(difference) < 0.001) {
+      centerIndex.value = motionTarget ?? centerIndex.value
+      motionTarget = null
+      motionFrame = 0
+      return
+    }
+    motionFrame = requestAnimationFrame(step)
+  }
+  motionFrame = requestAnimationFrame(step)
+}
+function moveToSong(songId: number | undefined): void {
+  if (!songId || !songs.value.length) return
+  const index = songs.value.findIndex((song) => song.id === songId)
+  if (index < 0) return
+  const length = songs.value.length
+  const target = index + Math.round((centerIndex.value - index) / length) * length
+  moveTo(target)
+}
+function locateCurrentSong(): void {
+  stopInertia()
+  stopMotion()
+  moveToSong(player.currentQueueSong?.id)
+}
 function settle(): void {
   if (settleTimer) clearTimeout(settleTimer)
   settleTimer = setTimeout(() => {
-    centerIndex.value = Math.round(centerIndex.value)
+    settleTimer = undefined
+    moveTo(Math.round(motionTarget ?? centerIndex.value))
   }, 120)
 }
 function stopInertia(): void {
@@ -99,14 +151,17 @@ function startInertia(): void {
     centerIndex.value = Math.round(centerIndex.value)
     return
   }
-  const step = (): void => {
-    if (Math.abs(velocity) < 0.01) {
-      centerIndex.value = Math.round(centerIndex.value)
+  let previousTime = performance.now()
+  const step = (now: number): void => {
+    const elapsed = Math.min(now - previousTime, 64)
+    previousTime = now
+    if (Math.abs(velocity) < 0.015) {
       inertiaFrame = 0
+      moveTo(Math.round(centerIndex.value))
       return
     }
-    centerIndex.value -= (velocity * 18) / cardWidth.value
-    velocity *= 0.92
+    centerIndex.value -= (velocity * elapsed) / cardWidth.value
+    velocity *= Math.exp(-elapsed / 180)
     inertiaFrame = requestAnimationFrame(step)
   }
   inertiaFrame = requestAnimationFrame(step)
@@ -114,8 +169,10 @@ function startInertia(): void {
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
   stopInertia()
+  stopMotion()
   isDragging = true
   carouselWasDragged = false
+  velocity = 0
   pointerStartX = event.clientX
   startingIndex = centerIndex.value
   lastX = event.clientX
@@ -124,29 +181,51 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerMove(event: PointerEvent): void {
   if (!isDragging) return
   const delta = event.clientX - pointerStartX
-  if (Math.abs(delta) > 5) carouselWasDragged = true
+  if (Math.abs(delta) > 8) carouselWasDragged = true
   centerIndex.value = startingIndex - delta / cardWidth.value
   const now = performance.now()
   const elapsed = now - lastTime
   if (elapsed > 0) {
-    velocity = (event.clientX - lastX) / elapsed
+    velocity = velocity * 0.65 + ((event.clientX - lastX) / elapsed) * 0.35
     lastX = event.clientX
     lastTime = now
   }
 }
-function onPointerUp(): void {
+function onPointerUp(event: PointerEvent): void {
   if (!isDragging) return
   isDragging = false
+  if (performance.now() - lastTime > 80) velocity = 0
   if (carouselWasDragged) {
     suppressCardClick = true
     setTimeout(() => (suppressCardClick = false), 0)
+  } else if (event.type === 'pointerup') {
+    const target = document.elementFromPoint(event.clientX, event.clientY)
+    const card = target?.closest<HTMLElement>('.card-item')
+    if (card && carouselRef.value?.contains(card) && !target?.closest('.card-play-button')) {
+      const virtualIndex = Number(card.dataset.virtualIndex)
+      if (Number.isFinite(virtualIndex)) {
+        moveTo(virtualIndex)
+        return
+      }
+    }
   }
   startInertia()
 }
+function horizontalWheelDelta(event: WheelEvent): number {
+  const rawDelta =
+    Math.abs(event.deltaX) > Math.abs(event.deltaY)
+      ? event.deltaX
+      : event.shiftKey
+        ? event.deltaY
+        : 0
+  return rawDelta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1)
+}
 function onWheel(event: WheelEvent): void {
+  const delta = horizontalWheelDelta(event)
+  if (!delta) return
   event.preventDefault()
   stopInertia()
-  centerIndex.value += event.deltaY / 460
+  moveTo((motionTarget ?? centerIndex.value) + delta / 460)
   settle()
 }
 function onPlaylistPointerDown(event: PointerEvent): void {
@@ -170,8 +249,10 @@ function onPlaylistPointerUp(): void {
 }
 function onPlaylistWheel(event: WheelEvent): void {
   if (!playlistStripRef.value) return
+  const delta = horizontalWheelDelta(event)
+  if (!delta) return
   event.preventDefault()
-  playlistStripRef.value.scrollLeft += event.deltaY || event.deltaX
+  playlistStripRef.value.scrollLeft += delta
 }
 function updatePlaylistScrollState(): void {
   const strip = playlistStripRef.value
@@ -192,16 +273,30 @@ function handlePlaylistSelect(id: number | null): void {
 function onCoverPointerDown(event: PointerEvent): void {
   onPointerDown(event)
 }
-function handleCoverClick(song: LibrarySong): void {
+function handleCardClick(event: MouseEvent, virtualIndex: number): void {
+  if (event.detail !== 0 || suppressCardClick) return
+  stopMotion()
+  moveTo(virtualIndex)
+}
+function handlePlayClick(song: LibrarySong, virtualIndex: number): void {
   if (suppressCardClick) return
+  stopMotion()
+  moveTo(virtualIndex)
   void playSong(song)
 }
 async function playSong(song: LibrarySong): Promise<void> {
   if (song.songStatus === 0) return
+  if (player.currentQueueSong?.id === song.id && player.currentFile) {
+    if (player.isPlaying) await player.pause()
+    else await player.play()
+    return
+  }
   await player.playCollection(songs.value, song.id)
 }
 async function loadSongs(): Promise<void> {
   isLoading.value = true
+  stopInertia()
+  stopMotion()
   try {
     const response =
       activePlaylistId.value === null
@@ -239,7 +334,12 @@ async function selectPlaylist(id: number | null): Promise<void> {
 
 watch(
   () => player.currentQueueSong?.id,
-  (songId) => centerOnSong(songId)
+  (songId) => {
+    if (isLoading.value) return
+    stopInertia()
+    stopMotion()
+    moveToSong(songId)
+  }
 )
 
 onMounted(async () => {
@@ -254,12 +354,14 @@ onMounted(async () => {
   updatePlaylistScrollState()
   requestAnimationFrame(() => (mounted.value = true))
   eventBus.on('playlistsChanged', loadPlaylists)
+  eventBus.on('locateCurrentSong', locateCurrentSong)
 })
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   stopInertia()
-  if (settleTimer) clearTimeout(settleTimer)
+  stopMotion()
   eventBus.off('playlistsChanged', loadPlaylists)
+  eventBus.off('locateCurrentSong', locateCurrentSong)
 })
 </script>
 
@@ -338,41 +440,53 @@ onBeforeUnmount(() => {
         <article
           v-for="item in visibleSongs"
           :key="`${item.song.id}-${item.virtualIndex}`"
-          class="card-item absolute left-1/2 top-1/2"
+          class="card-item absolute left-1/2 top-1/2 cursor-pointer"
           :style="getCardStyle(item.virtualIndex)"
+          :data-virtual-index="item.virtualIndex"
+          @click="handleCardClick($event, item.virtualIndex)"
         >
-          <button
-            type="button"
-            class="card-cover group relative block aspect-square w-full overflow-hidden rounded-2xl border border-white/20 bg-bg-l text-left shadow-2xl"
-            :disabled="item.song.songStatus === 0"
-            @pointerdown.stop="onCoverPointerDown"
-            @click.stop="handleCoverClick(item.song)"
-          >
-            <img
-              v-if="getCoverUrl(item.song.cover)"
-              :src="getCoverUrl(item.song.cover) || ''"
-              class="size-full object-cover"
-              :alt="item.song.title"
-              draggable="false"
-            />
-            <span
-              v-else
-              class="grid size-full place-items-center bg-gradient-to-br from-primary/75 to-violet-500/70"
+          <div class="card-artwork group relative aspect-square w-full">
+            <button
+              type="button"
+              class="card-cover block size-full overflow-hidden rounded-2xl border border-white/20 bg-bg-l text-left shadow-2xl"
+              :disabled="item.song.songStatus === 0"
+              @pointerdown.stop="onCoverPointerDown"
             >
-              <SvgIcon name="common-music" class-name="size-16 text-white/80" />
-            </span>
-            <span class="card-reflection" aria-hidden="true">
               <img
                 v-if="getCoverUrl(item.song.cover)"
                 :src="getCoverUrl(item.song.cover) || ''"
                 class="size-full object-cover"
-                alt=""
+                :alt="item.song.title"
                 draggable="false"
               />
-            </span>
-            <span class="card-play-overlay grid place-items-center">
               <span
-                class="grid size-14 place-items-center rounded-full bg-white/90 text-black shadow-xl transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110"
+                v-else
+                class="grid size-full place-items-center bg-gradient-to-br from-primary/75 to-violet-500/70"
+              >
+                <SvgIcon name="common-music" class-name="size-16 text-white/80" />
+              </span>
+              <span class="card-reflection" aria-hidden="true">
+                <img
+                  v-if="getCoverUrl(item.song.cover)"
+                  :src="getCoverUrl(item.song.cover) || ''"
+                  class="size-full object-cover"
+                  alt=""
+                  draggable="false"
+                />
+              </span>
+            </button>
+            <span class="card-play-overlay grid place-items-center">
+              <button
+                type="button"
+                class="card-play-button grid size-14 place-items-center rounded-full bg-white/90 text-black shadow-xl transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110"
+                :disabled="item.song.songStatus === 0"
+                :aria-label="
+                  player.currentQueueSong?.id === item.song.id && player.isPlaying
+                    ? t('footer.pause')
+                    : t('footer.play')
+                "
+                @pointerdown.stop="onCoverPointerDown"
+                @click.stop="handlePlayClick(item.song, item.virtualIndex)"
               >
                 <SvgIcon
                   :name="
@@ -382,9 +496,9 @@ onBeforeUnmount(() => {
                   "
                   class-name="size-6"
                 />
-              </span>
+              </button>
             </span>
-          </button>
+          </div>
           <div class="mt-4 w-full text-center">
             <p
               class="truncate text-base font-bold transition-colors"
@@ -446,9 +560,7 @@ onBeforeUnmount(() => {
 }
 .card-item {
   transform-origin: center;
-  transition:
-    transform var(--motion-duration-slow) var(--motion-ease-emphasized),
-    opacity var(--motion-duration-theme) var(--motion-ease-standard);
+  will-change: transform, opacity;
 }
 .card-cover {
   -webkit-box-reflect: below 0.1rem linear-gradient(to bottom, rgb(0 0 0 / 16%), transparent 68%);
@@ -459,13 +571,22 @@ onBeforeUnmount(() => {
 .card-play-overlay {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  border-radius: 1rem;
   background: rgb(0 0 0 / 42%);
   opacity: 0;
   transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
-.card-cover:hover .card-play-overlay,
-.card-cover:focus-visible .card-play-overlay {
+.card-play-button {
+  pointer-events: none;
+}
+.card-artwork:hover .card-play-overlay,
+.card-artwork:focus-within .card-play-overlay {
   opacity: 1;
+}
+.card-artwork:hover .card-play-button,
+.card-artwork:focus-within .card-play-button {
+  pointer-events: auto;
 }
 .card-cover:disabled {
   cursor: not-allowed;
