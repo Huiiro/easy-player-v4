@@ -11,6 +11,8 @@ export interface LibrarySong {
   coverLyricsDark?: number | null
   coverAnalysisVersion?: number | null
   audio: string
+  trackNo?: number | null
+  diskNo?: number | null
   isNewest: boolean
   fileName: string | null
   createdAt: string

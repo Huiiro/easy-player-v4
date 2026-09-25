@@ -23,7 +23,8 @@ type SongListSource =
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
-type SortField = 'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime'
+type SortField =
+  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo'
 interface MusicSourceOption {
   id: number
   name: string
@@ -103,7 +104,20 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
   const field = sortBy.value
   let result = 0
 
-  if (field === 'id' || field === 'duration') {
+  if (field === 'diskNo' || field === 'trackNo') {
+    const otherField = field === 'diskNo' ? 'trackNo' : 'diskNo'
+    for (const numberField of [field, otherField] as const) {
+      const leftNumber = left[numberField]
+      const rightNumber = right[numberField]
+      if (leftNumber == null || rightNumber == null) {
+        if (leftNumber == null && rightNumber == null) continue
+        return leftNumber == null ? 1 : -1
+      }
+      result = leftNumber - rightNumber
+      if (result !== 0) return result * (sortOrder.value === 'asc' ? 1 : -1)
+    }
+    return right.id - left.id
+  } else if (field === 'id' || field === 'duration') {
     result = Number(left[field] ?? 0) - Number(right[field] ?? 0)
   } else {
     const leftValue =
@@ -508,6 +522,8 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       :total="songs.length"
       :sort-by="sortBy"
       :sort-order="sortOrder"
+      :show-album-sorts="source.type === 'album'"
+      :show-play-time-sort="source.type === 'history'"
       :selection-mode="selectionMode"
       :selected-count="selectedIds.size"
       :all-selected="allSelected"

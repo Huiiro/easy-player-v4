@@ -3,8 +3,10 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import BaseMenu from '@/components/ui/BaseMenu.vue'
 
-type SortField = 'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime'
+type SortField =
+  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo'
 interface SourceOption {
   label: string
   value: string
@@ -15,6 +17,8 @@ const props = defineProps<{
   keyword: string
   sortBy: SortField
   sortOrder: 'asc' | 'desc'
+  showAlbumSorts?: boolean
+  showPlayTimeSort?: boolean
   selectionMode: boolean
   selectedCount: number
   allSelected: boolean
@@ -47,6 +51,44 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
+const sortFields = computed(() => [
+  { field: 'id' as const, label: t('songList.number') },
+  {
+    field: 'title' as const,
+    label: props.showFileName ? t('songList.fileName') : t('songList.title')
+  },
+  { field: 'artist' as const, label: t('songList.artist') },
+  { field: 'album' as const, label: t('songList.album') },
+  { field: 'duration' as const, label: t('songList.duration') },
+  ...(props.showAlbumSorts
+    ? [
+        { field: 'diskNo' as const, label: t('songList.discNumber') },
+        { field: 'trackNo' as const, label: t('songList.trackNumber') }
+      ]
+    : []),
+  ...(props.showPlayTimeSort ? [{ field: 'playTime' as const, label: t('songList.playTime') }] : [])
+])
+const activeSortLabel = computed(
+  () =>
+    sortFields.value.find((option) => option.field === props.sortBy)?.label ?? t('songList.sort')
+)
+const sortMenuItems = computed(() =>
+  sortFields.value.map(({ field, label }) => ({
+    value: field,
+    label: field === props.sortBy ? `${label} ${direction.value}` : label,
+    onClick: () => emit('sort', field)
+  }))
+)
+const moreMenuItems = computed(() => [
+  {
+    label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
+    onClick: () => emit('toggleCompact')
+  },
+  {
+    label: props.showFileName ? t('songList.showTitle') : t('songList.showFileName'),
+    onClick: () => emit('toggleFileName')
+  }
+])
 </script>
 
 <template>
@@ -93,27 +135,18 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
           {{ t('songList.total', { count: total }) }}
         </p>
       </div>
-      <div class="flex items-center gap-4">
-        <button
-          class="btn-hover px-2 text-xs"
-          :class="compact ? 'text-primary' : 'text-text-l'"
-          :title="compact ? t('songList.normalMode') : t('songList.compactMode')"
-          @click="emit('toggleCompact')"
-        >
-          {{ compact ? t('songList.normalMode') : t('songList.compactMode') }}
-        </button>
-        <!-- fileName -->
-        <button
-          class="btn-hover px-2 text-xs"
-          :aria-label="showFileName ? t('songList.showTitle') : t('songList.showFileName')"
-          :title="showFileName ? t('songList.showTitle') : t('songList.showFileName')"
-          @click="emit('toggleFileName')"
-        >
-          {{ showFileName ? t('songList.fileName') : t('songList.title') }}
-          <span class="sr-only">
-            {{ showFileName ? t('songList.showTitle') : t('songList.showFileName') }}
-          </span>
-        </button>
+      <div class="flex flex-wrap items-center justify-end gap-4">
+        <BaseMenu :model-value="sortBy" :items="sortMenuItems" width="w-40" :max-height="360">
+          <template #trigger>
+            <button
+              class="btn-hover flex items-center gap-1 px-2 text-xs"
+              :aria-label="t('songList.sort')"
+            >
+              <SvgIcon name="common-sort" class-name="size-4" />
+              {{ activeSortLabel }} {{ direction }}
+            </button>
+          </template>
+        </BaseMenu>
         <!-- source -->
         <BaseSelect
           v-if="sourceOptions?.length"
@@ -158,6 +191,17 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
           <SvgIcon name="common-refresh" class-name="size-4" />
           <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
+        <BaseMenu :items="moreMenuItems" width="w-44">
+          <template #trigger>
+            <button
+              class="btn-hover grid size-6 place-items-center"
+              :aria-label="t('songList.more')"
+              :title="t('songList.more')"
+            >
+              <SvgIcon name="menu-more-horizontal" class-name="size-4" />
+            </button>
+          </template>
+        </BaseMenu>
       </div>
     </div>
 
@@ -216,22 +260,11 @@ const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
     <div
       class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
     >
-      <button class="text-left" @click="emit('sort', 'id')">
-        # <span v-if="sortBy === 'id'">{{ direction }}</span>
-      </button>
-      <button class="text-left" @click="emit('sort', 'title')">
-        {{ showFileName ? t('songList.fileName') : t('songList.title') }}
-        <span v-if="sortBy === 'title'">{{ direction }}</span>
-      </button>
-      <button class="text-left" @click="emit('sort', 'artist')">
-        {{ t('songList.artist') }} <span v-if="sortBy === 'artist'">{{ direction }}</span>
-      </button>
-      <button class="text-left" @click="emit('sort', 'album')">
-        {{ t('songList.album') }} <span v-if="sortBy === 'album'">{{ direction }}</span>
-      </button>
-      <button class="text-right" @click="emit('sort', 'duration')">
-        {{ t('songList.duration') }} <span v-if="sortBy === 'duration'">{{ direction }}</span>
-      </button>
+      <span>#</span>
+      <span>{{ showFileName ? t('songList.fileName') : t('songList.title') }}</span>
+      <span>{{ t('songList.artist') }}</span>
+      <span>{{ t('songList.album') }}</span>
+      <span class="text-right">{{ t('songList.duration') }}</span>
     </div>
   </header>
 </template>
