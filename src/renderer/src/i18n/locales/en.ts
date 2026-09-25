@@ -35,6 +35,10 @@ export default {
       evening: 'Good evening, {name}'
     },
     quickNavigation: 'Quick navigation',
+    playlists: 'My playlists',
+    playPlaylist: 'Play playlist “{name}”',
+    nowPlaying: 'Now playing',
+    noPlaylists: 'No playlists yet',
     overview: 'Library overview',
     heatmap: 'Listening heatmap',
     lastYear: 'Past year',

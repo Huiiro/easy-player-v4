@@ -1,7 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { LogEntry } from '@/types/audio'
-import { audioBridge } from '@/services/audioBridge'
 import { playerDataStorage } from '@/stores/persistence'
 
 const MAX_ENTRIES = 1000
@@ -18,7 +17,13 @@ export const useLogStore = defineStore(
     })
 
     function addEntry(entry: LogEntry): void {
+      window.api.log.write(entry.level, entry.message)
+    }
+
+    function receive(entry: LogEntry): void {
+      if (entry.id !== undefined && entries.value.some((item) => item.id === entry.id)) return
       entries.value.push(entry)
+      entries.value.sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
       if (entries.value.length > MAX_ENTRIES) {
         entries.value.shift()
       }
@@ -31,9 +36,12 @@ export const useLogStore = defineStore(
     let unsubscribe: (() => void) | null = null
 
     function subscribe(): void {
-      unsubscribe = audioBridge.onLogEntry((data) => {
-        addEntry(data as LogEntry)
-      })
+      if (unsubscribe) return
+      unsubscribe = window.api.log.onEntry(receive)
+      void window.api.log
+        .recent()
+        .then((history) => history.forEach(receive))
+        .catch(() => undefined)
     }
 
     function unsubscribeEvents(): void {

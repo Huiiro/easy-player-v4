@@ -35,6 +35,10 @@ export default {
       evening: '晚上好，{name}'
     },
     quickNavigation: '快速导航',
+    playlists: '我的歌单',
+    playPlaylist: '播放歌单“{name}”',
+    nowPlaying: '正在播放',
+    noPlaylists: '暂无歌单',
     overview: '音乐概览',
     heatmap: '播放热力图',
     lastYear: '过去一年',

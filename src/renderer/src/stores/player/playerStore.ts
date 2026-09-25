@@ -121,6 +121,7 @@ export const usePlayerStore = defineStore('player', () => {
     outputGains: [1, 1, 1, 1, 1, 1, 1, 1]
   })
   const queue = ref<LibrarySong[]>([])
+  const queuePlaylistId = ref<number | null>(null)
   const currentQueueIndex = ref(-1)
   const playMode = ref<PlayMode>(PlayMode.List)
   const shufflePlayedSongIds = new Set<number>()
@@ -236,13 +237,14 @@ export const usePlayerStore = defineStore('player', () => {
     schedulePlaybackSessionSave()
   }
 
-  function setQueue(songs: LibrarySong[]): void {
+  function setQueue(songs: LibrarySong[], playlistId: number | null = null): void {
     const ids = new Set<number>()
     queue.value = songs.filter((song) => {
       if (ids.has(song.id)) return false
       ids.add(song.id)
       return true
     })
+    queuePlaylistId.value = playlistId
     currentQueueIndex.value = -1
     shufflePlayedSongIds.clear()
     shuffleHistory.length = 0
@@ -275,7 +277,7 @@ export const usePlayerStore = defineStore('player', () => {
       console.warn('[player] Unable to cache remote song:', remoteFile?.error)
       warning(t('queue.trackSkipped', { title: songName }))
       useLogStore().addEntry({
-        level: 'warning',
+        level: 'warn',
         message: `Skipping unavailable remote track “${songName}”: ${remoteFile?.error || 'cache failed'}`,
         timestamp: Date.now()
       })
@@ -290,7 +292,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
     warning(t('queue.trackSkipped', { title: songName }))
     useLogStore().addEntry({
-      level: 'warning',
+      level: 'warn',
       message: `Skipping unplayable track “${songName}”`,
       timestamp: Date.now()
     })
@@ -334,8 +336,12 @@ export const usePlayerStore = defineStore('player', () => {
     return false
   }
 
-  async function playCollection(songs: LibrarySong[], songId: number): Promise<boolean> {
-    setQueue(songs)
+  async function playCollection(
+    songs: LibrarySong[],
+    songId: number,
+    playlistId: number | null = null
+  ): Promise<boolean> {
+    setQueue(songs, playlistId)
     const index = queue.value.findIndex((song) => song.id === songId)
     return index >= 0 ? playQueueItem(index) : false
   }
@@ -383,6 +389,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function clearQueue(): void {
     queue.value = []
+    queuePlaylistId.value = null
     currentQueueIndex.value = -1
     shufflePlayedSongIds.clear()
     shuffleHistory.length = 0
@@ -488,6 +495,7 @@ export const usePlayerStore = defineStore('player', () => {
     durationMs: number
     trackInfo: TrackInfo | null
     queue: PersistedQueueSong[]
+    queuePlaylistId?: number | null
     currentQueueIndex: number
     playMode: PlayMode
     shuffleHistory?: number[]
@@ -561,6 +569,7 @@ export const usePlayerStore = defineStore('player', () => {
       durationMs: durationMs.value,
       trackInfo: toPlainData(trackInfo.value),
       queue: queue.value.map(serializeQueueSong),
+      queuePlaylistId: queuePlaylistId.value,
       currentQueueIndex: currentQueueIndex.value,
       playMode: playMode.value,
       shuffleHistory: shuffleHistory,
@@ -590,6 +599,10 @@ export const usePlayerStore = defineStore('player', () => {
           ? (checkpointResponse.data as Partial<PlaybackCheckpoint>)
           : session
       if (Array.isArray(session.queue)) queue.value = session.queue as LibrarySong[]
+      queuePlaylistId.value =
+        typeof session.queuePlaylistId === 'number' && Number.isInteger(session.queuePlaylistId)
+          ? session.queuePlaylistId
+          : null
       if (session.trackInfo && typeof session.trackInfo === 'object') {
         trackInfo.value = session.trackInfo as TrackInfo
       }
@@ -1170,7 +1183,6 @@ export const usePlayerStore = defineStore('player', () => {
         audioChain.value = data
       })
     )
-
     unsubs.push(
       audioBridge.onPositionChanged((data) => {
         positionMs.value = data.positionMs
@@ -1182,17 +1194,6 @@ export const usePlayerStore = defineStore('player', () => {
       audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason, data.filePath))
     )
 
-    // Forward engine errors to the log store
-    unsubs.push(
-      audioBridge.onError((data) => {
-        const logStore = useLogStore()
-        logStore.addEntry({
-          level: 'error',
-          message: `[${data.code}] ${data.message}`,
-          timestamp: Date.now()
-        })
-      })
-    )
   }
 
   function unsubscribe(): void {
@@ -1286,6 +1287,7 @@ export const usePlayerStore = defineStore('player', () => {
     phaserConfig,
     channelMatrixConfig,
     queue,
+    queuePlaylistId,
     currentQueueIndex,
     currentQueueSong,
     playMode,

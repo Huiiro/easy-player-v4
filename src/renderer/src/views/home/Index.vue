@@ -1,13 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
-import type { LibrarySong } from '@/types/library'
+import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import { formatArtists } from '@/utils/artists'
+import eventBus from '@/utils/eventBus'
 
 interface OverviewStats {
   songCount: number
@@ -24,9 +25,15 @@ interface HistoryDay {
 interface RankedSong extends LibrarySong {
   value: number
 }
+interface Playlist {
+  id: number
+  name: string
+  cover: string | null
+  description: string | null
+}
 
 const { t } = useI18n()
-const { success } = useMessage()
+const { success, warning, error: showError } = useMessage()
 const router = useRouter()
 const player = usePlayerStore()
 const uiStore = useUIStore()
@@ -44,7 +51,12 @@ const stats = ref<OverviewStats>({
 const historyDays = ref<HistoryDay[]>([])
 const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
+const playlists = ref<Playlist[]>([])
+const playingPlaylistId = ref<number | null>(null)
 const refreshing = ref(false)
+const activePlaylistId = computed(() =>
+  player.currentQueueSong && (player.isPlaying || player.isPaused) ? player.queuePlaylistId : null
+)
 
 const greeting = computed(() => {
   const hour = new Date().getHours()
@@ -161,6 +173,43 @@ function heatClass(seconds: number): string {
 function coverUrl(song: RankedSong): string | null {
   return song.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
 }
+function playlistCoverUrl(playlist: Playlist): string | null {
+  return playlist.cover
+    ? `easy-player-media://cover?path=${encodeURIComponent(playlist.cover)}`
+    : null
+}
+async function loadPlaylists(): Promise<void> {
+  const response = await window.api.database.command('listPlaylists')
+  if (response.success) playlists.value = response.data as Playlist[]
+}
+async function playPlaylist(playlist: Playlist): Promise<void> {
+  if (playingPlaylistId.value !== null) return
+  playingPlaylistId.value = playlist.id
+  try {
+    if (activePlaylistId.value === playlist.id) {
+      const changed = player.isPlaying ? await player.pause() : await player.play()
+      if (!changed) showError(t('playlist.playFailed'))
+      return
+    }
+    const response = await window.api.database.command('queryPlaylistSongs', {
+      playlistId: playlist.id,
+      query: {}
+    })
+    if (!response.success) {
+      showError(response.error || t('playlist.playFailed'))
+      return
+    }
+    const songs = (response.data as PagedLibrarySongs).data.filter((song) => song.songStatus !== 0)
+    if (!songs.length) {
+      warning(t('playlist.empty'))
+      return
+    }
+    if (!(await player.playCollection(songs, songs[0].id, playlist.id)))
+      showError(t('playlist.playFailed'))
+  } finally {
+    playingPlaylistId.value = null
+  }
+}
 async function playRanked(songs: RankedSong[], song: RankedSong): Promise<void> {
   const index = songs.findIndex((item) => item.id === song.id)
   if (index < 0) return
@@ -170,16 +219,19 @@ async function playRanked(songs: RankedSong[], song: RankedSong): Promise<void> 
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [statsResult, daysResult, playedResult, durationResult] = await Promise.all([
-      window.api.database.command('getOverviewStats'),
-      window.api.database.command('getPlayHistoryDays', { days: 365 }),
-      window.api.database.command('getTopPlayedSongs', { limit: 10 }),
-      window.api.database.command('getTopDurationSongs', { limit: 10 })
-    ])
+    const [statsResult, daysResult, playedResult, durationResult, playlistsResult] =
+      await Promise.all([
+        window.api.database.command('getOverviewStats'),
+        window.api.database.command('getPlayHistoryDays', { days: 365 }),
+        window.api.database.command('getTopPlayedSongs', { limit: 10 }),
+        window.api.database.command('getTopDurationSongs', { limit: 10 }),
+        window.api.database.command('listPlaylists')
+      ])
     if (statsResult.success) stats.value = statsResult.data as OverviewStats
     if (daysResult.success) historyDays.value = daysResult.data as HistoryDay[]
     if (playedResult.success) topPlayed.value = playedResult.data as RankedSong[]
     if (durationResult.success) topDuration.value = durationResult.data as RankedSong[]
+    if (playlistsResult.success) playlists.value = playlistsResult.data as Playlist[]
   } finally {
     loading.value = false
   }
@@ -194,7 +246,11 @@ async function refresh(): Promise<void> {
   }
 }
 
-onMounted(() => void load())
+onMounted(() => {
+  void load()
+  eventBus.on('playlistsChanged', loadPlaylists)
+})
+onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
 </script>
 
 <template>
@@ -218,6 +274,74 @@ onMounted(() => void load())
           <span class="mt-3 truncate text-sm">{{ item.label }}</span>
         </button>
       </div>
+    </section>
+    <!-- playlists -->
+    <section class="mb-9">
+      <h2 class="mb-3 text-lg font-semibold">{{ t('home.playlists') }}</h2>
+      <div v-if="playlists.length" class="custom-scrollbar flex gap-4 overflow-x-auto pb-3">
+        <article v-for="playlist in playlists" :key="playlist.id" class="w-36 shrink-0">
+          <button
+            class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l"
+            :aria-label="
+              activePlaylistId === playlist.id && player.isPlaying
+                ? t('footer.pause')
+                : t('home.playPlaylist', { name: playlist.name })
+            "
+            :title="
+              activePlaylistId === playlist.id && player.isPlaying
+                ? t('footer.pause')
+                : t('home.playPlaylist', { name: playlist.name })
+            "
+            :disabled="playingPlaylistId !== null"
+            @click="playPlaylist(playlist)"
+          >
+            <img
+              v-if="playlistCoverUrl(playlist)"
+              :src="playlistCoverUrl(playlist)!"
+              class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
+              :alt="playlist.name"
+            />
+            <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
+            <span
+              class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
+              aria-hidden="true"
+            />
+            <span
+              class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
+            >
+              <SvgIcon
+                :name="
+                  activePlaylistId === playlist.id && player.isPlaying ? 'play-pause' : 'play-play'
+                "
+                class-name="size-6"
+              />
+            </span>
+          </button>
+          <button
+            class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary"
+            :class="activePlaylistId === playlist.id ? 'text-primary' : ''"
+            :aria-label="
+              activePlaylistId === playlist.id
+                ? `${playlist.name} · ${t('home.nowPlaying')}`
+                : playlist.name
+            "
+            :title="playlist.name"
+            @click="router.push(`/playlist/${playlist.id}`)"
+          >
+            {{ playlist.name }}
+          </button>
+          <p
+            v-if="playlist.description"
+            class="truncate text-center text-xs text-text-l"
+            :title="playlist.description"
+          >
+            {{ playlist.description }}
+          </p>
+        </article>
+      </div>
+      <p v-else-if="!loading" class="py-6 text-center text-sm text-text-l">
+        {{ t('home.noPlaylists') }}
+      </p>
     </section>
     <!-- stats -->
     <section class="mb-9">
@@ -383,5 +507,14 @@ onMounted(() => void load())
   border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
   background: color-mix(in srgb, var(--color-bg-l) 34%, transparent);
   box-shadow: 0 12px 26px color-mix(in srgb, var(--color-black-20) 48%, transparent);
+}
+@media (hover: none) {
+  .playlist-cover-overlay,
+  .playlist-cover-action {
+    opacity: 1;
+  }
+  .playlist-cover-action {
+    scale: 1;
+  }
 }
 </style>

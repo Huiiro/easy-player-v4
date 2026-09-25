@@ -156,5 +156,4 @@ export type AudioEventType =
   | 'trackEnded'
   | 'deviceListChanged'
   | 'audioChainChanged'
-  | 'logEntry'
   | 'error'

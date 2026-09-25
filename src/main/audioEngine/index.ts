@@ -1,5 +1,6 @@
 import { join } from 'path'
 import { app } from 'electron'
+import { Logger } from '../service/loggerService'
 import { AudioChainStatus, DeviceInfo } from './types'
 import {
   DspSettings,
@@ -37,10 +38,10 @@ function loadNativeAddon(): boolean {
       nativeAddon = require(addonPath)
     }
 
-    console.log('[AudioEngineManager] Native addon loaded successfully')
+    Logger.info('[AudioEngineManager] Native addon loaded successfully')
     return true
   } catch (err) {
-    console.error('[AudioEngineManager] Failed to load native addon:', err)
+    Logger.error('[AudioEngineManager] Failed to load native addon:', err)
     return false
   }
 }
@@ -61,8 +62,12 @@ export class AudioEngineManager {
     this.isLoaded = loadNativeAddon()
     if (this.isLoaded) {
       this.engine = new nativeAddon.AudioEngine()
+      this.engine.onLog((level: number, message: string) => {
+        const levels = ['debug', 'info', 'warn', 'error'] as const
+        Logger.write(levels[level] ?? 'info', 'native', message)
+      })
       this.restoreDspSettings()
-      console.info(
+      Logger.info(
         `[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
       )
     }
@@ -428,10 +433,6 @@ export class AudioEngineManager {
     this.engine?.onError(callback)
   }
 
-  onLog(callback: (level: number, msg: string) => void): void {
-    this.engine?.onLog(callback)
-  }
-
   private restoreDspSettings(): void {
     this.engine.setVolume(this.dspSettings.volume)
     this.engine.setPreamp(this.dspSettings.preamp.db, this.dspSettings.preamp.enabled)
@@ -452,7 +453,7 @@ export class AudioEngineManager {
     this.engine.setTransitionConfig(this.dspSettings.transition)
     const output = this.dspSettings.outputDevice
     if (!this.engine.selectOutputDevice(output.backend, output.deviceId)) {
-      console.warn(
+      Logger.warn(
         `[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`
       )
       this.dspSettings.outputDevice = { backend: 'directsound', deviceId: 'default' }
@@ -471,7 +472,7 @@ export class AudioEngineManager {
     try {
       saveDspSettings(this.dspSettings)
     } catch (error) {
-      console.warn('[AudioEngineManager] Failed to save DSP settings:', error)
+      Logger.warn('[AudioEngineManager] Failed to save DSP settings:', error)
     }
   }
 }

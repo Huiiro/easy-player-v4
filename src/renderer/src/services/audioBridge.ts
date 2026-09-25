@@ -255,12 +255,6 @@ export const audioBridge = {
     return window.api.audio.onError(callback)
   },
 
-  onLogEntry(
-    callback: (data: { level: string; message: string; timestamp: number }) => void
-  ): () => void {
-    return window.api.audio.onLogEntry(callback)
-  },
-
   onAudioChainChanged(callback: (data: AudioChainStatus) => void): () => void {
     return window.api.audio.onAudioChainChanged(callback)
   },

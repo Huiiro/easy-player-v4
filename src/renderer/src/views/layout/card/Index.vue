@@ -291,7 +291,7 @@ async function playSong(song: LibrarySong): Promise<void> {
     else await player.play()
     return
   }
-  await player.playCollection(songs.value, song.id)
+  await player.playCollection(songs.value, song.id, activePlaylistId.value)
 }
 async function loadSongs(): Promise<void> {
   isLoading.value = true

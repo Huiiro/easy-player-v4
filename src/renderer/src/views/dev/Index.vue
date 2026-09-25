@@ -124,7 +124,6 @@ onMounted(async () => {
     if (Math.abs(visualActivity.value) < 0.001 && target === 0) visualActivity.value = 0
   }, 33)
   player.subscribeToEvents()
-  logs.subscribe()
   await player.logEngineInfo()
   await player.loadOutputDeviceSettings()
   await player.refreshDevices()
@@ -155,7 +154,6 @@ onUnmounted(() => {
   if (beatPulseTimer) clearTimeout(beatPulseTimer)
   if (visualDecayTimer) clearInterval(visualDecayTimer)
   player.unsubscribe()
-  logs.unsubscribeEvents()
 })
 
 // ── Event handlers ──
@@ -306,9 +304,9 @@ function formatTime(ms: number): string {
   return `${min}:${sec.toString().padStart(2, '0')}`
 }
 
-async function copyLog(entry: { timestamp: number; level: string; message: string }) {
+async function copyLog(entry: { timestamp: number; level: string; source?: string; message: string }) {
   const time = new Date(entry.timestamp).toLocaleTimeString()
-  const text = `[${time}] [${entry.level.toUpperCase()}] ${entry.message}`
+  const text = `[${time}] [${entry.level.toUpperCase()}] [${entry.source ?? 'renderer'}] ${entry.message}`
   try {
     await navigator.clipboard.writeText(text)
     console.log('[App] Copied to clipboard')
@@ -1210,6 +1208,7 @@ async function copyLog(entry: { timestamp: number; level: string; message: strin
           <button class="log-copy-btn" title="Copy log" @click="copyLog(entry)">📋</button>
           <span class="log-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
           <span class="log-level">[{{ entry.level.toUpperCase() }}]</span>
+          <span class="log-level">[{{ entry.source ?? 'renderer' }}]</span>
           <span class="log-msg">{{ entry.message }}</span>
         </div>
         <div v-if="logs.filteredEntries.length === 0" class="log-empty">No log entries yet.</div>

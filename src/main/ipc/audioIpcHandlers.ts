@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow } from 'electron'
 import { AudioEngineManager } from '../audioEngine'
 import { EngineState, IPC } from '../audioEngine/types'
 import { getAppSetting, setAppSetting } from '../database/repository'
+import { Logger } from '../service/loggerService'
 
 interface PlaybackCheckpoint {
   currentFile?: string
@@ -97,28 +98,22 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
         return { success: true, data: engine.getPlaybackSpeed() }
 
       case 'setEqBands': {
-        sendEvent(mainWindow, 'logEntry', {
-          level: 'info',
-          message: `IPC setEqBands request: ${Array.isArray(params.bands) ? params.bands.length : 'invalid'} band(s)`,
-          timestamp: Date.now()
-        })
+        Logger.info(
+          `IPC setEqBands request: ${Array.isArray(params.bands) ? params.bands.length : 'invalid'} band(s)`
+        )
         let ok = false
         try {
           ok = engine.setEqBands(params.bands)
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          sendEvent(mainWindow, 'logEntry', {
-            level: 'error',
-            message: `IPC setEqBands native exception: ${message}`,
-            timestamp: Date.now()
-          })
+          Logger.error(`IPC setEqBands native exception: ${message}`)
           return { success: false, error: message }
         }
-        sendEvent(mainWindow, 'logEntry', {
-          level: ok ? 'info' : 'error',
-          message: `IPC setEqBands result: ${ok ? 'accepted' : 'rejected'}`,
-          timestamp: Date.now()
-        })
+        Logger.write(
+          ok ? 'info' : 'error',
+          'main',
+          `IPC setEqBands result: ${ok ? 'accepted' : 'rejected'}`
+        )
         if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
         return { success: ok }
       }
@@ -225,20 +220,11 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'setDevice': {
         try {
           const ok = engine.setDevice(params.deviceId)
-          if (!ok)
-            sendEvent(mainWindow, 'logEntry', {
-              level: 'error',
-              message: `Failed to select audio device: ${params.deviceId}`,
-              timestamp: Date.now()
-            })
+          if (!ok) Logger.error(`Failed to select audio device: ${params.deviceId}`)
           return { success: ok, error: ok ? undefined : 'Device selection failed' }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          sendEvent(mainWindow, 'logEntry', {
-            level: 'error',
-            message: `Device selection exception: ${message}`,
-            timestamp: Date.now()
-          })
+          Logger.error(`Device selection exception: ${message}`)
           return { success: false, error: message }
         }
       }
@@ -246,20 +232,11 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'setBackend': {
         try {
           const ok = engine.setBackend(params.backend)
-          if (!ok)
-            sendEvent(mainWindow, 'logEntry', {
-              level: 'error',
-              message: `Failed to switch audio backend: ${params.backend}`,
-              timestamp: Date.now()
-            })
+          if (!ok) Logger.error(`Failed to switch audio backend: ${params.backend}`)
           return { success: ok, error: ok ? undefined : 'Backend switch failed' }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          sendEvent(mainWindow, 'logEntry', {
-            level: 'error',
-            message: `Backend switch exception: ${message}`,
-            timestamp: Date.now()
-          })
+          Logger.error(`Backend switch exception: ${message}`)
           return { success: false, error: message }
         }
       }
@@ -267,20 +244,11 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       case 'selectOutputDevice': {
         try {
           const ok = engine.selectOutputDevice(params.backend, params.deviceId)
-          if (!ok)
-            sendEvent(mainWindow, 'logEntry', {
-              level: 'error',
-              message: `Failed to select ${params.backend} device: ${params.deviceId}`,
-              timestamp: Date.now()
-            })
+          if (!ok) Logger.error(`Failed to select ${params.backend} device: ${params.deviceId}`)
           return { success: ok, error: ok ? undefined : 'Output device selection failed' }
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
-          sendEvent(mainWindow, 'logEntry', {
-            level: 'error',
-            message: `Output device selection exception: ${message}`,
-            timestamp: Date.now()
-          })
+          Logger.error(`Output device selection exception: ${message}`)
           return { success: false, error: message }
         }
       }
@@ -347,31 +315,13 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
   })
   engine.onTrackEnded((reason: string, filePath: string) => {
     sendEvent(mainWindow, 'trackEnded', { reason, filePath })
-    sendEvent(mainWindow, 'logEntry', {
-      level: 'info',
-      message: `Playback reached end of track (${reason})`,
-      timestamp: Date.now()
-    })
+    Logger.write('info', 'native', `Playback reached end of track (${reason})`)
   })
 
   // ── Error events ──
   engine.onError((code: number, msg: string) => {
     sendEvent(mainWindow, 'error', { code, message: msg, recoverable: true })
-  })
-
-  // ── Log events ──
-  engine.onLog((level: number, msg: string) => {
-    const levelMap: Record<number, string> = {
-      0: 'debug',
-      1: 'info',
-      2: 'warn',
-      3: 'error'
-    }
-    sendEvent(mainWindow, 'logEntry', {
-      level: levelMap[level] ?? 'info',
-      message: msg,
-      timestamp: Date.now()
-    })
+    Logger.write('error', 'native', `[${code}] ${msg}`)
   })
 }
 

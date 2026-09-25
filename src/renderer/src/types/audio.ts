@@ -117,7 +117,9 @@ export interface ChannelMatrixConfig {
 }
 
 export interface LogEntry {
+  id?: number
   level: 'debug' | 'info' | 'warn' | 'error'
+  source?: 'main' | 'native' | 'renderer' | 'preload'
   message: string
   timestamp: number
 }

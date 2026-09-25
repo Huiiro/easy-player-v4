@@ -302,11 +302,20 @@ const playSong = async (song: LibrarySong): Promise<void> => {
     if (queueIndex >= 0) await player.playQueueItem(queueIndex)
     return
   }
-  await player.playCollection(filteredSongs.value, song.id)
+  await player.playCollection(
+    filteredSongs.value,
+    song.id,
+    props.source.type === 'playlist' ? props.source.id : null
+  )
 }
 const playSelected = (): void => {
   const selectedSongs = filteredSongs.value.filter((song) => selectedIds.value.has(song.id))
-  if (selectedSongs[0]) void player.playCollection(selectedSongs, selectedSongs[0].id)
+  if (selectedSongs[0])
+    void player.playCollection(
+      selectedSongs,
+      selectedSongs[0].id,
+      props.source.type === 'playlist' ? props.source.id : null
+    )
 }
 const addActiveMenuSongToQueue = (): void => {
   const song = activeMenuSong.value

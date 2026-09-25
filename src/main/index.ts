@@ -38,6 +38,7 @@ import {
 } from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
+import { Logger } from './service/loggerService'
 import sharp from 'sharp'
 
 // Set this before Electron creates the macOS application menu. In development
@@ -202,7 +203,7 @@ function updateTrayMenu(): void {
 function createTray(): void {
   if (tray) return
   if (!existsSync(trayIcon)) {
-    console.warn(`[Tray] Icon not found; tray is disabled: ${trayIcon}`)
+    Logger.warn(`[Tray] Icon not found; tray is disabled: ${trayIcon}`)
     return
   }
   tray = new Tray(trayIcon)
@@ -632,6 +633,7 @@ app.whenReady().then(() => {
     else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
   }
   createDir()
+  Logger.registerIpc()
   initDatabase()
   migrateSourceSecrets()
   registerDatabaseIpcHandlers()
@@ -720,7 +722,7 @@ app.whenReady().then(() => {
   })
 
   // IPC test
-  ipcMain.on('ping', () => console.log('pong'))
+  ipcMain.on('ping', () => Logger.debug('pong'))
   const isPersistedRendererSettingKey = (key: unknown): key is string =>
     typeof key === 'string' && (key.startsWith('player.') || key.startsWith('ui.'))
   ipcMain.on('database:save-setting-sync', (event, request: { key?: unknown; value?: unknown }) => {
@@ -959,9 +961,9 @@ app.whenReady().then(() => {
   audioEngine = new AudioEngineManager()
   if (mainWindow && audioEngine.loaded) {
     registerIpcHandlers(audioEngine, mainWindow)
-    console.log('[Main] Audio engine initialized and IPC handlers registered')
+    Logger.info('[Main] Audio engine initialized and IPC handlers registered')
   } else if (mainWindow) {
-    console.warn('[Main] Audio engine failed to load — running without audio')
+    Logger.warn('[Main] Audio engine failed to load — running without audio')
   }
 
   app.on('activate', () => {

@@ -155,12 +155,6 @@ const audioAPI = {
   ): () => void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this as any).onEvent('error', callback)
-  },
-  onLogEntry: function (
-    callback: (data: { level: string; message: string; timestamp: number }) => void
-  ): () => void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (this as any).onEvent('logEntry', callback)
   }
 }
 
@@ -518,6 +512,16 @@ const systemAPI = {
 
 // Custom APIs for renderer
 const api = {
+  log: {
+    write: (level: 'debug' | 'info' | 'warn' | 'error', message: string) =>
+      ipcRenderer.send('log:write', { level, message }),
+    recent: () => ipcRenderer.invoke('log:recent'),
+    onEntry: (callback: (entry: unknown) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, entry: unknown): void => callback(entry)
+      ipcRenderer.on('log:entry', listener)
+      return () => ipcRenderer.removeListener('log:entry', listener)
+    }
+  },
   audio: audioAPI,
   database: databaseAPI,
   downloads: downloadsAPI,
@@ -543,6 +547,10 @@ if (process.contextIsolated) {
     contextBridge.exposeInMainWorld('electron', electronAPI)
     contextBridge.exposeInMainWorld('api', api)
   } catch (error) {
+    ipcRenderer.send(
+      'log:preload',
+      error instanceof Error ? error.stack || error.message : String(error)
+    )
     console.error(error)
   }
 } else {

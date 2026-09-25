@@ -1,4 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
+import type { LogEntry } from '../main/service/loggerService'
 import type {
   AudioChainStatus,
   CompressorConfig,
@@ -17,6 +18,11 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
+      log: {
+        write(level: LogEntry['level'], message: string): void
+        recent(): Promise<LogEntry[]>
+        onEntry(callback: (entry: LogEntry) => void): () => void
+      }
       audio: {
         getFilePath(file: File): string
         open(filePath: string): Promise<{ success: boolean; data?: unknown; error?: string }>
@@ -194,9 +200,6 @@ declare global {
         onAudioChainChanged(callback: (data: AudioChainStatus) => void): () => void
         onError(
           callback: (data: { code: number; message: string; recoverable: boolean }) => void
-        ): () => void
-        onLogEntry(
-          callback: (data: { level: string; message: string; timestamp: number }) => void
         ): () => void
       }
       database: {
