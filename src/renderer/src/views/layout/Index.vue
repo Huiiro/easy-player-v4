@@ -12,9 +12,14 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import i18n from '@/i18n'
 import { useShortcuts } from '@/hooks/useShortcuts'
+import { useMessage } from '@/components/ui/useMessage'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+const { error: showError } = useMessage()
+let stopFileListener: (() => void) | undefined
+let stopFileErrorListener: (() => void) | undefined
+let filePlayback = Promise.resolve()
 useShortcuts()
 
 watch(
@@ -39,10 +44,32 @@ onMounted(async () => {
   player.subscribeToEvents()
   await player.loadRhythmVisualConfig()
   await player.initializePersistentState()
-  await player.restorePlaybackSession(ui.autoPlayOnRestore)
+  const hasPendingFiles = await window.api.system.hasPendingAudioFiles()
+  await player.restorePlaybackSession(ui.autoPlayOnRestore && !hasPendingFiles)
+  stopFileListener = window.api.system.onOpenAudioFiles((songs) => {
+    filePlayback = filePlayback
+      .then(async () => {
+        if (!songs.length) return
+        player.addToQueue(songs, true)
+        const index = player.queue.findIndex((song) => song.id === songs[0].id)
+        if (index < 0 || !(await player.playQueueItem(index))) {
+          showError(i18n.global.t('settings.openAudioFailed'))
+        }
+      })
+      .catch(() => {
+        showError(i18n.global.t('settings.openAudioFailed'))
+      })
+  })
+  stopFileErrorListener = window.api.system.onOpenFilesError(() =>
+    showError(i18n.global.t('settings.openAudioFailed'))
+  )
+  window.api.system.audioFilesReady(true)
   window.addEventListener('beforeunload', player.savePlaybackSessionSync)
 })
 onBeforeUnmount(() => {
+  window.api.system.audioFilesReady(false)
+  stopFileListener?.()
+  stopFileErrorListener?.()
   window.removeEventListener('beforeunload', player.savePlaybackSessionSync)
   player.savePlaybackSessionSync()
   player.unsubscribe()

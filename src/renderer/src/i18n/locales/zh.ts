@@ -479,6 +479,12 @@ export default {
     closeToTray: '关闭时最小化到托盘',
     closeToTrayDescription: '点击窗口关闭按钮后，应用继续在系统托盘中运行。',
     autoStart: '开机自动启动',
+    fileAssociation: '文件关联',
+    fileAssociationDescription:
+      '在 Windows 默认应用中选择 Easy Player，设置音频文件的默认打开方式。支持 MP3、AAC、M4A、OGG、OPUS、FLAC、WAV、AIFF、APE、DFF 和 DSF。',
+    configureFileAssociation: '设置文件关联',
+    fileAssociationFailed: '无法打开 Windows 默认应用设置',
+    openAudioFailed: '无法打开音频文件，请检查文件是否可用或格式是否受支持',
     autoStartDescription: '登录系统后自动启动 Easy Player。',
     logLevel: '日志记录级别',
     logLevelDescription: '记录所选级别及更严重的日志，修改后立即生效，默认 Info。',

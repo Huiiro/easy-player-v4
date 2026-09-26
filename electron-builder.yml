@@ -53,6 +53,7 @@ win:
     - from: 'resources/tools/yt-dlp/win/yt-dlp.exe'
       to: 'tools/yt-dlp/yt-dlp.exe'
 nsis:
+  include: scripts/file-associations.nsh
   artifactName: ${name}-${version}-setup.${ext}
   # Prefer a compact solid archive for the full installer.
   differentialPackage: false

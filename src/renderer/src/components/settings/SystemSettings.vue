@@ -12,6 +12,18 @@ const { t } = useI18n()
 const { error: showError } = useMessage()
 const logLevel = ref<LogEntry['level']>('info')
 const logLevelBusy = ref(true)
+const associationBusy = ref(false)
+async function openDefaultApps(): Promise<void> {
+  associationBusy.value = true
+  try {
+    const result = await window.api.system.openDefaultApps()
+    if (!result.success) showError(t('settings.fileAssociationFailed'))
+  } catch {
+    showError(t('settings.fileAssociationFailed'))
+  } finally {
+    associationBusy.value = false
+  }
+}
 const logLevelOptions = computed(() => [
   { label: t('settings.logLevelDebug'), value: 'debug' },
   { label: t('settings.logLevelInfo'), value: 'info' },
@@ -85,6 +97,19 @@ watch(
 </script>
 
 <template>
+  <div v-if="ui.platform === 'win'" class="system-row">
+    <div>
+      <h3>{{ t('settings.fileAssociation') }}</h3>
+      <p>{{ t('settings.fileAssociationDescription') }}</p>
+    </div>
+    <button
+      class="btn-hover-base text-sm text-nowrap"
+      :disabled="associationBusy"
+      @click="openDefaultApps"
+    >
+      {{ t('settings.configureFileAssociation') }}
+    </button>
+  </div>
   <div class="system-row">
     <div>
       <h3>{{ t('settings.closeToTray') }}</h3>

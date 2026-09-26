@@ -489,6 +489,13 @@ export default {
     closeToTray: 'Minimize to tray on close',
     closeToTrayDescription: 'Keep the app running in the system tray when the window is closed.',
     autoStart: 'Launch at startup',
+    fileAssociation: 'File associations',
+    fileAssociationDescription:
+      'Choose Easy Player in Windows Default apps to open audio files by default. Supports MP3, AAC, M4A, OGG, OPUS, FLAC, WAV, AIFF, APE, DFF and DSF.',
+    configureFileAssociation: 'Configure file associations',
+    fileAssociationFailed: 'Unable to open Windows Default apps settings',
+    openAudioFailed:
+      'Unable to open the audio file. Check that it is available and its format is supported.',
     autoStartDescription: 'Launch Easy Player automatically after signing in.',
     logLevel: 'Log level',
     logLevelDescription:

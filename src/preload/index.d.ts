@@ -400,6 +400,13 @@ declare global {
         onAction(callback: (action: string) => void): () => void
       }
       system: {
+        hasPendingAudioFiles(): Promise<boolean>
+        openDefaultApps(): Promise<{ success: boolean; error?: string }>
+        audioFilesReady(ready: boolean): void
+        onOpenAudioFiles(
+          callback: (songs: import('../renderer/src/types/library').LibrarySong[]) => void
+        ): () => void
+        onOpenFilesError(callback: () => void): () => void
         setLocale(locale: 'zh' | 'en'): void
         setCloseToTray(enabled: boolean): Promise<{ success: boolean }>
         setAutoStart(enabled: boolean): Promise<{ success: boolean }>

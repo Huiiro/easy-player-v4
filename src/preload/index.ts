@@ -496,6 +496,26 @@ const shortcutsAPI = {
   }
 }
 const systemAPI = {
+  hasPendingAudioFiles: () =>
+    ipcRenderer.invoke('system:has-pending-audio-files') as Promise<boolean>,
+  openDefaultApps: () =>
+    ipcRenderer.invoke('system:open-default-apps') as Promise<{ success: boolean; error?: string }>,
+  audioFilesReady: (ready: boolean): void => ipcRenderer.send('system:audio-files-ready', ready),
+  onOpenAudioFiles: (
+    callback: (songs: import('../renderer/src/types/library').LibrarySong[]) => void
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      songs: import('../renderer/src/types/library').LibrarySong[]
+    ): void => callback(songs)
+    ipcRenderer.on('system:open-audio-files', listener)
+    return () => ipcRenderer.removeListener('system:open-audio-files', listener)
+  },
+  onOpenFilesError: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('system:open-files-error', listener)
+    return () => ipcRenderer.removeListener('system:open-files-error', listener)
+  },
   setLocale: (locale: 'zh' | 'en'): void => ipcRenderer.send('system:set-locale', locale),
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),

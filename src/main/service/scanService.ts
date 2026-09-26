@@ -82,7 +82,8 @@ async function collectMusicFiles(directory: string, files: string[]): Promise<vo
 /** Scans a selected local folder and imports supported audio files into the library. */
 export async function scanMusicDirectory(
   dirPath: string,
-  callback?: ScanCallback
+  callback?: ScanCallback,
+  selectedFiles?: string[]
 ): Promise<ScanResult> {
   return logOperation(
     '[Scanner] scanMusicDirectory',
@@ -101,7 +102,17 @@ export async function scanMusicDirectory(
       }
 
       const files: string[] = []
-      await collectMusicFiles(rootPath, files)
+      if (selectedFiles) {
+        files.push(
+          ...selectedFiles.filter(
+            (file) =>
+              path.dirname(file) === rootPath &&
+              SUPPORTED_EXTENSIONS.includes(path.extname(file).toLowerCase())
+          )
+        )
+      } else {
+        await collectMusicFiles(rootPath, files)
+      }
       Logger.debug('[Scanner] files collected', { directory: rootPath, fileCount: files.length })
 
       const db = getDatabase()
@@ -119,7 +130,7 @@ export async function scanMusicDirectory(
       const existsSong = db.prepare('SELECT 1 FROM song WHERE audio = ?')
       const coverDir = path.join(getDataPath(), 'covers')
       await fs.promises.mkdir(coverDir, { recursive: true })
-      db.prepare('UPDATE song SET is_newest = 0').run()
+      if (!selectedFiles) db.prepare('UPDATE song SET is_newest = 0').run()
 
       callback?.(0, files.length, 0, 0)
 

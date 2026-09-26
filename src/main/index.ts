@@ -43,6 +43,12 @@ import { getDataPath } from './utils/pathUtils'
 import { createDir } from './utils/pathUtils'
 import { Logger } from './service/loggerService'
 import sharp from 'sharp'
+import {
+  queueAudioFiles,
+  queueSecondInstanceAudioFiles,
+  registerFileAssociationHandlers,
+  resetAudioFileDelivery
+} from './service/fileAssociationService'
 
 // Set this before Electron creates the macOS application menu. In development
 // the executable is Electron.app, but the visible app/menu name is ours.
@@ -159,11 +165,19 @@ function sendTrayAction(action: 'previous' | 'toggle' | 'next'): void {
   mainWindow.webContents.send('tray:action', action)
 }
 
-// Keep one process and one main window active. A second launch simply restores the first.
-if (!app.requestSingleInstanceLock()) {
+// Forward file launches to the existing player, including while it is still starting.
+const audioLaunchRequest = {
+  args: process.argv.slice(app.isPackaged ? 1 : 2),
+  workingDirectory: process.cwd()
+}
+if (!app.requestSingleInstanceLock(audioLaunchRequest)) {
   app.quit()
 } else {
-  app.on('second-instance', () => showMainWindow())
+  queueAudioFiles(audioLaunchRequest.args, audioLaunchRequest.workingDirectory)
+  app.on('second-instance', (_event, argv, workingDirectory, additionalData) => {
+    queueSecondInstanceAudioFiles(argv, workingDirectory, additionalData)
+    showMainWindow()
+  })
 }
 
 function updateTrayMenu(): void {
@@ -483,6 +497,9 @@ function createWindow(): void {
     }
   })
   observeWindow(mainWindow, 'main')
+  mainWindow.webContents.on('did-start-navigation', (details) => {
+    resetAudioFileDelivery(details.isSameDocument, details.isMainFrame)
+  })
   setWindowsMica(getAppSetting('window.mica-enabled') === true)
 
   mainWindow.on('ready-to-show', () => {
@@ -706,6 +723,7 @@ app.whenReady().then(() =>
       registerFontIpcHandlers()
       registerMetadataIpcHandlers()
       registerFileIpcHandlers()
+      registerFileAssociationHandlers(() => mainWindow)
       registerDownloadIpcHandlers()
       createTray()
       ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
