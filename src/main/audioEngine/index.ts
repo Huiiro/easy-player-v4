@@ -193,6 +193,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getReplayGain() {
     return this.engine?.getReplayGain() ?? null
   }
@@ -204,6 +205,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getPlaybackSpeed() {
     return this.engine?.getPlaybackSpeed() ?? null
   }
@@ -308,6 +310,7 @@ export class AudioEngineManager {
     return ok
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getCompressorConfig() {
     return this.engine?.getCompressorConfig() ?? null
   }
@@ -320,6 +323,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getDelayConfig() {
     return this.engine?.getDelayConfig() ?? null
   }
@@ -332,6 +336,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getReverbConfig() {
     return this.engine?.getReverbConfig() ?? null
   }
@@ -344,6 +349,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getChorusConfig() {
     return this.engine?.getChorusConfig() ?? null
   }
@@ -356,6 +362,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getNoiseGateConfig() {
     return this.engine?.getNoiseGateConfig() ?? null
   }
@@ -368,6 +375,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getPhaserConfig() {
     return this.engine?.getPhaserConfig() ?? null
   }
@@ -380,6 +388,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getChannelMatrixConfig() {
     return this.engine?.getChannelMatrixConfig() ?? null
   }
@@ -392,6 +401,7 @@ export class AudioEngineManager {
     }
     return ok
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getLimiter() {
     return this.engine?.getLimiter() ?? null
   }
@@ -442,9 +452,11 @@ export class AudioEngineManager {
     return ok
   }
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getOutputDeviceSettings() {
     return this.dspSettings.outputDevice
   }
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getEngineInfo() {
     return {
       version: this.engine?.getVersion?.() ?? 'unavailable',
@@ -454,6 +466,7 @@ export class AudioEngineManager {
 
   // ── Query ──
 
+  // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getStatus() {
     if (!this.engine) return null
     return this.engine.getStatus()

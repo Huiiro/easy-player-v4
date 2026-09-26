@@ -2,7 +2,7 @@ import { t } from '../i18n'
 import { logError, logOperation, logParams, logUrl } from '../service/operationLogger'
 import { Logger } from '../service/loggerService'
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, shell } from 'electron'
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { createWriteStream, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { listDownloadTasks, saveDownloadTask } from '../database/repository'
@@ -114,13 +114,12 @@ function toSearchItem(
 
 function platformArgs(platform: DownloadPlatform): string[] {
   if (platform !== 'bili') return []
-  const args = [
+  return [
     '--add-headers',
     'Referer:https://www.bilibili.com/',
     '--add-headers',
     'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
   ]
-  return args
 }
 
 function platformFromUrl(url: string): DownloadPlatform {

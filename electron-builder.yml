@@ -45,8 +45,11 @@ win:
     - from: 'build/native-addon/'
       to: 'native/'
       filter:
-        - '**/*.node'
-        - '**/*.dll'
+        # Package the runtime at the root only. Release/ contains the same
+        # addon as a DLL; development/test .node modules are not used by the app.
+        - 'easy_player_native.node'
+        - '*.dll'
+        - '!easy_player_native.dll'
     - from: 'resources/tools/yt-dlp/win/yt-dlp.exe'
       to: 'tools/yt-dlp/yt-dlp.exe'
 nsis:

@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { type LyricLine, resolveLyrics } from '@/services/lyrics'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import eventBus from '@/utils/eventBus'
 
 const player = usePlayerStore()
 const ui = useUIStore()
@@ -98,7 +99,13 @@ function handleAction(action: 'previous' | 'toggle' | 'next'): void {
 }
 
 const cleanups: Array<() => void> = []
+function handleLyricsUpdated(songId: number): void {
+  if (songId === player.currentQueueSong?.id) void loadLyrics()
+}
+
 onMounted(() => {
+  eventBus.on('lyricsUpdated', handleLyricsUpdated)
+  cleanups.push(() => eventBus.off('lyricsUpdated', handleLyricsUpdated))
   cleanups.push(window.api.desktopLyrics.onAction(handleAction))
   cleanups.push(window.api.desktopLyrics.onRequestState(publish))
   cleanups.push(
@@ -112,7 +119,10 @@ onMounted(() => {
     })
   )
 })
-onBeforeUnmount(() => cleanups.forEach((cleanup) => cleanup()))
+onBeforeUnmount(() => {
+  requestId += 1
+  cleanups.forEach((cleanup) => cleanup())
+})
 
 watch(
   () => [player.currentQueueSong?.id, ui.lyricSourceOrder.join('|'), ui.lyricSourceMode],

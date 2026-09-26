@@ -155,6 +155,7 @@ function getAudioType(
   return 'UNKNOWN'
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function getRawLyricsWithTimestamp(meta: any): string {
   return (
     meta.native['ID3v2.3']?.find((tag) => tag.id === 'USLT')?.value?.text ||

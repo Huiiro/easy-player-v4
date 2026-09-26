@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import eventBus from '@/utils/eventBus'
 import {
   resolveLyrics,
   type LyricFormat,
@@ -167,6 +168,7 @@ async function save(): Promise<void> {
     romanizationFormat: romanization.value ? romanizationFormat.value : undefined
   })
   if (!response.success) return
+  eventBus.emit('lyricsUpdated', song.id)
   emit('saved')
   emit('update:modelValue', false)
 }

@@ -109,12 +109,9 @@ endif()
 #     bin/      (avcodec-*.dll, avformat-*.dll, ...)
 
 if(NOT DEFINED FFMPEG_ROOT)
-    # Default to BtbN extracted layout: deps/ffmpeg/ffmpeg-master-latest-win64-gpl-shared/
-    file(GLOB FFMPEG_DIRS "${CMAKE_SOURCE_DIR}/deps/ffmpeg/ffmpeg-*")
+    # Local FFmpeg headers, libraries and binaries live directly in deps/ffmpeg.
     if(DEFINED VCPKG_INSTALLED_ROOT AND EXISTS "${VCPKG_INSTALLED_ROOT}/include/libavcodec")
         set(FFMPEG_DEFAULT "${VCPKG_INSTALLED_ROOT}")
-    elseif(FFMPEG_DIRS)
-        list(GET FFMPEG_DIRS 0 FFMPEG_DEFAULT)
     else()
         set(FFMPEG_DEFAULT "${CMAKE_SOURCE_DIR}/deps/ffmpeg")
     endif()

@@ -16,20 +16,7 @@ if (process.platform === 'darwin') {
   console.log('[copy-native-assets] macOS addon ready:', nodePath)
   process.exit(0)
 }
-const ffmpegBin = path.join(__dirname, '..', 'src', 'main', 'native', 'deps', 'ffmpeg')
-
-// Find the FFmpeg directory (glob pattern: ffmpeg-*)
-const ffmpegDepsDir = path.join(__dirname, '..', 'src', 'main', 'native', 'deps', 'ffmpeg')
-let ffmpegBinDir = ''
-try {
-  const entries = fs.readdirSync(ffmpegDepsDir)
-  const ffmpegDir = entries.find((e) => e.startsWith('ffmpeg-'))
-  if (ffmpegDir) {
-    ffmpegBinDir = path.join(ffmpegDepsDir, ffmpegDir, 'bin')
-  }
-} catch {
-  // ignore
-}
+let ffmpegBinDir = path.join(__dirname, '..', 'src', 'main', 'native', 'deps', 'ffmpeg', 'bin')
 
 const vcpkgInstalled = process.env.VCPKG_INSTALLED_DIR
   ? path.join(process.env.VCPKG_INSTALLED_DIR, 'x64-windows')

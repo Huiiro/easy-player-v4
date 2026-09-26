@@ -21,7 +21,7 @@ echo === Copying .node and FFmpeg DLLs ===
 del /f build\native-addon\easy_player_native.node 2>nul
 copy /y build\native-addon\Release\easy_player_native.dll build\native-addon\easy_player_native.node
 
-set "FFMPEG_BIN=src\main\native\deps\ffmpeg\ffmpeg-master-latest-win64-gpl-shared\bin"
+set "FFMPEG_BIN=src\main\native\deps\ffmpeg\bin"
 for %%f in (avcodec-63.dll avformat-63.dll avutil-61.dll swresample-7.dll) do (
     copy /y "%FFMPEG_BIN%\%%f" build\native-addon\
 )
