@@ -1,3 +1,4 @@
+import { logOperation } from '../service/operationLogger'
 import { join } from 'path'
 import { app } from 'electron'
 import { Logger } from '../service/loggerService'
@@ -38,7 +39,10 @@ function loadNativeAddon(): boolean {
       nativeAddon = require(addonPath)
     }
 
-    Logger.info('[AudioEngineManager] Native addon loaded successfully')
+    Logger.debug('[AudioEngineManager] native addon loaded', {
+      packaged: app.isPackaged,
+      platform: process.platform
+    })
     return true
   } catch (err) {
     Logger.error('[AudioEngineManager] Failed to load native addon:', err)
@@ -80,43 +84,92 @@ export class AudioEngineManager {
   // ── Lifecycle ──
 
   open(filePath: string): boolean {
-    if (!this.engine) return false
-    return this.engine.open(filePath)
+    return logOperation(
+      '[AudioEngine] open',
+      { filePath, loaded: this.loaded },
+      () => {
+        if (!this.engine) return false
+        return this.engine.open(filePath)
+      },
+      { successLevel: 'debug', warnOnFalse: true }
+    )
   }
 
   async openAsync(filePath: string): Promise<boolean> {
-    if (!this.engine) return false
-    // The Windows backends already switch tracks without stalling Electron's
-    // message loop. CoreAudio teardown/open can wait noticeably on macOS, so
-    // only macOS uses the N-API worker path.
-    return process.platform === 'darwin'
-      ? this.engine.openAsync(filePath)
-      : this.engine.open(filePath)
+    return logOperation(
+      '[AudioEngine] openAsync',
+      { filePath, loaded: this.loaded },
+      async () => {
+        if (!this.engine) return false
+        // The Windows backends already switch tracks without stalling Electron's
+        // message loop. CoreAudio teardown/open can wait noticeably on macOS, so
+        // only macOS uses the N-API worker path.
+        return process.platform === 'darwin'
+          ? this.engine.openAsync(filePath)
+          : this.engine.open(filePath)
+      },
+      { successLevel: 'debug', warnOnFalse: true }
+    )
   }
 
   play(): boolean {
-    if (!this.engine) return false
-    return this.engine.play()
+    return logOperation(
+      '[AudioEngine] play',
+      { loaded: this.loaded },
+      () => {
+        if (!this.engine) return false
+        return this.engine.play()
+      },
+      { successLevel: 'debug', warnOnFalse: true }
+    )
   }
 
   pause(): boolean {
-    if (!this.engine) return false
-    return this.engine.pause()
+    return logOperation(
+      '[AudioEngine] pause',
+      { loaded: this.loaded },
+      () => {
+        if (!this.engine) return false
+        return this.engine.pause()
+      },
+      { successLevel: 'debug', warnOnFalse: true }
+    )
   }
 
   stop(): boolean {
-    if (!this.engine) return false
-    return this.engine.stop()
+    return logOperation(
+      '[AudioEngine] stop',
+      { loaded: this.loaded },
+      () => {
+        if (!this.engine) return false
+        return this.engine.stop()
+      },
+      { successLevel: 'debug', warnOnFalse: false }
+    )
   }
 
   async stopAsync(): Promise<boolean> {
-    if (!this.engine) return false
-    return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
+    return logOperation(
+      '[AudioEngine] stopAsync',
+      { loaded: this.loaded },
+      async () => {
+        if (!this.engine) return false
+        return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
+      },
+      { successLevel: 'debug', warnOnFalse: false }
+    )
   }
 
   seek(positionMs: number): boolean {
-    if (!this.engine) return false
-    return this.engine.seek(positionMs)
+    return logOperation(
+      '[AudioEngine] seek',
+      { positionMs, loaded: this.loaded },
+      () => {
+        if (!this.engine) return false
+        return this.engine.seek(positionMs)
+      },
+      { successLevel: 'debug', warnOnFalse: true }
+    )
   }
 
   // ── Control ──
@@ -346,8 +399,15 @@ export class AudioEngineManager {
   // ── Device / Backend ──
 
   enumerateDevices(): DeviceInfo[] {
-    if (!this.engine) return []
-    return this.engine.enumerateDevices()
+    return logOperation(
+      '[AudioEngine] enumerateDevices',
+      { loaded: this.loaded },
+      () => {
+        if (!this.engine) return []
+        return this.engine.enumerateDevices()
+      },
+      { successLevel: 'debug', warnOnFalse: false }
+    )
   }
 
   setDevice(deviceId: string): boolean {
@@ -439,31 +499,38 @@ export class AudioEngineManager {
   }
 
   private restoreDspSettings(): void {
-    this.engine.setVolume(this.dspSettings.volume)
-    this.engine.setPreamp(this.dspSettings.preamp.db, this.dspSettings.preamp.enabled)
-    this.engine.setReplayGain(this.dspSettings.replayGain)
-    this.engine.setPlaybackSpeed(this.dspSettings.playbackSpeed)
-    if (this.dspSettings.eqBands.length === 20) this.engine.setEqBands(this.dspSettings.eqBands)
-    this.engine.setDspNodes(this.dspSettings.dspNodes)
-    this.engine.setCompressorConfig(this.dspSettings.compressor)
-    this.engine.setDelayConfig(this.dspSettings.delay)
-    this.engine.setReverbConfig(this.dspSettings.reverb)
-    this.engine.setChorusConfig(this.dspSettings.chorus)
-    this.engine.setNoiseGateConfig(this.dspSettings.noiseGate)
-    this.engine.setPhaserConfig(this.dspSettings.phaser)
-    this.engine.setChannelMatrixConfig(this.dspSettings.channelMatrix)
-    this.engine.setLimiter(this.dspSettings.limiter)
-    this.engine.setResamplerConfig(this.dspSettings.resampler)
-    this.engine.setDopEnabled(this.dspSettings.dopEnabled)
-    this.engine.setTransitionConfig(this.dspSettings.transition)
-    const output = this.dspSettings.outputDevice
-    if (!this.engine.selectOutputDevice(output.backend, output.deviceId)) {
-      Logger.warn(
-        `[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`
-      )
-      this.dspSettings.outputDevice = { backend: 'directsound', deviceId: 'default' }
-      this.persistDspSettings()
-    }
+    return logOperation(
+      '[AudioEngine] restoreDspSettings',
+      { output: this.dspSettings.outputDevice, eqBandCount: this.dspSettings.eqBands.length },
+      () => {
+        this.engine.setVolume(this.dspSettings.volume)
+        this.engine.setPreamp(this.dspSettings.preamp.db, this.dspSettings.preamp.enabled)
+        this.engine.setReplayGain(this.dspSettings.replayGain)
+        this.engine.setPlaybackSpeed(this.dspSettings.playbackSpeed)
+        if (this.dspSettings.eqBands.length === 20) this.engine.setEqBands(this.dspSettings.eqBands)
+        this.engine.setDspNodes(this.dspSettings.dspNodes)
+        this.engine.setCompressorConfig(this.dspSettings.compressor)
+        this.engine.setDelayConfig(this.dspSettings.delay)
+        this.engine.setReverbConfig(this.dspSettings.reverb)
+        this.engine.setChorusConfig(this.dspSettings.chorus)
+        this.engine.setNoiseGateConfig(this.dspSettings.noiseGate)
+        this.engine.setPhaserConfig(this.dspSettings.phaser)
+        this.engine.setChannelMatrixConfig(this.dspSettings.channelMatrix)
+        this.engine.setLimiter(this.dspSettings.limiter)
+        this.engine.setResamplerConfig(this.dspSettings.resampler)
+        this.engine.setDopEnabled(this.dspSettings.dopEnabled)
+        this.engine.setTransitionConfig(this.dspSettings.transition)
+        const output = this.dspSettings.outputDevice
+        if (!this.engine.selectOutputDevice(output.backend, output.deviceId)) {
+          Logger.warn(
+            `[AudioEngineManager] Failed to restore ${output.backend} device ${output.deviceId}; using DirectSound default`
+          )
+          this.dspSettings.outputDevice = { backend: 'directsound', deviceId: 'default' }
+          this.persistDspSettings()
+        }
+      },
+      { successLevel: 'debug', warnOnFalse: false }
+    )
   }
 
   private persistDspSettings(): void {
@@ -472,12 +539,19 @@ export class AudioEngineManager {
   }
 
   flushDspSettings(): void {
-    if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
-    this.dspSettingsSaveTimer = undefined
-    try {
-      saveDspSettings(this.dspSettings)
-    } catch (error) {
-      Logger.warn('[AudioEngineManager] Failed to save DSP settings:', error)
-    }
+    return logOperation(
+      '[AudioEngine] flushDspSettings',
+      { output: this.dspSettings.outputDevice },
+      () => {
+        if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
+        this.dspSettingsSaveTimer = undefined
+        try {
+          saveDspSettings(this.dspSettings)
+        } catch (error) {
+          Logger.warn('[AudioEngineManager] Failed to save DSP settings:', error)
+        }
+      },
+      { successLevel: 'debug', warnOnFalse: false }
+    )
   }
 }

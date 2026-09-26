@@ -1,8 +1,10 @@
+import { t } from '../i18n'
 import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
+import { Logger } from '../service/loggerService'
 
 export function getAppSetting(key: string): unknown | null {
   const row = getDatabase().prepare('SELECT value_json FROM app_setting WHERE key = ?').get(key) as
@@ -596,10 +598,10 @@ export function getPlaylist(id: number): Playlist | null {
 export function createPlaylist(input: PlaylistInput): Playlist {
   const db = getDatabase()
   const name = input.name.trim()
-  if (!name) throw new Error('Playlist name is required')
-  if (name.length > 64) throw new Error('Playlist name must be 64 characters or fewer')
+  if (!name) throw new Error(t('playlistNameRequired'))
+  if (name.length > 64) throw new Error(t('playlistNameTooLong'))
   if (db.prepare('SELECT 1 FROM song_list WHERE name = ? COLLATE NOCASE').get(name)) {
-    throw new Error('Playlist name already exists')
+    throw new Error(t('playlistNameExists'))
   }
   const result = db
     .prepare(
@@ -610,14 +612,13 @@ export function createPlaylist(input: PlaylistInput): Playlist {
 }
 export function updatePlaylist(id: number, input: PlaylistInput): boolean {
   const name = input.name.trim()
-  if (!name || name.length > 64)
-    throw new Error('Playlist name must be between 1 and 64 characters')
+  if (!name || name.length > 64) throw new Error(t('playlistNameLength'))
   if (
     getDatabase()
       .prepare('SELECT 1 FROM song_list WHERE name = ? COLLATE NOCASE AND id != ?')
       .get(name, id)
   ) {
-    throw new Error('Playlist name already exists')
+    throw new Error(t('playlistNameExists'))
   }
   const result = getDatabase()
     .prepare(
@@ -639,10 +640,10 @@ export function setPlaylistCustomCover(id: number, path: string | null): boolean
 }
 
 function copyPlaylistCover(sourcePath: string): string {
-  if (!existsSync(sourcePath)) throw new Error('The selected cover file no longer exists')
+  if (!existsSync(sourcePath)) throw new Error(t('coverFileRemoved'))
   const extension = extname(sourcePath).toLowerCase()
   if (!['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension)) {
-    throw new Error('Unsupported cover image format')
+    throw new Error(t('coverFormatUnsupported'))
   }
   const coverDirectory = join(getDataPath(), 'covers')
   mkdirSync(coverDirectory, { recursive: true })
@@ -930,30 +931,56 @@ export function toggleSongTag(tagId: number, songId: number): boolean {
   return true
 }
 
+const SOURCE_COLUMNS =
+  'id, name, type, server, base_url AS baseUrl, user, secret, auth_type AS authType, status, source_order AS sourceOrder, imported_count AS importedCount, song_count AS songCount, last_connect AS lastConnect'
+const sourceCredentialWarnings = new Map<number, MusicSource['credentialError']>()
+
 export function listSources(): MusicSource[] {
   const sources = getDatabase()
-    .prepare(
-      'SELECT id, name, type, server, base_url AS baseUrl, user, secret, auth_type AS authType, status, source_order AS sourceOrder, imported_count AS importedCount, song_count AS songCount, last_connect AS lastConnect FROM music_source ORDER BY source_order, id'
-    )
+    .prepare(`SELECT ${SOURCE_COLUMNS} FROM music_source ORDER BY source_order, id`)
     .all() as MusicSource[]
-  return sources.map((source) => ({ ...source, secret: decryptSourceSecret(source.secret) }))
+  return sources.map(readSourceCredentials)
 }
 
 const SOURCE_SECRET_PREFIX = 'safe:v1:'
 
 function encryptSourceSecret(secret: string | null | undefined): string | null {
   if (!secret) return null
-  if (!safeStorage.isEncryptionAvailable())
-    throw new Error('系统凭据加密不可用，无法保存远程音源密码。')
+  if (!safeStorage.isEncryptionAvailable()) throw new Error(t('credentialEncryptUnavailable'))
   return `${SOURCE_SECRET_PREFIX}${safeStorage.encryptString(secret).toString('base64')}`
 }
 
-function decryptSourceSecret(secret: string | null): string | null {
-  if (!secret) return null
-  if (!secret.startsWith(SOURCE_SECRET_PREFIX)) return secret
-  if (!safeStorage.isEncryptionAvailable())
-    throw new Error('系统凭据加密不可用，无法读取远程音源密码。')
-  return safeStorage.decryptString(Buffer.from(secret.slice(SOURCE_SECRET_PREFIX.length), 'base64'))
+function readSourceCredentials(source: MusicSource): MusicSource {
+  const secret = source.secret
+  if (!secret || !secret.startsWith(SOURCE_SECRET_PREFIX)) {
+    sourceCredentialWarnings.delete(source.id)
+    return source
+  }
+  let credentialError: MusicSource['credentialError'] = 'unavailable'
+  try {
+    if (safeStorage.isEncryptionAvailable()) {
+      credentialError = 'decrypt-failed'
+      const plaintext = safeStorage.decryptString(
+        Buffer.from(secret.slice(SOURCE_SECRET_PREFIX.length), 'base64')
+      )
+      sourceCredentialWarnings.delete(source.id)
+      return { ...source, secret: plaintext }
+    }
+  } catch {
+    // The ciphertext may belong to another OS key store or be damaged. Listing
+    // sources must not erase it or prevent unrelated sources from loading.
+  }
+  if (sourceCredentialWarnings.get(source.id) !== credentialError) {
+    Logger.warn('[Remote source] saved credential unavailable', {
+      sourceId: source.id,
+      type: source.type,
+      credentialError,
+      action:
+        credentialError === 'decrypt-failed' ? 're-enter password' : 'restore system key store'
+    })
+    sourceCredentialWarnings.set(source.id, credentialError)
+  }
+  return { ...source, secret: null, credentialError }
 }
 
 /** Encrypt legacy plaintext credentials after the app's key store is available. */
@@ -990,9 +1017,17 @@ export function createSource(input: MusicSourceInput): MusicSource {
       input.authType ?? null,
       input.status ?? null
     )
-  return listSources().find((source) => source.id === Number(result.lastInsertRowid))!
+  return getSource(Number(result.lastInsertRowid))!
 }
 export function updateSource(source: MusicSource): boolean {
+  // A null password returned after a failed read is not a request to erase the
+  // saved ciphertext. Keep it when updating other source fields.
+  const retained =
+    source.credentialError && !source.secret
+      ? (getDatabase().prepare('SELECT secret FROM music_source WHERE id = ?').get(source.id) as
+          { secret: string | null } | undefined)
+      : undefined
+  const storedSecret = retained ? retained.secret : encryptSourceSecret(source.secret)
   return (
     getDatabase()
       .prepare(
@@ -1004,7 +1039,7 @@ export function updateSource(source: MusicSource): boolean {
         source.server,
         source.baseUrl,
         source.user,
-        encryptSourceSecret(source.secret),
+        storedSecret,
         source.authType,
         source.status,
         source.sourceOrder,
@@ -1016,10 +1051,14 @@ export function updateSource(source: MusicSource): boolean {
   )
 }
 export function deleteSource(id: number): boolean {
+  sourceCredentialWarnings.delete(id)
   return getDatabase().prepare('DELETE FROM music_source WHERE id = ?').run(id).changes > 0
 }
 export function getSource(id: number): MusicSource | null {
-  return listSources().find((source) => source.id === id) ?? null
+  const source = getDatabase()
+    .prepare(`SELECT ${SOURCE_COLUMNS} FROM music_source WHERE id = ?`)
+    .get(id) as MusicSource | undefined
+  return source ? readSourceCredentials(source) : null
 }
 export function reorderSources(items: Array<{ id: number; sourceOrder: number }>): void {
   const stmt = getDatabase().prepare('UPDATE music_source SET source_order = ? WHERE id = ?')

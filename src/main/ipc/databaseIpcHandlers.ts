@@ -1,5 +1,8 @@
+import { t } from '../i18n'
 import { ipcMain } from 'electron'
 import * as library from '../database/repository'
+import { Logger } from '../service/loggerService'
+import { logOperation, logParams } from '../service/operationLogger'
 
 export const DATABASE_IPC_CHANNEL = 'database:command'
 
@@ -155,12 +158,25 @@ export type DatabaseResponse<T = unknown> =
 
 export function registerDatabaseIpcHandlers(): void {
   ipcMain.handle(DATABASE_IPC_CHANNEL, (_event, request: DatabaseRequest): DatabaseResponse => {
-    if (!request || typeof request.action !== 'string')
-      return { success: false, error: 'Invalid database request' }
+    if (!request || typeof request.action !== 'string') {
+      Logger.warn('[Database IPC] invalid request')
+      return { success: false, error: t('invalidDatabaseRequest') }
+    }
     const handler = handlers[request.action] as Handler | undefined
-    if (!handler) return { success: false, error: 'Unknown database action' }
+    if (!handler) {
+      Logger.warn('[Database IPC] unknown action', { action: request.action })
+      return { success: false, error: t('unknownDatabaseAction') }
+    }
     try {
-      return { success: true, data: handler(request.params as never) }
+      return {
+        success: true,
+        data: logOperation(
+          `[Database IPC] ${request.action}`,
+          logParams(request.params),
+          () => handler(request.params as never),
+          { quiet: request.action === 'getSetting' }
+        )
+      }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

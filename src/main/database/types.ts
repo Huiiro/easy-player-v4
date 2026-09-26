@@ -92,6 +92,8 @@ export interface MusicSource {
   baseUrl: string | null
   user: string | null
   secret: string | null
+  /** Read status only; never stored in the database. Failed reads return a null secret. */
+  credentialError?: 'unavailable' | 'decrypt-failed'
   authType: string | null
   status: string | null
   sourceOrder: number

@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import fs from 'fs'
 import sharp from 'sharp'
 import NodeID3 from 'node-id3'
@@ -5,7 +6,7 @@ import { SongMetadata } from './metadataService'
 
 export async function writeMp3Metadata(filePath: string, input: SongMetadata): Promise<boolean> {
   if (!fs.existsSync(filePath)) {
-    throw new Error(`File dose not exist, ${filePath}`)
+    throw new Error(t('fileMissing', { path: filePath }))
   }
 
   const tags: NodeID3.Tags = {}

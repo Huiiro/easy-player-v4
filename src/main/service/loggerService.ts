@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import fs from 'node:fs'
 import path from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -86,7 +87,7 @@ export class Logger {
     minimumLevel = isLogLevel(savedLevel) ? savedLevel : 'info'
     ipcMain.handle('log:get-level', () => minimumLevel)
     ipcMain.handle('log:set-level', (_event, level: unknown) => {
-      if (!isLogLevel(level)) return { success: false, error: 'Invalid log level' }
+      if (!isLogLevel(level)) return { success: false, error: t('invalidLogLevel') }
       try {
         setAppSetting(LEVEL_SETTING_KEY, level)
         minimumLevel = level

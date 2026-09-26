@@ -1,5 +1,8 @@
+import { t } from '../i18n'
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater, type ProgressInfo, type UpdateInfo } from 'electron-updater'
+import { Logger } from './loggerService'
+import { logError, logOperation } from './operationLogger'
 
 export type UpdateStatus =
   | { state: 'idle'; version: string }
@@ -20,25 +23,35 @@ function releaseNotes(info: UpdateInfo): string | null {
 }
 
 function publishStatus(next: UpdateStatus): void {
+  if (next.state !== status.state || next.version !== status.version)
+    Logger.debug('[Updater] state changed', {
+      from: status.state,
+      to: next.state,
+      version: next.version
+    })
   status = next
   for (const window of BrowserWindow.getAllWindows())
     window.webContents.send('app-update:status', status)
 }
 
 function setAvailable(state: 'available' | 'downloaded', info: UpdateInfo): void {
+  Logger.info(`[Updater] update ${state}`, { version: info.version })
   publishStatus({ state, version: info.version, releaseNotes: releaseNotes(info) })
 }
 
 function updateErrorMessage(error: Error): string {
   if (/latest\.yml.*(?:404|not found)|(?:404|not found).*latest\.yml/i.test(error.message)) {
-    return '未找到 GitHub Release 的更新元数据（latest.yml）。请发布包含 latest.yml 的新版本后再检查更新。'
+    return t('updateMetadataMissing')
   }
   return error.message
 }
 
 /** Configure GitHub Releases updates for packaged desktop builds only. */
 export function initializeUpdater(): void {
-  if (initialized || !app.isPackaged) return
+  if (initialized || !app.isPackaged) {
+    Logger.debug('[Updater] initialize skipped', { initialized, packaged: app.isPackaged })
+    return
+  }
   initialized = true
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
@@ -53,9 +66,15 @@ export function initializeUpdater(): void {
     publishStatus({ state: 'downloading', version: status.version, percent: progress.percent })
   )
   autoUpdater.on('update-downloaded', (info) => setAvailable('downloaded', info))
-  autoUpdater.on('error', (error) =>
+  autoUpdater.on('error', (error) => {
+    Logger.error(
+      '[Updater] error',
+      { state: status.state, version: status.version },
+      logError(error)
+    )
     publishStatus({ state: 'error', version: app.getVersion(), message: updateErrorMessage(error) })
-  )
+  })
+  Logger.debug('[Updater] initialized', { version: app.getVersion(), autoDownload: false })
 }
 
 export function getUpdateStatus(): UpdateStatus {
@@ -64,15 +83,18 @@ export function getUpdateStatus(): UpdateStatus {
 
 export async function checkForUpdates(): Promise<UpdateStatus> {
   if (!app.isPackaged) {
+    Logger.debug('[Updater] check skipped in development', { version: app.getVersion() })
     return {
       state: 'error',
       version: app.getVersion(),
-      message: '更新检查仅在已安装的正式版本中可用。'
+      message: t('updateCheckPackaged')
     }
   }
   initializeUpdater()
   try {
-    await autoUpdater.checkForUpdates()
+    await logOperation('[Updater] checkForUpdates', { version: app.getVersion() }, () =>
+      autoUpdater.checkForUpdates()
+    )
   } catch (error) {
     const message = updateErrorMessage(error instanceof Error ? error : new Error(String(error)))
     publishStatus({ state: 'error', version: app.getVersion(), message })
@@ -81,12 +103,15 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 }
 
 export async function downloadUpdate(): Promise<UpdateStatus> {
-  if (!app.isPackaged) throw new Error('更新下载仅在已安装的正式版本中可用。')
-  await autoUpdater.downloadUpdate()
-  return status
+  return logOperation('[Updater] downloadUpdate', { version: status.version }, async () => {
+    if (!app.isPackaged) throw new Error(t('updateDownloadPackaged'))
+    await autoUpdater.downloadUpdate()
+    return status
+  })
 }
 
 export function quitAndInstallUpdate(): void {
-  if (status.state !== 'downloaded') throw new Error('当前没有已下载的更新。')
+  if (status.state !== 'downloaded') throw new Error(t('noDownloadedUpdate'))
+  Logger.info('[Updater] installing update', { version: status.version })
   autoUpdater.quitAndInstall()
 }

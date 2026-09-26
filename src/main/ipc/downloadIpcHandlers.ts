@@ -1,3 +1,6 @@
+import { t } from '../i18n'
+import { logError, logOperation, logParams, logUrl } from '../service/operationLogger'
+import { Logger } from '../service/loggerService'
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, shell } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { createWriteStream, existsSync } from 'node:fs'
@@ -30,9 +33,11 @@ interface DownloadRequest {
 }
 
 function downloadNotificationTitle(locale?: string): string {
-  return (locale || app.getLocale()).toLowerCase().startsWith('zh')
-    ? '下载完成'
-    : 'Download completed'
+  return t(
+    'downloadCompleted',
+    {},
+    locale?.toLowerCase().startsWith('zh') ? 'zh' : locale ? 'en' : undefined
+  )
 }
 
 function ytdlpCommand(): string {
@@ -54,23 +59,28 @@ function ytdlpCommand(): string {
 }
 
 function runYtDlp(args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const process = spawn(ytdlpCommand(), args, { windowsHide: true })
-    let stdout = ''
-    let stderr = ''
-    process.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
-    process.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
-    process.once('error', () =>
-      reject(new Error('未找到 yt-dlp。请安装它或设置 EASY_PLAYER_YTDLP_PATH。'))
-    )
-    process.once('close', (code) => {
-      if (code === 0) resolve(stdout)
-      else {
-        const detail = stderr.trim()
-        reject(new Error(detail || `yt-dlp 执行失败（退出码 ${code ?? 'unknown'}）。`))
-      }
-    })
-  })
+  return logOperation(
+    '[Download] runYtDlp',
+    { executable: ytdlpCommand(), argumentCount: args.length },
+    () => {
+      return new Promise((resolve, reject) => {
+        const process = spawn(ytdlpCommand(), args, { windowsHide: true })
+        let stdout = ''
+        let stderr = ''
+        process.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
+        process.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString()))
+        process.once('error', () => reject(new Error(t('ytdlpMissing'))))
+        process.once('close', (code) => {
+          if (code === 0) resolve(stdout)
+          else {
+            const detail = stderr.trim()
+            reject(new Error(detail || t('ytdlpFailed', { code: code ?? 'unknown' })))
+          }
+        })
+      })
+    },
+    { successLevel: 'debug' }
+  )
 }
 
 function toSearchItem(
@@ -142,11 +152,13 @@ function biliApi<T>(url: string): Promise<T> {
           }
           if (parsed.code !== 0 || !parsed.data)
             reject(
-              new Error(parsed.message || `哔哩哔哩接口请求失败（${parsed.code ?? 'unknown'}）。`)
+              new Error(
+                parsed.message || t('biliRequestFailed', { code: parsed.code ?? 'unknown' })
+              )
             )
           else resolve(parsed.data)
         } catch {
-          reject(new Error('哔哩哔哩返回了无法识别的数据。'))
+          reject(new Error(t('biliInvalidData')))
         }
       })
     })
@@ -180,7 +192,7 @@ function biliImageDataUrl(url: string): Promise<string> {
         if (size <= 5 * 1024 * 1024) chunks.push(chunk)
       })
       response.on('end', () => {
-        if (size > 5 * 1024 * 1024) return reject(new Error('封面文件过大。'))
+        if (size > 5 * 1024 * 1024) return reject(new Error(t('coverTooLarge')))
         const mimeType = String(response.headers['content-type'] || 'image/jpeg').split(';')[0]
         resolve(`data:${mimeType};base64,${Buffer.concat(chunks).toString('base64')}`)
       })
@@ -214,7 +226,7 @@ async function extractBiliItems(target: string, search = false): Promise<Downloa
     })
   }
   const bvid = biliBvid(target)
-  if (!bvid) throw new Error('未识别到有效的哔哩哔哩 BV 号。')
+  if (!bvid) throw new Error(t('biliInvalidId'))
   const requestedPage = Math.max(1, Number(new URL(target).searchParams.get('p') || '1'))
   const data = await biliApi<{
     bvid: string
@@ -349,7 +361,17 @@ function registerProgress(
   taskId: string,
   request: DownloadRequest
 ): void {
+  const started = Date.now()
+  Logger.debug('[Download] process started', {
+    taskId,
+    pid: process.pid,
+    platform: request.platform,
+    type: request.downloadType,
+    quality: request.quality,
+    directory: request.directory
+  })
   let savedFilePath = request.directory
+  let diagnosticTail = ''
   const onLine = (line: string): void => {
     const progress = line.match(/\[download\]\s+([\d.]+)%/)
     if (progress)
@@ -362,12 +384,28 @@ function registerProgress(
     if (/^(?:[A-Za-z]:\\|\/)/.test(candidate) && existsSync(candidate)) savedFilePath = candidate
   }
   process.stdout.on('data', (chunk: Buffer) => chunk.toString().split(/\r?\n/).forEach(onLine))
-  process.stderr.on('data', (chunk: Buffer) => chunk.toString().split(/\r?\n/).forEach(onLine))
-  process.once('error', () =>
+  process.stderr.on('data', (chunk: Buffer) => {
+    diagnosticTail = (diagnosticTail + chunk.toString()).slice(-4096)
+    chunk.toString().split(/\r?\n/).forEach(onLine)
+  })
+  process.once('error', (error) => {
+    Logger.error('[Download] process error', { taskId, pid: process.pid }, logError(error))
     sender.send('media-download:progress', { taskId, status: 'error', progress: 0 })
-  )
-  process.once('close', (code) => {
+  })
+  process.once('close', (code, signal) => {
     const done = code === 0
+    Logger[done ? 'info' : 'error'](
+      '[Download] process finished',
+      {
+        taskId,
+        pid: process.pid,
+        exitCode: code,
+        signal,
+        filePath: savedFilePath,
+        elapsedMs: Date.now() - started
+      },
+      ...(done ? [] : [logError(new Error(diagnosticTail.trim() || t('downloadNoDiagnostics')))])
+    )
     saveDownloadTask({
       platform: request.platform,
       resourceId: request.resourceId,
@@ -406,12 +444,13 @@ function senderError(
   title: string,
   reason: unknown
 ): void {
+  Logger.error('[Download] task failed', { taskId }, logError(reason))
   sender.send('media-download:progress', {
     taskId,
     status: 'error',
     progress: 0,
     title,
-    error: reason instanceof Error ? reason.message : '下载失败。'
+    error: reason instanceof Error ? reason.message : t('downloadFailed')
   })
 }
 
@@ -420,105 +459,125 @@ async function startBiliDownload(
   taskId: string,
   request: DownloadRequest
 ): Promise<void> {
-  const bvid = biliBvid(request.url)
-  if (!bvid) throw new Error('未识别到有效的哔哩哔哩 BV 号。')
-  const view = await biliApi<{ cid: number; pages?: Array<{ cid: number; page?: number }> }>(
-    `https://api.bilibili.com/x/web-interface/wbi/view?bvid=${bvid}`
-  )
-  const pageNumber = Number(new URL(request.url).searchParams.get('p') || '1')
-  const cid = view.pages?.find((page) => page.page === pageNumber)?.cid ?? view.cid
-  const play = await biliApi<{
-    durl?: Array<{ url?: string }>
-    dash?: { audio?: Array<{ baseUrl?: string; base_url?: string; bandwidth?: number }> }
-  }>(
-    `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&fnval=${request.downloadType === 'video' ? '16' : '4048'}&fnver=0&fourk=0`
-  )
-  const source =
-    request.downloadType === 'video'
-      ? play.durl?.[0]?.url
-      : ([...(play.dash?.audio ?? [])].sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0]
-          ?.baseUrl ??
-        [...(play.dash?.audio ?? [])].sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0]
-          ?.base_url)
-  if (!source) throw new Error('未获取到可下载的哔哩哔哩媒体地址。')
-  const extension = request.downloadType === 'video' ? 'mp4' : 'm4a'
-  const filePath = join(
-    request.directory,
-    `${request.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180)} [${bvid}-${cid}].${extension}`
-  )
-  await new Promise<void>((resolve, reject) => {
-    const mediaRequest = net.request({ method: 'GET', url: source })
-    Object.entries(BILI_HEADERS).forEach(([name, value]) => mediaRequest.setHeader(name, value))
-    mediaRequest.setHeader('Range', 'bytes=0-')
-    mediaRequest.on('response', (response) => {
-      if ((response.statusCode ?? 0) >= 400) {
-        reject(new Error(`哔哩哔哩媒体请求失败（HTTP ${response.statusCode}）。`))
-        return
-      }
-      const total = Number(response.headers['content-length'] || 0)
-      let received = 0
-      const output = createWriteStream(filePath)
-      response.on('data', (chunk: Buffer) => {
-        received += chunk.length
-        output.write(chunk)
-        if (total > 0)
-          sender.send('media-download:progress', {
-            taskId,
-            status: 'downloading',
-            progress: Math.min(99, Math.round((received / total) * 100))
+  return logOperation(
+    '[Download] biliTask',
+    {
+      taskId,
+      platform: request.platform,
+      type: request.downloadType,
+      quality: request.quality,
+      directory: request.directory
+    },
+    async () => {
+      const bvid = biliBvid(request.url)
+      if (!bvid) throw new Error(t('biliInvalidId'))
+      const view = await biliApi<{ cid: number; pages?: Array<{ cid: number; page?: number }> }>(
+        `https://api.bilibili.com/x/web-interface/wbi/view?bvid=${bvid}`
+      )
+      const pageNumber = Number(new URL(request.url).searchParams.get('p') || '1')
+      const cid = view.pages?.find((page) => page.page === pageNumber)?.cid ?? view.cid
+      const play = await biliApi<{
+        durl?: Array<{ url?: string }>
+        dash?: { audio?: Array<{ baseUrl?: string; base_url?: string; bandwidth?: number }> }
+      }>(
+        `https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&fnval=${request.downloadType === 'video' ? '16' : '4048'}&fnver=0&fourk=0`
+      )
+      const source =
+        request.downloadType === 'video'
+          ? play.durl?.[0]?.url
+          : ([...(play.dash?.audio ?? [])].sort(
+              (a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0)
+            )[0]?.baseUrl ??
+            [...(play.dash?.audio ?? [])].sort((a, b) => (b.bandwidth ?? 0) - (a.bandwidth ?? 0))[0]
+              ?.base_url)
+      if (!source) throw new Error(t('biliNoMedia'))
+      const extension = request.downloadType === 'video' ? 'mp4' : 'm4a'
+      const filePath = join(
+        request.directory,
+        `${request.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180)} [${bvid}-${cid}].${extension}`
+      )
+      await new Promise<void>((resolve, reject) => {
+        const mediaRequest = net.request({ method: 'GET', url: source })
+        Object.entries(BILI_HEADERS).forEach(([name, value]) => mediaRequest.setHeader(name, value))
+        mediaRequest.setHeader('Range', 'bytes=0-')
+        mediaRequest.on('response', (response) => {
+          if ((response.statusCode ?? 0) >= 400) {
+            reject(new Error(t('biliMediaFailed', { status: response.statusCode ?? 'unknown' })))
+            return
+          }
+          const total = Number(response.headers['content-length'] || 0)
+          let received = 0
+          const output = createWriteStream(filePath)
+          response.on('data', (chunk: Buffer) => {
+            received += chunk.length
+            output.write(chunk)
+            if (total > 0)
+              sender.send('media-download:progress', {
+                taskId,
+                status: 'downloading',
+                progress: Math.min(99, Math.round((received / total) * 100))
+              })
           })
+          response.once('error', reject)
+          response.once('end', () => output.end(resolve))
+          output.once('error', reject)
+        })
+        mediaRequest.on('error', reject)
+        mediaRequest.end()
       })
-      response.once('error', reject)
-      response.once('end', () => output.end(resolve))
-      output.once('error', reject)
-    })
-    mediaRequest.on('error', reject)
-    mediaRequest.end()
-  })
-  saveDownloadTask({
-    platform: request.platform,
-    resourceId: bvid,
-    subId: String(cid),
-    title: request.title,
-    filePath,
-    quality: `${request.downloadType}:${request.quality}`,
-    status: 'done',
-    progress: 100,
-    extra: { url: request.url, downloadType: request.downloadType }
-  })
-  sender.send('media-download:progress', {
-    taskId,
-    status: 'done',
-    progress: 100,
-    filePath,
-    title: request.title
-  })
+      saveDownloadTask({
+        platform: request.platform,
+        resourceId: bvid,
+        subId: String(cid),
+        title: request.title,
+        filePath,
+        quality: `${request.downloadType}:${request.quality}`,
+        status: 'done',
+        progress: 100,
+        extra: { url: request.url, downloadType: request.downloadType }
+      })
+      sender.send('media-download:progress', {
+        taskId,
+        status: 'done',
+        progress: 100,
+        filePath,
+        title: request.title
+      })
+    },
+    { successLevel: 'info' }
+  )
 }
 
 export function registerDownloadIpcHandlers(): void {
   ipcMain.handle('media-download:choose-directory', async (event) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    const result = window
-      ? await dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] })
-      : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    return result.canceled ? null : (result.filePaths[0] ?? null)
+    return logOperation('[IPC] media-download:choose-directory', {}, async () => {
+      const window = BrowserWindow.fromWebContents(event.sender)
+      const result = window
+        ? await dialog.showOpenDialog(window, { properties: ['openDirectory', 'createDirectory'] })
+        : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    })
   })
   ipcMain.handle('media-download:history', () => listDownloadTasks())
   ipcMain.handle('media-download:thumbnail', async (_event, url: string) => {
-    let hostname = ''
-    try {
-      hostname = new URL(url).hostname
-    } catch {
-      throw new Error('无效的封面地址。')
-    }
-    if (!/(^|\.)hdslb\.com$/i.test(hostname)) throw new Error('不支持的封面来源。')
-    return biliImageDataUrl(url)
+    return logOperation('[IPC] media-download:thumbnail', { url: logUrl(url) }, async () => {
+      let hostname = ''
+      try {
+        hostname = new URL(url).hostname
+      } catch {
+        throw new Error(t('invalidDownloadCoverUrl'))
+      }
+      if (!/(^|\.)hdslb\.com$/i.test(hostname)) throw new Error(t('coverSourceUnsupported'))
+      return biliImageDataUrl(url)
+    })
   })
   ipcMain.handle('media-download:show-in-folder', (_event, filePath: string) => {
-    if (!filePath || !existsSync(filePath))
-      return { success: false, error: '下载文件不存在或已被移动。' }
-    shell.showItemInFolder(filePath)
-    return { success: true }
+    return logOperation('[IPC] media-download:show-in-folder', { filePath }, () => {
+      if (!filePath || !existsSync(filePath))
+        return { success: false, error: t('downloadFileRemoved') }
+      shell.showItemInFolder(filePath)
+      return { success: true }
+    })
   })
   ipcMain.handle(
     'media-download:search',
@@ -529,33 +588,47 @@ export function registerDownloadIpcHandlers(): void {
         query: string
       }
     ) => {
-      const query = request.query.trim()
-      if (!query) throw new Error('请输入搜索关键词。')
-      const prefix = request.platform === 'youtube' ? 'ytsearch12:' : 'bilisearch12:'
-      return extractItems(`${prefix}${query}`, request.platform)
+      return logOperation(
+        '[IPC] media-download:search',
+        { platform: request?.platform, queryLength: request?.query?.length },
+        async () => {
+          const query = request.query.trim()
+          if (!query) throw new Error(t('searchQueryRequired'))
+          const prefix = request.platform === 'youtube' ? 'ytsearch12:' : 'bilisearch12:'
+          return extractItems(`${prefix}${query}`, request.platform)
+        }
+      )
     }
   )
   ipcMain.handle('media-download:parse', async (_event, request: { url: string }) => {
-    const url = request.url.trim()
-    if (!/^https?:\/\//i.test(url)) throw new Error('请输入有效的视频链接。')
-    const platform = platformFromUrl(url)
-    return extractItems(url, platform)
+    return logOperation('[IPC] media-download:parse', { url: logUrl(request?.url) }, async () => {
+      const url = request.url.trim()
+      if (!/^https?:\/\//i.test(url)) throw new Error(t('videoUrlInvalid'))
+      const platform = platformFromUrl(url)
+      return extractItems(url, platform)
+    })
   })
   ipcMain.handle('media-download:start', (event, request: DownloadRequest) => {
-    if (!request.directory || !request.url || !request.resourceId)
-      throw new Error('下载参数不完整。')
-    const taskId = `${request.platform}-${request.resourceId}-${Date.now()}`
-    if (request.platform === 'bili') {
-      void startBiliDownload(event.sender, taskId, request).catch((reason) => {
-        senderError(event.sender, taskId, request.title, reason)
-      })
-      return { taskId }
-    }
-    const output = join(request.directory, '%(title).180B [%(id)s].%(ext)s')
-    const process = spawn(ytdlpCommand(), [...downloadArgs(request, output), request.url], {
-      windowsHide: true
-    })
-    registerProgress(process, event.sender, taskId, request)
-    return { taskId }
+    return logOperation(
+      '[IPC] media-download:start',
+      { ...logParams(request), url: logUrl(request?.url) },
+      () => {
+        if (!request.directory || !request.url || !request.resourceId)
+          throw new Error(t('downloadParamsIncomplete'))
+        const taskId = `${request.platform}-${request.resourceId}-${Date.now()}`
+        if (request.platform === 'bili') {
+          void startBiliDownload(event.sender, taskId, request).catch((reason) => {
+            senderError(event.sender, taskId, request.title, reason)
+          })
+          return { taskId }
+        }
+        const output = join(request.directory, '%(title).180B [%(id)s].%(ext)s')
+        const process = spawn(ytdlpCommand(), [...downloadArgs(request, output), request.url], {
+          windowsHide: true
+        })
+        registerProgress(process, event.sender, taskId, request)
+        return { taskId }
+      }
+    )
   })
 }

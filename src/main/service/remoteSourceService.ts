@@ -1,3 +1,6 @@
+import { t } from '../i18n'
+import { logError, logOperation, logUrl } from './operationLogger'
+import { Logger } from './loggerService'
 import { createHash, randomBytes } from 'node:crypto'
 import {
   existsSync,
@@ -67,21 +70,28 @@ function normalizedBaseUrl(baseUrl: string): string {
   try {
     url = new URL(baseUrl.trim())
   } catch {
-    throw new Error('远程音源地址无效')
+    throw new Error(t('invalidSourceUrl'))
   }
   if (url.protocol !== 'https:' && url.protocol !== 'http:')
-    throw new Error('远程音源仅支持 HTTP 或 HTTPS 地址')
-  if (url.username || url.password) throw new Error('远程音源地址不能包含用户名或密码')
+    throw new Error(t('sourceProtocolUnsupported'))
+  if (url.username || url.password) throw new Error(t('sourceUrlCredentials'))
   return url.href.replace(/\/$/, '')
 }
 
 function remoteFetch(input: string, options: RequestInit = {}): Promise<Response> {
-  return fetch(input, { ...options, signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS) })
+  return logOperation(
+    '[Remote] request',
+    { url: logUrl(input), method: options.method ?? 'GET' },
+    () => {
+      return fetch(input, { ...options, signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS) })
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
 
 function assertResponseSize(response: Response, limit: number, kind: string): void {
   const length = Number(response.headers.get('content-length') || 0)
-  if (Number.isFinite(length) && length > limit) throw new Error(`${kind}超过允许的大小限制`)
+  if (Number.isFinite(length) && length > limit) throw new Error(t('sizeLimit', { kind }))
 }
 
 async function writeResponseToFile(
@@ -91,13 +101,13 @@ async function writeResponseToFile(
   kind: string
 ): Promise<void> {
   assertResponseSize(response, limit, kind)
-  if (!response.body) throw new Error(`${kind}没有可读取的数据`)
+  if (!response.body) throw new Error(t('noResponseData', { kind }))
   let received = 0
   const limiter = new Transform({
     transform(chunk: Buffer, _encoding, callback) {
       received += chunk.length
       if (received > limit) {
-        callback(new Error(`${kind}超过允许的大小限制`))
+        callback(new Error(t('sizeLimit', { kind })))
         return
       }
       callback(null, chunk)
@@ -127,12 +137,15 @@ async function forEachWithConcurrency<T>(
 
 function providerFor(type: string | null | undefined): RemoteProvider {
   const provider = providers[type as RemoteProviderId]
-  if (!provider) throw new Error(`不支持的远程音源类型：${type || 'unknown'}`)
+  if (!provider) throw new Error(t('sourceTypeUnsupported', { type: type || 'unknown' }))
   return provider
 }
 
 function validateSource(source: MusicSource | null): asserts source is ConfiguredSource {
-  if (!source?.baseUrl || !source.user || !source.secret) throw new Error('远程音源配置不完整')
+  if (source?.credentialError === 'unavailable') throw new Error(t('credentialStoreUnavailable'))
+  if (source?.credentialError === 'decrypt-failed') throw new Error(t('credentialDecryptFailed'))
+  if (!source?.baseUrl || !source.user || !source.secret)
+    throw new Error(t('sourceConfigIncomplete'))
   providerFor(source.type)
 }
 
@@ -180,10 +193,10 @@ interface SubsonicResponse<T> {
 
 /** Some reverse proxies return an empty page or HTML on an authentication error. */
 async function readJson<T>(response: Response): Promise<T | undefined> {
-  assertResponseSize(response, MAX_REMOTE_JSON_BYTES, '远程响应')
+  assertResponseSize(response, MAX_REMOTE_JSON_BYTES, t('remoteResponse'))
   const text = await response.text()
   if (Buffer.byteLength(text, 'utf8') > MAX_REMOTE_JSON_BYTES)
-    throw new Error('远程响应超过允许的大小限制')
+    throw new Error(t('remoteResponseTooLarge'))
   if (!text.trim()) return undefined
   try {
     return JSON.parse(text) as T
@@ -201,7 +214,7 @@ async function subsonicRequest<T>(
   const body = await readJson<SubsonicResponse<T>>(response)
   const result = body?.['subsonic-response']
   if (!response.ok || result?.status !== 'ok')
-    throw new Error(result?.error?.message || `请求 ${endpoint} 失败`)
+    throw new Error(result?.error?.message || t('requestFailed', { endpoint }))
   return result as T
 }
 
@@ -301,7 +314,8 @@ async function jellyfinToken(connection: RemoteConnection): Promise<string> {
     }
   )
   const result = (await readJson<JellyfinAuth & { Message?: string }>(response)) || {}
-  if (!response.ok || !result.AccessToken) throw new Error(result.Message || 'Jellyfin 认证失败')
+  if (!response.ok || !result.AccessToken)
+    throw new Error(result.Message || t('jellyfinAuthFailed'))
   return result.AccessToken
 }
 
@@ -325,7 +339,7 @@ const jellyfinProvider: RemoteProvider = {
       headers: { 'X-Emby-Token': token }
     })
     const info = (await readJson<{ Version?: string; Message?: string }>(response)) || {}
-    if (!response.ok) throw new Error(info.Message || 'Jellyfin 连接失败')
+    if (!response.ok) throw new Error(info.Message || t('jellyfinConnectFailed'))
     return { version: info.Version || '' }
   },
   async listTracks(source) {
@@ -345,7 +359,7 @@ const jellyfinProvider: RemoteProvider = {
           TotalRecordCount?: number
           Message?: string
         }>(response)) || {}
-      if (!response.ok) throw new Error(page.Message || '读取 Jellyfin 曲库失败')
+      if (!response.ok) throw new Error(page.Message || t('jellyfinLibraryFailed'))
       const items = page.Items || []
       for (const item of items) {
         const audio = item.MediaStreams?.find((stream) => stream.Type === 'Audio')
@@ -385,9 +399,16 @@ const providers: Record<RemoteProviderId, RemoteProvider> = {
 }
 
 export async function testRemoteSource(config: RemoteConnection): Promise<{ version: string }> {
-  if (!config.baseUrl.trim() || !config.user.trim() || !config.secret)
-    throw new Error('远程音源配置不完整')
-  return providerFor(config.type).test(config)
+  return logOperation(
+    '[Remote] testSource',
+    { type: config.type, server: logUrl(config.baseUrl) },
+    async () => {
+      if (!config.baseUrl.trim() || !config.user.trim() || !config.secret)
+        throw new Error(t('sourceConfigIncomplete'))
+      return providerFor(config.type).test(config)
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
 
 function remoteFolderId(source: MusicSource): number {
@@ -415,7 +436,7 @@ async function cacheCover(source: ConfiguredSource, coverId?: string): Promise<s
   if (!response.ok) return null
   const temporaryPath = `${filePath}.part`
   try {
-    await writeResponseToFile(response, temporaryPath, MAX_REMOTE_COVER_BYTES, '远程封面')
+    await writeResponseToFile(response, temporaryPath, MAX_REMOTE_COVER_BYTES, t('remoteCover'))
     renameSync(temporaryPath, filePath)
   } catch (error) {
     if (existsSync(temporaryPath)) unlinkSync(temporaryPath)
@@ -461,16 +482,35 @@ async function upsertSong(
 export async function syncRemoteSource(
   sourceId: number
 ): Promise<{ imported: number; total: number }> {
-  const source = getSource(sourceId)
-  validateSource(source)
-  const tracks = await providerFor(source.type).listTracks(source)
-  const folderId = remoteFolderId(source)
-  await forEachWithConcurrency(tracks, REMOTE_SYNC_CONCURRENCY, (track) =>
-    upsertSong(source, folderId, track)
+  return logOperation(
+    '[Remote] syncSource',
+    { sourceId },
+    async () => {
+      const source = getSource(sourceId)
+      validateSource(source)
+      const tracks = await providerFor(source.type).listTracks(source)
+      Logger.debug('[Remote] library fetched', {
+        sourceId,
+        type: source.type,
+        trackCount: tracks.length
+      })
+      const folderId = remoteFolderId(source)
+      await forEachWithConcurrency(tracks, REMOTE_SYNC_CONCURRENCY, (track) =>
+        upsertSong(source, folderId, track).catch((error) => {
+          Logger.error(
+            '[Remote] import track failed',
+            { sourceId, remoteId: track.id },
+            logError(error)
+          )
+          throw error
+        })
+      )
+      touchSource(sourceId)
+      updateSourceStats(sourceId, tracks.length, tracks.length)
+      return { imported: tracks.length, total: tracks.length }
+    },
+    { successLevel: 'info', warnOnFalse: false }
   )
-  touchSource(sourceId)
-  updateSourceStats(sourceId, tracks.length, tracks.length)
-  return { imported: tracks.length, total: tracks.length }
 }
 
 function cacheDirectory(): string {
@@ -490,36 +530,62 @@ function cleanupCache(directory: string): void {
       return { path, size: stat.size, mtime: stat.mtimeMs }
     })
   let total = files.reduce((sum, file) => sum + file.size, 0)
+  const previousBytes = total
+  let removedFiles = 0
   for (const file of files.sort((a, b) => a.mtime - b.mtime)) {
     if (total <= maxBytes) break
     unlinkSync(file.path)
     total -= file.size
+    removedFiles++
   }
+  Logger.debug('[Remote] cache cleanup completed', {
+    directory,
+    limitBytes: maxBytes,
+    previousBytes,
+    currentBytes: total,
+    removedFiles
+  })
 }
 
 /** Returns a local file path, downloading a provider stream on a cache miss. */
 export async function cacheRemoteSong(songId: number): Promise<string> {
-  const song = getSong(songId)
-  if (!song?.sourceId || !song.remoteId) throw new Error('远程歌曲不存在')
-  const source = getSource(song.sourceId)
-  validateSource(source)
-  const directory = cacheDirectory()
-  mkdirSync(directory, { recursive: true })
-  const extension =
-    (song.format || extname(song.fileName || '') || 'mp3')
-      .replace(/^\./, '')
-      .replace(/[^a-zA-Z0-9]/g, '') || 'mp3'
-  const filePath = join(
-    directory,
-    `${source.type}-${source.id}-${song.remoteId.replace(/[^a-zA-Z0-9._-]/g, '_')}.${extension}`
+  return logOperation(
+    '[Remote] cacheSong',
+    { songId },
+    async () => {
+      const song = getSong(songId)
+      if (!song?.sourceId || !song.remoteId) throw new Error(t('remoteSongNotFound'))
+      const source = getSource(song.sourceId)
+      validateSource(source)
+      const directory = cacheDirectory()
+      mkdirSync(directory, { recursive: true })
+      const extension =
+        (song.format || extname(song.fileName || '') || 'mp3')
+          .replace(/^\./, '')
+          .replace(/[^a-zA-Z0-9]/g, '') || 'mp3'
+      const filePath = join(
+        directory,
+        `${source.type}-${source.id}-${song.remoteId.replace(/[^a-zA-Z0-9._-]/g, '_')}.${extension}`
+      )
+      if (existsSync(filePath)) {
+        Logger.debug('[Remote] cache hit', { songId, sourceId: source.id, filePath })
+        return filePath
+      }
+      Logger.debug('[Remote] cache miss', { songId, sourceId: source.id, filePath })
+      const response = await providerFor(source.type).fetchStream(source, song.remoteId)
+      if (!response.ok) throw new Error(t('remoteDownloadFailed', { status: response.status }))
+      const temporaryPath = `${filePath}.part`
+      await writeResponseToFile(response, temporaryPath, MAX_REMOTE_STREAM_BYTES, t('remoteSong'))
+      if (existsSync(filePath)) unlinkSync(filePath)
+      renameSync(temporaryPath, filePath)
+      Logger.debug('[Remote] cached stream saved', {
+        songId,
+        filePath,
+        bytes: statSync(filePath).size
+      })
+      cleanupCache(directory)
+      return filePath
+    },
+    { successLevel: 'debug', warnOnFalse: false }
   )
-  if (existsSync(filePath)) return filePath
-  const response = await providerFor(source.type).fetchStream(source, song.remoteId)
-  if (!response.ok) throw new Error(`下载远程歌曲失败（${response.status}）`)
-  const temporaryPath = `${filePath}.part`
-  await writeResponseToFile(response, temporaryPath, MAX_REMOTE_STREAM_BYTES, '远程歌曲')
-  if (existsSync(filePath)) unlinkSync(filePath)
-  renameSync(temporaryPath, filePath)
-  cleanupCache(directory)
-  return filePath
 }

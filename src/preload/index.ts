@@ -496,6 +496,7 @@ const shortcutsAPI = {
   }
 }
 const systemAPI = {
+  setLocale: (locale: 'zh' | 'en'): void => ipcRenderer.send('system:set-locale', locale),
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),
   getMicaState: () => ipcRenderer.invoke('system:get-mica-state'),

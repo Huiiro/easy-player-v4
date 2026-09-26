@@ -1,4 +1,6 @@
 import { getAppSetting, setAppSetting } from '../database/repository'
+import { Logger } from '../service/loggerService'
+import { logError } from '../service/operationLogger'
 
 export interface PersistedEqBand {
   enabled: boolean
@@ -86,7 +88,12 @@ export interface DspSettings {
     quality: 'best' | 'medium' | 'fast'
   }
   dopEnabled: boolean
-  transition: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number; crossfadeAuto: boolean }
+  transition: {
+    gaplessEnabled: boolean
+    crossfadeEnabled: boolean
+    crossfadeMs: number
+    crossfadeAuto: boolean
+  }
   outputDevice: PersistedOutputDevice
 }
 
@@ -121,7 +128,12 @@ export const defaultDspSettings = (): DspSettings => ({
   },
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' },
   dopEnabled: false,
-  transition: { gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000, crossfadeAuto: false },
+  transition: {
+    gaplessEnabled: true,
+    crossfadeEnabled: false,
+    crossfadeMs: 5000,
+    crossfadeAuto: false
+  },
   outputDevice: { backend: 'directsound', deviceId: 'default' }
 })
 
@@ -356,7 +368,12 @@ export function loadDspSettings(): DspSettings {
             : 'default'
       }
     }
-  } catch {
+  } catch (error) {
+    Logger.warn(
+      '[AudioEngine] failed to load DSP settings; using defaults',
+      { key: DSP_SETTINGS_KEY },
+      logError(error)
+    )
     return defaultDspSettings()
   }
 }

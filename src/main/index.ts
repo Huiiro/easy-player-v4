@@ -1,3 +1,6 @@
+import { setMainLocale, t } from './i18n'
+import { logError, logOperation, logParams, logUrl } from './service/operationLogger'
+import { performance } from 'node:perf_hooks'
 import {
   app,
   shell,
@@ -137,6 +140,7 @@ function showMainWindow(): void {
 }
 
 function quitApplication(): void {
+  Logger.info('[Main] quit requested', { audioLoaded: audioEngine?.loaded === true })
   isQuitting = true
   audioEngine?.stop()
   audioEngine?.flushDspSettings()
@@ -238,6 +242,12 @@ function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, strin
     if (!registered) failed.push(accelerator)
     else registeredAccelerators.add(normalizedAccelerator)
   }
+  if (failed.length)
+    Logger.warn('[Shortcuts] failed to register shortcuts', { accelerators: failed })
+  Logger.debug('[Shortcuts] registration completed', {
+    registeredCount: registeredAccelerators.size,
+    failedCount: failed.length
+  })
   return failed
 }
 
@@ -384,7 +394,12 @@ function registerMediaProtocol(): void {
             'Access-Control-Allow-Origin': '*'
           }
         })
-      } catch {
+      } catch (error) {
+        Logger.debug(
+          '[Media] thumbnail generation failed; serving original cover',
+          { coverPath, size },
+          logError(error)
+        )
         // Fall back to the original image for uncommon formats or corrupt cache entries.
       }
     }
@@ -401,6 +416,35 @@ function registerMediaProtocol(): void {
       headers
     })
   })
+}
+
+function observeWindow(window: BrowserWindow, kind: string): void {
+  const windowId = window.id
+  Logger.debug('[Window] created', { kind, windowId, bounds: window.getBounds() })
+  window.webContents.on('did-finish-load', () =>
+    Logger.debug('[Window] renderer loaded', { kind, windowId })
+  )
+  window.webContents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
+    if (code === -3) return // A cancelled navigation is expected during replacement loads.
+    Logger.error('[Window] renderer load failed', {
+      kind,
+      windowId,
+      code,
+      description,
+      url: logUrl(url),
+      isMainFrame
+    })
+  })
+  window.webContents.on('render-process-gone', (_event, details) => {
+    Logger.error('[Window] renderer process gone', {
+      kind,
+      windowId,
+      reason: details.reason,
+      exitCode: details.exitCode
+    })
+  })
+  window.on('unresponsive', () => Logger.warn('[Window] renderer unresponsive', { kind, windowId }))
+  window.on('closed', () => Logger.debug('[Window] closed', { kind, windowId }))
 }
 
 function createWindow(): void {
@@ -438,6 +482,7 @@ function createWindow(): void {
       sandbox: false
     }
   })
+  observeWindow(mainWindow, 'main')
   setWindowsMica(getAppSetting('window.mica-enabled') === true)
 
   mainWindow.on('ready-to-show', () => {
@@ -533,6 +578,7 @@ function createMiniPlayerWindow(): BrowserWindow {
       sandbox: false
     }
   })
+  observeWindow(miniWindow, 'mini-player')
   miniWindow.setAlwaysOnTop(true, 'floating')
   miniWindow.on('ready-to-show', () => miniWindow?.show())
   miniWindow.on('closed', () => {
@@ -576,6 +622,7 @@ function createDesktopLyricsWindow(): BrowserWindow {
   // `floating` sits below many exclusive/full-screen games. Keep lyrics above
   // that layer; the renderer makes the window click-through by default so it
   // does not steal focus or input from the game.
+  observeWindow(desktopLyricsWindow, 'desktop-lyrics')
   desktopLyricsWindow.setAlwaysOnTop(true, 'screen-saver')
   desktopLyricsWindow.setIgnoreMouseEvents(true, { forward: true })
   desktopLyricsWindow.on('ready-to-show', () => desktopLyricsWindow?.showInactive())
@@ -618,367 +665,481 @@ function createDesktopLyricsWindow(): BrowserWindow {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
-  // Keep Windows notifications and taskbar identity aligned with the packaged app.
-  app.setAppUserModelId('com.huiiro.easyplayer')
-  // The player is controlled from its right-side status item on macOS. Avoid
-  // Electron's empty/default application menu occupying the rest of the bar.
-  if (process.platform === 'darwin') Menu.setApplicationMenu(null)
-  // `app.dock.setIcon` accepts a NativeImage reliably; passing an ICNS path
-  // string makes Electron try its PNG path loader and can reject at startup.
-  if (process.platform === 'darwin') {
-    const dockImage = nativeImage.createFromPath(dockIcon)
-    const fallbackDockImage = nativeImage.createFromPath(icon)
-    if (!dockImage.isEmpty()) app.dock?.setIcon(dockImage)
-    else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
-  }
-  createDir()
-  initDatabase()
-  Logger.registerIpc()
-  migrateSourceSecrets()
-  registerDatabaseIpcHandlers()
-  registerScanIpcHandlers()
-  registerLyricsIpcHandlers()
-  registerFontIpcHandlers()
-  registerMetadataIpcHandlers()
-  registerFileIpcHandlers()
-  registerDownloadIpcHandlers()
-  createTray()
-  ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
-    setAppSetting('system.close-to-tray', enabled === true)
-    return { success: true }
-  })
-  ipcMain.on('window:set-traffic-light-visible', (_event, visible: boolean) =>
-    setPlayerWindowControlsVisible(visible)
-  )
-  ipcMain.handle('system:set-auto-start', (_event, enabled: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: enabled === true })
-    setAppSetting('system.auto-start', enabled === true)
-    return { success: true }
-  })
-  ipcMain.handle('system:get-mica-state', () => {
-    const available = supportsWindowsMica()
-    return {
-      success: true,
-      data: { available, enabled: available && getAppSetting('window.mica-enabled') === true }
-    }
-  })
-  ipcMain.handle('system:set-mica-enabled', (_event, enabled: boolean) => {
-    const active = setWindowsMica(enabled === true)
-    if (supportsWindowsMica()) setAppSetting('window.mica-enabled', active)
-    return { success: true, data: { available: supportsWindowsMica(), enabled: active } }
-  })
-  ipcMain.on(
-    'tray:update',
-    (_event, data: { title?: string; artist?: string; isPlaying?: boolean }) => {
-      trayTrack = {
-        title: data.title || '',
-        artist: data.artist || '',
-        isPlaying: data.isPlaying === true
+app.whenReady().then(() =>
+  logOperation(
+    '[Main] initialize',
+    { platform: process.platform, packaged: app.isPackaged },
+    () => {
+      const startupStarted = performance.now()
+      // Keep Windows notifications and taskbar identity aligned with the packaged app.
+      app.setAppUserModelId('com.huiiro.easyplayer')
+      // The player is controlled from its right-side status item on macOS. Avoid
+      // Electron's empty/default application menu occupying the rest of the bar.
+      if (process.platform === 'darwin') Menu.setApplicationMenu(null)
+      // `app.dock.setIcon` accepts a NativeImage reliably; passing an ICNS path
+      // string makes Electron try its PNG path loader and can reject at startup.
+      if (process.platform === 'darwin') {
+        const dockImage = nativeImage.createFromPath(dockIcon)
+        const fallbackDockImage = nativeImage.createFromPath(icon)
+        if (!dockImage.isEmpty()) app.dock?.setIcon(dockImage)
+        else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
       }
-      updateTrayMenu()
-    }
-  )
-  ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
-    try {
-      const failed = registerGlobalShortcuts(
-        shortcuts && typeof shortcuts === 'object'
-          ? (shortcuts as Partial<Record<ShortcutAction, string>>)
-          : {}
-      )
-      return { success: true, data: { failed } }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('shortcuts:unregister-global', () => {
-    globalShortcut.unregisterAll()
-    return { success: true }
-  })
-  registerMediaProtocol()
-  initializeUpdater()
-  ipcMain.handle('app-update:status', () => ({ success: true, data: getUpdateStatus() }))
-  ipcMain.handle('app-update:check', async () => {
-    try {
-      return { success: true, data: await checkForUpdates() }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('app-update:download', async () => {
-    try {
-      return { success: true, data: await downloadUpdate() }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('app-update:install', () => {
-    try {
-      quitAndInstallUpdate()
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-
-  // IPC test
-  ipcMain.on('ping', () => Logger.debug('pong'))
-  const isPersistedRendererSettingKey = (key: unknown): key is string =>
-    typeof key === 'string' && (key.startsWith('player.') || key.startsWith('ui.'))
-  ipcMain.on('database:save-setting-sync', (event, request: { key?: unknown; value?: unknown }) => {
-    if (!isPersistedRendererSettingKey(request?.key)) {
-      event.returnValue = { success: false, error: 'Invalid setting key' }
-      return
-    }
-    try {
-      setAppSetting(request.key, request.value)
-      event.returnValue = { success: true }
-    } catch (error) {
-      event.returnValue = {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    }
-  })
-  ipcMain.on('database:get-setting-sync', (event, key: unknown) => {
-    if (!isPersistedRendererSettingKey(key)) {
-      event.returnValue = { success: false, error: 'Invalid setting key' }
-      return
-    }
-    try {
-      event.returnValue = { success: true, data: getAppSetting(key) }
-    } catch (error) {
-      event.returnValue = {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    }
-  })
-  ipcMain.handle('window:command', (event, command: string) => {
-    const window = BrowserWindow.fromWebContents(event.sender)
-    if (!window) return { maximized: false }
-
-    if (command === 'minimize') window.minimize()
-    if (command === 'toggle-maximize') {
-      if (window.isMaximized()) window.unmaximize()
-      else window.maximize()
-    }
-    if (command === 'close') window.close()
-
-    return { maximized: window.isMaximized() }
-  })
-  ipcMain.handle('library:show-song-in-folder', async (_event, songId: unknown) => {
-    if (!Number.isInteger(songId)) return { success: false, error: 'Invalid song id' }
-    const audioPath = getSong(songId as number)?.audio
-    if (!audioPath || !existsSync(audioPath)) {
-      return { success: false, error: 'Song file no longer exists locally' }
-    }
-    shell.showItemInFolder(audioPath)
-    return { success: true }
-  })
-  ipcMain.handle('lyrics:open-in-editor', async (_event, request: unknown) => {
-    const value = request as { songId?: unknown; lyrics?: unknown; lyricFormat?: unknown }
-    if (!Number.isInteger(value?.songId)) return { success: false, error: 'Invalid song id' }
-    if (typeof value.lyrics !== 'string' || value.lyrics.length > 1_000_000)
-      return { success: false, error: 'Invalid lyrics' }
-    const song = getSong(value.songId as number)
-    if (!song) return { success: false, error: 'Song not found' }
-
-    let audioPath = song.audio
-    if (!existsSync(audioPath) && song.sourceId) {
-      try {
-        audioPath = await cacheRemoteSong(song.id)
-      } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : String(error) }
-      }
-    }
-    if (!existsSync(audioPath)) return { success: false, error: 'Song file is unavailable' }
-
-    const payloadPath = join(app.getPath('temp'), `lyric-timeline-${randomUUID()}.json`)
-    const payload = {
-      version: 1,
-      audioPath,
-      title: song.title,
-      artist: song.artist || '',
-      album: song.album || '',
-      lyrics: value.lyrics,
-      ...(typeof value.lyricFormat === 'string' ? { lyricFormat: value.lyricFormat } : {})
-    }
-    try {
-      await fs.writeFile(payloadPath, JSON.stringify(payload), { encoding: 'utf8', flag: 'wx' })
-      await shell.openExternal(`lyric-timeline://open?payload=${encodeURIComponent(payloadPath)}`)
-      setTimeout(() => void fs.unlink(payloadPath).catch(() => undefined), 60_000)
-      return { success: true }
-    } catch (error) {
-      await fs.unlink(payloadPath).catch(() => undefined)
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
-    const value = config as { type?: unknown; baseUrl?: unknown; user?: unknown; secret?: unknown }
-    if (
-      (value?.type !== 'navidrome' && value?.type !== 'jellyfin') ||
-      typeof value?.baseUrl !== 'string' ||
-      typeof value.user !== 'string' ||
-      typeof value.secret !== 'string'
-    ) {
-      return { success: false, error: 'Invalid remote source configuration' }
-    }
-    try {
-      return {
-        success: true,
-        data: await testRemoteSource(
-          value as { type: 'navidrome' | 'jellyfin'; baseUrl: string; user: string; secret: string }
-        )
-      }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('remote-source:choose-cache-directory', async () => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] })
-    return result.canceled ? { success: false } : { success: true, data: result.filePaths[0] }
-  })
-  ipcMain.handle('remote-source:default-cache-directory', () => ({
-    success: true,
-    data: join(getDataPath(), 'cache')
-  }))
-  ipcMain.handle('remote-source:cache-size', async (_event, directory: unknown) => {
-    if (typeof directory !== 'string' || !existsSync(directory)) return { success: true, data: 0 }
-    const sizeOf = async (target: string): Promise<number> => {
-      const entries = await fs.readdir(target, { withFileTypes: true })
-      let total = 0
-      for (const entry of entries) {
-        const child = join(target, entry.name)
-        if (entry.isDirectory()) total += await sizeOf(child)
-        else if (entry.isFile()) total += (await fs.stat(child)).size
-      }
-      return total
-    }
-    try {
-      return { success: true, data: await sizeOf(directory) }
-    } catch {
-      return { success: true, data: 0 }
-    }
-  })
-  ipcMain.handle('remote-source:sync', async (_event, sourceId: unknown) => {
-    if (!Number.isInteger(sourceId)) return { success: false, error: 'Invalid source id' }
-    try {
-      return { success: true, data: await syncRemoteSource(sourceId as number) }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('remote-source:cache-song', async (_event, songId: unknown) => {
-    if (!Number.isInteger(songId)) return { success: false, error: 'Invalid song id' }
-    try {
-      return { success: true, data: await cacheRemoteSong(songId as number) }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
-    }
-  })
-  ipcMain.handle('mini-player:enter', () => {
-    const mini = createMiniPlayerWindow()
-    mainWindow?.hide()
-    mini.show()
-    mini.focus()
-    if (!mini.webContents.isLoading()) mainWindow?.webContents.send('mini-player:request-state')
-    return { success: true }
-  })
-  ipcMain.handle('mini-player:restore', () => {
-    miniWindow?.hide()
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.show()
-      mainWindow.focus()
-    }
-    return { success: true }
-  })
-  ipcMain.on('mini-player:ready', () => mainWindow?.webContents.send('mini-player:request-state'))
-  ipcMain.on('mini-player:update', (_event, data: unknown) => {
-    miniWindow?.webContents.send('mini-player:update', data)
-  })
-  ipcMain.on('mini-player:action', (_event, action: 'previous' | 'toggle' | 'next') => {
-    mainWindow?.webContents.send('mini-player:action', action)
-  })
-  ipcMain.handle('desktop-lyrics:open', () => {
-    const window = createDesktopLyricsWindow()
-    window.showInactive()
-    return { success: true }
-  })
-  ipcMain.handle('desktop-lyrics:close', () => {
-    desktopLyricsWindow?.close()
-    return { success: true }
-  })
-  ipcMain.on('desktop-lyrics:ready', () =>
-    mainWindow?.webContents.send('desktop-lyrics:request-state')
-  )
-  ipcMain.on('desktop-lyrics:update', (_event, data: unknown) =>
-    desktopLyricsWindow?.webContents.send('desktop-lyrics:update', data)
-  )
-  ipcMain.on('desktop-lyrics:sync-font-size', (_event, fontSize: unknown) => {
-    if (typeof fontSize !== 'number' || !Number.isFinite(fontSize)) return
-    mainWindow?.webContents.send(
-      'desktop-lyrics:font-size-changed',
-      Math.max(24, Math.min(64, Math.round(fontSize)))
-    )
-  })
-  ipcMain.on('desktop-lyrics:action', (_event, action: 'previous' | 'toggle' | 'next') =>
-    mainWindow?.webContents.send('desktop-lyrics:action', action)
-  )
-  ipcMain.on('desktop-lyrics:set-locked', (_event, locked: unknown) => {
-    if (!desktopLyricsWindow) return
-    desktopLyricsWindow.setIgnoreMouseEvents(locked === true, { forward: true })
-  })
-  ipcMain.on(
-    'desktop-lyrics:resize-for-font',
-    (_event, fontSize: unknown, preserveSavedBounds: unknown) => {
-      if (!desktopLyricsWindow || typeof fontSize !== 'number') return
-      if (preserveSavedBounds === true && getAppSetting('window.desktop-lyrics')) {
-        desktopLyricsWindow.webContents.send('desktop-lyrics:bounds', {
-          ...desktopLyricsWindow.getBounds(),
-          syncFontSize: true
+      createDir()
+      initDatabase()
+      setMainLocale(getAppSetting('system.locale'))
+      ipcMain.on('system:set-locale', (_event, locale: unknown) => {
+        if (locale !== 'zh' && locale !== 'en') return
+        setAppSetting('system.locale', locale)
+        setMainLocale(locale)
+      })
+      Logger.registerIpc()
+      Logger.info('[Main] starting application', {
+        version: app.getVersion(),
+        platform: process.platform,
+        arch: process.arch,
+        packaged: app.isPackaged
+      })
+      migrateSourceSecrets()
+      registerDatabaseIpcHandlers()
+      registerScanIpcHandlers()
+      registerLyricsIpcHandlers()
+      registerFontIpcHandlers()
+      registerMetadataIpcHandlers()
+      registerFileIpcHandlers()
+      registerDownloadIpcHandlers()
+      createTray()
+      ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
+        return logOperation('[IPC] system:set-close-to-tray', { enabled }, () => {
+          setAppSetting('system.close-to-tray', enabled === true)
+          return { success: true }
         })
-        return
-      }
-      const bounds = desktopLyricsWindow.getBounds()
-      const width = Math.max(420, Math.min(1120, Math.round(760 + (fontSize - 34) * 11)))
-      const height = Math.max(
-        DESKTOP_LYRICS_MIN_HEIGHT,
-        Math.min(360, Math.ceil(Math.max(fontSize * 3.75 + 34, fontSize * 2.6 + 74.4)))
+      })
+      ipcMain.on('window:set-traffic-light-visible', (_event, visible: boolean) =>
+        setPlayerWindowControlsVisible(visible)
       )
-      desktopLyricsWindow.setBounds({
-        x: Math.round(bounds.x - (width - bounds.width) / 2),
-        y: bounds.y,
-        width,
-        height
+      ipcMain.handle('system:set-auto-start', (_event, enabled: boolean) => {
+        return logOperation('[IPC] system:set-auto-start', { enabled }, () => {
+          app.setLoginItemSettings({ openAtLogin: enabled === true })
+          setAppSetting('system.auto-start', enabled === true)
+          return { success: true }
+        })
+      })
+      ipcMain.handle('system:get-mica-state', () => {
+        const available = supportsWindowsMica()
+        return {
+          success: true,
+          data: { available, enabled: available && getAppSetting('window.mica-enabled') === true }
+        }
+      })
+      ipcMain.handle('system:set-mica-enabled', (_event, enabled: boolean) => {
+        return logOperation('[IPC] system:set-mica-enabled', { enabled }, () => {
+          const active = setWindowsMica(enabled === true)
+          if (supportsWindowsMica()) setAppSetting('window.mica-enabled', active)
+          return { success: true, data: { available: supportsWindowsMica(), enabled: active } }
+        })
+      })
+      ipcMain.on(
+        'tray:update',
+        (_event, data: { title?: string; artist?: string; isPlaying?: boolean }) => {
+          trayTrack = {
+            title: data.title || '',
+            artist: data.artist || '',
+            isPlaying: data.isPlaying === true
+          }
+          updateTrayMenu()
+        }
+      )
+      ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
+        return logOperation(
+          '[IPC] shortcuts:register-global',
+          { actions: shortcuts && typeof shortcuts === 'object' ? Object.keys(shortcuts) : [] },
+          () => {
+            try {
+              const failed = registerGlobalShortcuts(
+                shortcuts && typeof shortcuts === 'object'
+                  ? (shortcuts as Partial<Record<ShortcutAction, string>>)
+                  : {}
+              )
+              return { success: true, data: { failed } }
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+              }
+            }
+          }
+        )
+      })
+      ipcMain.handle('shortcuts:unregister-global', () => {
+        return logOperation('[IPC] shortcuts:unregister-global', {}, () => {
+          globalShortcut.unregisterAll()
+          return { success: true }
+        })
+      })
+      registerMediaProtocol()
+      initializeUpdater()
+      ipcMain.handle('app-update:status', () => ({ success: true, data: getUpdateStatus() }))
+      ipcMain.handle('app-update:check', async () => {
+        return logOperation('[IPC] app-update:check', {}, async () => {
+          try {
+            return { success: true, data: await checkForUpdates() }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('app-update:download', async () => {
+        return logOperation('[IPC] app-update:download', {}, async () => {
+          try {
+            return { success: true, data: await downloadUpdate() }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('app-update:install', () => {
+        return logOperation('[IPC] app-update:install', {}, () => {
+          try {
+            quitAndInstallUpdate()
+            return { success: true }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+
+      // IPC test
+      ipcMain.on('ping', () => Logger.debug('pong'))
+      const isPersistedRendererSettingKey = (key: unknown): key is string =>
+        typeof key === 'string' && (key.startsWith('player.') || key.startsWith('ui.'))
+      ipcMain.on(
+        'database:save-setting-sync',
+        (event, request: { key?: unknown; value?: unknown }) => {
+          if (!isPersistedRendererSettingKey(request?.key)) {
+            event.returnValue = { success: false, error: t('invalidSettingKey') }
+            return
+          }
+          try {
+            setAppSetting(request.key, request.value)
+            event.returnValue = { success: true }
+          } catch (error) {
+            Logger.error(
+              '[Settings] synchronous save failed',
+              { key: request.key },
+              logError(error)
+            )
+            event.returnValue = {
+              success: false,
+              error: error instanceof Error ? error.message : String(error)
+            }
+          }
+        }
+      )
+      ipcMain.on('database:get-setting-sync', (event, key: unknown) => {
+        if (!isPersistedRendererSettingKey(key)) {
+          event.returnValue = { success: false, error: t('invalidSettingKey') }
+          return
+        }
+        try {
+          event.returnValue = { success: true, data: getAppSetting(key) }
+        } catch (error) {
+          Logger.error('[Settings] synchronous read failed', { key }, logError(error))
+          event.returnValue = {
+            success: false,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }
+      })
+      ipcMain.handle('window:command', (event, command: string) => {
+        return logOperation('[IPC] window:command', { command, windowId: event.sender.id }, () => {
+          const window = BrowserWindow.fromWebContents(event.sender)
+          if (!window) return { maximized: false }
+
+          if (command === 'minimize') window.minimize()
+          if (command === 'toggle-maximize') {
+            if (window.isMaximized()) window.unmaximize()
+            else window.maximize()
+          }
+          if (command === 'close') window.close()
+
+          return { maximized: window.isMaximized() }
+        })
+      })
+      ipcMain.handle('library:show-song-in-folder', async (_event, songId: unknown) => {
+        return logOperation('[IPC] library:show-song-in-folder', { songId }, async () => {
+          if (!Number.isInteger(songId)) return { success: false, error: t('invalidSongId') }
+          const audioPath = getSong(songId as number)?.audio
+          if (!audioPath || !existsSync(audioPath)) {
+            return { success: false, error: t('songFileRemoved') }
+          }
+          shell.showItemInFolder(audioPath)
+          return { success: true }
+        })
+      })
+      ipcMain.handle('lyrics:open-in-editor', async (_event, request: unknown) => {
+        return logOperation('[IPC] lyrics:open-in-editor', logParams(request), async () => {
+          const value = request as { songId?: unknown; lyrics?: unknown; lyricFormat?: unknown }
+          if (!Number.isInteger(value?.songId)) return { success: false, error: t('invalidSongId') }
+          if (typeof value.lyrics !== 'string' || value.lyrics.length > 1_000_000)
+            return { success: false, error: t('invalidLyrics') }
+          const song = getSong(value.songId as number)
+          if (!song) return { success: false, error: t('songNotFound') }
+
+          let audioPath = song.audio
+          if (!existsSync(audioPath) && song.sourceId) {
+            try {
+              audioPath = await cacheRemoteSong(song.id)
+            } catch (error) {
+              return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+              }
+            }
+          }
+          if (!existsSync(audioPath)) return { success: false, error: t('songFileUnavailable') }
+
+          const payloadPath = join(app.getPath('temp'), `lyric-timeline-${randomUUID()}.json`)
+          const payload = {
+            version: 1,
+            audioPath,
+            title: song.title,
+            artist: song.artist || '',
+            album: song.album || '',
+            lyrics: value.lyrics,
+            ...(typeof value.lyricFormat === 'string' ? { lyricFormat: value.lyricFormat } : {})
+          }
+          try {
+            await fs.writeFile(payloadPath, JSON.stringify(payload), {
+              encoding: 'utf8',
+              flag: 'wx'
+            })
+            await shell.openExternal(
+              `lyric-timeline://open?payload=${encodeURIComponent(payloadPath)}`
+            )
+            setTimeout(() => void fs.unlink(payloadPath).catch(() => undefined), 60_000)
+            return { success: true }
+          } catch (error) {
+            await fs.unlink(payloadPath).catch(() => undefined)
+            Logger.error(
+              '[Lyrics IPC] open editor failed',
+              { songId: song.id, audioPath, payloadPath },
+              logError(error)
+            )
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
+        return logOperation('[IPC] remote-source:test', {}, async () => {
+          const value = config as {
+            type?: unknown
+            baseUrl?: unknown
+            user?: unknown
+            secret?: unknown
+          }
+          if (
+            (value?.type !== 'navidrome' && value?.type !== 'jellyfin') ||
+            typeof value?.baseUrl !== 'string' ||
+            typeof value.user !== 'string' ||
+            typeof value.secret !== 'string'
+          ) {
+            return { success: false, error: t('invalidSourceConfig') }
+          }
+          try {
+            return {
+              success: true,
+              data: await testRemoteSource(
+                value as {
+                  type: 'navidrome' | 'jellyfin'
+                  baseUrl: string
+                  user: string
+                  secret: string
+                }
+              )
+            }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('remote-source:choose-cache-directory', async () => {
+        return logOperation(
+          '[IPC] remote-source:choose-cache-directory',
+          {},
+          async () => {
+            const result = await dialog.showOpenDialog({
+              properties: ['openDirectory', 'createDirectory']
+            })
+            return result.canceled
+              ? { success: false }
+              : { success: true, data: result.filePaths[0] }
+          },
+          { cancellationExpected: true }
+        )
+      })
+      ipcMain.handle('remote-source:default-cache-directory', () => ({
+        success: true,
+        data: join(getDataPath(), 'cache')
+      }))
+      ipcMain.handle('remote-source:cache-size', async (_event, directory: unknown) => {
+        if (typeof directory !== 'string' || !existsSync(directory))
+          return { success: true, data: 0 }
+        const sizeOf = async (target: string): Promise<number> => {
+          const entries = await fs.readdir(target, { withFileTypes: true })
+          let total = 0
+          for (const entry of entries) {
+            const child = join(target, entry.name)
+            if (entry.isDirectory()) total += await sizeOf(child)
+            else if (entry.isFile()) total += (await fs.stat(child)).size
+          }
+          return total
+        }
+        try {
+          return { success: true, data: await sizeOf(directory) }
+        } catch (error) {
+          Logger.warn('[Remote] cache size calculation failed', { directory }, logError(error))
+          return { success: true, data: 0 }
+        }
+      })
+      ipcMain.handle('remote-source:sync', async (_event, sourceId: unknown) => {
+        return logOperation('[IPC] remote-source:sync', { sourceId }, async () => {
+          if (!Number.isInteger(sourceId)) return { success: false, error: t('invalidSourceId') }
+          try {
+            return { success: true, data: await syncRemoteSource(sourceId as number) }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('remote-source:cache-song', async (_event, songId: unknown) => {
+        return logOperation('[IPC] remote-source:cache-song', { songId }, async () => {
+          if (!Number.isInteger(songId)) return { success: false, error: t('invalidSongId') }
+          try {
+            return { success: true, data: await cacheRemoteSong(songId as number) }
+          } catch (error) {
+            return { success: false, error: error instanceof Error ? error.message : String(error) }
+          }
+        })
+      })
+      ipcMain.handle('mini-player:enter', () => {
+        return logOperation('[IPC] mini-player:enter', {}, () => {
+          const mini = createMiniPlayerWindow()
+          mainWindow?.hide()
+          mini.show()
+          mini.focus()
+          if (!mini.webContents.isLoading())
+            mainWindow?.webContents.send('mini-player:request-state')
+          return { success: true }
+        })
+      })
+      ipcMain.handle('mini-player:restore', () => {
+        return logOperation('[IPC] mini-player:restore', {}, () => {
+          miniWindow?.hide()
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show()
+            mainWindow.focus()
+          }
+          return { success: true }
+        })
+      })
+      ipcMain.on('mini-player:ready', () =>
+        mainWindow?.webContents.send('mini-player:request-state')
+      )
+      ipcMain.on('mini-player:update', (_event, data: unknown) => {
+        miniWindow?.webContents.send('mini-player:update', data)
+      })
+      ipcMain.on('mini-player:action', (_event, action: 'previous' | 'toggle' | 'next') => {
+        mainWindow?.webContents.send('mini-player:action', action)
+      })
+      ipcMain.handle('desktop-lyrics:open', () => {
+        return logOperation('[IPC] desktop-lyrics:open', {}, () => {
+          const window = createDesktopLyricsWindow()
+          window.showInactive()
+          return { success: true }
+        })
+      })
+      ipcMain.handle('desktop-lyrics:close', () => {
+        return logOperation('[IPC] desktop-lyrics:close', {}, () => {
+          desktopLyricsWindow?.close()
+          return { success: true }
+        })
+      })
+      ipcMain.on('desktop-lyrics:ready', () =>
+        mainWindow?.webContents.send('desktop-lyrics:request-state')
+      )
+      ipcMain.on('desktop-lyrics:update', (_event, data: unknown) =>
+        desktopLyricsWindow?.webContents.send('desktop-lyrics:update', data)
+      )
+      ipcMain.on('desktop-lyrics:sync-font-size', (_event, fontSize: unknown) => {
+        if (typeof fontSize !== 'number' || !Number.isFinite(fontSize)) return
+        mainWindow?.webContents.send(
+          'desktop-lyrics:font-size-changed',
+          Math.max(24, Math.min(64, Math.round(fontSize)))
+        )
+      })
+      ipcMain.on('desktop-lyrics:action', (_event, action: 'previous' | 'toggle' | 'next') =>
+        mainWindow?.webContents.send('desktop-lyrics:action', action)
+      )
+      ipcMain.on('desktop-lyrics:set-locked', (_event, locked: unknown) => {
+        if (!desktopLyricsWindow) return
+        desktopLyricsWindow.setIgnoreMouseEvents(locked === true, { forward: true })
+      })
+      ipcMain.on(
+        'desktop-lyrics:resize-for-font',
+        (_event, fontSize: unknown, preserveSavedBounds: unknown) => {
+          if (!desktopLyricsWindow || typeof fontSize !== 'number') return
+          if (preserveSavedBounds === true && getAppSetting('window.desktop-lyrics')) {
+            desktopLyricsWindow.webContents.send('desktop-lyrics:bounds', {
+              ...desktopLyricsWindow.getBounds(),
+              syncFontSize: true
+            })
+            return
+          }
+          const bounds = desktopLyricsWindow.getBounds()
+          const width = Math.max(420, Math.min(1120, Math.round(760 + (fontSize - 34) * 11)))
+          const height = Math.max(
+            DESKTOP_LYRICS_MIN_HEIGHT,
+            Math.min(360, Math.ceil(Math.max(fontSize * 3.75 + 34, fontSize * 2.6 + 74.4)))
+          )
+          desktopLyricsWindow.setBounds({
+            x: Math.round(bounds.x - (width - bounds.width) / 2),
+            y: bounds.y,
+            width,
+            height
+          })
+        }
+      )
+
+      createWindow()
+
+      // Initialize audio engine after window is created
+      audioEngine = new AudioEngineManager()
+      if (mainWindow && audioEngine.loaded) {
+        registerIpcHandlers(audioEngine, mainWindow)
+        Logger.debug('[Main] audio IPC handlers registered')
+      } else if (mainWindow) {
+        Logger.warn('[Main] Audio engine failed to load — running without audio')
+      }
+
+      Logger.info('[Main] application ready', {
+        audioLoaded: audioEngine.loaded,
+        elapsedMs: Math.round(performance.now() - startupStarted)
+      })
+      app.on('activate', () => {
+        // A hidden close-to-tray window must be restored when the Dock icon is
+        // activated; only create a replacement when no window exists at all.
+        if (BrowserWindow.getAllWindows().length === 0) {
+          createWindow()
+          if (audioEngine?.loaded && mainWindow) {
+            registerIpcHandlers(audioEngine, mainWindow)
+          }
+        } else {
+          showMainWindow()
+        }
       })
     }
   )
-
-  createWindow()
-
-  // Initialize audio engine after window is created
-  audioEngine = new AudioEngineManager()
-  if (mainWindow && audioEngine.loaded) {
-    registerIpcHandlers(audioEngine, mainWindow)
-    Logger.info('[Main] Audio engine initialized and IPC handlers registered')
-  } else if (mainWindow) {
-    Logger.warn('[Main] Audio engine failed to load — running without audio')
-  }
-
-  app.on('activate', () => {
-    // A hidden close-to-tray window must be restored when the Dock icon is
-    // activated; only create a replacement when no window exists at all.
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-      if (audioEngine?.loaded && mainWindow) {
-        registerIpcHandlers(audioEngine, mainWindow)
-      }
-    } else {
-      showMainWindow()
-    }
-  })
-})
+)
 
 // The close-to-tray option is handled by the window's `close` event above.
 // If it is disabled, closing the final window must terminate the app on every
@@ -991,6 +1152,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  Logger.debug('[Main] will quit; flushing settings and closing database')
   isQuitting = true
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()

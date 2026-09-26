@@ -1,3 +1,4 @@
+import { logOperation } from '../service/operationLogger'
 import {
   BrowserWindow,
   dialog,
@@ -28,31 +29,37 @@ export function registerFileIpcHandlers(): void {
   ipcMain.handle(
     'files:export-library',
     async (event, parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>) => {
-      const result = await showSaveDialogFor(event, {
-        defaultPath: `easy-player-backup-${Date.now()}.epb`,
-        filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
+      return logOperation('[IPC] files:export-library', { parts }, async () => {
+        const result = await showSaveDialogFor(event, {
+          defaultPath: `easy-player-backup-${Date.now()}.epb`,
+          filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
+        })
+        if (result.canceled || !result.filePath) return { success: false, cancelled: true }
+        return { success: true, data: exportLibrary(result.filePath, parts) }
       })
-      if (result.canceled || !result.filePath) return { success: false, cancelled: true }
-      return { success: true, data: exportLibrary(result.filePath, parts) }
     }
   )
   ipcMain.handle('files:import-library', async (event) => {
-    const result = await showOpenDialogFor(event, {
-      properties: ['openFile'],
-      filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
-    })
-    if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
-    return {
-      success: true,
-      data: await importLibrary(result.filePaths[0], (current, total) => {
-        if (!event.sender.isDestroyed())
-          event.sender.send('files:import-progress', { current, total })
+    return logOperation('[IPC] files:import-library', {}, async () => {
+      const result = await showOpenDialogFor(event, {
+        properties: ['openFile'],
+        filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
       })
-    }
+      if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
+      return {
+        success: true,
+        data: await importLibrary(result.filePaths[0], (current, total) => {
+          if (!event.sender.isDestroyed())
+            event.sender.send('files:import-progress', { current, total })
+        })
+      }
+    })
   })
   ipcMain.handle('files:recover-moved-songs', async (event) => {
-    const result = await showOpenDialogFor(event, { properties: ['openDirectory'] })
-    if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
-    return { success: true, data: await recoverMovedSongs(result.filePaths[0]) }
+    return logOperation('[IPC] files:recover-moved-songs', {}, async () => {
+      const result = await showOpenDialogFor(event, { properties: ['openDirectory'] })
+      if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
+      return { success: true, data: await recoverMovedSongs(result.filePaths[0]) }
+    })
   })
 }

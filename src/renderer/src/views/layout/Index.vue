@@ -21,6 +21,7 @@ watch(
   () => ui.locale,
   (locale) => {
     i18n.global.locale = locale
+    window.api.system.setLocale(locale)
   },
   { immediate: true }
 )

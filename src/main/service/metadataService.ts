@@ -1,3 +1,4 @@
+import { logError, logOperation } from './operationLogger'
 import path from 'path'
 import { parseFile } from 'music-metadata'
 import { writeMp3Metadata } from './mp3MetadataService'
@@ -51,63 +52,87 @@ export async function writeMetadata(
   fileType: string,
   input: SongMetadata
 ): Promise<boolean> {
-  if (fileType in ['MPEG', 'FLAC', 'M4A', 'AAC', 'UNKNOWN']) {
-    return dispatchMetadata(filePath, fileType, input)
-  }
-  const metadata = await parseFile(filePath).catch(() => null)
-  const codec = metadata?.format.codec || ''
-  const audioType = getAudioType(filePath, codec)
-  return dispatchMetadata(filePath, audioType, input)
+  return logOperation(
+    '[Metadata] writeMetadata',
+    { filePath, fileType, fields: Object.keys(input) },
+    async () => {
+      if (fileType in ['MPEG', 'FLAC', 'M4A', 'AAC', 'UNKNOWN']) {
+        return dispatchMetadata(filePath, fileType, input)
+      }
+      const metadata = await parseFile(filePath).catch((error) => {
+        Logger.debug(
+          '[Metadata] format probe failed; falling back to extension',
+          { filePath },
+          logError(error)
+        )
+        return null
+      })
+      const codec = metadata?.format.codec || ''
+      const audioType = getAudioType(filePath, codec)
+      return dispatchMetadata(filePath, audioType, input)
+    },
+    { successLevel: 'debug', warnOnFalse: true }
+  )
 }
 
 export async function readMetadata(filePath: string): Promise<SongMetadata> {
-  let metadata
-  try {
-    metadata = await parseFile(filePath)
-  } catch (err) {
-    Logger.error('MetadataService: parse Metadata fail: ', err)
-    const ext = filePath.split('.').pop()?.toLowerCase()
-    if (ext === 'm4a' || ext === 'aac') {
-      if (!writeNativeMetadata(filePath, {})) throw err
-      metadata = await parseFile(filePath)
-    } else {
-      Logger.error('MetadataService: parse Metadata fail: Unsupported file extension.')
-      throw err
-    }
-  }
-  const picture = metadata.common.picture?.[0]
+  return logOperation(
+    '[Metadata] readMetadata',
+    { filePath },
+    async () => {
+      let metadata
+      try {
+        metadata = await parseFile(filePath)
+      } catch (err) {
+        const ext = filePath.split('.').pop()?.toLowerCase()
+        if (ext === 'm4a' || ext === 'aac') {
+          Logger.warn(
+            '[Metadata] read failed; attempting native repair',
+            { filePath, extension: ext },
+            logError(err)
+          )
+          if (!writeNativeMetadata(filePath, {})) throw err
+          metadata = await parseFile(filePath)
+        } else {
+          throw err
+        }
+      }
+      const picture = metadata.common.picture?.[0]
 
-  return {
-    title: metadata.common.title,
-    artist: metadata.common.artist,
-    artists: metadata.common.artists,
-    album: metadata.common.album,
-    albumArtist: metadata.common.albumartist,
+      return {
+        title: metadata.common.title,
+        artist: metadata.common.artist,
+        artists: metadata.common.artists,
+        album: metadata.common.album,
+        albumArtist: metadata.common.albumartist,
 
-    trackNumber: metadata.common.track?.no,
-    trackTotal: metadata.common.track?.of,
-    discNumber: metadata.common.disk?.no,
-    discTotal: metadata.common.disk?.of,
+        trackNumber: metadata.common.track?.no,
+        trackTotal: metadata.common.track?.of,
+        discNumber: metadata.common.disk?.no,
+        discTotal: metadata.common.disk?.of,
 
-    genre: metadata.common.genre?.[0],
-    year: metadata.common.year,
+        genre: metadata.common.genre?.[0],
+        year: metadata.common.year,
 
-    composer: metadata.common.composer?.[0],
-    lyricist: metadata.common.lyricist?.[0],
+        composer: metadata.common.composer?.[0],
+        lyricist: metadata.common.lyricist?.[0],
 
-    lyrics: getRawLyricsWithTimestamp(metadata),
+        lyrics: getRawLyricsWithTimestamp(metadata),
 
-    duration: metadata.format.duration,
-    bitrate: metadata.format.bitrate,
-    sampleRate: metadata.format.sampleRate,
-    bitsPerSample: metadata.format.bitsPerSample,
-    channels: metadata.format.numberOfChannels,
-    codec: metadata.format.codec,
-    container: metadata.format.container,
+        duration: metadata.format.duration,
+        bitrate: metadata.format.bitrate,
+        sampleRate: metadata.format.sampleRate,
+        bitsPerSample: metadata.format.bitsPerSample,
+        channels: metadata.format.numberOfChannels,
+        codec: metadata.format.codec,
+        container: metadata.format.container,
 
-    cover: picture?.data ?? null,
-    coverMimeType: picture?.format
-  }
+        cover: picture?.data ?? null,
+        coverMimeType: picture?.format
+      }
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
 
 function getAudioType(
@@ -153,11 +178,10 @@ async function dispatchMetadata(
     if (format === 'MPEG') {
       return await writeMp3Metadata(filePath, input)
     }
+    Logger.warn('[Metadata] write rejected: unsupported format', { filePath, format })
     return false
   } catch (err) {
-    Logger.error(
-      `MetadataService: file: ${filePath}, format: ${format}, dispatchMetadata fail: ${err}`
-    )
+    Logger.error('[Metadata] dispatch write failed', { filePath, format }, logError(err))
     return false
   }
 }

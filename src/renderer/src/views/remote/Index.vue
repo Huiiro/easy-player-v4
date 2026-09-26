@@ -13,6 +13,7 @@ interface MusicSource {
   baseUrl: string | null
   user: string | null
   secret: string | null
+  credentialError?: 'unavailable' | 'decrypt-failed'
   status: string | null
   importedCount: number
   songCount: number
@@ -48,13 +49,17 @@ const filteredSources = computed(() =>
     : sources.value.filter((source) => source.type === providerFilter.value)
 )
 
-async function load(): Promise<void> {
+async function load(): Promise<boolean> {
   const sourceResult = await window.api.database.command('listSources')
-  if (sourceResult.success) sources.value = sourceResult.data as MusicSource[]
+  if (!sourceResult.success) {
+    error(sourceResult.error || t('remote.loadFailed'))
+    return false
+  }
+  sources.value = sourceResult.data as MusicSource[]
+  return true
 }
 async function refreshSources(): Promise<void> {
-  await load()
-  success(t('remote.refreshed'))
+  if (await load()) success(t('remote.refreshed'))
 }
 function openCreate(): void {
   editing.value = null
@@ -95,7 +100,17 @@ async function saveSource(): Promise<void> {
   await load()
   success(t('remote.saved'))
 }
-async function test(source: MusicSource | null = editing.value): Promise<void> {
+async function test(source: MusicSource | null = null): Promise<void> {
+  if (source?.credentialError) {
+    error(
+      t(
+        source.credentialError === 'unavailable'
+          ? 'remote.credentialsUnavailable'
+          : 'remote.credentialsNeedPassword'
+      )
+    )
+    return
+  }
   const config: { type: 'navidrome' | 'jellyfin'; baseUrl: string; user: string; secret: string } =
     source
       ? {
@@ -110,6 +125,10 @@ async function test(source: MusicSource | null = editing.value): Promise<void> {
           user: form.value.user,
           secret: form.value.secret
         }
+  if (!config.baseUrl || !config.user || !config.secret) {
+    error(t('remote.connectionRequired'))
+    return
+  }
   testing.value = true
   try {
     const response = await window.api.remoteSource.test(config)
@@ -127,6 +146,16 @@ async function test(source: MusicSource | null = editing.value): Promise<void> {
   }
 }
 async function sync(source: MusicSource): Promise<void> {
+  if (source.credentialError) {
+    error(
+      t(
+        source.credentialError === 'unavailable'
+          ? 'remote.credentialsUnavailable'
+          : 'remote.credentialsNeedPassword'
+      )
+    )
+    return
+  }
   syncingSourceId.value = source.id
   try {
     const response = await window.api.remoteSource.sync(source.id)
@@ -225,6 +254,15 @@ onMounted(() => void load())
               </span>
             </div>
             <p class="mt-1 truncate text-sm text-text-l">{{ source.baseUrl }}</p>
+            <p v-if="source.credentialError" class="mt-2 text-sm text-amber-500" role="status">
+              {{
+                t(
+                  source.credentialError === 'unavailable'
+                    ? 'remote.credentialsUnavailable'
+                    : 'remote.credentialsNeedPassword'
+                )
+              }}
+            </p>
             <p class="mt-2 text-xs text-text-l">
               {{
                 t('remote.sourceStats', {
@@ -245,7 +283,7 @@ onMounted(() => void load())
             </button>
             <button
               class="btn-hover flex items-center gap-1 px-2 py-1 text-sm"
-              :disabled="testing"
+              :disabled="testing || Boolean(source.credentialError)"
               @click="test(source)"
             >
               <svg-icon name="common-connect" class-name="w-[12px] h-[12px]" />
@@ -253,7 +291,7 @@ onMounted(() => void load())
             </button>
             <button
               class="btn-hover flex items-center gap-1 px-2 py-1 text-sm"
-              :disabled="syncingSourceId === source.id"
+              :disabled="syncingSourceId === source.id || Boolean(source.credentialError)"
               @click="sync(source)"
             >
               <svg-icon name="common-refresh" class-name="w-[12px] h-[12px]" />
@@ -304,6 +342,15 @@ onMounted(() => void load())
       <label class="block text-sm">
         {{ t('remote.password') }}
         <input v-model="form.secret" class="input-base mt-1 h-9 w-full" type="password" />
+        <p v-if="editing?.credentialError" class="mt-2 text-sm text-amber-500" role="status">
+          {{
+            t(
+              editing.credentialError === 'unavailable'
+                ? 'remote.credentialsUnavailable'
+                : 'remote.credentialsNeedPassword'
+            )
+          }}
+        </p>
       </label>
     </div>
     <template #footer>

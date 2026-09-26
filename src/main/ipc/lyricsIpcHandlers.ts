@@ -1,3 +1,6 @@
+import { t } from '../i18n'
+import { logError, logOperation, logParams } from '../service/operationLogger'
+import { Logger } from '../service/loggerService'
 import { ipcMain } from 'electron'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
@@ -210,29 +213,43 @@ export function registerLyricsIpcHandlers(): void {
   ipcMain.handle(
     'lyrics:load-source',
     async (_event, request: { audioPath: string; source: LyricsSource }) => {
-      try {
-        if (!request?.audioPath || request.source === 'network')
-          return { success: true, data: null }
-        if (request.source === 'local')
-          return { success: true, data: readLocalLyrics(request.audioPath) }
-        const metadata = await parseFile(request.audioPath, { skipCovers: true })
-        return { success: true, data: embeddedLyricsToPayload(metadata.common.lyrics) }
-      } catch (error) {
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unable to load lyrics'
+      return logOperation('[IPC] lyrics:load-source', logParams(request), async () => {
+        try {
+          if (!request?.audioPath || request.source === 'network')
+            return { success: true, data: null }
+          if (request.source === 'local')
+            return { success: true, data: readLocalLyrics(request.audioPath) }
+          const metadata = await parseFile(request.audioPath, { skipCovers: true })
+          return { success: true, data: embeddedLyricsToPayload(metadata.common.lyrics) }
+        } catch (error) {
+          Logger.error('[Lyrics IPC] load source failed', logParams(request), logError(error))
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : t('lyricsLoadFailed')
+          }
         }
-      }
+      })
     }
   )
   ipcMain.handle('lyrics:search-network', async (_event, request: LyricSearchRequest) => {
-    try {
-      return { success: true, data: await searchNetworkLyrics(request) }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unable to search network lyrics'
+    return logOperation(
+      '[IPC] lyrics:search-network',
+      { titleLength: request?.title?.length, hasArtist: Boolean(request?.artist) },
+      async () => {
+        try {
+          return { success: true, data: await searchNetworkLyrics(request) }
+        } catch (error) {
+          Logger.error(
+            '[Lyrics IPC] network search failed',
+            { titleLength: request?.title?.length },
+            logError(error)
+          )
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : t('lyricsSearchFailed')
+          }
+        }
       }
-    }
+    )
   })
 }

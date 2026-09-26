@@ -400,6 +400,7 @@ declare global {
         onAction(callback: (action: string) => void): () => void
       }
       system: {
+        setLocale(locale: 'zh' | 'en'): void
         setCloseToTray(enabled: boolean): Promise<{ success: boolean }>
         setAutoStart(enabled: boolean): Promise<{ success: boolean }>
         getMicaState(): Promise<{

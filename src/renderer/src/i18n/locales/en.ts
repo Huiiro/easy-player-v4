@@ -236,6 +236,11 @@ export default {
     serverUrl: 'Server URL',
     username: 'Username',
     password: 'Password',
+    loadFailed: 'Unable to load remote sources',
+    credentialsNeedPassword:
+      'The saved password cannot be read. Edit this source and enter the password again.',
+    credentialsUnavailable:
+      'System credential storage is temporarily unavailable. Restore access and refresh the source list.',
     connectionRequired: 'Complete the remote source connection details',
     saveFailed: 'Unable to save source',
     saved: 'Source saved',

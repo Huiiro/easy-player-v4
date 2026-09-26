@@ -1,3 +1,6 @@
+import { t } from '../i18n'
+import { logOperation } from '../service/operationLogger'
+import { Logger } from '../service/loggerService'
 import Database from 'better-sqlite3'
 import { join } from 'node:path'
 import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2, schemaV3, schemaV4 } from './schema'
@@ -11,64 +14,93 @@ function databasePath(overridePath?: string): string {
 }
 
 function migrate(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_migration (
-      version INTEGER PRIMARY KEY,
-      applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-  `)
+  return logOperation(
+    '[Database] migrate',
+    { targetVersion: DATABASE_SCHEMA_VERSION },
+    () => {
+      db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_migration (
+        version INTEGER PRIMARY KEY,
+        applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `)
 
-  const currentVersion = db
-    .prepare('SELECT MAX(version) AS version FROM schema_migration')
-    .get() as { version: number | null }
-  const version = currentVersion.version ?? 0
-  if (version >= DATABASE_SCHEMA_VERSION) return
+      const currentVersion = db
+        .prepare('SELECT MAX(version) AS version FROM schema_migration')
+        .get() as { version: number | null }
+      const version = currentVersion.version ?? 0
+      if (version >= DATABASE_SCHEMA_VERSION) return
+      Logger.debug('[Database] applying schema migration', {
+        fromVersion: version,
+        toVersion: DATABASE_SCHEMA_VERSION
+      })
 
-  db.transaction(() => {
-    if (version < 1) {
-      db.exec(schemaV1)
-      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (1)').run()
-    }
-    if (version < 2) {
-      db.exec(schemaV2)
-      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (2)').run()
-    }
-    if (version < 3) {
-      db.exec(schemaV3)
-      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (3)').run()
-    }
-    if (version < 4) {
-      db.exec(schemaV4)
-      db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (4)').run()
-    }
-  })()
+      db.transaction(() => {
+        if (version < 1) {
+          db.exec(schemaV1)
+          db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (1)').run()
+        }
+        if (version < 2) {
+          db.exec(schemaV2)
+          db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (2)').run()
+        }
+        if (version < 3) {
+          db.exec(schemaV3)
+          db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (3)').run()
+        }
+        if (version < 4) {
+          db.exec(schemaV4)
+          db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (4)').run()
+        }
+      })()
+      Logger.info('[Database] schema migrated', {
+        fromVersion: version,
+        toVersion: DATABASE_SCHEMA_VERSION
+      })
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
 
 /** Opens the local library database and applies all pending migrations. */
 export function initDatabase(overridePath?: string): Database.Database {
-  if (database) return database
+  return logOperation(
+    '[Database] initialize',
+    { path: databasePath(overridePath) },
+    () => {
+      if (database) return database
 
-  const db = new Database(databasePath(overridePath))
-  try {
-    db.pragma('foreign_keys = ON')
-    db.pragma('journal_mode = WAL')
-    db.pragma('busy_timeout = 5000')
-    migrate(db)
-    database = db
-    return db
-  } catch (error) {
-    db.close()
-    throw error
-  }
+      const db = new Database(databasePath(overridePath))
+      try {
+        db.pragma('foreign_keys = ON')
+        db.pragma('journal_mode = WAL')
+        db.pragma('busy_timeout = 5000')
+        migrate(db)
+        database = db
+        return db
+      } catch (error) {
+        db.close()
+        throw error
+      }
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
 
 export function getDatabase(): Database.Database {
-  if (!database) throw new Error('Database has not been initialized')
+  if (!database) throw new Error(t('databaseNotReady'))
   return database
 }
 
 export function closeDatabase(): void {
-  if (!database) return
-  database.close()
-  database = undefined
+  return logOperation(
+    '[Database] close',
+    {},
+    () => {
+      if (!database) return
+      database.close()
+      database = undefined
+    },
+    { successLevel: 'debug', warnOnFalse: false }
+  )
 }
