@@ -74,6 +74,44 @@ let motionRaf = 0
 let motionTime = 0
 let expectedScroll = 0
 let resizeObserver: ResizeObserver | undefined
+let lineVisibilityObserver: IntersectionObserver | undefined
+const visibleLineIndices = shallowRef(new Set<number>())
+
+function observeVisibleLines(): void {
+  lineVisibilityObserver?.disconnect()
+  visibleLineIndices.value = new Set()
+  const viewport = viewportRef.value
+  if (!viewport || isUnmounted) return
+  const indices = new WeakMap<Element, number>()
+  // Keep the real row heights for seeking and scrolling, but only allocate
+  // filtered/transformed surfaces near the viewport. Include a trailing margin
+  // so spring offsets and fast manual scrolling do not reveal unstyled rows.
+  lineVisibilityObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = new Set(visibleLineIndices.value)
+      for (const entry of entries) {
+        const index = indices.get(entry.target)
+        if (index === undefined) continue
+        const element = entry.target as HTMLElement
+        if (entry.isIntersecting) {
+          visible.add(index)
+          const spring = rowSprings[index]
+          const offset = motionRaf && spring ? expectedScroll - spring.position : 0
+          element.style.setProperty('--scroll-y', `${offset}px`)
+        } else {
+          visible.delete(index)
+          element.style.removeProperty('--scroll-y')
+        }
+      }
+      visibleLineIndices.value = visible
+    },
+    { root: viewport, rootMargin: '300px 0px' }
+  )
+  lineRefs.value.forEach((element, index) => {
+    indices.set(element, index)
+    lineVisibilityObserver!.observe(element)
+  })
+}
 const trackRef = ref<HTMLElement>()
 const enableAutoScroll = computed(() => {
   return !isUserScrolling.value
@@ -184,6 +222,8 @@ async function load(): Promise<void> {
   cancelAnimationFrame(sweepRaf)
   sweepRaf = 0
   sweepLines.clear()
+  lineVisibilityObserver?.disconnect()
+  visibleLineIndices.value = new Set()
   writeScroll(0)
   if (scrollTimer) clearTimeout(scrollTimer)
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -263,7 +303,9 @@ function animateScroll(now: number): void {
       moving = spring.step(dt, frequency, 0.82) || moving
     }
     const element = lineRefs.value[idx]
-    if (element) element.style.setProperty('--scroll-y', `${scrollTop - spring.position}px`)
+    if (element && visibleLineIndices.value.has(idx)) {
+      element.style.setProperty('--scroll-y', `${scrollTop - spring.position}px`)
+    }
   })
   motionRaf = moving ? requestAnimationFrame(animateScroll) : 0
 }
@@ -557,6 +599,10 @@ const getLineStyle = (idx: number) => {
   const blur = Math.min(abs * 1.2, 6)
   const opacity = 1 - Math.min(abs * 0.22, 0.75)
 
+  if (!visibleLineIndices.value.has(idx)) {
+    return { transform: 'none', filter: 'none', opacity }
+  }
+
   if (isUserScrolling.value) {
     return {
       transform: 'none',
@@ -645,6 +691,7 @@ watch(
 )
 
 watch(activeIndices, () => void nextTick(refreshSweepElements), { flush: 'post' })
+watch(lyrics, () => void nextTick(observeVisibleLines), { flush: 'post' })
 
 watch(
   [lyrics, source],
@@ -701,6 +748,7 @@ watch([() => props.currentTime, () => props.isPlaying], updatePlayback, { immedi
 
 onMounted(() => {
   updateAutomaticLyricsMetrics()
+  observeVisibleLines()
   snapToCurrent()
   const viewport = viewportRef.value
   viewport?.addEventListener('scroll', handleScroll, {
@@ -726,6 +774,7 @@ onUnmounted(() => {
   cancelAnimationFrame(sweepRaf)
   sweepLines.clear()
   resizeObserver?.disconnect()
+  lineVisibilityObserver?.disconnect()
   lineRefs.value = []
 })
 </script>
@@ -752,6 +801,7 @@ onUnmounted(() => {
         v-memo="[
           line,
           lineStyles[idx],
+          visibleLineIndices.has(idx),
           activeIndexSet.has(idx),
           ui.showLyricsTranslation,
           ui.showLyricsRomanization,
@@ -760,6 +810,7 @@ onUnmounted(() => {
         ]"
         class="lyric-line group hover:bg-white/2"
         :class="{
+          'lyric-line--offscreen': !visibleLineIndices.has(idx),
           'lyric-line--interlude': !line.untimed && !line.text.trim(),
           'lyric-line--pending-interlude':
             !line.untimed && !line.text.trim() && !activeIndexSet.has(idx),
@@ -874,7 +925,7 @@ onUnmounted(() => {
           <button
             :disabled="line.untimed || !line.text.trim()"
             :aria-label="line.text"
-            class="flex text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded backdrop-blur"
+            class="flex text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded"
             @click.stop="onClickLyric(line.timeMs)"
           >
             ▶
@@ -899,7 +950,6 @@ onUnmounted(() => {
   word-wrap: break-word;
   scroll-behavior: auto;
   scrollbar-width: none;
-  perspective: 1200px;
   height: 100%;
   user-select: none;
   mask-image: linear-gradient(to bottom, transparent 0%, black 12%, black 88%, transparent 100%);
@@ -936,6 +986,11 @@ onUnmounted(() => {
 .lyric-line--interlude {
   max-height: calc(var(--lrc-size) * 2.8 + var(--lrc-padding) * 2);
   overflow: hidden;
+}
+
+.lyric-line--offscreen {
+  /* Release old filter surfaces immediately instead of animating them away. */
+  transition: none;
 }
 
 .lyric-line--background {

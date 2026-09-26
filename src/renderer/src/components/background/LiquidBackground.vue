@@ -48,6 +48,16 @@ let blurredCoverTexture: WebGLTexture | null = null
 let coverTargetLoaded = false
 let coverFade = 0
 let coverLoadToken = 0
+let coverImage: HTMLImageElement | null = null
+
+function cancelCoverLoad(): void {
+  coverLoadToken += 1
+  if (!coverImage) return
+  coverImage.onload = null
+  coverImage.onerror = null
+  coverImage.removeAttribute('src')
+  coverImage = null
+}
 const motion = createLiquidMotion()
 const frameInterval = 1000 / 30
 let vertexBuffer: WebGLBuffer | null = null
@@ -91,6 +101,7 @@ let secondaryColor = colour(props.secondary)
 let tertiaryColor = colour(props.tertiary)
 
 function loadCover(source: string | null): void {
+  cancelCoverLoad()
   if (!gl || !blurredCoverTexture) return
   const token = ++coverLoadToken
   coverTargetLoaded = false
@@ -99,6 +110,7 @@ function loadCover(source: string | null): void {
     return
   }
   const image = new Image()
+  coverImage = image
   image.crossOrigin = 'anonymous'
   image.onload = () => {
     if (!gl || !blurredCoverTexture || token !== coverLoadToken) return
@@ -128,10 +140,15 @@ function loadCover(source: string | null): void {
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 0)
       coverTargetLoaded = false
       console.warn('[FluidBackground] Unable to upload cover texture', error)
+    } finally {
+      if (coverImage === image) cancelCoverLoad()
     }
   }
   image.onerror = () => {
-    if (token === coverLoadToken) coverTargetLoaded = false
+    if (token === coverLoadToken) {
+      coverTargetLoaded = false
+      cancelCoverLoad()
+    }
   }
   image.src = source
 }
@@ -384,6 +401,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  cancelCoverLoad()
   if (frame) cancelAnimationFrame(frame)
   if (resizeTimer) window.clearTimeout(resizeTimer)
   resizeObserver?.disconnect()
@@ -393,6 +411,12 @@ onBeforeUnmount(() => {
     if (vertexBuffer) gl.deleteBuffer(vertexBuffer)
     if (blurredCoverTexture) gl.deleteTexture(blurredCoverTexture)
     if (program) gl.deleteProgram(program)
+    // Deleting individual objects does not release the context's drawing buffers.
+    gl.getExtension('WEBGL_lose_context')?.loseContext()
+  }
+  if (canvas.value) {
+    canvas.value.width = 1
+    canvas.value.height = 1
   }
   vertexBuffer = null
   blurredCoverTexture = null

@@ -380,7 +380,7 @@ function registerMediaProtocol(): void {
       return new Response('Not Found', { status: 404 })
     }
 
-    const size = Math.min(512, Math.max(64, Number(url.searchParams.get('size')) || 0))
+    const size = Math.min(1024, Math.max(64, Number(url.searchParams.get('size')) || 0))
     if (url.hostname === 'cover-thumb' && size) {
       try {
         const thumbnail = await sharp(coverPath)

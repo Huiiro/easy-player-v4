@@ -38,7 +38,10 @@ let collapseTriggeredByPointer = false
 
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
-  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
+  // Share one bounded decode between the cover, palette sampler and background.
+  return cover
+    ? `easy-player-media://cover-thumb?path=${encodeURIComponent(cover)}&size=1024`
+    : null
 })
 const displayedCoverUrl = ref<string | null>(null)
 const trackTitle = computed(
@@ -314,6 +317,7 @@ watch(
       active = false
       image.onload = null
       image.onerror = null
+      image.removeAttribute('src')
     })
     image.crossOrigin = 'anonymous'
     image.onload = () => {
