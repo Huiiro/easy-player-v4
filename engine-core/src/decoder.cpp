@@ -1,6 +1,7 @@
 #include "decoder.h"
 #include "dop_packer.h"
 #include "logger.h"
+#include "ffmpeg_logging.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -155,6 +156,7 @@ struct Decoder::Impl {
 };
 
 Decoder::Decoder() : impl_(std::make_unique<Impl>()) {
+    initialize_ffmpeg_logging();
     impl_->frame = av_frame_alloc();
     impl_->packet = av_packet_alloc();
 }
@@ -166,6 +168,7 @@ Decoder::~Decoder() {
 }
 
 bool Decoder::open(const std::string& file_path) {
+    ScopedFFmpegLogContext log_context(file_path, "open/probe");
     close();
 
     // Verify file exists and is readable (uses wide-char API on Windows)
@@ -174,7 +177,7 @@ bool Decoder::open(const std::string& file_path) {
         return false;
     }
 
-    LOG_INFO("Opening file: " + file_path);
+    LOG_DEBUG("Opening file: " + file_path);
     int ret = avformat_open_input(&impl_->fmt_ctx, file_path.c_str(), nullptr, nullptr);
 
 #ifdef _WIN32
@@ -191,7 +194,7 @@ bool Decoder::open(const std::string& file_path) {
                 WideCharToMultiByte(CP_ACP, 0, wpath.c_str(), -1, &ansi_path[0], alen, nullptr, nullptr);
                 // Remove null terminator
                 if (!ansi_path.empty() && ansi_path.back() == '\0') ansi_path.pop_back();
-                LOG_INFO("Retrying with ANSI path: " + ansi_path);
+                LOG_DEBUG("Retrying with ANSI path: " + ansi_path);
                 ret = avformat_open_input(&impl_->fmt_ctx, ansi_path.c_str(), nullptr, nullptr);
             }
         }
@@ -199,20 +202,21 @@ bool Decoder::open(const std::string& file_path) {
 #endif
 
     if (ret < 0) {
-        LOG_ERROR("avformat_open_input failed [" + av_err_str(ret) + "]: " + file_path);
+        LOG_ERROR("avformat_open_input failed: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) + ", path=" + file_path);
         return false;
     }
 
     ret = avformat_find_stream_info(impl_->fmt_ctx, nullptr);
     if (ret < 0) {
-        LOG_WARN("avformat_find_stream_info incomplete");
+        LOG_WARN("avformat_find_stream_info incomplete: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) + ", path=" + file_path);
     }
 
     // Find best audio stream
     impl_->stream_index = av_find_best_stream(impl_->fmt_ctx, AVMEDIA_TYPE_AUDIO,
                                                -1, -1, nullptr, 0);
     if (impl_->stream_index < 0) {
-        LOG_ERROR("No audio stream found in: " + file_path);
+        LOG_ERROR("No audio stream found: code=" + std::to_string(impl_->stream_index) +
+                  ", error=" + av_err_str(impl_->stream_index) + ", path=" + file_path);
         close();
         return false;
     }
@@ -221,7 +225,8 @@ bool Decoder::open(const std::string& file_path) {
     const AVCodec* codec = avcodec_find_decoder(stream->codecpar->codec_id);
     if (!codec) {
         LOG_ERROR("No decoder found for codec: " +
-                  std::string(avcodec_get_name(stream->codecpar->codec_id)));
+                  std::string(avcodec_get_name(stream->codecpar->codec_id)) + ", path=" + file_path +
+                  ", stream=" + std::to_string(impl_->stream_index));
         close();
         return false;
     }
@@ -232,7 +237,10 @@ bool Decoder::open(const std::string& file_path) {
 
     ret = avcodec_open2(impl_->codec_ctx, codec, nullptr);
     if (ret < 0) {
-        LOG_ERROR("avcodec_open2 failed [" + av_err_str(ret) + "]");
+        LOG_ERROR("avcodec_open2 failed: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) +
+                  ", path=" + file_path + ", codec=" + codec->name +
+                  ", sample_rate=" + std::to_string(impl_->codec_ctx->sample_rate) +
+                  ", channels=" + std::to_string(impl_->codec_ctx->ch_layout.nb_channels));
         close();
         return false;
     }
@@ -270,12 +278,18 @@ bool Decoder::open(const std::string& file_path) {
         av_opt_set_int(impl_->swr_ctx, "phase_shift", 10, 0);
         av_opt_set_double(impl_->swr_ctx, "cutoff", 0.97, 0);
         av_opt_set_int(impl_->swr_ctx, "dither_method", SWR_DITHER_NONE, 0);
-        LOG_INFO("DSD PCM conversion: high-quality decimation " +
+        LOG_DEBUG("DSD PCM conversion: high-quality decimation " +
                  std::to_string(impl_->input_sample_rate) + "Hz -> " +
                  std::to_string(impl_->output_sample_rate) + "Hz (64-tap, no dither)");
     }
-    if (ret < 0 || !impl_->swr_ctx || swr_init(impl_->swr_ctx) < 0) {
-        LOG_ERROR("swr_init failed" + std::string(source_is_dsd ? " for required DSD PCM decimation" : " - falling back to native format"));
+    const int swr_init_result = ret >= 0 && impl_->swr_ctx ? swr_init(impl_->swr_ctx) : ret;
+    if (ret < 0 || !impl_->swr_ctx || swr_init_result < 0) {
+        LOG_ERROR("Swresample initialization failed: alloc_code=" + std::to_string(ret) +
+                  ", init_code=" + std::to_string(swr_init_result) + ", path=" + file_path +
+                  ", input_rate=" + std::to_string(impl_->input_sample_rate) +
+                  ", output_rate=" + std::to_string(impl_->output_sample_rate) +
+                  ", channels=" + std::to_string(impl_->codec_ctx->ch_layout.nb_channels) +
+                  std::string(source_is_dsd ? "; required DSD decimation unavailable" : "; falling back to native format"));
         swr_free(&impl_->swr_ctx);
         if (source_is_dsd) {
             close();
@@ -346,12 +360,12 @@ bool Decoder::open(const std::string& file_path) {
     read_lyrics_metadata(impl_->fmt_ctx->metadata, track_info_.metadata);
     if (track_info_.metadata.lyrics.empty()) read_lyrics_metadata(stream->metadata, track_info_.metadata);
 
-    LOG_INFO("Decoder opened: " + file_path + " [" + track_info_.format + ", " +
+    LOG_DEBUG("Decoder opened: " + file_path + " [" + track_info_.format + ", " +
              std::to_string(track_info_.sample_rate) + "Hz, " +
              std::to_string(track_info_.channels) + "ch, " +
              std::to_string(track_info_.duration_ms) + "ms]");
     if (track_info_.is_dsd) {
-        LOG_INFO("DSD source recognized: " + track_info_.format + " at " +
+        LOG_DEBUG("DSD source recognized: " + track_info_.format + " at " +
                  std::to_string(track_info_.dsd_sample_rate) +
                  "Hz; decoder PCM=" + std::to_string(track_info_.sample_rate) +
                  "Hz; default transport=PCM conversion (Native DSD unavailable; DoP requires explicit compatibility opt-in)");
@@ -382,9 +396,12 @@ void Decoder::close() {
 }
 
 bool Decoder::begin_dop() {
+    ScopedFFmpegLogContext log_context(track_info_.file_path, "begin-dop", impl_->current_pts);
     if (!impl_->fmt_ctx || !impl_->codec_ctx || !impl_->source_is_dsd) return false;
-    if (av_seek_frame(impl_->fmt_ctx, impl_->stream_index, 0, AVSEEK_FLAG_BACKWARD) < 0) {
-        LOG_WARN("DSD DoP: failed to rewind demuxer");
+    const int seek_result = av_seek_frame(impl_->fmt_ctx, impl_->stream_index, 0, AVSEEK_FLAG_BACKWARD);
+    if (seek_result < 0) {
+        LOG_WARN("DSD DoP rewind failed: code=" + std::to_string(seek_result) + ", error=" + av_err_str(seek_result) +
+                 ", path=" + track_info_.file_path + ", stream=" + std::to_string(impl_->stream_index));
         return false;
     }
     avcodec_flush_buffers(impl_->codec_ctx);
@@ -393,13 +410,14 @@ bool Decoder::begin_dop() {
     impl_->dop_marker = 0x05;
     impl_->dop_mode = true;
     impl_->eof = false;
-    LOG_INFO("DSD DoP: raw packet reader prepared (" +
+    LOG_DEBUG("DSD DoP: raw packet reader prepared (" +
              std::string(impl_->dsd_planar ? "planar" : "interleaved") + ", " +
              std::string(impl_->dsd_lsb_first ? "LSB-first" : "MSB-first") + ")");
     return true;
 }
 
 int Decoder::read_dop(uint8_t* output, int max_frames) {
+    ScopedFFmpegLogContext log_context(track_info_.file_path, "read-dop", impl_->current_pts);
     if (!output || max_frames <= 0 || !impl_->dop_mode || !impl_->source_is_dsd) return -1;
     const int channels = track_info_.channels;
     if (channels < 1 || channels > 8) return -1;
@@ -427,11 +445,16 @@ int Decoder::read_dop(uint8_t* output, int max_frames) {
         }
         const int ret = av_read_frame(impl_->fmt_ctx, impl_->packet);
         if (ret == AVERROR_EOF) { impl_->eof = true; break; }
-        if (ret < 0) return frames > 0 ? frames : -1;
+        if (ret < 0) {
+            LOG_ERROR("DSD DoP packet read failed: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) +
+                      ", path=" + track_info_.file_path + ", decoded_frames=" + std::to_string(frames));
+            return frames > 0 ? frames : -1;
+        }
         if (impl_->packet->stream_index != impl_->stream_index) { av_packet_unref(impl_->packet); continue; }
         const int bytes_per_channel = impl_->packet->size / channels;
         if (bytes_per_channel <= 0 || bytes_per_channel * channels != impl_->packet->size) {
-            LOG_WARN("DSD DoP: malformed raw packet");
+            LOG_WARN("DSD DoP malformed packet: bytes=" + std::to_string(impl_->packet->size) +
+                     ", channels=" + std::to_string(channels) + ", path=" + track_info_.file_path);
             av_packet_unref(impl_->packet);
             continue;
         }
@@ -451,6 +474,7 @@ int Decoder::read_dop(uint8_t* output, int max_frames) {
 }
 
 int Decoder::decode(float* output, int max_frames) {
+    ScopedFFmpegLogContext log_context(track_info_.file_path, "decode", impl_->current_pts);
     if (impl_->fatal_error) return -1;
     if (!impl_->codec_ctx || !output || max_frames <= 0 || (impl_->eof && impl_->swr_flushed)) return 0;
 
@@ -488,8 +512,8 @@ int Decoder::decode(float* output, int max_frames) {
                 if (ret == AVERROR_EOF) {
                     const int flush_ret = avcodec_send_packet(impl_->codec_ctx, nullptr);
                     if (flush_ret < 0 && flush_ret != AVERROR_EOF) {
-                        impl_->last_error = "avcodec_send_packet(flush) failed: " + av_err_str(flush_ret);
-                        LOG_ERROR(impl_->last_error);
+                        impl_->last_error = "avcodec_send_packet(flush) failed: " + av_err_str(flush_ret) + " (code=" + std::to_string(flush_ret) + ")";
+                        LOG_ERROR(impl_->last_error + ", path=" + track_info_.file_path + ", sample=" + std::to_string(impl_->current_pts));
                         impl_->fatal_error = true;
                         return frames_decoded > 0 ? frames_decoded : -1;
                     }
@@ -497,8 +521,8 @@ int Decoder::decode(float* output, int max_frames) {
                     break;
                 }
                 if (ret < 0) {
-                    impl_->last_error = "av_read_frame failed: " + av_err_str(ret);
-                    LOG_ERROR(impl_->last_error);
+                    impl_->last_error = "av_read_frame failed: " + av_err_str(ret) + " (code=" + std::to_string(ret) + ")";
+                    LOG_ERROR(impl_->last_error + ", path=" + track_info_.file_path + ", sample=" + std::to_string(impl_->current_pts));
                     impl_->fatal_error = true;
                     return frames_decoded > 0 ? frames_decoded : -1;
                 }
@@ -509,12 +533,17 @@ int Decoder::decode(float* output, int max_frames) {
                     if (ret >= 0) break;
                     if (ret == AVERROR_INVALIDDATA) {
                         if (impl_->consecutive_bad_frames++ < 32) {
-                            LOG_WARN("Discarding malformed audio packet: " + av_err_str(ret));
+                            const auto message = "Discarding malformed audio packet: code=" + std::to_string(ret) +
+                                ", error=" + av_err_str(ret) + ", path=" + track_info_.file_path +
+                                ", sample=" + std::to_string(impl_->current_pts) +
+                                ", consecutive_bad_frames=" + std::to_string(impl_->consecutive_bad_frames);
+                            if (impl_->consecutive_bad_frames == 1) LOG_WARN(message);
+                            else LOG_DEBUG(message);
                             continue;
                         }
                     }
-                    impl_->last_error = "avcodec_send_packet failed: " + av_err_str(ret);
-                    LOG_ERROR(impl_->last_error);
+                    impl_->last_error = "avcodec_send_packet failed: " + av_err_str(ret) + " (code=" + std::to_string(ret) + ")";
+                    LOG_ERROR(impl_->last_error + ", path=" + track_info_.file_path + ", sample=" + std::to_string(impl_->current_pts));
                     impl_->fatal_error = true;
                     return frames_decoded > 0 ? frames_decoded : -1;
                 } else {
@@ -557,14 +586,25 @@ int Decoder::decode(float* output, int max_frames) {
             // resume from a later packet.  Do not turn a single bad frame
             // into a false end-of-track notification.
             if (ret == AVERROR_INVALIDDATA && impl_->consecutive_bad_frames++ < 32) {
-                LOG_WARN("Discarding malformed decoded frame: " + av_err_str(ret));
+                const auto message = "Discarding malformed decoded frame: code=" + std::to_string(ret) +
+                    ", error=" + av_err_str(ret) + ", path=" + track_info_.file_path +
+                    ", sample=" + std::to_string(impl_->current_pts) +
+                    ", consecutive_bad_frames=" + std::to_string(impl_->consecutive_bad_frames);
+                if (impl_->consecutive_bad_frames == 1) LOG_WARN(message);
+                else LOG_DEBUG(message);
                 av_frame_unref(impl_->frame);
                 continue;
             }
-            impl_->last_error = "avcodec_receive_frame failed: " + av_err_str(ret);
-            LOG_ERROR(impl_->last_error);
+            impl_->last_error = "avcodec_receive_frame failed: " + av_err_str(ret) + " (code=" + std::to_string(ret) + ")";
+            LOG_ERROR(impl_->last_error + ", path=" + track_info_.file_path + ", sample=" + std::to_string(impl_->current_pts) +
+                      ", consecutive_bad_frames=" + std::to_string(impl_->consecutive_bad_frames));
             impl_->fatal_error = true;
             return frames_decoded > 0 ? frames_decoded : -1;
+        }
+        if (impl_->consecutive_bad_frames > 0) {
+            LOG_DEBUG("Decoder recovered after malformed data: path=" + track_info_.file_path +
+                      ", sample=" + std::to_string(impl_->current_pts) +
+                      ", skipped_errors=" + std::to_string(impl_->consecutive_bad_frames));
         }
         impl_->consecutive_bad_frames = 0;
 
@@ -661,15 +701,19 @@ void read_replaygain_metadata(const AVDictionary* dictionary, TrackInfo::Metadat
 }
 
 bool Decoder::seek(int64_t sample_position) {
+    ScopedFFmpegLogContext log_context(track_info_.file_path, "seek", sample_position);
     if (!impl_->fmt_ctx || !impl_->codec_ctx) return false;
 
     AVStream* stream = impl_->fmt_ctx->streams[impl_->stream_index];
     if (stream->time_base.num <= 0 || stream->time_base.den <= 0) {
-        LOG_WARN("Invalid stream time_base, seek skipped");
+        LOG_WARN("Decoder seek rejected: time_base=" + std::to_string(stream->time_base.num) + "/" +
+                 std::to_string(stream->time_base.den) + ", sample=" + std::to_string(sample_position) +
+                 ", path=" + track_info_.file_path);
         return false;
     }
     if (track_info_.sample_rate <= 0) {
-        LOG_WARN("Invalid sample rate, seek skipped");
+        LOG_WARN("Decoder seek rejected: sample_rate=" + std::to_string(track_info_.sample_rate) +
+                 ", sample=" + std::to_string(sample_position) + ", path=" + track_info_.file_path);
         return false;
     }
     const int64_t input_position = av_rescale_q(sample_position,
@@ -683,9 +727,14 @@ bool Decoder::seek(int64_t sample_position) {
     int ret = av_seek_frame(impl_->fmt_ctx, impl_->stream_index,
                             seek_target, AVSEEK_FLAG_BACKWARD);
     if (ret < 0) {
-        LOG_WARN("av_seek_frame failed");
+        LOG_WARN("av_seek_frame failed: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) +
+                 ", path=" + track_info_.file_path + ", sample=" + std::to_string(sample_position) +
+                 ", target_pts=" + std::to_string(seek_target) + ", stream=" + std::to_string(impl_->stream_index));
         return false;
     }
+
+    LOG_DEBUG("Decoder seek: path=" + track_info_.file_path + ", from_sample=" + std::to_string(impl_->current_pts) +
+              ", to_sample=" + std::to_string(sample_position) + ", target_pts=" + std::to_string(seek_target));
 
     avcodec_flush_buffers(impl_->codec_ctx);
     if (impl_->swr_ctx) {

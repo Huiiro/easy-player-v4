@@ -1,5 +1,6 @@
 #include "dsound_backend.h"
 #include "logger.h"
+#include <cerrno>
 
 #include <algorithm>
 #include <atomic>
@@ -177,6 +178,10 @@ AudioFormat DSoundBackend::open(
     AudioCallback callback)
 {
     close();
+    LOG_DEBUG("DirectSound open: device=" + log_wide(device_id) +
+              ", requested_rate=" + std::to_string(requested_format.sample_rate) +
+              ", requested_bits=" + std::to_string(requested_format.bit_depth) +
+              ", requested_channels=" + std::to_string(requested_format.channels));
     impl_->callback = std::move(callback);
     HRESULT hr;
 
@@ -184,7 +189,7 @@ AudioFormat DSoundBackend::open(
     IDirectSound8* ds8 = nullptr;
     hr = DirectSoundCreate8(nullptr, &ds8, nullptr);
     if (FAILED(hr)) {
-        LOG_ERROR("DirectSoundCreate8 failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("DirectSoundCreate8 failed: hr=" + log_hex(hr));
         return {};
     }
     impl_->ds8 = ds8;
@@ -193,7 +198,7 @@ AudioFormat DSoundBackend::open(
     HWND hwnd = GetForegroundWindow();
     hr = ds8->SetCooperativeLevel(hwnd, DSSCL_PRIORITY);
     if (FAILED(hr)) {
-        LOG_WARN("SetCooperativeLevel failed, trying NORMAL");
+        LOG_WARN("DirectSound SetCooperativeLevel failed: hr=" + log_hex(hr) + "; trying NORMAL");
         hr = ds8->SetCooperativeLevel(hwnd, DSSCL_NORMAL);
     }
 
@@ -216,7 +221,7 @@ AudioFormat DSoundBackend::open(
     IDirectSoundBuffer* primary = nullptr;
     hr = ds8->CreateSoundBuffer(&desc, &primary, nullptr);
     if (FAILED(hr)) {
-        LOG_ERROR("CreateSoundBuffer (primary) failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("CreateSoundBuffer (primary) failed: hr=" + log_hex(hr));
         return {};
     }
     impl_->primary = primary;
@@ -224,7 +229,9 @@ AudioFormat DSoundBackend::open(
     // Set primary buffer format — this controls hardware output format
     hr = primary->SetFormat(&fmt);
     if (FAILED(hr)) {
-        LOG_WARN("SetFormat on primary buffer failed, continuing anyway");
+        LOG_WARN("DirectSound primary SetFormat failed: hr=" + log_hex(hr) +
+                 ", rate=" + std::to_string(fmt.nSamplesPerSec) + ", bits=" + std::to_string(fmt.wBitsPerSample) +
+                 ", channels=" + std::to_string(fmt.nChannels) + "; continuing");
     }
 
     // ── Step 2: Create secondary streaming buffer ──
@@ -246,7 +253,7 @@ AudioFormat DSoundBackend::open(
     IDirectSoundBuffer* secondary = nullptr;
     hr = ds8->CreateSoundBuffer(&desc2, &secondary, nullptr);
     if (FAILED(hr)) {
-        LOG_ERROR("CreateSoundBuffer (secondary) failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("CreateSoundBuffer (secondary) failed: hr=" + log_hex(hr));
         return {};
     }
     impl_->secondary = secondary;
@@ -258,7 +265,7 @@ AudioFormat DSoundBackend::open(
     buffer_frames_ = half_frames; // half buffer = 100ms
     latency_ms_ = (double)(half_frames * 2) / fmt.nSamplesPerSec * 1000.0; // total 200ms
 
-    LOG_INFO("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
+    LOG_DEBUG("DSoundBackend opened: " + std::to_string(fmt.nSamplesPerSec) + "Hz, " +
              std::to_string(fmt.nChannels) + "ch, " +
              std::to_string(half_frames) + "f/half × 2, " +
              std::to_string(latency_ms_) + "ms total latency");
@@ -291,11 +298,11 @@ bool DSoundBackend::start() {
             if (ptr2) std::memset(ptr2, 0, bytes2);
             hr = impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
             if (FAILED(hr)) {
-                LOG_ERROR("DSoundBackend prefill Unlock failed: hr=0x" + std::to_string(hr));
+                LOG_ERROR("DSoundBackend prefill Unlock failed: hr=" + log_hex(hr));
                 return false;
             }
         } else {
-            LOG_ERROR("DSoundBackend prefill Lock failed: hr=0x" + std::to_string(hr));
+            LOG_ERROR("DSoundBackend prefill Lock failed: hr=" + log_hex(hr));
             return false;
         }
     }
@@ -313,7 +320,7 @@ bool DSoundBackend::start() {
     HRESULT hr = impl_->secondary->QueryInterface(IID_IDirectSoundNotify8,
                                                    (void**)&notify);
     if (FAILED(hr) || !notify) {
-        LOG_ERROR("DSoundBackend QueryInterface(IDirectSoundNotify8) failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("DSoundBackend QueryInterface(IDirectSoundNotify8) failed: hr=" + log_hex(hr));
         return false;
     }
     impl_->notify = notify;
@@ -324,7 +331,7 @@ bool DSoundBackend::start() {
     positions[1].hEventNotify = impl_->notify_events[1];
     hr = notify->SetNotificationPositions(2, positions);
     if (FAILED(hr)) {
-        LOG_ERROR("DSoundBackend SetNotificationPositions failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("DSoundBackend SetNotificationPositions failed: hr=" + log_hex(hr));
         return false;
     }
 
@@ -335,12 +342,13 @@ bool DSoundBackend::start() {
 
     if (!impl_->thread_handle) {
         impl_->running.store(false, std::memory_order_release);
-        LOG_ERROR("DSoundBackend could not create render thread");
+        LOG_ERROR("DirectSound render thread creation failed: errno=" + std::to_string(errno) +
+                  ", buffer_bytes=" + std::to_string(impl_->buffer_bytes));
         return false;
     }
 
     active_ = true;
-    LOG_INFO("DSoundBackend started (" + std::to_string(impl_->buffer_bytes) + " bytes buffer)");
+    LOG_DEBUG("DSoundBackend started (" + std::to_string(impl_->buffer_bytes) + " bytes buffer)");
     return true;
 }
 
@@ -360,11 +368,11 @@ bool DSoundBackend::stop() {
 
     const HRESULT thread_error = impl_->thread_error.load(std::memory_order_acquire);
     if (FAILED(thread_error)) {
-        LOG_ERROR("DSoundBackend render thread stopped: hr=0x" + std::to_string(thread_error));
+        LOG_ERROR("DSoundBackend render thread stopped: hr=" + log_hex(thread_error));
     }
 
     active_ = false;
-    LOG_INFO("DSoundBackend stopped");
+    LOG_DEBUG("DSoundBackend stopped");
     return true;
 }
 
@@ -422,7 +430,7 @@ void DSoundBackend::flush() {
 
     // Wake the audio thread so normal half-buffer refills resume promptly.
     if (impl_->notify_events[0]) SetEvent(impl_->notify_events[0]);
-    LOG_INFO("DSoundBackend flushed");
+    LOG_DEBUG("DSoundBackend flushed");
 }
 
 void DSoundBackend::close() {
@@ -448,5 +456,5 @@ void DSoundBackend::close() {
         impl_->ds8->Release();
         impl_->ds8 = nullptr;
     }
-    LOG_INFO("DSoundBackend closed");
+    LOG_DEBUG("DSoundBackend closed");
 }

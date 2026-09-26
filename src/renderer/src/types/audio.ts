@@ -71,6 +71,7 @@ export interface TransitionConfig {
   gaplessEnabled: boolean
   crossfadeEnabled: boolean
   crossfadeMs: number
+  crossfadeAuto: boolean
 }
 
 export interface DspNodeConfig {

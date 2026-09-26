@@ -100,6 +100,9 @@ export const audioBridge = {
   async setTransitionConfig(config: TransitionConfig): Promise<boolean> {
     return (await window.api.audio.setTransitionConfig(config)).success
   },
+  async setNextTrack(filePath: string): Promise<boolean> {
+    return (await window.api.audio.setNextTrack(filePath)).success
+  },
   async getTransitionConfig(): Promise<TransitionConfig | null> {
     return cmd(await window.api.audio.getTransitionConfig())
   },

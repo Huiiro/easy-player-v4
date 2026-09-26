@@ -22,12 +22,11 @@ enum class EngineState {
     Stopped
 };
 
-// With no library yet, the next queue entry is another instance of the
-// opened file. A future queue can replace next_track_path_ before the window.
 struct TransitionConfig {
     bool gapless_enabled = true;
     bool crossfade_enabled = false;
     int crossfade_ms = 5000;
+    bool crossfade_auto = false;
 };
 
 struct AudioAnalysisSnapshot {
@@ -49,7 +48,7 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.2";
+    static constexpr const char* kVersion = "1.0.3";
     explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }
@@ -66,9 +65,7 @@ public:
     // ── Control ──
     void set_volume(float volume); // 0.0 - 1.0
     float volume() const { return dsp_pipeline_.master_volume(); }
-    void set_preamp_db(float db, bool enabled) {
-        dsp_pipeline_.set_preamp_db(db, enabled);
-    }
+    void set_preamp_db(float db, bool enabled) { dsp_pipeline_.set_preamp_db(db, enabled); }
     void set_replay_gain_mode(int mode, bool prevent_clipping);
     int replay_gain_mode() const { return replay_gain_mode_; }
     bool replay_gain_prevent_clipping() const { return replay_gain_prevent_clipping_; }
@@ -104,10 +101,12 @@ public:
     bool set_limiter_config(const LimiterConfig& config) { return dsp_pipeline_.set_limiter_config(config); }
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
     bool set_transition_config(const TransitionConfig& config);
+    bool set_next_track(const std::string& file_path);
     TransitionConfig transition_config() const {
         return {gapless_enabled_.load(std::memory_order_acquire),
                 crossfade_enabled_.load(std::memory_order_acquire),
-                crossfade_ms_.load(std::memory_order_acquire)};
+                crossfade_ms_.load(std::memory_order_acquire),
+                crossfade_auto_.load(std::memory_order_acquire)};
     }
 
     // ── Device / Backend ──
@@ -119,8 +118,14 @@ public:
     // ── Query ──
     EngineState state() const { return state_; }
     double position_ms() const;
-    double duration_ms() const { return track_info_.duration_ms; }
-    const TrackInfo& track_info() const { return track_info_; }
+    double duration_ms() const {
+        std::lock_guard<std::mutex> lock(decoder_mutex_);
+        return track_info_.duration_ms;
+    }
+    TrackInfo track_info() const {
+        std::lock_guard<std::mutex> lock(decoder_mutex_);
+        return track_info_;
+    }
     bool is_playing() const { return state_ == EngineState::Playing; }
     int glitch_count() const { return glitch_count_.load(); }
     AudioChainStatus audio_chain_status() const;
@@ -154,6 +159,7 @@ private:
     void analysis_thread_func();
     void stop_analysis_thread();
     bool prepare_next_decoder_locked();
+    void refresh_auto_fade_plan();
     bool switch_to_next_decoder_locked();
     void mark_track_ended_pending();
 
@@ -178,11 +184,22 @@ private:
     Decoder decoder_;
     Decoder next_decoder_;
     TrackInfo track_info_;
+    int source_channels_ = 0;
     std::string next_track_path_;
+    TrackInfo pending_track_info_;
+    std::string pending_ended_path_;
+    int64_t pending_start_frame_ = 0;
+    std::atomic<int64_t> pending_transition_frame_{-1};
+    std::atomic<int64_t> track_start_frame_{0};
     std::atomic<bool> gapless_enabled_{true};
     std::atomic<bool> crossfade_enabled_{false};
     std::atomic<int> crossfade_ms_{5000};
+    std::atomic<bool> crossfade_auto_{false};
+    int64_t auto_fade_end_frame_ = 0;
+    int64_t auto_fade_frames_ = 0;
     std::atomic<bool> transition_active_{false};
+    bool crossfade_target_warned_ = false;
+    bool crossfade_started_logged_ = false;
     std::vector<float> transition_work_buffer_;
     std::unique_ptr<RingBuffer> ring_buffer_;
     // Encoded transport path. Never share this queue with PCM/DSP buffers.
@@ -225,7 +242,7 @@ private:
     std::unique_ptr<std::thread> decoder_thread_;
     std::atomic<bool> decoder_running_{false};
     std::atomic<int> seek_generation_{0};  // incremented on each seek to invalidate stale decoder output
-    std::mutex decoder_mutex_;             // protects decoder from concurrent seek/decode
+    mutable std::mutex decoder_mutex_;     // protects decoder and track snapshot
 
     // ── Position timer ──
     std::unique_ptr<std::thread> position_timer_;

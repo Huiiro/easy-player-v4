@@ -20,7 +20,7 @@ struct TrackInfo {
         std::string title;
         std::string artist;
         std::string album;
-        // Raw embedded lyric payload (typically LRC in a lyrics/syncedlyrics
+        // Raw embedded lyric payload (typically LRC in a lyrics/synced lyrics
         // tag). Parsing and source selection belong to the UI layer.
         std::string lyrics;
         int track_number = 0;

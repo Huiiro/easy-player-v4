@@ -117,6 +117,7 @@ export type AudioCommandAction =
   | 'getResamplerConfig'
   | 'setDopEnabled'
   | 'getDopEnabled'
+  | 'setNextTrack'
   | 'setTransitionConfig'
   | 'getTransitionConfig'
   | 'setDspNodes'

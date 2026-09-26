@@ -1,5 +1,6 @@
 #include "audio_engine.h"
 #include "logger.h"
+#include "ffmpeg_logging.h"
 #ifdef EASY_PLAYER_MACOS
 #include "macos_backend_factory.h"
 using PlatformAudioBackendFactory = MacOSAudioBackendFactory;
@@ -14,18 +15,76 @@ using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
 #include <string>
 #include <filesystem>
 #include <map>
+#include <exception>
+#include <system_error>
+#include <chrono>
+#include <initializer_list>
+#include <sstream>
 extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/dict.h>
 }
 
+static const char* state_name(EngineState state) {
+    switch (state) {
+        case EngineState::Idle: return "idle";
+        case EngineState::Loading: return "loading";
+        case EngineState::Ready: return "ready";
+        case EngineState::Playing: return "playing";
+        case EngineState::Paused: return "paused";
+        case EngineState::Stopped: return "stopped";
+    }
+    return "unknown";
+}
+
+static std::string format_params(std::initializer_list<std::pair<const char*, double>> values) {
+    std::ostringstream output;
+    for (const auto& value : values) {
+        if (output.tellp() > 0) output << ", ";
+        output << value.first << "=" << value.second;
+    }
+    return output.str();
+}
+
+// Describe scalar arguments without serializing arbitrary objects or invoking
+// getters. Setters replace this summary with the values they actually parse.
+static std::string describe_arguments(const Napi::CallbackInfo& info) {
+    if (info.Length() == 0) return "no arguments";
+    std::ostringstream output;
+    for (size_t i = 0; i < info.Length(); ++i) {
+        if (i) output << ", ";
+        output << "arg" << i << "=";
+        const auto value = info[i];
+        if (value.IsString()) {
+            const auto text = value.As<Napi::String>().Utf8Value();
+            output << '"' << text.substr(0, 512) << (text.size() > 512 ? "..." : "") << '"';
+        } else if (value.IsNumber()) output << value.As<Napi::Number>().DoubleValue();
+        else if (value.IsBoolean()) output << (value.As<Napi::Boolean>().Value() ? "true" : "false");
+        else if (value.IsArray()) output << "array(length=" << value.As<Napi::Array>().Length() << ")";
+        else if (value.IsNull()) output << "null";
+        else if (value.IsUndefined()) output << "undefined";
+        else output << "object";
+    }
+    return output.str();
+}
+
+// Set the field before invoking a JS getter or coercion, so exceptions identify
+// the property that failed without evaluating the object's other properties.
+static Napi::Value read_property(const Napi::Object& object, const char* field,
+                                 std::string& parameters) {
+    parameters += "; reading_field=" + std::string(field);
+    return object.Get(field);
+}
+
 static bool rewrite_metadata(const std::string& source, const std::map<std::string, std::string>& tags, const std::string& cover_path, std::string& error) {
+    ScopedFFmpegLogContext log_context(source, "rewrite-metadata");
     AVFormatContext* input = nullptr;
     AVFormatContext* output = nullptr;
     AVFormatContext* cover = nullptr;
     int cover_stream = -1;
     int cover_output_stream = -1;
+    std::error_code rename_error;
     const std::filesystem::path source_path(source);
     const auto temporary = (source_path.parent_path() / (source_path.stem().string() + ".easy-player-meta-tmp" + source_path.extension().string())).string();
     if (avformat_open_input(&input, source.c_str(), nullptr, nullptr) < 0 || avformat_find_stream_info(input, nullptr) < 0) { error = "Unable to open media file"; goto done; }
@@ -41,18 +100,48 @@ static bool rewrite_metadata(const std::string& source, const std::map<std::stri
     { AVPacket packet; av_init_packet(&packet); while (av_read_frame(input, &packet) >= 0) { AVStream* in = input->streams[packet.stream_index]; if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) { av_packet_unref(&packet); continue; } AVStream* out = output->streams[packet.stream_index]; av_packet_rescale_ts(&packet, in->time_base, out->time_base); int result = av_interleaved_write_frame(output, &packet); av_packet_unref(&packet); if (result < 0) { error = "Unable to write media packet"; goto done; } } }
     av_write_trailer(output);
     avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); output = nullptr;
-    std::filesystem::rename(temporary, source_path); return true;
+    std::filesystem::rename(temporary, source_path, rename_error);
+    if (rename_error) {
+        error = "Unable to replace media file: " + rename_error.message();
+        std::error_code cleanup_error;
+        std::filesystem::remove(temporary, cleanup_error);
+        return false;
+    }
+    return true;
 done:
     if (input) avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (output) { if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); } std::error_code ec; std::filesystem::remove(temporary, ec); return false;
 }
 
 static Napi::Value WriteMetadata(const Napi::CallbackInfo& info) {
-    if (!info[0].IsString() || !info[1].IsObject()) return Napi::Boolean::New(info.Env(), false);
-    const auto values = info[1].As<Napi::Object>(); std::map<std::string, std::string> tags;
-    const std::pair<const char*, const char*> names[] = {{"title","title"},{"artist","artist"},{"album","album"},{"albumArtist","album_artist"},{"year","date"},{"genre","genre"},{"trackNumber","track"},{"discNumber","disc"},{"composer","composer"},{"lyricist","writer"},{"lyrics","lyrics"}};
-    for (const auto& [js, ff] : names) { const auto v = values.Get(js); if (v.IsString() || v.IsNumber()) tags[ff] = v.ToString().Utf8Value(); }
-    const auto cover = values.Get("coverPath"); const std::string cover_path = cover.IsString() ? cover.ToString().Utf8Value() : "";
-    std::string error; const bool ok = rewrite_metadata(info[0].As<Napi::String>().Utf8Value(), tags, cover_path, error); if (!ok) Napi::Error::New(info.Env(), error).ThrowAsJavaScriptException(); return Napi::Boolean::New(info.Env(), ok);
+    if (!info[0].IsString() || !info[1].IsObject()) {
+        LOG_WARN("N-API writeMetadata rejected: expected a path and metadata object");
+        return Napi::Boolean::New(info.Env(), false);
+    }
+    std::string source;
+    try {
+        source = info[0].As<Napi::String>().Utf8Value();
+        const auto values = info[1].As<Napi::Object>(); std::map<std::string, std::string> tags;
+        const std::pair<const char*, const char*> names[] = {{"title","title"},{"artist","artist"},{"album","album"},{"albumArtist","album_artist"},{"year","date"},{"genre","genre"},{"trackNumber","track"},{"discNumber","disc"},{"composer","composer"},{"lyricist","writer"},{"lyrics","lyrics"}};
+        for (const auto& [js, ff] : names) { const auto v = values.Get(js); if (v.IsString() || v.IsNumber()) tags[ff] = v.ToString().Utf8Value(); }
+        const auto cover = values.Get("coverPath"); const std::string cover_path = cover.IsString() ? cover.ToString().Utf8Value() : "";
+        LOG_DEBUG("N-API writeMetadata begin: path=" + source + ", fields=" +
+                  std::to_string(tags.size()) + ", cover=" + (cover_path.empty() ? "unchanged" : cover_path));
+        std::string error; const bool ok = rewrite_metadata(source, tags, cover_path, error);
+        if (!ok) {
+            LOG_ERROR("N-API writeMetadata failed: path=" + source + ", error=" + error);
+            Napi::Error::New(info.Env(), error).ThrowAsJavaScriptException();
+        } else {
+            LOG_DEBUG("N-API writeMetadata completed: path=" + source);
+        }
+        return Napi::Boolean::New(info.Env(), ok);
+    } catch (const std::exception& error) {
+        LOG_ERROR("N-API writeMetadata exception: path=" + source + ", error=" + error.what());
+        Napi::Error::New(info.Env(), error.what()).ThrowAsJavaScriptException();
+    } catch (...) {
+        LOG_ERROR("N-API writeMetadata unknown exception: path=" + source);
+        Napi::Error::New(info.Env(), "Native metadata operation failed").ThrowAsJavaScriptException();
+    }
+    return info.Env().Undefined();
 }
 
 // ──────────────────────────────────────────────────────────
@@ -101,6 +190,7 @@ public:
             InstanceMethod("setLimiter", &AudioEngineWrapper::SetLimiter),
             InstanceMethod("getLimiter", &AudioEngineWrapper::GetLimiter),
             InstanceMethod("setTransitionConfig", &AudioEngineWrapper::SetTransitionConfig),
+            InstanceMethod("setNextTrack", &AudioEngineWrapper::SetNextTrack),
             InstanceMethod("getTransitionConfig", &AudioEngineWrapper::GetTransitionConfig),
             InstanceMethod("enumerateDevices", &AudioEngineWrapper::EnumerateDevices),
             InstanceMethod("setDevice", &AudioEngineWrapper::SetDevice),
@@ -156,6 +246,45 @@ public:
 private:
     // ── Commands ──
 
+    Napi::Value RejectCommand(const Napi::CallbackInfo& info, const char* name, const char* expected) {
+        LOG_WARN(std::string("N-API ") + name + " rejected: expected " + expected +
+                 " (" + describe_arguments(info) + ")");
+        return Napi::Boolean::New(info.Env(), false);
+    }
+
+    template <typename Command>
+    Napi::Value RunBoolCommand(const Napi::CallbackInfo& info, const char* name, Command&& command,
+                               bool warn_on_failure = false) {
+        const auto started = std::chrono::steady_clock::now();
+        const auto before = engine_->state();
+        std::string parameters = "arguments not parsed";
+        const auto context = [&] {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            return " (" + parameters + "; state=" + state_name(before) + "->" +
+                state_name(engine_->state()) + "; elapsed_ms=" + std::to_string(elapsed) + ")";
+        };
+        try {
+            parameters = describe_arguments(info);
+            LOG_DEBUG(std::string("N-API ") + name + " begin" + context());
+            const bool ok = command(parameters);
+            if (ok) {
+                LOG_DEBUG(std::string("N-API ") + name + " completed" + context());
+            } else {
+                const std::string message = std::string("N-API ") + name + " returned false" + context();
+                if (warn_on_failure) LOG_WARN(message);
+                else LOG_DEBUG(message);
+            }
+            return Napi::Boolean::New(info.Env(), ok);
+        } catch (const std::exception& error) {
+            LOG_ERROR(std::string("N-API ") + name + " exception: " + error.what() + context());
+            return Napi::Boolean::New(info.Env(), false);
+        } catch (...) {
+            LOG_ERROR(std::string("N-API ") + name + " unknown exception" + context());
+            return Napi::Boolean::New(info.Env(), false);
+        }
+    }
+
     class EngineCommandWorker final : public Napi::AsyncWorker {
     public:
         EngineCommandWorker(AudioEngineWrapper* owner, std::string path, bool open)
@@ -168,11 +297,28 @@ private:
         Napi::Promise Promise() const { return deferred_.Promise(); }
 
         void Execute() override {
+            const auto started = std::chrono::steady_clock::now();
+            const auto before = owner_->engine_->state();
+            const auto context = [&] {
+                return std::string("N-API ") + (open_ ? "openAsync" : "stopAsync") +
+                    " (path=" + path_ + "; state=" + state_name(before) + "->" +
+                    state_name(owner_->engine_->state()) + "; elapsed_ms=" +
+                    std::to_string(std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now() - started).count()) + ")";
+            };
             try {
+                LOG_DEBUG(context() + " begin");
                 std::lock_guard<std::mutex> lock(owner_->operation_mutex_);
                 result_ = open_ ? owner_->engine_->open(path_) : owner_->engine_->stop();
+                if (result_) LOG_DEBUG(context() + " completed");
+                else if (open_) LOG_WARN(context() + " returned false");
+                else LOG_DEBUG(context() + " returned false");
             } catch (const std::exception& error) {
+                LOG_ERROR(context() + " exception: " + error.what());
                 SetError(error.what());
+            } catch (...) {
+                LOG_ERROR(context() + " unknown exception");
+                SetError("Unknown native audio engine exception");
             }
         }
 
@@ -196,6 +342,7 @@ private:
 
     Napi::Value OpenAsync(const Napi::CallbackInfo& info) {
         if (!info[0].IsString()) {
+            LOG_WARN("N-API openAsync rejected: path must be a string");
             auto deferred = Napi::Promise::Deferred::New(info.Env());
             deferred.Resolve(Napi::Boolean::New(info.Env(), false));
             return deferred.Promise();
@@ -208,26 +355,31 @@ private:
     }
 
     Napi::Value Open(const Napi::CallbackInfo& info) {
-        std::string path = info[0].As<Napi::String>().Utf8Value();
-        std::lock_guard<std::mutex> lock(operation_mutex_);
-        bool ok = engine_->open(path);
-        return Napi::Boolean::New(info.Env(), ok);
+        if (!info[0].IsString()) {
+            LOG_WARN("N-API open rejected: path must be a string");
+            return Napi::Boolean::New(info.Env(), false);
+        }
+        return RunBoolCommand(info, "open", [&](std::string& parameters) {
+            std::string path = info[0].As<Napi::String>().Utf8Value();
+            parameters = "path=" + path;
+            std::lock_guard<std::mutex> lock(operation_mutex_);
+            return engine_->open(path);
+        }, true);
     }
 
     Napi::Value Play(const Napi::CallbackInfo& info) {
-        bool ok = engine_->play();
-        return Napi::Boolean::New(info.Env(), ok);
+        return RunBoolCommand(info, "play", [&](std::string& parameters) { return engine_->play(); });
     }
 
     Napi::Value Pause(const Napi::CallbackInfo& info) {
-        bool ok = engine_->pause();
-        return Napi::Boolean::New(info.Env(), ok);
+        return RunBoolCommand(info, "pause", [&](std::string& parameters) { return engine_->pause(); });
     }
 
     Napi::Value Stop(const Napi::CallbackInfo& info) {
-        std::lock_guard<std::mutex> lock(operation_mutex_);
-        bool ok = engine_->stop();
-        return Napi::Boolean::New(info.Env(), ok);
+        return RunBoolCommand(info, "stop", [&](std::string& parameters) {
+            std::lock_guard<std::mutex> lock(operation_mutex_);
+            return engine_->stop();
+        });
     }
 
     Napi::Value StopAsync(const Napi::CallbackInfo& info) {
@@ -239,29 +391,62 @@ private:
     }
 
     Napi::Value Seek(const Napi::CallbackInfo& info) {
+        if (!info[0].IsNumber()) {
+            LOG_WARN("N-API seek rejected: position must be a number");
+            return Napi::Boolean::New(info.Env(), false);
+        }
         double ms = info[0].As<Napi::Number>().DoubleValue();
-        bool ok = engine_->seek(ms);
-        return Napi::Boolean::New(info.Env(), ok);
+        return RunBoolCommand(info, "seek", [&](std::string& parameters) {
+            parameters = "position_ms=" + std::to_string(ms);
+            return engine_->seek(ms);
+        });
     }
 
     Napi::Value SetVolume(const Napi::CallbackInfo& info) {
+        if (!info[0].IsNumber()) {
+            LOG_WARN("N-API setVolume rejected: volume must be a number");
+            return info.Env().Undefined();
+        }
         float vol = info[0].As<Napi::Number>().FloatValue();
-        engine_->set_volume(vol);
+        try {
+            LOG_DEBUG("N-API setVolume: volume=" + std::to_string(vol));
+            engine_->set_volume(vol);
+        } catch (const std::exception& error) {
+            LOG_ERROR(std::string("N-API setVolume exception: ") + error.what() + ", volume=" + std::to_string(vol));
+        } catch (...) {
+            LOG_ERROR("N-API setVolume unknown exception: volume=" + std::to_string(vol));
+        }
         return info.Env().Undefined();
     }
 
     Napi::Value SetPreamp(const Napi::CallbackInfo& info) {
+        if (!info[0].IsNumber() || !info[1].IsBoolean()) {
+            LOG_WARN("N-API setPreamp rejected: expected gain and enabled flag");
+            return info.Env().Undefined();
+        }
         const float db = info[0].As<Napi::Number>().FloatValue();
         const bool enabled = info[1].As<Napi::Boolean>().Value();
-        engine_->set_preamp_db(db, enabled);
+        try {
+            LOG_DEBUG("N-API setPreamp: " + format_params({{"gainDb", db}, {"enabled", enabled}}));
+            engine_->set_preamp_db(db, enabled);
+        } catch (const std::exception& error) {
+            LOG_ERROR(std::string("N-API setPreamp exception: ") + error.what() +
+                      " (" + format_params({{"gainDb", db}, {"enabled", enabled}}) + ")");
+        } catch (...) {
+            LOG_ERROR("N-API setPreamp unknown exception (" + format_params({{"gainDb", db}, {"enabled", enabled}}) + ")");
+        }
         return info.Env().Undefined();
     }
     Napi::Value SetReplayGain(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        const std::string mode = v.Get("mode").ToString().Utf8Value();
-        engine_->set_replay_gain_mode(mode == "track" ? 1 : mode == "album" ? 2 : 0, v.Get("preventClipping").ToBoolean().Value());
-        return Napi::Boolean::New(info.Env(), true);
+        if (!info[0].IsObject()) return RejectCommand(info, "setReplayGain", "object");
+        return RunBoolCommand(info, "setReplayGain", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const std::string mode = read_property(v, "mode", parameters).ToString().Utf8Value();
+            const bool prevent_clipping = read_property(v, "preventClipping", parameters).ToBoolean().Value();
+            parameters = "mode=" + mode + ", preventClipping=" + (prevent_clipping ? "true" : "false");
+            engine_->set_replay_gain_mode(mode == "track" ? 1 : mode == "album" ? 2 : 0, prevent_clipping);
+            return true;
+        });
     }
     Napi::Value GetReplayGain(const Napi::CallbackInfo& info) {
         const auto c = engine_->replay_gain_config(); auto v = Napi::Object::New(info.Env());
@@ -271,9 +456,13 @@ private:
         return v;
     }
     Napi::Value SetPlaybackSpeed(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_playback_speed_config({v.Get("enabled").ToBoolean().Value(), v.Get("speed").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setPlaybackSpeed", "object");
+        return RunBoolCommand(info, "setPlaybackSpeed", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const PlaybackSpeedConfig config{read_property(v, "enabled", parameters).ToBoolean().Value(), read_property(v, "speed", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"enabled", config.enabled}, {"speed", config.speed}});
+            return engine_->set_playback_speed_config(config);
+        }, true);
     }
     Napi::Value GetPlaybackSpeed(const Napi::CallbackInfo& info) {
         const auto c = engine_->playback_speed_config(); auto v = Napi::Object::New(info.Env());
@@ -293,22 +482,27 @@ private:
             return Napi::Boolean::New(info.Env(), false);
         }
 
-        LOG_INFO("N-API setEqBands received: 20 bands");
-
-        std::array<EqBand, kEqBandCount> bands;
-        for (int i = 0; i < kEqBandCount; ++i) {
-            auto value = values.Get(i);
-            if (!value.IsObject()) {
-                LOG_WARN("N-API setEqBands rejected: band " + std::to_string(i) + " is not an object");
-                return Napi::Boolean::New(info.Env(), false);
+        return RunBoolCommand(info, "setEqBands", [&](std::string& parameters) {
+            std::array<EqBand, kEqBandCount> bands;
+            std::ostringstream details;
+            for (int i = 0; i < kEqBandCount; ++i) {
+                parameters = "bands=" + std::to_string(kEqBandCount) + ", parsing_index=" + std::to_string(i) + details.str();
+                auto value = values.Get(i);
+                if (!value.IsObject()) {
+                    LOG_WARN("N-API setEqBands rejected: band " + std::to_string(i) + " is not an object");
+                    return false;
+                }
+                auto band = value.As<Napi::Object>();
+                bands[i].enabled = read_property(band, "enabled", parameters).ToBoolean().Value();
+                bands[i].frequency_hz = read_property(band, "frequencyHz", parameters).ToNumber().FloatValue();
+                bands[i].gain_db = read_property(band, "gainDb", parameters).ToNumber().FloatValue();
+                bands[i].q = read_property(band, "q", parameters).ToNumber().FloatValue();
+                details << " [" << i << ": enabled=" << bands[i].enabled << ", frequencyHz="
+                        << bands[i].frequency_hz << ", gainDb=" << bands[i].gain_db << ", Q=" << bands[i].q << "]";
+                parameters = "bands=" + std::to_string(kEqBandCount) + details.str();
             }
-            auto band = value.As<Napi::Object>();
-            bands[i].enabled = band.Get("enabled").ToBoolean().Value();
-            bands[i].frequency_hz = band.Get("frequencyHz").ToNumber().FloatValue();
-            bands[i].gain_db = band.Get("gainDb").ToNumber().FloatValue();
-            bands[i].q = band.Get("q").ToNumber().FloatValue();
-        }
-        return Napi::Boolean::New(info.Env(), engine_->set_eq_bands(bands));
+            return engine_->set_eq_bands(bands);
+        }, true);
     }
 
     Napi::Value GetEqBands(const Napi::CallbackInfo& info) {
@@ -326,14 +520,16 @@ private:
     }
 
     Napi::Value SetResamplerConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto config = info[0].As<Napi::Object>();
-        const bool force = config.Get("forceOutputRate").ToBoolean().Value();
-        const int rate = config.Get("targetSampleRate").ToNumber().Int32Value();
-        const std::string quality = config.Get("quality").ToString().Utf8Value();
-        const int quality_value = quality == "medium" ? 1 : quality == "fast" ? 2 : 0;
-        return Napi::Boolean::New(info.Env(),
-                                  engine_->set_resampler_config(force, rate, quality_value));
+        if (!info[0].IsObject()) return RejectCommand(info, "setResamplerConfig", "object");
+        return RunBoolCommand(info, "setResamplerConfig", [&](std::string& parameters) {
+            const auto config = info[0].As<Napi::Object>();
+            const bool force = read_property(config, "forceOutputRate", parameters).ToBoolean().Value();
+            const int rate = read_property(config, "targetSampleRate", parameters).ToNumber().Int32Value();
+            const std::string quality = read_property(config, "quality", parameters).ToString().Utf8Value();
+            const int quality_value = quality == "medium" ? 1 : quality == "fast" ? 2 : 0;
+            parameters = format_params({{"forceOutputRate", force}, {"targetSampleRate", rate}}) + ", quality=" + quality;
+            return engine_->set_resampler_config(force, rate, quality_value);
+        }, true);
     }
 
     Napi::Value GetResamplerConfig(const Napi::CallbackInfo& info) {
@@ -347,9 +543,11 @@ private:
     }
 
     Napi::Value SetDopEnabled(const Napi::CallbackInfo& info) {
-        if (!info[0].IsBoolean()) return Napi::Boolean::New(info.Env(), false);
-        engine_->set_dop_enabled(info[0].As<Napi::Boolean>().Value());
-        return Napi::Boolean::New(info.Env(), true);
+        if (!info[0].IsBoolean()) return RejectCommand(info, "setDopEnabled", "boolean");
+        return RunBoolCommand(info, "setDopEnabled", [&](std::string& parameters) {
+            engine_->set_dop_enabled(info[0].As<Napi::Boolean>().Value());
+            return true;
+        });
     }
 
     Napi::Value GetDopEnabled(const Napi::CallbackInfo& info) {
@@ -357,18 +555,26 @@ private:
     }
 
     Napi::Value SetDspNodes(const Napi::CallbackInfo& info) {
-        if (!info[0].IsArray()) return Napi::Boolean::New(info.Env(), false);
-        const auto values = info[0].As<Napi::Array>();
-        std::vector<DspNodeConfig> nodes;
-        nodes.reserve(values.Length());
-        for (uint32_t i = 0; i < values.Length(); ++i) {
-            const auto value = values.Get(i);
-            if (!value.IsObject()) return Napi::Boolean::New(info.Env(), false);
-            const auto node = value.As<Napi::Object>();
-            nodes.push_back({node.Get("id").ToString().Utf8Value(),
-                             node.Get("enabled").ToBoolean().Value()});
-        }
-        return Napi::Boolean::New(info.Env(), engine_->set_dsp_nodes(nodes));
+        if (!info[0].IsArray()) return RejectCommand(info, "setDspNodes", "array");
+        return RunBoolCommand(info, "setDspNodes", [&](std::string& parameters) {
+            const auto values = info[0].As<Napi::Array>();
+            std::vector<DspNodeConfig> nodes;
+            nodes.reserve(values.Length());
+            for (uint32_t i = 0; i < values.Length(); ++i) {
+                parameters = "nodes=" + std::to_string(values.Length()) + ", parsing_index=" + std::to_string(i);
+                const auto value = values.Get(i);
+                if (!value.IsObject()) return false;
+                const auto node = value.As<Napi::Object>();
+                nodes.push_back({read_property(node, "id", parameters).ToString().Utf8Value(),
+                                 read_property(node, "enabled", parameters).ToBoolean().Value()});
+            }
+            parameters = "nodes=" + std::to_string(nodes.size());
+            for (size_t i = 0; i < std::min<size_t>(nodes.size(), 32); ++i) {
+                parameters += " [id=" + nodes[i].id.substr(0, 128) + ", enabled=" + (nodes[i].enabled ? "true" : "false") + "]";
+            }
+            if (nodes.size() > 32) parameters += " ...";
+            return engine_->set_dsp_nodes(nodes);
+        }, true);
     }
 
     Napi::Value GetDspNodes(const Napi::CallbackInfo& info) {
@@ -384,15 +590,19 @@ private:
     }
 
     Napi::Value SetCompressorConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto value = info[0].As<Napi::Object>();
-        CompressorConfig config;
-        config.threshold_db = value.Get("thresholdDb").ToNumber().FloatValue();
-        config.ratio = value.Get("ratio").ToNumber().FloatValue();
-        config.attack_ms = value.Get("attackMs").ToNumber().FloatValue();
-        config.release_ms = value.Get("releaseMs").ToNumber().FloatValue();
-        config.makeup_db = value.Get("makeupDb").ToNumber().FloatValue();
-        return Napi::Boolean::New(info.Env(), engine_->set_compressor_config(config));
+        if (!info[0].IsObject()) return RejectCommand(info, "setCompressorConfig", "object");
+        return RunBoolCommand(info, "setCompressorConfig", [&](std::string& parameters) {
+            const auto value = info[0].As<Napi::Object>();
+            CompressorConfig config;
+            config.threshold_db = read_property(value, "thresholdDb", parameters).ToNumber().FloatValue();
+            config.ratio = read_property(value, "ratio", parameters).ToNumber().FloatValue();
+            config.attack_ms = read_property(value, "attackMs", parameters).ToNumber().FloatValue();
+            config.release_ms = read_property(value, "releaseMs", parameters).ToNumber().FloatValue();
+            config.makeup_db = read_property(value, "makeupDb", parameters).ToNumber().FloatValue();
+            parameters = format_params({{"thresholdDb", config.threshold_db}, {"ratio", config.ratio},
+                {"attackMs", config.attack_ms}, {"releaseMs", config.release_ms}, {"makeupDb", config.makeup_db}});
+            return engine_->set_compressor_config(config);
+        }, true);
     }
 
     Napi::Value GetCompressorConfig(const Napi::CallbackInfo& info) {
@@ -407,13 +617,16 @@ private:
     }
 
     Napi::Value SetDelayConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto value = info[0].As<Napi::Object>();
-        DelayConfig config;
-        config.delay_ms = value.Get("delayMs").ToNumber().FloatValue();
-        config.feedback = value.Get("feedback").ToNumber().FloatValue();
-        config.mix = value.Get("mix").ToNumber().FloatValue();
-        return Napi::Boolean::New(info.Env(), engine_->set_delay_config(config));
+        if (!info[0].IsObject()) return RejectCommand(info, "setDelayConfig", "object");
+        return RunBoolCommand(info, "setDelayConfig", [&](std::string& parameters) {
+            const auto value = info[0].As<Napi::Object>();
+            DelayConfig config;
+            config.delay_ms = read_property(value, "delayMs", parameters).ToNumber().FloatValue();
+            config.feedback = read_property(value, "feedback", parameters).ToNumber().FloatValue();
+            config.mix = read_property(value, "mix", parameters).ToNumber().FloatValue();
+            parameters = format_params({{"delayMs", config.delay_ms}, {"feedback", config.feedback}, {"mix", config.mix}});
+            return engine_->set_delay_config(config);
+        }, true);
     }
 
     Napi::Value GetDelayConfig(const Napi::CallbackInfo& info) {
@@ -423,11 +636,14 @@ private:
         value.Set("mix", Napi::Number::New(info.Env(), config.mix)); return value;
     }
     Napi::Value SetReverbConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_reverb_config({
-            v.Get("roomSize").ToNumber().FloatValue(), v.Get("decay").ToNumber().FloatValue(),
-            v.Get("mix").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setReverbConfig", "object");
+        return RunBoolCommand(info, "setReverbConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const ReverbConfig config{read_property(v, "roomSize", parameters).ToNumber().FloatValue(),
+                read_property(v, "decay", parameters).ToNumber().FloatValue(), read_property(v, "mix", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"roomSize", config.room_size}, {"decay", config.decay}, {"mix", config.mix}});
+            return engine_->set_reverb_config(config);
+        }, true);
     }
     Napi::Value GetReverbConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->reverb_config(); auto v = Napi::Object::New(info.Env());
@@ -435,11 +651,14 @@ private:
         v.Set("mix", Napi::Number::New(info.Env(), c.mix)); return v;
     }
     Napi::Value SetChorusConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_chorus_config({
-            v.Get("rateHz").ToNumber().FloatValue(), v.Get("depthMs").ToNumber().FloatValue(),
-            v.Get("mix").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setChorusConfig", "object");
+        return RunBoolCommand(info, "setChorusConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const ChorusConfig config{read_property(v, "rateHz", parameters).ToNumber().FloatValue(),
+                read_property(v, "depthMs", parameters).ToNumber().FloatValue(), read_property(v, "mix", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"rateHz", config.rate_hz}, {"depthMs", config.depth_ms}, {"mix", config.mix}});
+            return engine_->set_chorus_config(config);
+        }, true);
     }
     Napi::Value GetChorusConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->chorus_config(); auto v = Napi::Object::New(info.Env());
@@ -447,12 +666,16 @@ private:
         v.Set("mix", Napi::Number::New(info.Env(), c.mix)); return v;
     }
     Napi::Value SetNoiseGateConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_noise_gate_config({
-            v.Get("thresholdDb").ToNumber().FloatValue(), v.Get("attackMs").ToNumber().FloatValue(),
-            v.Get("holdMs").ToNumber().FloatValue(), v.Get("releaseMs").ToNumber().FloatValue(),
-            v.Get("rangeDb").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setNoiseGateConfig", "object");
+        return RunBoolCommand(info, "setNoiseGateConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const NoiseGateConfig config{read_property(v, "thresholdDb", parameters).ToNumber().FloatValue(),
+                read_property(v, "attackMs", parameters).ToNumber().FloatValue(), read_property(v, "holdMs", parameters).ToNumber().FloatValue(),
+                read_property(v, "releaseMs", parameters).ToNumber().FloatValue(), read_property(v, "rangeDb", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"thresholdDb", config.threshold_db}, {"attackMs", config.attack_ms},
+                {"holdMs", config.hold_ms}, {"releaseMs", config.release_ms}, {"rangeDb", config.range_db}});
+            return engine_->set_noise_gate_config(config);
+        }, true);
     }
     Napi::Value GetNoiseGateConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->noise_gate_config(); auto v = Napi::Object::New(info.Env());
@@ -461,12 +684,16 @@ private:
         v.Set("rangeDb", Napi::Number::New(info.Env(), c.range_db)); return v;
     }
     Napi::Value SetPhaserConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_phaser_config({
-            v.Get("rateHz").ToNumber().FloatValue(), v.Get("depth").ToNumber().FloatValue(),
-            v.Get("centerHz").ToNumber().FloatValue(), v.Get("feedback").ToNumber().FloatValue(),
-            v.Get("mix").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setPhaserConfig", "object");
+        return RunBoolCommand(info, "setPhaserConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const PhaserConfig config{read_property(v, "rateHz", parameters).ToNumber().FloatValue(),
+                read_property(v, "depth", parameters).ToNumber().FloatValue(), read_property(v, "centerHz", parameters).ToNumber().FloatValue(),
+                read_property(v, "feedback", parameters).ToNumber().FloatValue(), read_property(v, "mix", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"rateHz", config.rate_hz}, {"depth", config.depth},
+                {"centerHz", config.center_hz}, {"feedback", config.feedback}, {"mix", config.mix}});
+            return engine_->set_phaser_config(config);
+        }, true);
     }
     Napi::Value GetPhaserConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->phaser_config(); auto v = Napi::Object::New(info.Env());
@@ -475,14 +702,19 @@ private:
         v.Set("mix", Napi::Number::New(info.Env(), c.mix)); return v;
     }
     Napi::Value SetChannelMatrixConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        ChannelMatrixConfig config{};
-        config.enabled = v.Get("enabled").ToBoolean().Value(); config.balance = v.Get("balance").ToNumber().FloatValue();
-        config.swap_stereo = v.Get("swapStereo").ToBoolean().Value(); config.mono_downmix = v.Get("monoDownmix").ToBoolean().Value();
-        const auto gains = v.Get("outputGains");
-        if (gains.IsArray()) { const auto values = gains.As<Napi::Array>(); for (uint32_t i = 0; i < std::min<uint32_t>(values.Length(), kMaxAudioChannels); ++i) config.output_gains[i] = values.Get(i).ToNumber().FloatValue(); }
-        return Napi::Boolean::New(info.Env(), engine_->set_channel_matrix_config(config));
+        if (!info[0].IsObject()) return RejectCommand(info, "setChannelMatrixConfig", "object");
+        return RunBoolCommand(info, "setChannelMatrixConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            ChannelMatrixConfig config{};
+            config.enabled = read_property(v, "enabled", parameters).ToBoolean().Value(); config.balance = read_property(v, "balance", parameters).ToNumber().FloatValue();
+            config.swap_stereo = read_property(v, "swapStereo", parameters).ToBoolean().Value(); config.mono_downmix = read_property(v, "monoDownmix", parameters).ToBoolean().Value();
+            const auto gains = read_property(v, "outputGains", parameters);
+            if (gains.IsArray()) { const auto values = gains.As<Napi::Array>(); for (uint32_t i = 0; i < std::min<uint32_t>(values.Length(), kMaxAudioChannels); ++i) config.output_gains[i] = values.Get(i).ToNumber().FloatValue(); }
+            parameters = format_params({{"enabled", config.enabled}, {"balance", config.balance},
+                {"swapStereo", config.swap_stereo}, {"monoDownmix", config.mono_downmix}}) + ", outputGains=";
+            for (const auto gain : config.output_gains) parameters += std::to_string(gain) + " ";
+            return engine_->set_channel_matrix_config(config);
+        }, true);
     }
     Napi::Value GetChannelMatrixConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->channel_matrix_config(); auto v = Napi::Object::New(info.Env());
@@ -491,32 +723,52 @@ private:
         auto gains = Napi::Array::New(info.Env(), kMaxAudioChannels); for (uint32_t i = 0; i < kMaxAudioChannels; ++i) gains.Set(i, Napi::Number::New(info.Env(), c.output_gains[i])); v.Set("outputGains", gains); return v;
     }
     Napi::Value SetLimiter(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>(); engine_->set_limiter_enabled(v.Get("enabled").ToBoolean().Value());
-        return Napi::Boolean::New(info.Env(), engine_->set_limiter_config({v.Get("ceilingDb").ToNumber().FloatValue(), v.Get("releaseMs").ToNumber().FloatValue()}));
+        if (!info[0].IsObject()) return RejectCommand(info, "setLimiter", "object");
+        return RunBoolCommand(info, "setLimiter", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            engine_->set_limiter_enabled(read_property(v, "enabled", parameters).ToBoolean().Value());
+            const LimiterConfig config{read_property(v, "ceilingDb", parameters).ToNumber().FloatValue(), read_property(v, "releaseMs", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"enabled", engine_->limiter_enabled()}, {"ceilingDb", config.ceiling_db}, {"releaseMs", config.release_ms}});
+            return engine_->set_limiter_config(config);
+        }, true);
     }
     Napi::Value GetLimiter(const Napi::CallbackInfo& info) {
         const auto c = engine_->limiter_config(); auto v=Napi::Object::New(info.Env());
         v.Set("enabled", Napi::Boolean::New(info.Env(), engine_->limiter_enabled())); v.Set("ceilingDb", Napi::Number::New(info.Env(), c.ceiling_db)); v.Set("releaseMs", Napi::Number::New(info.Env(), c.release_ms)); return v;
     }
     Napi::Value SetTransitionConfig(const Napi::CallbackInfo& info) {
-        if (!info[0].IsObject()) return Napi::Boolean::New(info.Env(), false);
-        const auto v = info[0].As<Napi::Object>();
-        return Napi::Boolean::New(info.Env(), engine_->set_transition_config({
-            v.Get("gaplessEnabled").ToBoolean().Value(),
-            v.Get("crossfadeEnabled").ToBoolean().Value(),
-            v.Get("crossfadeMs").ToNumber().Int32Value()
-        }));
+        if (!info[0].IsObject()) return RejectCommand(info, "setTransitionConfig", "object");
+        return RunBoolCommand(info, "setTransitionConfig", [&](std::string& parameters) {
+            const auto v = info[0].As<Napi::Object>();
+            const auto auto_value = read_property(v, "crossfadeAuto", parameters);
+            const TransitionConfig config{read_property(v, "gaplessEnabled", parameters).ToBoolean().Value(),
+                read_property(v, "crossfadeEnabled", parameters).ToBoolean().Value(), read_property(v, "crossfadeMs", parameters).ToNumber().Int32Value(),
+                auto_value.IsBoolean() && auto_value.As<Napi::Boolean>().Value()};
+            parameters = format_params({{"gaplessEnabled", config.gapless_enabled}, {"crossfadeEnabled", config.crossfade_enabled},
+                {"crossfadeMs", config.crossfade_ms}, {"crossfadeAuto", config.crossfade_auto}});
+            return engine_->set_transition_config(config);
+        }, true);
     }
     Napi::Value GetTransitionConfig(const Napi::CallbackInfo& info) {
         const auto c = engine_->transition_config(); auto v = Napi::Object::New(info.Env());
         v.Set("gaplessEnabled", Napi::Boolean::New(info.Env(), c.gapless_enabled));
         v.Set("crossfadeEnabled", Napi::Boolean::New(info.Env(), c.crossfade_enabled));
-        v.Set("crossfadeMs", Napi::Number::New(info.Env(), c.crossfade_ms)); return v;
+        v.Set("crossfadeMs", Napi::Number::New(info.Env(), c.crossfade_ms));
+        v.Set("crossfadeAuto", Napi::Boolean::New(info.Env(), c.crossfade_auto)); return v;
     }
 
     Napi::Value EnumerateDevices(const Napi::CallbackInfo& info) {
-        auto devices = engine_->enumerate_devices();
+        std::vector<DeviceInfo> devices;
+        try {
+            devices = engine_->enumerate_devices();
+        } catch (const std::exception& error) {
+            LOG_ERROR(std::string("N-API enumerateDevices exception: ") + error.what());
+            return Napi::Array::New(info.Env());
+        } catch (...) {
+            LOG_ERROR("N-API enumerateDevices unknown exception");
+            return Napi::Array::New(info.Env());
+        }
+        LOG_DEBUG("N-API enumerateDevices found " + std::to_string(devices.size()) + " device(s)");
         auto arr = Napi::Array::New(info.Env(), devices.size());
 
         for (size_t i = 0; i < devices.size(); ++i) {
@@ -559,37 +811,65 @@ private:
             obj.Set("backend", Napi::String::New(info.Env(), backend_str));
             obj.Set("isDefault", Napi::Boolean::New(info.Env(), devices[i].is_default));
             obj.Set("maxChannels", Napi::Number::New(info.Env(), devices[i].max_channels));
+            LOG_DEBUG("Audio device: backend=" + std::string(backend_str) + ", id=" + log_wide(devices[i].id) +
+                      ", name=" + wide_to_utf8(devices[i].name) + ", max_channels=" + std::to_string(devices[i].max_channels) +
+                      ", default=" + std::to_string(devices[i].is_default) + ", exclusive=" + std::to_string(devices[i].supports_exclusive));
             arr.Set(i, obj);
         }
         return arr;
     }
 
     Napi::Value SetDevice(const Napi::CallbackInfo& info) {
-        std::string id = info[0].As<Napi::String>().Utf8Value();
-        return Napi::Boolean::New(info.Env(), engine_->set_device(std::wstring(id.begin(), id.end())));
+        if (!info[0].IsString()) {
+            LOG_WARN("N-API setDevice rejected: device ID must be a string");
+            return Napi::Boolean::New(info.Env(), false);
+        }
+        return RunBoolCommand(info, "setDevice", [&](std::string& parameters) {
+            std::string id = info[0].As<Napi::String>().Utf8Value();
+            parameters = "device_id=" + id;
+            return engine_->set_device(std::wstring(id.begin(), id.end()));
+        }, true);
+    }
+    Napi::Value SetNextTrack(const Napi::CallbackInfo& info) {
+        if (!info[0].IsString()) return RejectCommand(info, "setNextTrack", "string");
+        return RunBoolCommand(info, "setNextTrack", [&](std::string& parameters) {
+            return engine_->set_next_track(info[0].As<Napi::String>().Utf8Value());
+        });
     }
 
     Napi::Value SetBackend(const Napi::CallbackInfo& info) {
-        std::string backend = info[0].As<Napi::String>().Utf8Value();
-        BackendType type;
-        if (backend == "wasapi_shared")      type = BackendType::WASAPI_SHARED;
-        else if (backend == "wasapi_exclusive") type = BackendType::WASAPI_EXCLUSIVE;
-        else if (backend == "asio")             type = BackendType::ASIO;
-        else                                    type = BackendType::DIRECTSOUND;
-        bool ok = engine_->set_backend(type);
-        return Napi::Boolean::New(info.Env(), ok);
+        if (!info[0].IsString()) {
+            LOG_WARN("N-API setBackend rejected: backend must be a string");
+            return Napi::Boolean::New(info.Env(), false);
+        }
+        return RunBoolCommand(info, "setBackend", [&](std::string& parameters) {
+            std::string backend = info[0].As<Napi::String>().Utf8Value();
+            parameters = "backend=" + backend;
+            BackendType type;
+            if (backend == "wasapi_shared")      type = BackendType::WASAPI_SHARED;
+            else if (backend == "wasapi_exclusive") type = BackendType::WASAPI_EXCLUSIVE;
+            else if (backend == "asio")             type = BackendType::ASIO;
+            else                                    type = BackendType::DIRECTSOUND;
+            return engine_->set_backend(type);
+        }, true);
     }
 
     Napi::Value SelectOutputDevice(const Napi::CallbackInfo& info) {
-        std::string backend = info[0].As<Napi::String>().Utf8Value();
-        std::string id = info[1].As<Napi::String>().Utf8Value();
-        BackendType type;
-        if (backend == "wasapi_shared")      type = BackendType::WASAPI_SHARED;
-        else if (backend == "wasapi_exclusive") type = BackendType::WASAPI_EXCLUSIVE;
-        else if (backend == "asio")             type = BackendType::ASIO;
-        else                                      type = BackendType::DIRECTSOUND;
-        return Napi::Boolean::New(info.Env(), engine_->select_output_device(
-            type, std::wstring(id.begin(), id.end())));
+        if (!info[0].IsString() || !info[1].IsString()) {
+            LOG_WARN("N-API selectOutputDevice rejected: expected backend and device ID");
+            return Napi::Boolean::New(info.Env(), false);
+        }
+        return RunBoolCommand(info, "selectOutputDevice", [&](std::string& parameters) {
+            std::string backend = info[0].As<Napi::String>().Utf8Value();
+            std::string id = info[1].As<Napi::String>().Utf8Value();
+            parameters = "backend=" + backend + ", device_id=" + id;
+            BackendType type;
+            if (backend == "wasapi_shared")      type = BackendType::WASAPI_SHARED;
+            else if (backend == "wasapi_exclusive") type = BackendType::WASAPI_EXCLUSIVE;
+            else if (backend == "asio")             type = BackendType::ASIO;
+            else                                      type = BackendType::DIRECTSOUND;
+            return engine_->select_output_device(type, std::wstring(id.begin(), id.end()));
+        }, true);
     }
 
     Napi::Value GetVersion(const Napi::CallbackInfo& info) {
@@ -604,8 +884,9 @@ private:
         obj.Set("volume", Napi::Number::New(info.Env(), engine_->volume()));
         obj.Set("glitchCount", Napi::Number::New(info.Env(), engine_->glitch_count()));
 
-        auto& ti = engine_->track_info();
+        const auto ti = engine_->track_info();
         auto tiObj = Napi::Object::New(info.Env());
+        tiObj.Set("filePath", Napi::String::New(info.Env(), ti.file_path));
         tiObj.Set("format", Napi::String::New(info.Env(), ti.format));
         tiObj.Set("sampleRate", Napi::Number::New(info.Env(), ti.sample_rate));
         tiObj.Set("bitDepth", Napi::Number::New(info.Env(), ti.bit_depth));
@@ -672,13 +953,17 @@ private:
     }
     Napi::Value SetLoudnessAnalysisEnabled(const Napi::CallbackInfo& info) {
         const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
-        engine_->set_loudness_analysis_enabled(enabled);
-        return Napi::Boolean::New(info.Env(), true);
+        return RunBoolCommand(info, "setLoudnessAnalysisEnabled", [&](std::string& parameters) {
+            engine_->set_loudness_analysis_enabled(enabled);
+            return true;
+        });
     }
     Napi::Value SetSpectrumAnalysisEnabled(const Napi::CallbackInfo& info) {
         const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
-        engine_->set_spectrum_analysis_enabled(enabled);
-        return Napi::Boolean::New(info.Env(), true);
+        return RunBoolCommand(info, "setSpectrumAnalysisEnabled", [&](std::string& parameters) {
+            engine_->set_spectrum_analysis_enabled(enabled);
+            return true;
+        });
     }
 
     // ── Callback registration ──

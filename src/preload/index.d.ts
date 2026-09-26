@@ -19,6 +19,12 @@ declare global {
     electron: ElectronAPI
     api: {
       log: {
+        getLevel(): Promise<LogEntry['level']>
+        setLevel(level: LogEntry['level']): Promise<{
+          success: boolean
+          level?: LogEntry['level']
+          error?: string
+        }>
         write(level: LogEntry['level'], message: string): void
         recent(): Promise<LogEntry[]>
         onEntry(callback: (entry: LogEntry) => void): () => void
@@ -59,6 +65,7 @@ declare global {
         setDopEnabled(enabled: boolean): Promise<{ success: boolean }>
         getDopEnabled(): Promise<{ success: boolean; data?: boolean; error?: string }>
         setTransitionConfig(config: TransitionConfig): Promise<{ success: boolean }>
+        setNextTrack(filePath: string): Promise<{ success: boolean }>
         getTransitionConfig(): Promise<{
           success: boolean
           data?: TransitionConfig

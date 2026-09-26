@@ -98,7 +98,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
         return { success: true, data: engine.getPlaybackSpeed() }
 
       case 'setEqBands': {
-        Logger.info(
+        Logger.debug(
           `IPC setEqBands request: ${Array.isArray(params.bands) ? params.bands.length : 'invalid'} band(s)`
         )
         let ok = false
@@ -110,7 +110,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
           return { success: false, error: message }
         }
         Logger.write(
-          ok ? 'info' : 'error',
+          ok ? 'debug' : 'error',
           'main',
           `IPC setEqBands result: ${ok ? 'accepted' : 'rejected'}`
         )
@@ -135,6 +135,8 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
         return { success: engine.setDopEnabled(params.enabled === true) }
       case 'getDopEnabled':
         return { success: true, data: engine.getDopEnabled() }
+      case 'setNextTrack':
+        return { success: engine.setNextTrack(params.filePath) }
       case 'setTransitionConfig': {
         const ok = engine.setTransitionConfig(params.config)
         if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
@@ -314,8 +316,13 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
     })
   })
   engine.onTrackEnded((reason: string, filePath: string) => {
+    if (reason === 'transition') {
+      const status = engine.getStatus()
+      const nextFile = status?.trackInfo?.filePath
+      if (nextFile) saveCheckpoint({ currentFile: nextFile, positionMs: status.positionMs })
+    }
     sendEvent(mainWindow, 'trackEnded', { reason, filePath })
-    Logger.write('info', 'native', `Playback reached end of track (${reason})`)
+    Logger.write('debug', 'native', `Track ended: reason=${reason}, path=${filePath}`)
   })
 
   // ── Error events ──

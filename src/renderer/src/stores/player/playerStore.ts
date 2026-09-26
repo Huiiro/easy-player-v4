@@ -78,7 +78,8 @@ export const usePlayerStore = defineStore('player', () => {
   const transitionConfig = ref<TransitionConfig>({
     gaplessEnabled: true,
     crossfadeEnabled: false,
-    crossfadeMs: 5000
+    crossfadeMs: 5000,
+    crossfadeAuto: false
   })
   const dspNodes = ref<DspNodeConfig[]>([
     { id: 'compressor', enabled: false },
@@ -129,6 +130,9 @@ export const usePlayerStore = defineStore('player', () => {
   let shuffleHistoryIndex = -1
   const shuffleNavigationRevision = ref(0)
   const stopAfterCurrent = ref(false)
+  let preparedNextIndex = -1
+  let preparedNextPath = ''
+  let nextTrackRevision = 0
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let deferredRestore: { filePath: string; positionMs: number } | null = null
   let historySession:
@@ -177,10 +181,16 @@ export const usePlayerStore = defineStore('player', () => {
   const positionFormatted = computed(() => formatTime(positionMs.value))
   const durationFormatted = computed(() => formatTime(durationMs.value))
   const currentQueueSong = computed(() => queue.value[currentQueueIndex.value] ?? null)
+  const queueTransitionEntries = computed(() =>
+    queue.value.map((song) => [song.id, song.audio, song.songStatus, song.sourceId])
+  )
 
   // ── Actions ──
   async function openFile(filePath: string): Promise<boolean> {
     deferredRestore = null
+    nextTrackRevision++
+    preparedNextIndex = -1
+    preparedNextPath = ''
     currentFile.value = filePath
     const ok = await audioBridge.open(filePath)
     if (ok) {
@@ -207,6 +217,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
     const result = await audioBridge.play()
     if (result && currentQueueSong.value) beginHistory(currentQueueSong.value)
+    if (result && preparedNextIndex < 0) void syncNextTrack()
     return result
   }
 
@@ -396,6 +407,7 @@ export const usePlayerStore = defineStore('player', () => {
     shuffleHistoryIndex = -1
     shuffleNavigationRevision.value++
     schedulePlaybackSessionSave()
+    void syncNextTrack()
   }
 
   function nextIndex(): number {
@@ -444,6 +456,28 @@ export const usePlayerStore = defineStore('player', () => {
     return nextIndex()
   }
 
+  async function syncNextTrack(): Promise<void> {
+    const revision = ++nextTrackRevision
+    const index = !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled
+      ? previewNextIndex()
+      : -1
+    const song = queue.value[index]
+    let path = song && song.songStatus !== 0 ? song.audio : ''
+    if (path && song.sourceId) {
+      try {
+        const cached = await window.api.remoteSource.cacheSong(song.id)
+        path = cached.success && cached.data ? cached.data : ''
+      } catch {
+        path = ''
+      }
+    }
+    if (revision !== nextTrackRevision) return
+    const ready = await audioBridge.setNextTrack(path).catch(() => false)
+    if (revision !== nextTrackRevision) return
+    preparedNextIndex = ready ? index : -1
+    preparedNextPath = ready ? path : ''
+  }
+
   async function playNext(previewIndex?: number): Promise<boolean> {
     if (playMode.value === PlayMode.Random && shuffleHistoryIndex < shuffleHistory.length - 1) {
       const historyIndex = shuffleHistoryIndex + 1
@@ -477,12 +511,16 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function stop(): Promise<boolean> {
+    nextTrackRevision++
+    preparedNextIndex = -1
+    preparedNextPath = ''
     const result = await audioBridge.stop()
     if (result) flushHistory(true)
     return result
   }
   function setStopAfterCurrent(enabled: boolean): void {
     stopAfterCurrent.value = enabled
+    void syncNextTrack()
   }
 
   async function seek(ms: number): Promise<boolean> {
@@ -711,7 +749,7 @@ export const usePlayerStore = defineStore('player', () => {
       (band) => band.enabled && Math.abs(band.gainDb) >= 0.0001
     ).length
     logStore.addEntry({
-      level: 'info',
+      level: 'debug',
       message: `Renderer EQ submit: ${activeBands} active band(s)`,
       timestamp: Date.now()
     })
@@ -726,7 +764,7 @@ export const usePlayerStore = defineStore('player', () => {
       }))
       const ok = await audioBridge.setEqBands(bands)
       logStore.addEntry({
-        level: ok ? 'info' : 'error',
+        level: ok ? 'debug' : 'error',
         message: `Renderer EQ submit ${ok ? 'accepted by IPC' : 'rejected by IPC'}`,
         timestamp: Date.now()
       })
@@ -759,6 +797,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (ok) {
       transitionConfig.value = next
       await refreshAudioChain()
+      void syncNextTrack()
     }
     return ok
   }
@@ -1069,7 +1108,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
-  let analysisTimer: ReturnType<typeof setInterval> | undefined
+  let analysisTimer: ReturnType<typeof setTimeout> | undefined
+  const audioControlAnalysisPollingRate = 2
+  let audioControlAnalysisActive = false
+  let playerPanelAnalysisPollingRate = 0
+  let playerPanelAnalysisIncludesSpectrum = false
   let audioAnalysisPollingRate = 0
   let audioAnalysisIncludesSpectrum = false
   let analysisRefreshInFlight = false
@@ -1089,7 +1132,7 @@ export const usePlayerStore = defineStore('player', () => {
     analysisRefreshInFlight = true
     void refreshAudioAnalysis(audioAnalysisIncludesSpectrum).finally(() => {
       analysisRefreshInFlight = false
-      if (state.value !== 'playing' || audioAnalysisPollingRate <= 0) return
+      if (state.value !== 'playing' || !documentVisible || audioAnalysisPollingRate <= 0) return
       analysisTimer = setTimeout(
         () => {
           analysisTimer = undefined
@@ -1107,14 +1150,29 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function setAudioAnalysisPollingRate(rate: number, includeSpectrum = false): void {
-    const normalized = Math.max(0, Math.min(60, Math.round(rate)))
+    playerPanelAnalysisPollingRate = Math.max(0, Math.min(60, Math.round(rate)))
+    playerPanelAnalysisIncludesSpectrum = playerPanelAnalysisPollingRate > 0 && includeSpectrum
+    updateAudioAnalysisPolling()
+  }
+
+  function setAudioControlAnalysisActive(active: boolean): void {
+    if (audioControlAnalysisActive === active) return
+    audioControlAnalysisActive = active
+    updateAudioAnalysisPolling()
+  }
+
+  function updateAudioAnalysisPolling(): void {
+    const normalized = Math.max(
+      playerPanelAnalysisPollingRate,
+      audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0
+    )
     if (
       audioAnalysisPollingRate === normalized &&
-      audioAnalysisIncludesSpectrum === (normalized > 0 && includeSpectrum)
+      audioAnalysisIncludesSpectrum === playerPanelAnalysisIncludesSpectrum
     )
       return
     audioAnalysisPollingRate = normalized
-    audioAnalysisIncludesSpectrum = normalized > 0 && includeSpectrum
+    audioAnalysisIncludesSpectrum = playerPanelAnalysisIncludesSpectrum
     void audioBridge.setSpectrumAnalysisEnabled(audioAnalysisIncludesSpectrum)
     stopAudioAnalysisPolling()
     startAudioAnalysisPolling()
@@ -1130,6 +1188,30 @@ export const usePlayerStore = defineStore('player', () => {
     // user selects the next track just as the old one ends, its late event
     // must not advance the newly selected track a second time.
     if (filePath && filePath !== currentFile.value) return
+    if (reason === 'transition' && preparedNextIndex >= 0) {
+      const song = queue.value[preparedNextIndex]
+      if (song && preparedNextPath) {
+        flushHistory(true)
+        currentQueueIndex.value = preparedNextIndex
+        currentFile.value = preparedNextPath
+        if (playMode.value === PlayMode.Random) {
+          shufflePlayedSongIds.add(song.id)
+          shuffleHistory.splice(shuffleHistoryIndex + 1)
+          shuffleHistory.push(song.id)
+          shuffleHistoryIndex = shuffleHistory.length - 1
+          shuffleNavigationRevision.value++
+        }
+        const status = await audioBridge.getStatus()
+        if (status) {
+          trackInfo.value = status.trackInfo
+          durationMs.value = status.durationMs
+        }
+        beginHistory(song)
+        savePlaybackSessionSync()
+        void syncNextTrack()
+      }
+      return
+    }
     const now = Date.now()
     // Native backends may emit an EOF notification more than once while the
     // previous output callback drains. Only one event may advance the queue.
@@ -1139,7 +1221,7 @@ export const usePlayerStore = defineStore('player', () => {
     state.value = 'stopped'
     stopAudioAnalysisPolling()
     useLogStore().addEntry({
-      level: 'info',
+      level: 'debug',
       message: `Playback reached end of track (${reason})`,
       timestamp: now
     })
@@ -1243,6 +1325,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   watch([currentQueueSong, trackInfo, isPlaying], publishMiniPlayerState, { deep: true })
+  watch([queueTransitionEntries, currentQueueIndex, playMode], () => {
+    if (isPlaying.value) void syncNextTrack()
+  })
   watch(
     [
       () => ui.useDarkMode,
@@ -1361,6 +1446,7 @@ export const usePlayerStore = defineStore('player', () => {
     refreshAudioAnalysis,
     setLoudnessAnalysisEnabled,
     setAudioAnalysisPollingRate,
+    setAudioControlAnalysisActive,
     initializePersistentState,
     loadRhythmVisualConfig,
     saveRhythmVisualConfig,

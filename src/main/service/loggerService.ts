@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
 import { getLogPath } from '../utils/pathUtils'
+import { getAppSetting, setAppSetting } from '../database/repository'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogSource = 'main' | 'native' | 'renderer' | 'preload'
@@ -15,7 +16,14 @@ export interface LogEntry {
 
 const recent: LogEntry[] = []
 const MAX_RECENT = 1000
+const LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
+const LEVEL_SETTING_KEY = 'logging.level'
+let minimumLevel: LogLevel = 'info'
 let nextId = 1
+
+function isLogLevel(value: unknown): value is LogLevel {
+  return typeof value === 'string' && LEVELS.includes(value as LogLevel)
+}
 
 function format(value: unknown): string {
   if (value instanceof Error) return value.stack || value.message
@@ -29,6 +37,7 @@ function format(value: unknown): string {
 
 export class Logger {
   static write(level: LogLevel, source: LogSource, message: string, ...params: unknown[]): void {
+    if (LEVELS.indexOf(level) < LEVELS.indexOf(minimumLevel)) return
     const entry: LogEntry = {
       id: nextId++,
       timestamp: Date.now(),
@@ -73,10 +82,27 @@ export class Logger {
   }
 
   static registerIpc(): void {
+    const savedLevel = getAppSetting(LEVEL_SETTING_KEY)
+    minimumLevel = isLogLevel(savedLevel) ? savedLevel : 'info'
+    ipcMain.handle('log:get-level', () => minimumLevel)
+    ipcMain.handle('log:set-level', (_event, level: unknown) => {
+      if (!isLogLevel(level)) return { success: false, error: 'Invalid log level' }
+      try {
+        setAppSetting(LEVEL_SETTING_KEY, level)
+        minimumLevel = level
+        return { success: true, level }
+      } catch (error) {
+        this.error('Could not save log level:', error)
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    })
     ipcMain.on('log:write', (_event, data: unknown) => {
       if (!data || typeof data !== 'object') return
       const entry = data as { level?: unknown; message?: unknown }
-      if (!['debug', 'info', 'warn', 'error'].includes(String(entry.level))) return
+      if (!isLogLevel(entry.level)) return
       if (typeof entry.message !== 'string') return
       this.write(entry.level as LogLevel, 'renderer', entry.message.slice(0, 8192))
     })

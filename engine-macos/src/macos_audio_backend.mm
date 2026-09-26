@@ -52,7 +52,8 @@ AudioFormat MacOSAudioBackend::open(const std::wstring&, const AudioFormat& requ
         0,
         &queue);
     if (status != noErr || !queue) {
-        LOG_ERROR("CoreAudio: AudioQueueNewOutput failed: " + std::to_string(status));
+        LOG_ERROR("CoreAudio AudioQueueNewOutput failed: status=" + std::to_string(status) +
+                  " (" + log_hex(status) + "), rate=" + std::to_string(sample_rate) + ", channels=" + std::to_string(channels));
         return {};
     }
     impl_->queue.store(queue, std::memory_order_release);
@@ -65,21 +66,25 @@ AudioFormat MacOSAudioBackend::open(const std::wstring&, const AudioFormat& requ
     const UInt32 buffer_bytes = static_cast<UInt32>(impl_->buffer_frames * format.mBytesPerFrame);
     for (int i = 0; i < 3; ++i) {
         AudioQueueBufferRef buffer = nullptr;
-        if (AudioQueueAllocateBuffer(queue, buffer_bytes, &buffer) != noErr || !buffer) {
-            LOG_ERROR("CoreAudio: AudioQueueAllocateBuffer failed");
+        const OSStatus allocate_status = AudioQueueAllocateBuffer(queue, buffer_bytes, &buffer);
+        if (allocate_status != noErr || !buffer) {
+            LOG_ERROR("CoreAudio AudioQueueAllocateBuffer failed: status=" + std::to_string(allocate_status) +
+                      ", buffer_index=" + std::to_string(i) + ", buffer_bytes=" + std::to_string(buffer_bytes));
             close();
             return {};
         }
         std::memset(buffer->mAudioData, 0, buffer_bytes);
         buffer->mAudioDataByteSize = buffer_bytes;
-        if (AudioQueueEnqueueBuffer(queue, buffer, 0, nullptr) != noErr) {
-            LOG_ERROR("CoreAudio: AudioQueueEnqueueBuffer failed");
+        const OSStatus enqueue_status = AudioQueueEnqueueBuffer(queue, buffer, 0, nullptr);
+        if (enqueue_status != noErr) {
+            LOG_ERROR("CoreAudio AudioQueueEnqueueBuffer failed: status=" + std::to_string(enqueue_status) +
+                      ", buffer_index=" + std::to_string(i) + ", buffer_bytes=" + std::to_string(buffer_bytes));
             close();
             return {};
         }
         impl_->buffers.push_back(buffer);
     }
-    LOG_INFO("CoreAudio opened: " + std::to_string(sample_rate) + "Hz/" +
+    LOG_DEBUG("CoreAudio opened: " + std::to_string(sample_rate) + "Hz/" +
              std::to_string(channels) + "ch float PCM");
     return impl_->format;
 }
@@ -91,7 +96,8 @@ bool MacOSAudioBackend::start() {
     const OSStatus status = AudioQueueStart(queue, nullptr);
     if (status != noErr) {
         active_.store(false, std::memory_order_release);
-        LOG_ERROR("CoreAudio: AudioQueueStart failed: " + std::to_string(status));
+        LOG_ERROR("CoreAudio AudioQueueStart failed: status=" + std::to_string(status) +
+                  ", rate=" + std::to_string(impl_->format.sample_rate) + ", channels=" + std::to_string(impl_->format.channels));
         return false;
     }
     return true;
@@ -110,10 +116,10 @@ void MacOSAudioBackend::close() {
     closing_.store(true, std::memory_order_release);
     const auto queue = impl_->queue.exchange(nullptr, std::memory_order_acq_rel);
     if (queue) {
-        LOG_INFO("CoreAudio: stopping output queue");
+        LOG_DEBUG("CoreAudio: stopping output queue");
         AudioQueueStop(queue, true);
         AudioQueueDispose(queue, true);
-        LOG_INFO("CoreAudio: output queue disposed");
+        LOG_DEBUG("CoreAudio: output queue disposed");
     }
     impl_->buffers.clear();
     impl_->callback = nullptr;

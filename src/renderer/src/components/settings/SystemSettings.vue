@@ -1,11 +1,48 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import { useMessage } from '@/components/ui/useMessage'
 import { useUIStore } from '@/stores/ui/uiStore'
+import type { LogEntry } from '@/types/audio'
 
 const ui = useUIStore()
 const { t } = useI18n()
+const { error: showError } = useMessage()
+const logLevel = ref<LogEntry['level']>('info')
+const logLevelBusy = ref(true)
+const logLevelOptions = computed(() => [
+  { label: t('settings.logLevelDebug'), value: 'debug' },
+  { label: t('settings.logLevelInfo'), value: 'info' },
+  { label: t('settings.logLevelWarn'), value: 'warn' },
+  { label: t('settings.logLevelError'), value: 'error' }
+])
+
+async function changeLogLevel(value: string | number | (string | number)[]): Promise<void> {
+  if (value !== 'debug' && value !== 'info' && value !== 'warn' && value !== 'error') return
+  if (logLevelBusy.value || value === logLevel.value) return
+  logLevelBusy.value = true
+  try {
+    const result = await window.api.log.setLevel(value)
+    if (result.success && result.level) logLevel.value = result.level
+    else showError(t('settings.logLevelSaveFailed'))
+  } catch {
+    showError(t('settings.logLevelSaveFailed'))
+  } finally {
+    logLevelBusy.value = false
+  }
+}
+
+onMounted(async () => {
+  try {
+    logLevel.value = await window.api.log.getLevel()
+  } catch {
+    showError(t('settings.logLevelLoadFailed'))
+  } finally {
+    logLevelBusy.value = false
+  }
+})
 type UpdateStatus = { state: string; version: string; percent?: number; message?: string }
 const updateStatus = ref<UpdateStatus>({ state: 'idle', version: '' })
 const updateBusy = ref(false)
@@ -61,6 +98,21 @@ watch(
       <p>{{ t('settings.autoStartDescription') }}</p>
     </div>
     <BaseSwitch v-model="ui.autoStart" size="md" />
+  </div>
+  <div class="system-row">
+    <div>
+      <h3>{{ t('settings.logLevel') }}</h3>
+      <p>{{ t('settings.logLevelDescription') }}</p>
+    </div>
+    <BaseSelect
+      :model-value="logLevel"
+      :options="logLevelOptions"
+      :disabled="logLevelBusy"
+      :aria-label="t('settings.logLevel')"
+      teleport
+      class="w-48 shrink-0"
+      @update:model-value="changeLogLevel"
+    />
   </div>
   <div class="system-row">
     <div>

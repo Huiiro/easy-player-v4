@@ -3,6 +3,7 @@
 set(EASY_PLAYER_ENGINE_CORE_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/src/audio_engine.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/src/decoder.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/src/ffmpeg_logging.cpp"
 )
 
 set(EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/include/easy_player")

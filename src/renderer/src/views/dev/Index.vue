@@ -1087,6 +1087,15 @@ async function copyLog(entry: { timestamp: number; level: string; source?: strin
         Crossfade</label
       >
       <label
+        ><input
+          v-model="player.transitionConfig.crossfadeAuto"
+          :disabled="!player.transitionConfig.gaplessEnabled || !player.transitionConfig.crossfadeEnabled"
+          type="checkbox"
+          @change="updateTransitionConfig"
+        />
+        Adaptive timing</label
+      >
+      <label
         >Duration
         <input
           v-model.number="player.transitionConfig.crossfadeMs"

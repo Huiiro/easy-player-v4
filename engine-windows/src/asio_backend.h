@@ -4,7 +4,7 @@
 
 // ASIO backend — Phase 2 implementation.
 // Loads ASIO drivers dynamically from the registry via LoadLibrary.
-// Supports Native DSD when the DAC reports DSD capability.
+// Supports DoP over an exact PCM24 carrier; Native DSD is not implemented.
 class AsioBackend : public AudioBackend {
 public:
     AsioBackend();

@@ -43,6 +43,8 @@ const audioAPI = {
   setDopEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('audio:command', { action: 'setDopEnabled', params: { enabled } }),
   getDopEnabled: () => ipcRenderer.invoke('audio:command', { action: 'getDopEnabled', params: {} }),
+  setNextTrack: (filePath: string) =>
+    ipcRenderer.invoke('audio:command', { action: 'setNextTrack', params: { filePath } }),
   setTransitionConfig: (config: unknown) =>
     ipcRenderer.invoke('audio:command', { action: 'setTransitionConfig', params: { config } }),
   getTransitionConfig: () =>
@@ -513,6 +515,9 @@ const systemAPI = {
 // Custom APIs for renderer
 const api = {
   log: {
+    getLevel: () => ipcRenderer.invoke('log:get-level'),
+    setLevel: (level: 'debug' | 'info' | 'warn' | 'error') =>
+      ipcRenderer.invoke('log:set-level', level),
     write: (level: 'debug' | 'info' | 'warn' | 'error', message: string) =>
       ipcRenderer.send('log:write', { level, message }),
     recent: () => ipcRenderer.invoke('log:recent'),

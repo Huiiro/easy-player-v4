@@ -86,7 +86,7 @@ export interface DspSettings {
     quality: 'best' | 'medium' | 'fast'
   }
   dopEnabled: boolean
-  transition: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number }
+  transition: { gaplessEnabled: boolean; crossfadeEnabled: boolean; crossfadeMs: number; crossfadeAuto: boolean }
   outputDevice: PersistedOutputDevice
 }
 
@@ -121,7 +121,7 @@ export const defaultDspSettings = (): DspSettings => ({
   },
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' },
   dopEnabled: false,
-  transition: { gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000 },
+  transition: { gaplessEnabled: true, crossfadeEnabled: false, crossfadeMs: 5000, crossfadeAuto: false },
   outputDevice: { backend: 'directsound', deviceId: 'default' }
 })
 
@@ -336,6 +336,7 @@ export function loadDspSettings(): DspSettings {
       transition: {
         gaplessEnabled: settings.transition?.gaplessEnabled !== false,
         crossfadeEnabled: settings.transition?.crossfadeEnabled === true,
+        crossfadeAuto: settings.transition?.crossfadeAuto === true,
         crossfadeMs:
           typeof settings.transition?.crossfadeMs === 'number'
             ? Math.max(0, Math.min(30000, settings.transition.crossfadeMs))

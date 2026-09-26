@@ -257,6 +257,9 @@ std::vector<DeviceInfo> AsioBackend::enumerate_devices() {
 AudioFormat AsioBackend::open(const std::wstring& dev_id,
                                const AudioFormat& req, AudioCallback cb) {
     tr("open start");close();
+    LOG_DEBUG("ASIO open: device=" + log_wide(dev_id) +
+              ", rate=" + std::to_string(req.sample_rate) + ", bits=" + std::to_string(req.bit_depth) +
+              ", channels=" + std::to_string(req.channels));
     if (!preparing_dop_open_) { impl_->raw_callback = {}; impl_->raw_transport = false; }
     impl_->callback=std::move(cb);
     tr("ComGuard");ComGuard com;
@@ -272,27 +275,28 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     if(!cs.empty()&&SUCCEEDED(CLSIDFromString(cs.c_str(),&cl))){
         HRESULT hr=CoCreateInstance(cl,nullptr,CLSCTX_INPROC_SERVER,cl,
                                     reinterpret_cast<void**>(&impl_->obj));
-        if(SUCCEEDED(hr)){tr("CoCreateInstance OK");LOG_INFO("ASIO: CoCreateInstance OK");}
-        else{LOG_ERROR("ASIO: CoCreateInstance 0x"+std::to_string(hr));return{};}}
+        if(SUCCEEDED(hr)){tr("CoCreateInstance OK");}
+        else{LOG_ERROR("ASIO: CoCreateInstance "+log_hex(hr));return{};}}
     else{LOG_ERROR("ASIO: no CLSID");return{};}
 
     // extract vtable
     tr("extract vtable");vt_from_obj(impl_->obj,&impl_->vt);
 
     // init
-    HWND hwnd=GetDesktopWindow();tr("init");LOG_INFO("ASIO: init...");
+    HWND hwnd=GetDesktopWindow();tr("init");
     if(!impl_->vt.init(impl_->obj,hwnd)){tr("init FAILED");LOG_ERROR("ASIO: init failed");close();return{};}
-    tr("init OK");LOG_INFO("ASIO: init OK");
+    tr("init OK");
 
     // driver info
     char nb[128]={};tr("getDriverName");impl_->vt.getDriverName(impl_->obj,nb);
     impl_->driver_name=nb;
     tr("getDV");long dv=impl_->vt.getDriverVersion(impl_->obj);tr("getDV ok");
-    LOG_INFO("ASIO: "+impl_->driver_name+" v"+std::to_string(dv));
+    LOG_DEBUG("ASIO: "+impl_->driver_name+" v"+std::to_string(dv));
 
     // channels
     long ni=0,no=0;
-    tr("getCh");impl_->vt.getChannels(impl_->obj,&ni,&no);tr("getCh ok");
+    tr("getCh");const ASIOError channel_result=impl_->vt.getChannels(impl_->obj,&ni,&no);tr("getCh ok");
+    if(channel_result!=ASE_OK) LOG_ERROR("ASIO getChannels failed: code="+std::to_string(channel_result)+", driver="+impl_->driver_name);
     impl_->input_channels=(int)ni;impl_->output_channels=(int)no;
     if(no<1){LOG_ERROR("ASIO: no output");close();return{};}
     int uc=std::min((int)no, std::max(1, req.channels));
@@ -301,6 +305,9 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     long mn=0,mx=0,pr=0,gr=0;tr("getBufferSize");
     impl_->vt.getBufferSize(impl_->obj,&mn,&mx,&pr,&gr);
     impl_->buffer_size=pr>0?pr:512;
+    LOG_DEBUG("ASIO buffers: driver=" + impl_->driver_name + ", min=" + std::to_string(mn) +
+              ", max=" + std::to_string(mx) + ", preferred=" + std::to_string(pr) +
+              ", granularity=" + std::to_string(gr) + ", selected=" + std::to_string(impl_->buffer_size));
 
     // sample rate
     int trate=req.sample_rate>0?req.sample_rate:44100;
@@ -316,25 +323,31 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
         }
     }
     tr("setSampleRate");
-    if (impl_->vt.setSampleRate(impl_->obj,sr)!=ASE_OK) {
-        LOG_WARN("ASIO: setSampleRate rejected " + std::to_string(static_cast<int>(sr)) + "Hz");
+    const ASIOError rate_result = impl_->vt.setSampleRate(impl_->obj,sr);
+    if (rate_result!=ASE_OK) {
+        LOG_WARN("ASIO setSampleRate rejected: code=" + std::to_string(rate_result) +
+                 ", rate=" + std::to_string(static_cast<int>(sr)) + "Hz, driver=" + impl_->driver_name);
         close(); return {};
     }
     ASIOSampleRate confirmed_rate = 0;
-    if (impl_->vt.getSampleRate(impl_->obj,&confirmed_rate)!=ASE_OK || confirmed_rate<=0 ||
+    const ASIOError confirmed_result = impl_->vt.getSampleRate(impl_->obj,&confirmed_rate);
+    if (confirmed_result!=ASE_OK || confirmed_rate<=0 ||
         (impl_->raw_transport && confirmed_rate != static_cast<ASIOSampleRate>(trate))) {
         LOG_WARN("ASIO" + std::string(impl_->raw_transport ? " DoP" : "") +
-                 ": device did not confirm requested rate " + std::to_string(trate) + "Hz");
+                 ": rate confirmation failed, code=" + std::to_string(confirmed_result) +
+                 ", requested=" + std::to_string(trate) + "Hz, actual=" + std::to_string(confirmed_rate) + "Hz");
         close(); return {};
     }
     sr=confirmed_rate;impl_->sample_rate=sr;
-    LOG_INFO("ASIO rate: "+std::to_string((int)sr));
+    LOG_DEBUG("ASIO rate: "+std::to_string((int)sr));
 
     // channel info
     tr("channel info");impl_->channel_infos.resize(uc);impl_->channel_types.resize(uc);
     for(long ci=0;ci<uc;++ci){ASIOChannelInfo info={};info.channel=ci;info.isInput=ASIOFalse;
-    if (impl_->vt.getChannelInfo(impl_->obj,&info)!=ASE_OK) {
-        LOG_ERROR("ASIO: getChannelInfo failed for output " + std::to_string(ci)); close(); return {};
+    const ASIOError info_result = impl_->vt.getChannelInfo(impl_->obj,&info);
+    if (info_result!=ASE_OK) {
+        LOG_ERROR("ASIO getChannelInfo failed: code=" + std::to_string(info_result) +
+                  ", output=" + std::to_string(ci) + ", driver=" + impl_->driver_name); close(); return {};
     }
     impl_->channel_infos[ci]=info;
     impl_->channel_types[ci]=info.type;
@@ -346,7 +359,7 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
         return {};
     }
     if (impl_->raw_transport) {
-        LOG_INFO("ASIO DoP output " + std::to_string(ci) + ": " + tp_name(info.type) +
+        LOG_DEBUG("ASIO DoP output " + std::to_string(ci) + ": " + tp_name(info.type) +
                  (info.type == ASIOSTInt24LSB ? " packed PCM24" : " right-aligned PCM24-in-32"));
     }}
 
@@ -359,7 +372,8 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     cbs.sampleRateDidChange=sr_change;cbs.asioMessage=asio_msg;
     cbs.bufferSwitchTimeInfo=buf_switch_time;
     ASIOError ce=impl_->vt.createBuffers(impl_->obj,impl_->buffer_infos.data(),uc,impl_->buffer_size,&cbs);
-    if(ce!=ASE_OK){tr("createBuffers FAILED");LOG_ERROR("ASIO: createBuffers "+std::to_string(ce));close();return{};}
+    if(ce!=ASE_OK){LOG_ERROR("ASIO createBuffers failed: code="+std::to_string(ce)+
+        ", driver="+impl_->driver_name+", channels="+std::to_string(uc)+", frames="+std::to_string(impl_->buffer_size));close();return{};}
     impl_->buffers_created=true;tr("createBuffers OK");
 
     // latency
@@ -383,7 +397,7 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     current_format_.sample_rate=(int)sr;current_format_.bit_depth=valid_bits;
     current_format_.channels=uc;buffer_frames_=(int)impl_->buffer_size;
 
-    LOG_INFO("AsioBackend opened: "+impl_->driver_name+" "+std::to_string(current_format_.sample_rate)+"Hz "+
+    LOG_DEBUG("AsioBackend opened: "+impl_->driver_name+" "+std::to_string(current_format_.sample_rate)+"Hz "+
              std::to_string(uc)+"ch "+std::to_string(impl_->buffer_size)+"samp");
     tr("open done OK");return current_format_;}
 
@@ -404,19 +418,21 @@ AudioFormat AsioBackend::open_dop(const std::wstring& device_id,
         impl_->raw_transport = false;
         return {};
     }
-    LOG_INFO("ASIO DoP transport opened: " + std::to_string(actual.sample_rate) + "Hz, " +
+    LOG_DEBUG("ASIO DoP transport opened: " + std::to_string(actual.sample_rate) + "Hz, " +
              std::to_string(actual.channels) + "ch, PCM24 carrier (packed or explicit 24-in-32)");
     return actual;
 }
 
 bool AsioBackend::start() {tr("start");
     if(!impl_->obj||active_)return false;impl_->running.store(true,std::memory_order_release);
-    if(impl_->vt.start(impl_->obj)!=ASE_OK){impl_->running.store(false);LOG_ERROR("ASIO: start failed");return false;}
-    active_=true;LOG_INFO("AsioBackend started");return true;}
+    const ASIOError start_error=impl_->vt.start(impl_->obj);
+    if(start_error!=ASE_OK){impl_->running.store(false);LOG_ERROR("ASIO start failed: code="+std::to_string(start_error)+
+        ", driver="+impl_->driver_name+", rate="+std::to_string(impl_->sample_rate)+", frames="+std::to_string(impl_->buffer_size));return false;}
+    active_=true;LOG_DEBUG("AsioBackend started");return true;}
 
 bool AsioBackend::stop() {tr("stop");
     if(!active_)return false;impl_->running.store(false);impl_->vt.stop(impl_->obj);
-    active_=false;LOG_INFO("AsioBackend stopped");return true;}
+    active_=false;LOG_DEBUG("AsioBackend stopped");return true;}
 
 void AsioBackend::flush() {
     // IASIO has no portable buffer-reset primitive.  Restarting the driver is
@@ -434,4 +450,4 @@ void AsioBackend::close() {tr("close");
     impl_->vt.Release(impl_->obj);impl_->obj=nullptr;}
     impl_->vt={};impl_->buffers_created=false;
     impl_->buffer_infos.clear();impl_->channel_infos.clear();impl_->channel_types.clear();
-    impl_->interleaved_buf.clear();impl_->raw_interleaved_buf.clear();LOG_INFO("AsioBackend closed");}
+    impl_->interleaved_buf.clear();impl_->raw_interleaved_buf.clear();LOG_DEBUG("AsioBackend closed");}

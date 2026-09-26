@@ -203,10 +203,14 @@ export class AudioEngineManager {
   getDopEnabled(): boolean {
     return this.engine?.getDopEnabled() === true
   }
+  setNextTrack(filePath: string): boolean {
+    return this.engine?.setNextTrack?.(filePath) ?? false
+  }
   setTransitionConfig(config: {
     gaplessEnabled: boolean
     crossfadeEnabled: boolean
     crossfadeMs: number
+    crossfadeAuto: boolean
   }): boolean {
     const ok = this.engine?.setTransitionConfig(config) ?? false
     if (ok) {
@@ -219,6 +223,7 @@ export class AudioEngineManager {
     gaplessEnabled: boolean
     crossfadeEnabled: boolean
     crossfadeMs: number
+    crossfadeAuto: boolean
   } | null {
     return this.engine?.getTransitionConfig() ?? null
   }

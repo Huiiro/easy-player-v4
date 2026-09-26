@@ -1,5 +1,6 @@
 #include "wasapi_backend.h"
 #include "logger.h"
+#include <cerrno>
 
 #include <algorithm>
 #include <atomic>
@@ -257,8 +258,8 @@ static IMMDeviceEnumerator* get_enumerator() {
         __uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL,
         IID_PPV_ARGS(&en));
     if (FAILED(hr)) {
-        LOG_ERROR("CoCreateInstance(MMDeviceEnumerator) failed: 0x" +
-                  std::to_string(hr));
+        LOG_ERROR("CoCreateInstance(MMDeviceEnumerator) failed: " +
+                  log_hex(hr));
     }
     return en;
 }
@@ -272,7 +273,7 @@ WasapiBackend::WasapiBackend(bool exclusive)
     , impl_(std::make_unique<Impl>())
 {
     impl_->exclusive = exclusive;
-    LOG_INFO(std::string("WasapiBackend created (") +
+    LOG_DEBUG(std::string("WasapiBackend created (") +
              (exclusive ? "Exclusive" : "Shared") + ")");
 }
 
@@ -352,6 +353,10 @@ AudioFormat WasapiBackend::open(
     AudioCallback callback)
 {
     close();
+    LOG_DEBUG("WASAPI open: mode=" + std::string(exclusive_ ? "exclusive" : "shared") +
+              ", device=" + log_wide(device_id) +
+              ", rate=" + std::to_string(requested_format.sample_rate) +
+              ", bits=" + std::to_string(requested_format.bit_depth) + ", channels=" + std::to_string(requested_format.channels));
     if (!preparing_dop_open_) {
         impl_->raw_callback = {};
         impl_->raw_transport = false;
@@ -373,8 +378,8 @@ AudioFormat WasapiBackend::open(
     en->Release();
     if (FAILED(hr) || !dev) {
         LOG_ERROR("WASAPI: failed to get audio endpoint (id=" +
-                  std::string(device_id.begin(), device_id.end()) +
-                  ") hr=0x" + std::to_string(hr));
+                  log_wide(device_id) +
+                  ") hr=" + log_hex(hr));
         return {};
     }
     impl_->device = dev;
@@ -384,8 +389,8 @@ AudioFormat WasapiBackend::open(
     hr = dev->Activate(IID_IAudioClient, CLSCTX_ALL, nullptr,
                         (void**)&client);
     if (FAILED(hr)) {
-        LOG_ERROR("WASAPI: Activate(IAudioClient) failed: 0x" +
-                  std::to_string(hr));
+        LOG_ERROR("WASAPI: Activate(IAudioClient) failed: " +
+                  log_hex(hr));
         return {};
     }
     impl_->audio_client = client;
@@ -427,10 +432,10 @@ AudioFormat WasapiBackend::open(
                                         &wfext.Format, &closest);
         if (hr != S_OK) {
             if (closest) CoTaskMemFree(closest);
-            LOG_WARN("WASAPI Exclusive: requested encoding unsupported at " +
+            LOG_DEBUG("WASAPI Exclusive: requested encoding unsupported: hr=" + log_hex(hr) + ", rate=" +
                      std::to_string(sample_rate) + "Hz (" +
                      std::to_string(requested_valid_bits) + " valid / " +
-                     std::to_string(requested_pcm_bits) + " container bits)");
+                     std::to_string(requested_pcm_bits) + " container bits), channels=" + std::to_string(channels));
             return {};
         }
 
@@ -469,7 +474,7 @@ AudioFormat WasapiBackend::open(
                 hnsPeriod = static_cast<REFERENCE_TIME>(
                     (10000000.0 * static_cast<double>(aligned_frames)) /
                     static_cast<double>(sample_rate));
-                LOG_INFO("WASAPI Exclusive: retrying aligned buffer " +
+                LOG_DEBUG("WASAPI Exclusive: retrying aligned buffer " +
                          std::to_string(aligned_frames) + "f (" +
                          std::to_string(hnsPeriod / 10000.0) + "ms)");
                 hr = client->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
@@ -481,9 +486,10 @@ AudioFormat WasapiBackend::open(
             // The caller can retry a different PCM rate. Treat this as a
             // candidate rejection; it becomes a terminal error only after
             // every candidate fails in AudioEngine.
-            LOG_WARN("WASAPI Exclusive: Initialize rejected requested format: 0x" +
-                      std::to_string(hr) + " (period=" +
-                      std::to_string(hnsPeriod / 10000.0) + "ms)");
+            LOG_DEBUG("WASAPI Exclusive: Initialize rejected requested format: " +
+                      log_hex(hr) + " (period=" +
+                      std::to_string(hnsPeriod / 10000.0) + "ms), rate=" + std::to_string(sample_rate) +
+                      ", valid_bits=" + std::to_string(requested_valid_bits) + ", channels=" + std::to_string(channels));
             CoTaskMemFree(fmt);
             return {};
         }
@@ -492,8 +498,8 @@ AudioFormat WasapiBackend::open(
         WAVEFORMATEX* mix_fmt = nullptr;
         hr = client->GetMixFormat(&mix_fmt);
         if (FAILED(hr)) {
-            LOG_ERROR("WASAPI Shared: GetMixFormat failed: 0x" +
-                      std::to_string(hr));
+            LOG_ERROR("WASAPI Shared: GetMixFormat failed: " +
+                      log_hex(hr));
             return {};
         }
 
@@ -522,8 +528,9 @@ AudioFormat WasapiBackend::open(
                                  fmt,
                                  nullptr);
         if (FAILED(hr)) {
-            LOG_ERROR("WASAPI Shared: Initialize failed: 0x" +
-                      std::to_string(hr));
+            LOG_ERROR("WASAPI Shared: Initialize failed: " +
+                      log_hex(hr) + ", mix_rate=" + std::to_string(fmt->nSamplesPerSec) +
+                      ", mix_bits=" + std::to_string(fmt->wBitsPerSample) + ", mix_channels=" + std::to_string(fmt->nChannels));
             CoTaskMemFree(fmt);
             return {};
         }
@@ -534,6 +541,9 @@ AudioFormat WasapiBackend::open(
     // Get buffer size (frames)
     hr = client->GetBufferSize(&impl_->buffer_frames);
     if (FAILED(hr)) {
+        LOG_ERROR("WASAPI GetBufferSize failed: hr=" + log_hex(hr) +
+                  ", mode=" + std::string(exclusive_ ? "exclusive" : "shared") +
+                  ", rate=" + std::to_string(fmt->nSamplesPerSec));
         CoTaskMemFree(fmt);
         impl_->wave_format = nullptr;
         return {};
@@ -556,12 +566,12 @@ AudioFormat WasapiBackend::open(
     // Create event handle (must be AFTER Initialize)
     impl_->event_handle = CreateEventW(nullptr, FALSE, FALSE, nullptr);
     if (!impl_->event_handle) {
-        LOG_ERROR("WASAPI: CreateEvent failed");
+        LOG_ERROR("WASAPI CreateEvent failed: win32_error=" + log_hex(GetLastError()));
         return {};
     }
     hr = client->SetEventHandle(impl_->event_handle);
     if (FAILED(hr)) {
-        LOG_ERROR("WASAPI: SetEventHandle failed: 0x" + std::to_string(hr));
+        LOG_ERROR("WASAPI: SetEventHandle failed: " + log_hex(hr));
         return {};
     }
 
@@ -569,8 +579,8 @@ AudioFormat WasapiBackend::open(
     IAudioRenderClient* rc = nullptr;
     hr = client->GetService(IID_IAudioRenderClient, (void**)&rc);
     if (FAILED(hr)) {
-        LOG_ERROR("WASAPI: GetService(IAudioRenderClient) failed: 0x" +
-                  std::to_string(hr));
+        LOG_ERROR("WASAPI: GetService(IAudioRenderClient) failed: " +
+                  log_hex(hr));
         return {};
     }
     impl_->render_client = rc;
@@ -586,7 +596,7 @@ AudioFormat WasapiBackend::open(
     buffer_frames_ = (int)impl_->buffer_frames;
     latency_ms_    = impl_->latency_ms;
 
-    LOG_INFO(std::string("WasapiBackend opened (") +
+    LOG_DEBUG(std::string("WasapiBackend opened (") +
              (exclusive_ ? "Exclusive" : "Shared") + "): " +
              std::to_string(fmt->nSamplesPerSec) + "Hz, " +
              std::to_string(fmt->nChannels) + "ch, " +
@@ -617,7 +627,7 @@ AudioFormat WasapiBackend::open_dop(
         impl_->raw_transport = false;
         return {};
     }
-    LOG_INFO("WASAPI Exclusive DoP transport opened: " +
+    LOG_DEBUG("WASAPI Exclusive DoP transport opened: " +
              std::to_string(actual.sample_rate) + "Hz, " +
              std::to_string(actual.channels) + "ch, PCM24 carrier");
     return actual;
@@ -635,12 +645,13 @@ bool WasapiBackend::start() {
 
     if (!impl_->thread_handle) {
         impl_->running.store(false, std::memory_order_release);
-        LOG_ERROR("WasapiBackend could not create render thread");
+        LOG_ERROR("WASAPI render thread creation failed: errno=" + std::to_string(errno) +
+                  ", buffer_frames=" + std::to_string(impl_->buffer_frames));
         return false;
     }
 
     active_ = true;
-    LOG_INFO("WasapiBackend started");
+    LOG_DEBUG("WasapiBackend started");
     return true;
 }
 
@@ -662,11 +673,11 @@ bool WasapiBackend::stop() {
 
     const HRESULT thread_error = impl_->thread_error.load(std::memory_order_acquire);
     if (FAILED(thread_error)) {
-        LOG_ERROR("WasapiBackend render thread stopped: hr=0x" + std::to_string(thread_error));
+        LOG_ERROR("WasapiBackend render thread stopped: hr=" + log_hex(thread_error));
     }
 
     active_ = false;
-    LOG_INFO("WasapiBackend stopped");
+    LOG_DEBUG("WasapiBackend stopped");
     return true;
 }
 
@@ -681,14 +692,14 @@ void WasapiBackend::flush() {
     const bool restart = active_;
     if (restart) stop();
     HRESULT hr = impl_->audio_client->Stop();
-    if (FAILED(hr)) LOG_WARN("WasapiBackend flush Stop failed: hr=0x" + std::to_string(hr));
+    if (FAILED(hr)) LOG_WARN("WasapiBackend flush Stop failed: hr=" + log_hex(hr));
     hr = impl_->audio_client->Reset();
     if (FAILED(hr)) {
-        LOG_ERROR("WasapiBackend flush Reset failed: hr=0x" + std::to_string(hr));
+        LOG_ERROR("WasapiBackend flush Reset failed: hr=" + log_hex(hr));
         return;
     }
     if (restart) start();
-    LOG_INFO("WasapiBackend flushed");
+    LOG_DEBUG("WasapiBackend flushed");
 }
 
 // ── close ─────────────────────────────────────────────────
@@ -716,5 +727,5 @@ void WasapiBackend::close() {
         CoTaskMemFree(impl_->wave_format);
         impl_->wave_format = nullptr;
     }
-    LOG_INFO("WasapiBackend closed");
+    LOG_DEBUG("WasapiBackend closed");
 }

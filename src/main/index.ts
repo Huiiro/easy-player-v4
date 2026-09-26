@@ -633,8 +633,8 @@ app.whenReady().then(() => {
     else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
   }
   createDir()
-  Logger.registerIpc()
   initDatabase()
+  Logger.registerIpc()
   migrateSourceSecrets()
   registerDatabaseIpcHandlers()
   registerScanIpcHandlers()

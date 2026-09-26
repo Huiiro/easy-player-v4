@@ -33,8 +33,10 @@ AudioFormat AndroidAAudioBackend::open(const std::wstring& device_id,
     close();
 
     AAudioStreamBuilder* builder = nullptr;
-    if (AAudio_createStreamBuilder(&builder) != AAUDIO_OK || !builder) {
-        LOG_ERROR("AAudio: failed to create stream builder");
+    const aaudio_result_t builder_result = AAudio_createStreamBuilder(&builder);
+    if (builder_result != AAUDIO_OK || !builder) {
+        LOG_ERROR("AAudio stream builder failed: code=" + std::to_string(builder_result) +
+                  ", error=" + AAudio_convertResultToText(builder_result));
         return {};
     }
 
@@ -60,12 +62,13 @@ AudioFormat AndroidAAudioBackend::open(const std::wstring& device_id,
     const aaudio_result_t result = AAudioStreamBuilder_openStream(builder, &impl_->stream);
     AAudioStreamBuilder_delete(builder);
     if (result != AAUDIO_OK || !impl_->stream) {
-        LOG_ERROR(std::string("AAudio: open failed: ") + AAudio_convertResultToText(result));
+        LOG_ERROR("AAudio open failed: code=" + std::to_string(result) + ", error=" + AAudio_convertResultToText(result) +
+                  ", requested_rate=" + std::to_string(requested_format.sample_rate) + ", channels=" + std::to_string(requested_format.channels));
         impl_->stream = nullptr;
         return {};
     }
     if (AAudioStream_getFormat(impl_->stream) != AAUDIO_FORMAT_PCM_FLOAT) {
-        LOG_ERROR("AAudio: device rejected float PCM output");
+        LOG_ERROR("AAudio float PCM rejected: actual_format=" + std::to_string(AAudioStream_getFormat(impl_->stream)));
         close();
         return {};
     }
@@ -74,7 +77,7 @@ AudioFormat AndroidAAudioBackend::open(const std::wstring& device_id,
     impl_->format = {AAudioStream_getSampleRate(impl_->stream), 32,
                      AAudioStream_getChannelCount(impl_->stream)};
     impl_->buffer_size_frames = AAudioStream_getBufferSizeInFrames(impl_->stream);
-    LOG_INFO("AAudio opened: " + std::to_string(impl_->format.sample_rate) + "Hz/" +
+    LOG_DEBUG("AAudio opened: " + std::to_string(impl_->format.sample_rate) + "Hz/" +
              std::to_string(impl_->format.channels) + "ch");
     return impl_->format;
 }
@@ -147,5 +150,5 @@ aaudio_data_callback_result_t AndroidAAudioBackend::data_callback(AAudioStream*,
 void AndroidAAudioBackend::error_callback(AAudioStream*, void* user_data, aaudio_result_t error) {
     auto* backend = static_cast<AndroidAAudioBackend*>(user_data);
     backend->active_.store(false, std::memory_order_release);
-    LOG_ERROR(std::string("AAudio stream error: ") + AAudio_convertResultToText(error));
+    LOG_ERROR("AAudio stream error: code=" + std::to_string(error) + ", error=" + AAudio_convertResultToText(error));
 }

@@ -135,9 +135,13 @@ async function initializeAudioControls(): Promise<void> {
 
 onMounted(() => {
   player.setLoudnessAnalysisEnabled(true)
+  player.setAudioControlAnalysisActive(true)
   void initializeAudioControls()
 })
-onBeforeUnmount(() => player.setLoudnessAnalysisEnabled(false))
+onBeforeUnmount(() => {
+  player.setAudioControlAnalysisActive(false)
+  player.setLoudnessAnalysisEnabled(false)
+})
 
 function resetEqBands(): void {
   for (const band of player.eqBands) {
@@ -328,6 +332,24 @@ const qualityOptions = [
   { label: t('ap.qualityMedium'), value: 'medium' },
   { label: t('ap.qualityFast'), value: 'fast' }
 ]
+const resamplerStatus = computed(() => {
+  if (player.audioChain?.activeNodes.includes('DoP encoded transport')) return ''
+  const sourceRate = player.audioChain?.sourceFormat.sampleRate ?? 0
+  const outputRate = player.audioChain?.backendFormat.sampleRate ?? 0
+  if (!sourceRate || !outputRate) return ''
+  const targetRate = player.resamplerConfig.targetSampleRate
+  if (player.resamplerConfig.forceOutputRate && outputRate !== targetRate) {
+    return t(
+      player.currentBackend === 'wasapi_shared'
+        ? 'ap.resamplerSharedRate'
+        : 'ap.resamplerTargetUnavailable',
+      { target: targetRate, actual: outputRate }
+    )
+  }
+  return sourceRate === outputRate
+    ? t('ap.resamplerBypassed', { rate: outputRate })
+    : t('ap.resamplerActive', { source: sourceRate, actual: outputRate })
+})
 function setResamplerEnabled(enabled: boolean | string | number): void {
   player.resamplerConfig.forceOutputRate = enabled === true
   updateResampler()
@@ -734,7 +756,7 @@ function refreshOutputDevices(): void {
           </span>
         </div>
         <!-- Resampler -->
-        <div class="flex items-center gap-3 mt-3">
+        <div class="flex flex-wrap items-center gap-3 mt-3">
           <span class="text-sm whitespace-nowrap w-36">{{ t('ap.resampler') }}</span>
           <BaseSwitch
             :model-value="player.resamplerConfig.forceOutputRate"
@@ -757,6 +779,7 @@ function refreshOutputDevices(): void {
               @change="updateResampler"
             />
           </div>
+          <span v-if="resamplerStatus" class="text-xs text-text-l">{{ resamplerStatus }}</span>
         </div>
         <!-- DoP -->
         <div class="flex items-center gap-3 mt-3">
@@ -766,7 +789,9 @@ function refreshOutputDevices(): void {
             size="sm"
             @change="(enabled) => setDopEnabled(enabled)"
           />
-          <span class="text-xs text-text-l"> {{ t('ap.dopDesc') }} {{ t('ap.dopSupport') }} </span>
+          <span class="text-xs text-text-l">
+            {{ t('ap.dopDesc') }} {{ t('ap.dopSupport') }} {{ t('ap.dopNextPlayback') }}
+          </span>
         </div>
         <!-- Matrix -->
         <div class="flex items-center gap-3 mt-3">
@@ -854,8 +879,17 @@ function refreshOutputDevices(): void {
             />
           </div>
           <span v-if="player.transitionConfig.crossfadeEnabled" class="text-xs text-text-l"
-            >ms</span
+            >{{ player.transitionConfig.crossfadeAuto ? t('ap.crossfadeMax') : 'ms' }}</span
           >
+        </div>
+        <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3 mt-2">
+          <span class="text-sm whitespace-nowrap w-36">{{ t('ap.crossfadeAuto') }}</span>
+          <BaseSwitch
+            :model-value="player.transitionConfig.crossfadeAuto"
+            size="sm"
+            @change="(enabled) => { player.transitionConfig.crossfadeAuto = enabled === true; updateTransitionConfig() }"
+          />
+          <span class="text-xs text-text-l">{{ t('ap.crossfadeAutoDesc') }}</span>
         </div>
       </div>
     </section>
