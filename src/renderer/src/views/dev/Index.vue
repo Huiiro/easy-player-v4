@@ -304,7 +304,12 @@ function formatTime(ms: number): string {
   return `${min}:${sec.toString().padStart(2, '0')}`
 }
 
-async function copyLog(entry: { timestamp: number; level: string; source?: string; message: string }) {
+async function copyLog(entry: {
+  timestamp: number
+  level: string
+  source?: string
+  message: string
+}) {
   const time = new Date(entry.timestamp).toLocaleTimeString()
   const text = `[${time}] [${entry.level.toUpperCase()}] [${entry.source ?? 'renderer'}] ${entry.message}`
   try {
@@ -1089,7 +1094,9 @@ async function copyLog(entry: { timestamp: number; level: string; source?: strin
       <label
         ><input
           v-model="player.transitionConfig.crossfadeAuto"
-          :disabled="!player.transitionConfig.gaplessEnabled || !player.transitionConfig.crossfadeEnabled"
+          :disabled="
+            !player.transitionConfig.gaplessEnabled || !player.transitionConfig.crossfadeEnabled
+          "
           type="checkbox"
           @change="updateTransitionConfig"
         />

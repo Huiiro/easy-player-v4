@@ -458,9 +458,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function syncNextTrack(): Promise<void> {
     const revision = ++nextTrackRevision
-    const index = !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled
-      ? previewNextIndex()
-      : -1
+    const index =
+      !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled ? previewNextIndex() : -1
     const song = queue.value[index]
     let path = song && song.songStatus !== 0 ? song.audio : ''
     if (path && song.sourceId) {
@@ -1275,7 +1274,6 @@ export const usePlayerStore = defineStore('player', () => {
     unsubs.push(
       audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason, data.filePath))
     )
-
   }
 
   function unsubscribe(): void {
