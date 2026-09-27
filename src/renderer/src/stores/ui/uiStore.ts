@@ -59,6 +59,16 @@ export const useUIStore = defineStore(
     const closeToTray = ref(false)
     const autoStart = ref(false)
     const showWelcomeText = ref(true)
+    const homeSectionOrder = ref<string[]>([
+      'welcome',
+      'navigation',
+      'playlists',
+      'overview',
+      'heatmap',
+      'topPlayed',
+      'topDuration'
+    ])
+    const hiddenHomeSections = ref<string[]>([])
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
@@ -620,6 +630,8 @@ export const useUIStore = defineStore(
       useLocalFileName,
       useFullProgress,
       showWelcomeText,
+      homeSectionOrder,
+      hiddenHomeSections,
       customFontFamily,
       customFonts,
       customThemeColor,
@@ -716,6 +728,8 @@ export const useUIStore = defineStore(
         'closeToTray',
         'autoStart',
         'showWelcomeText',
+        'homeSectionOrder',
+        'hiddenHomeSections',
         'customFontFamily',
         'customThemeColor',
         'systemBackground',

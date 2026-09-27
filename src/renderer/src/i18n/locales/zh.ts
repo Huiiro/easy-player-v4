@@ -26,6 +26,17 @@ export default {
     collapse: '折叠目录'
   },
   home: {
+    layout: {
+      customize: '调整布局',
+      welcome: '欢迎语',
+      hint: '拖动调整顺序，使用开关显示或隐藏组件。设置自动保存。',
+      drag: '拖动排序',
+      moveUp: '上移{name}',
+      moveDown: '下移{name}',
+      reset: '恢复默认',
+      done: '完成',
+      empty: '所有组件已隐藏，可通过“调整布局”重新显示。'
+    },
     welcome: '欢迎回来',
     greeting: {
       night: '夜深了，{name}',

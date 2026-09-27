@@ -26,6 +26,17 @@ export default {
     collapse: 'Collapse folder'
   },
   home: {
+    layout: {
+      customize: 'Customize layout',
+      welcome: 'Welcome message',
+      hint: 'Drag to reorder and toggle sections on or off. Changes are saved automatically.',
+      drag: 'Drag to reorder',
+      moveUp: 'Move {name} up',
+      moveDown: 'Move {name} down',
+      reset: 'Restore defaults',
+      done: 'Done',
+      empty: 'All sections are hidden. Use Customize layout to show them again.'
+    },
     welcome: 'Welcome back',
     greeting: {
       night: 'Good night, {name}',
