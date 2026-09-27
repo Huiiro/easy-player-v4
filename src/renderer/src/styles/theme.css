@@ -138,8 +138,10 @@
   --scrollbar-thumb: oklch(92.3% 0.003 48.717);
   --scrollbar-thumb-hover: oklch(86.9% 0.005 56.366);
 
-  --btn-primary-bg: var(--color-primary);
+  --color-primary-fill: var(--color-primary);
+  --btn-primary-bg: var(--color-primary-fill);
   --btn-primary-text: var(--color-white);
+  --color-on-primary: var(--color-white);
   --btn-primary-bg-hover: var(--color-primary-l-20);
   --btn-primary-ring: var(--color-primary);
 
@@ -192,6 +194,37 @@
 }
 
 /* Built-in backgrounds remain expressive, while these tokens keep content readable. */
+:root[data-system-theme='solid'] {
+  --btn-primary-text: var(--color-on-primary);
+  --color-text: #e5eae9;
+  --color-text-l: #b8c2c0;
+  --color-text-l2: #929f9c;
+  --color-bg: color-mix(in srgb, var(--color-primary) 9%, #101416);
+  --color-bg-l: color-mix(in srgb, var(--color-primary) 12%, #1b2224);
+  --color-bg-l2: color-mix(in srgb, var(--color-primary) 16%, #252c2e);
+  --color-bg-d: color-mix(in srgb, var(--color-primary) 6%, #090d0f);
+  --color-border: rgb(210 220 216 / 9%);
+  --color-border-l: rgb(210 220 216 / 15%);
+  --color-hover: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  --color-hover-bg: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--color-primary) 38%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--color-primary) 58%, transparent);
+}
+
+:root[data-system-theme='solid'] .app-sidebar {
+  /* Share the uniform material; an extra gradient produces visible dark bands. */
+  background: transparent;
+  border-right-color: transparent;
+}
+
+:root[data-system-theme='solid'] .bg-primary,
+:root[data-system-theme='solid'] .btn-base:hover,
+:root[data-system-theme='solid'] .more-item:hover,
+:root[data-system-theme='solid'] .hover\:bg-primary:hover {
+  color: var(--color-on-primary);
+  background-color: var(--color-primary-fill);
+}
+
 :root[data-system-theme='blackhole'] {
   --color-bg: rgb(13 12 9);
   --color-bg-l: rgb(25 22 16);

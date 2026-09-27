@@ -574,6 +574,7 @@ export default {
     playerBackgroundAlbum: 'Album artwork',
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundLiquid: 'Liquid flow',
+    systemBackgroundSolid: 'Mica tint',
     playerCoverStyle: 'Cover style',
     playerCoverStyleDescription: 'Choose how the cover appears in the player.',
     playerCoverStyleStandard: 'Standard cover',

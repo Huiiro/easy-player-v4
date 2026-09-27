@@ -425,8 +425,8 @@ onBeforeUnmount(() => {
   color: var(--color-primary);
 }
 .primary-button {
-  background: var(--color-primary);
-  color: white;
+  background: var(--color-primary-fill, var(--color-primary));
+  color: var(--color-on-primary, white);
 }
 .primary-button:disabled,
 .secondary-button:disabled {

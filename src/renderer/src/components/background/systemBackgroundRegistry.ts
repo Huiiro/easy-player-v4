@@ -5,9 +5,10 @@ import ForestBackground from './themes/ForestBackground.vue'
 import MatrixBackground from './themes/MatrixBackground.vue'
 import OceanBackground from './themes/OceanBackground.vue'
 import SunsetBackground from './themes/SunsetBackground.vue'
+import SolidBackground from './SolidBackground.vue'
 
 export type SystemBackground =
-  'none' | 'aurora' | 'ocean' | 'sunset' | 'forest' | 'matrix' | 'blackhole'
+  'none' | 'aurora' | 'ocean' | 'sunset' | 'forest' | 'matrix' | 'blackhole' | 'solid'
 
 export interface SystemBackgroundTheme {
   id: SystemBackground
@@ -29,6 +30,16 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
     headerBackground: 'color-mix(in srgb, var(--color-bg) 82%, transparent)',
     footerBackground: 'color-mix(in srgb, var(--color-bg) 78%, transparent)',
     chromeBorder: 'color-mix(in srgb, var(--color-border) 82%, transparent)'
+  },
+  {
+    id: 'solid',
+    labelKey: 'settings.systemBackgroundSolid',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.691 0.198 148.262)',
+    headerBackground: 'color-mix(in srgb, var(--color-bg) 46%, transparent)',
+    footerBackground: 'color-mix(in srgb, var(--color-bg) 64%, transparent)',
+    chromeBorder: 'rgb(210 220 216 / 5%)',
+    component: SolidBackground
   },
   {
     id: 'aurora',

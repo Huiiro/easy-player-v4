@@ -1064,6 +1064,15 @@ onBeforeUnmount(() => {
     box-shadow var(--motion-duration-standard) var(--motion-ease-standard),
     color var(--motion-duration-standard) var(--motion-ease-standard);
 }
+.system-background-preview--solid .preview-window {
+  background: #25352f;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+.system-background-preview--solid i,
+.system-background-preview--solid b {
+  background: rgb(255 255 255 / 10%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+}
 .theme-option:hover {
   border-color: var(--color-primary);
   color: var(--color-text);

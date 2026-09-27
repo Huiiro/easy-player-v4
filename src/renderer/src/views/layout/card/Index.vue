@@ -633,8 +633,8 @@ onBeforeUnmount(() => {
   transform: translateY(-50%);
 }
 .playlist-scroll-arrow:hover {
-  color: white;
-  background: var(--color-primary);
+  color: var(--color-on-primary, white);
+  background: var(--color-primary-fill, var(--color-primary));
 }
 .playlist-scroll-arrow.is-left {
   left: 0.35rem;
@@ -669,8 +669,8 @@ onBeforeUnmount(() => {
   transform: translateY(-1px);
 }
 .playlist-pill.is-active {
-  color: white;
-  background: var(--color-primary);
+  color: var(--color-on-primary, white);
+  background: var(--color-primary-fill, var(--color-primary));
   box-shadow: 0 4px 14px color-mix(in srgb, var(--color-primary) 42%, transparent);
 }
 @media (prefers-reduced-motion: reduce) {

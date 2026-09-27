@@ -1299,6 +1299,10 @@ export const usePlayerStore = defineStore('player', () => {
         dark: ui.useDarkMode,
         background: ui.useCustomBg ? 'custom' : ui.systemBackground,
         accent: ui.activeThemeColor,
+        fill:
+          ui.systemBackground === 'solid'
+            ? (ui.songThemeColor ?? ui.activeThemeColor)
+            : ui.activeThemeColor,
         border: ui.useCustomBg ? ui.customBg.chromeBorder : null
       }
     })
@@ -1332,6 +1336,8 @@ export const usePlayerStore = defineStore('player', () => {
       () => ui.useCustomBg,
       () => ui.systemBackground,
       () => ui.customThemeColor,
+      () => ui.activeThemeColor,
+      () => ui.songThemeColor,
       () => ui.customBg.chromeBorder
     ],
     publishMiniPlayerState

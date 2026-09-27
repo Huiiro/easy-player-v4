@@ -1,12 +1,51 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getSystemBackgroundTheme } from './systemBackgroundRegistry'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { usePlayerStore } from '@/stores/player/playerStore'
+import { SystemThemeColorAnalyzer } from './songThemeColors'
 
 const ui = useUIStore()
+const player = usePlayerStore()
 const activeTheme = computed(() => getSystemBackgroundTheme(ui.systemBackground))
 const isSystemTheme = computed(() => !ui.useCustomBg && ui.systemBackground !== 'none')
 const isBackgroundActive = ref(!document.hidden && document.hasFocus())
+const isSolidTheme = computed(() => isSystemTheme.value && ui.systemBackground === 'solid')
+
+watch(
+  () => [isSolidTheme.value, player.currentQueueSong?.id, player.currentQueueSong?.cover],
+  (_, __, onCleanup) => {
+    const song = player.currentQueueSong
+    if (!isSolidTheme.value || !song?.cover) {
+      ui.songThemeColor = null
+      return
+    }
+    const cached = SystemThemeColorAnalyzer.getCachedSystemThemeColor(song.cover)
+    if (cached) {
+      ui.songThemeColor = `rgb(${cached})`
+      return
+    }
+    // Sample a bounded thumbnail once per song, even when the player panel is closed.
+    const image = new Image()
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+      image.onload = image.onerror = null
+      image.removeAttribute('src')
+    })
+    image.crossOrigin = 'anonymous'
+    image.onload = () => {
+      if (cancelled) return
+      const color = SystemThemeColorAnalyzer.getSystemThemeColor(image, song.cover)
+      ui.songThemeColor = color ? `rgb(${color})` : null
+    }
+    image.onerror = () => {
+      if (!cancelled) ui.songThemeColor = null
+    }
+    image.src = `easy-player-media://cover-thumb?path=${encodeURIComponent(song.cover)}&size=256`
+  },
+  { immediate: true }
+)
 
 const syncBackgroundActivity = (): void => {
   isBackgroundActive.value = !document.hidden && document.hasFocus()
@@ -18,6 +57,7 @@ onMounted(() => {
   window.addEventListener('blur', syncBackgroundActivity)
 })
 onBeforeUnmount(() => {
+  ui.songThemeColor = null
   document.removeEventListener('visibilitychange', syncBackgroundActivity)
   window.removeEventListener('focus', syncBackgroundActivity)
   window.removeEventListener('blur', syncBackgroundActivity)
@@ -46,11 +86,19 @@ onBeforeUnmount(() => {
         <component
           :is="activeTheme.component"
           v-bind="
-            activeTheme.id === 'blackhole' ? { paused: !isBackgroundActive || ui.showPlayer } : {}
+            activeTheme.id === 'solid'
+              ? {
+                  primary: ui.songThemeColor ?? ui.activeThemeColor,
+                  active: isBackgroundActive && !ui.showPlayer,
+                  reducedMotion: ui.reduceMotion
+                }
+              : activeTheme.id === 'blackhole'
+                ? { paused: !isBackgroundActive || ui.showPlayer }
+                : {}
           "
         />
       </div>
-      <div class="app-background-scrim app-background-scrim--system" />
+      <div v-if="!isSolidTheme" class="app-background-scrim app-background-scrim--system" />
     </div>
   </Transition>
 </template>
@@ -62,6 +110,7 @@ onBeforeUnmount(() => {
   z-index: 0;
   overflow: hidden;
   pointer-events: none;
+  background: var(--color-bg);
 }
 
 .app-background-host {

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { accessibleSongAccent, primarySurfaceColors } from '@/components/background/songThemeColors'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
@@ -77,8 +78,12 @@ export const useUIStore = defineStore(
     let applyingVisualTheme = false
     const customThemeColor = ref('oklch(0.691 0.198 148.262)')
     const systemBackground = ref<SystemBackground>('none')
+    // Transient song palette; theme selection remains the persisted preference.
+    const songThemeColor = ref<string | null>(null)
     const activeThemeColor = computed(() => {
       if (!useCustomBg.value && systemBackground.value !== 'none') {
+        if (systemBackground.value === 'solid' && songThemeColor.value)
+          return accessibleSongAccent(songThemeColor.value)
         return getSystemBackgroundTheme(systemBackground.value).accentColor
       }
       return customThemeColor.value
@@ -230,6 +235,17 @@ export const useUIStore = defineStore(
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
       if (activeThemeColor.value) root.style.setProperty('--color-primary', activeThemeColor.value)
       else root.style.removeProperty('--color-primary')
+      if (!useCustomBg.value && systemBackground.value === 'solid') {
+        const fill = songThemeColor.value ?? activeThemeColor.value
+        const surface = primarySurfaceColors(fill)
+        root.style.setProperty('--color-primary-fill', fill)
+        root.style.setProperty('--color-on-primary', surface.text)
+        root.style.setProperty('--btn-primary-bg-hover', surface.hover)
+      } else {
+        root.style.removeProperty('--color-primary-fill')
+        root.style.removeProperty('--color-on-primary')
+        root.style.removeProperty('--btn-primary-bg-hover')
+      }
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
       const normalizedPadding = normalizeLyricsFontPadding(lyricsFontPadding.value)
       if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
@@ -579,6 +595,7 @@ export const useUIStore = defineStore(
       applyVisualThemeWithTransition
     )
     watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], applyTheme)
+    watch(songThemeColor, applyTheme)
     watch(
       playerBgType,
       (value) => {
@@ -636,6 +653,7 @@ export const useUIStore = defineStore(
       customFonts,
       customThemeColor,
       activeThemeColor,
+      songThemeColor,
       systemBackground,
       customBg,
       currentDynamicBg,

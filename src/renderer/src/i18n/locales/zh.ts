@@ -555,6 +555,7 @@ export default {
     playerBackgroundAlbum: '专辑封面',
     playerBackgroundAmbient: '氛围光晕',
     playerBackgroundLiquid: '流体氛围',
+    systemBackgroundSolid: '云母纯色',
     playerCoverStyle: '封面样式',
     playerCoverStyleDescription: '选择播放器中的封面外观。',
     playerCoverStyleStandard: '普通封面',

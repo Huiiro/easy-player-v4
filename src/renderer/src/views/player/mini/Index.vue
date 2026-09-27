@@ -3,11 +3,13 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import type { SystemBackground } from '@/stores/ui/uiStore'
+import { primarySurfaceColors } from '@/components/background/songThemeColors'
 
 interface MiniPlayerTheme {
   dark: boolean
   background: SystemBackground | 'custom'
   accent: string
+  fill?: string
   border: string | null
 }
 
@@ -43,6 +45,17 @@ const removeUpdateListener = window.api.miniPlayer.onUpdate((data) => {
     root.style.colorScheme = next.theme.dark ? 'dark' : 'light'
     if (next.theme.accent) root.style.setProperty('--color-primary', next.theme.accent)
     else root.style.removeProperty('--color-primary')
+    if (next.theme.background === 'solid') {
+      const fill = next.theme.fill ?? next.theme.accent
+      const surface = primarySurfaceColors(fill)
+      root.style.setProperty('--color-primary-fill', fill)
+      root.style.setProperty('--color-on-primary', surface.text)
+      root.style.setProperty('--btn-primary-bg-hover', surface.hover)
+    } else {
+      root.style.removeProperty('--color-primary-fill')
+      root.style.removeProperty('--color-on-primary')
+      root.style.removeProperty('--btn-primary-bg-hover')
+    }
     if (next.theme.border) root.style.setProperty('--color-border', next.theme.border)
     else root.style.removeProperty('--color-border')
   }
@@ -130,11 +143,11 @@ onUnmounted(removeUpdateListener)
   transform: scale(1.06);
 }
 .mini-action--play {
-  color: white;
-  background: var(--color-primary);
+  color: var(--color-on-primary, white);
+  background: var(--color-primary-fill, var(--color-primary));
 }
 .mini-action--play:hover {
-  color: white;
-  background: var(--color-primary-l-20);
+  color: var(--color-on-primary, white);
+  background: var(--btn-primary-bg-hover);
 }
 </style>
