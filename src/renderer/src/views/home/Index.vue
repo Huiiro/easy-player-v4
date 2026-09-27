@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
@@ -42,7 +42,6 @@ const router = useRouter()
 const player = usePlayerStore()
 const uiStore = useUIStore()
 const loading = ref(true)
-const layoutOpen = ref(false)
 const defaultSectionOrder = [
   'welcome',
   'clock',
@@ -125,6 +124,8 @@ const activePlaylistId = computed(() =>
 )
 
 const greeting = computed(() => {
+  const customText = uiStore.homeWelcomeText.trim()
+  if (customText) return customText
   const hour = new Date().getHours()
   const key = (() => {
     switch (true) {
@@ -317,25 +318,24 @@ onMounted(() => {
   void load()
   eventBus.on('playlistsChanged', loadPlaylists)
 })
-onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
+onDeactivated(() => {
+  uiStore.homeLayoutOpen = false
+})
+onBeforeUnmount(() => {
+  uiStore.homeLayoutOpen = false
+  eventBus.off('playlistsChanged', loadPlaylists)
+})
 </script>
 
 <template>
   <main class="custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text">
-    <div class="mb-4 flex justify-end">
-      <button
-        class="btn-hover flex items-center gap-2 px-3 py-2 text-sm"
-        @click="layoutOpen = true"
-      >
-        <SvgIcon name="common-sort" class-name="size-4" />
-        {{ t('home.layout.customize') }}
-      </button>
-    </div>
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <template v-for="section in visibleSections" :key="section">
         <section v-if="section === 'welcome'" class="xl:col-span-2">
           <p class="text-sm text-text-l">{{ t('home.welcome') }}</p>
-          <h1 class="mt-1 text-3xl font-semibold tracking-tight">{{ greeting }}</h1>
+          <h1 class="mt-1 whitespace-pre-wrap break-words text-3xl font-semibold tracking-tight">
+            {{ greeting }}
+          </h1>
         </section>
         <HomeClock v-if="section === 'clock'" class="xl:col-span-2" />
         <section v-if="section === 'navigation'" class="xl:col-span-2">
@@ -565,7 +565,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
     <p v-if="!visibleSections.length" class="py-16 text-center text-sm text-text-l">
       {{ t('home.layout.empty') }}
     </p>
-    <BaseDialog v-model="layoutOpen" :title="t('home.layout.customize')">
+    <BaseDialog v-model="uiStore.homeLayoutOpen" :title="t('home.layout.customize')">
       <p class="mb-4 text-sm text-text-l">{{ t('home.layout.hint') }}</p>
       <Draggable
         v-model="sectionOrder"
@@ -596,7 +596,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
         </button>
         <button
           class="rounded-lg bg-primary px-4 py-2 text-sm text-white"
-          @click="layoutOpen = false"
+          @click="uiStore.homeLayoutOpen = false"
         >
           {{ t('home.layout.done') }}
         </button>

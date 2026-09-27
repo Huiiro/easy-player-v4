@@ -759,7 +759,7 @@ onBeforeUnmount(() => {
             class="absolute bottom-full right-0 z-[9999] mb-4 w-48 rounded-xl border border-border bg-bg p-1 shadow-xl"
           >
             <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
-              <SvgIcon name="control-playlist" class-name="size-4" />
+              <SvgIcon name="common-plus" class-name="size-4 shrink-0" />
               {{ t('songList.addToPlaylist') }}
             </button>
             <button class="menu-item flex items-center gap-2" @click="openTags">
@@ -771,8 +771,8 @@ onBeforeUnmount(() => {
               class="menu-item flex items-center gap-2"
               @click="openArtist(artist)"
             >
-              <SvgIcon name="common-user" class-name="size-4" />
-              <span class="truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
+              <SvgIcon name="common-user" class-name="size-4 shrink-0" />
+              <span class="min-w-0 truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
             </button>
             <button
               class="menu-item flex items-center gap-2"
@@ -792,7 +792,7 @@ onBeforeUnmount(() => {
               <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
             </button>
             <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
-              <SvgIcon name="common-lyrics" class-name="size-4" />
+              <SvgIcon name="common-edit-lrc" class-name="size-4" />
               {{ t('footer.openInLyricEditor') }}
             </button>
           </div>

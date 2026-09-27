@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { useMessage } from '@/components/ui/useMessage'
@@ -97,6 +98,20 @@ watch(
 </script>
 
 <template>
+  <div class="system-row welcome-row">
+    <div>
+      <h3 id="home-welcome-label">{{ t('settings.homeWelcomeText') }}</h3>
+      <p id="home-welcome-description">{{ t('settings.homeWelcomeTextDescription') }}</p>
+    </div>
+    <BaseInput
+      v-model="ui.homeWelcomeText"
+      :placeholder="t('settings.homeWelcomeTextPlaceholder')"
+      :maxlength="120"
+      aria-labelledby="home-welcome-label"
+      aria-describedby="home-welcome-description"
+      class="w-full sm:w-72 sm:shrink-0"
+    />
+  </div>
   <div v-if="ui.platform === 'win'" class="system-row">
     <div>
       <h3>{{ t('settings.fileAssociation') }}</h3>
@@ -204,5 +219,9 @@ watch(
   color: var(--color-text-l);
   font-size: 0.8125rem;
   line-height: 1.45;
+}
+.welcome-row {
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 </style>

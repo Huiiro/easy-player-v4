@@ -413,6 +413,10 @@ export default {
     restore: 'Restore main window'
   },
   settings: {
+    homeWelcomeText: 'Home welcome message',
+    homeWelcomeTextDescription:
+      'Customize the home heading. Leave empty for the default time-based greeting. Changes are saved automatically.',
+    homeWelcomeTextPlaceholder: 'Example: A good day for good music',
     title: 'Settings',
     navigation: 'Navigation',
     description: 'Configure player behavior and preferences.',

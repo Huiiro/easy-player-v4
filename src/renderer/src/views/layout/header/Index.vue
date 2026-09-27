@@ -124,6 +124,17 @@ async function uploadLocalFiles(): Promise<void> {
     <div class="h-full min-w-4 flex-1" />
     <div class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
+        v-if="route.path === '/home' && !ui.useCardView"
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('home.layout.customize')"
+        :aria-label="t('home.layout.customize')"
+        :aria-expanded="ui.homeLayoutOpen"
+        aria-haspopup="dialog"
+        @click="ui.homeLayoutOpen = true"
+      >
+        <svgIcon name="common-layout" class-name="size-4" />
+      </button>
+      <button
         class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="t('header.importLocalMusic')"
         @click="uploadLocalFiles"

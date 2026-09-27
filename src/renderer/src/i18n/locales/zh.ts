@@ -409,6 +409,9 @@ export default {
     restore: '恢复主窗口'
   },
   settings: {
+    homeWelcomeText: '主页欢迎语',
+    homeWelcomeTextDescription: '自定义主页的大标题，留空则按时段显示默认问候。修改自动保存。',
+    homeWelcomeTextPlaceholder: '例如：今天也要听点好音乐',
     title: '设置',
     navigation: '设置导航',
     description: '设置播放器行为和偏好。',

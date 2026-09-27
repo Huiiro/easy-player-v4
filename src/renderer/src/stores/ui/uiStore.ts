@@ -31,6 +31,7 @@ export const useUIStore = defineStore(
     const platform = ref<'win' | 'macOS' | 'linux'>('win')
     const logoText = ref('Easy Player')
     const userName = ref('Easy Player')
+    const homeWelcomeText = ref('')
     const itemOrder = ref<'asc' | 'desc'>('desc')
     // ========== UI设置 ==========
     // The player is dark by default; custom backgrounds inherit this mode for contrast.
@@ -72,6 +73,7 @@ export const useUIStore = defineStore(
     ])
     const hiddenHomeSections = ref<string[]>([])
     const homeClockEnabled = ref(false)
+    const homeLayoutOpen = ref(false)
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
@@ -631,6 +633,7 @@ export const useUIStore = defineStore(
       platform,
       logoText,
       userName,
+      homeWelcomeText,
       itemOrder,
       useDarkMode,
       followSystemTheme,
@@ -652,6 +655,7 @@ export const useUIStore = defineStore(
       homeSectionOrder,
       hiddenHomeSections,
       homeClockEnabled,
+      homeLayoutOpen,
       customFontFamily,
       customFonts,
       customThemeColor,
@@ -732,6 +736,7 @@ export const useUIStore = defineStore(
         'locale',
         'logoText',
         'userName',
+        'homeWelcomeText',
         'itemOrder',
         'useDarkMode',
         'followSystemTheme',
