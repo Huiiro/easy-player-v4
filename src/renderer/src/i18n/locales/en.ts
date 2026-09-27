@@ -27,15 +27,14 @@ export default {
   },
   home: {
     layout: {
+      clock: 'Clock',
       customize: 'Customize layout',
       welcome: 'Welcome message',
       hint: 'Drag to reorder and toggle sections on or off. Changes are saved automatically.',
       drag: 'Drag to reorder',
-      moveUp: 'Move {name} up',
-      moveDown: 'Move {name} down',
       reset: 'Restore defaults',
       done: 'Done',
-      empty: 'All sections are hidden. Use Customize layout to show them again.'
+      empty: ''
     },
     welcome: 'Welcome back',
     greeting: {
@@ -237,7 +236,7 @@ export default {
     title: 'Remote sources',
     refresh: 'Refresh sources',
     refreshed: 'Source list refreshed',
-    supported: 'Navidrome (Subsonic API) and Jellyfin are supported; more services can be added.',
+    supported: 'Currently supports Navidrome and Jellyfin.',
     add: 'Add source',
     edit: 'Edit remote source',
     delete: 'Delete',
@@ -502,7 +501,7 @@ export default {
     autoStart: 'Launch at startup',
     fileAssociation: 'File associations',
     fileAssociationDescription:
-      'Choose Easy Player in Windows Default apps to open audio files by default. Supports MP3, AAC, M4A, OGG, OPUS, FLAC, WAV, AIFF, APE, DFF and DSF.',
+      'Choose Easy Player in Windows Default apps to open audio files by default.',
     configureFileAssociation: 'Configure file associations',
     fileAssociationFailed: 'Unable to open Windows Default apps settings',
     openAudioFailed:
@@ -574,7 +573,7 @@ export default {
     playerBackgroundAlbum: 'Album artwork',
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundLiquid: 'Liquid flow',
-    systemBackgroundSolid: 'Mica tint',
+    systemBackgroundSolid: 'Follow song',
     playerCoverStyle: 'Cover style',
     playerCoverStyleDescription: 'Choose how the cover appears in the player.',
     playerCoverStyleStandard: 'Standard cover',
@@ -698,8 +697,7 @@ export default {
     lyricManage: 'Lyrics manager',
     lyricSource: 'Lyrics source',
     lyricBrowseSource: 'View / edit source',
-    lyricBrowseSourceHint:
-      'Selecting a source only changes the editor; use the bottom-right button to change playback.',
+    lyricBrowseSourceHint: 'Selecting a source only changes the editor.',
     lyricSourceApply: 'Switch lyrics source',
     lyricSourceCurrentSelection: 'Current lyrics source',
     lyricSourceAuto: 'Auto (priority order)',

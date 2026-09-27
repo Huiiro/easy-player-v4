@@ -27,15 +27,14 @@ export default {
   },
   home: {
     layout: {
+      clock: '时钟',
       customize: '调整布局',
       welcome: '欢迎语',
       hint: '拖动调整顺序，使用开关显示或隐藏组件。设置自动保存。',
       drag: '拖动排序',
-      moveUp: '上移{name}',
-      moveDown: '下移{name}',
       reset: '恢复默认',
       done: '完成',
-      empty: '所有组件已隐藏，可通过“调整布局”重新显示。'
+      empty: ''
     },
     welcome: '欢迎回来',
     greeting: {
@@ -236,7 +235,7 @@ export default {
     title: '远程音源',
     refresh: '刷新音源',
     refreshed: '音源列表已刷新',
-    supported: '支持 Navidrome（Subsonic API）和 Jellyfin，可继续扩展更多服务。',
+    supported: '当前支持 Navidrome 和 Jellyfin。',
     add: '新增音源',
     edit: '编辑远程音源',
     delete: '删除',
@@ -492,7 +491,7 @@ export default {
     autoStart: '开机自动启动',
     fileAssociation: '文件关联',
     fileAssociationDescription:
-      '在 Windows 默认应用中选择 Easy Player，设置音频文件的默认打开方式。支持 MP3、AAC、M4A、OGG、OPUS、FLAC、WAV、AIFF、APE、DFF 和 DSF。',
+      '在 Windows 默认应用中选择 Easy Player，设置音频文件的默认打开方式。',
     configureFileAssociation: '设置文件关联',
     fileAssociationFailed: '无法打开 Windows 默认应用设置',
     openAudioFailed: '无法打开音频文件，请检查文件是否可用或格式是否受支持',
@@ -555,7 +554,7 @@ export default {
     playerBackgroundAlbum: '专辑封面',
     playerBackgroundAmbient: '氛围光晕',
     playerBackgroundLiquid: '流体氛围',
-    systemBackgroundSolid: '云母纯色',
+    systemBackgroundSolid: '跟随歌曲',
     playerCoverStyle: '封面样式',
     playerCoverStyleDescription: '选择播放器中的封面外观。',
     playerCoverStyleStandard: '普通封面',
@@ -675,7 +674,7 @@ export default {
     lyricManage: '歌词管理',
     lyricSource: '歌词来源',
     lyricBrowseSource: '阅览 / 编辑来源',
-    lyricBrowseSourceHint: '选择来源只切换编辑器内容；点击右下角按钮后才会改变播放来源。',
+    lyricBrowseSourceHint: '选择来源只切换编辑器内容。',
     lyricSourceApply: '切换歌词来源',
     lyricSourceCurrentSelection: '当前歌词来源',
     lyricSourceAuto: '自动（按优先级）',

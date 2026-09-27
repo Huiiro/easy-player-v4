@@ -85,7 +85,7 @@ async function uploadLocalFiles(): Promise<void> {
 
 <template>
   <header
-    class="app-header flex h-[42px] items-center border-b transition-opacity [-webkit-app-region:drag]"
+    class="app-header flex h-[42px] items-center transition-opacity [-webkit-app-region:drag]"
     :class="[visible ? '' : 'pointer-events-none opacity-0', isMac ? 'app-header--mac' : '']"
     :style="headerStyle"
   >

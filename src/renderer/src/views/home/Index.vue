@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
+import HomeClock from '@/components/home/HomeClock.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -44,6 +45,7 @@ const loading = ref(true)
 const layoutOpen = ref(false)
 const defaultSectionOrder = [
   'welcome',
+  'clock',
   'navigation',
   'playlists',
   'overview',
@@ -54,6 +56,7 @@ const defaultSectionOrder = [
 type HomeSection = (typeof defaultSectionOrder)[number]
 const sectionLabels: Record<HomeSection, string> = {
   welcome: 'home.layout.welcome',
+  clock: 'home.layout.clock',
   navigation: 'home.quickNavigation',
   playlists: 'home.playlists',
   overview: 'home.overview',
@@ -77,6 +80,7 @@ function sectionKey(id: HomeSection): string {
 }
 function isSectionVisible(id: HomeSection): boolean {
   if (id === 'welcome') return uiStore.showWelcomeText
+  if (id === 'clock') return uiStore.homeClockEnabled
   return !Array.isArray(uiStore.hiddenHomeSections) || !uiStore.hiddenHomeSections.includes(id)
 }
 const visibleSections = computed(() => sectionOrder.value.filter(isSectionVisible))
@@ -85,22 +89,19 @@ function setSectionVisible(id: HomeSection, visible: boolean | string | number):
     uiStore.showWelcomeText = Boolean(visible)
     return
   }
+  if (id === 'clock') {
+    uiStore.homeClockEnabled = Boolean(visible)
+    return
+  }
   const hidden = Array.isArray(uiStore.hiddenHomeSections) ? uiStore.hiddenHomeSections : []
   uiStore.hiddenHomeSections = visible
     ? hidden.filter((item) => item !== id)
     : [...new Set([...hidden, id])]
 }
-function moveSection(index: number, offset: number): void {
-  const order = [...sectionOrder.value]
-  const target = index + offset
-  if (target < 0 || target >= order.length) return
-  const [section] = order.splice(index, 1)
-  order.splice(target, 0, section)
-  sectionOrder.value = order
-}
 function resetLayout(): void {
   sectionOrder.value = [...defaultSectionOrder]
   uiStore.hiddenHomeSections = []
+  uiStore.homeClockEnabled = false
   uiStore.showWelcomeText = true
 }
 
@@ -336,6 +337,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           <p class="text-sm text-text-l">{{ t('home.welcome') }}</p>
           <h1 class="mt-1 text-3xl font-semibold tracking-tight">{{ greeting }}</h1>
         </section>
+        <HomeClock v-if="section === 'clock'" class="xl:col-span-2" />
         <section v-if="section === 'navigation'" class="xl:col-span-2">
           <h2 class="mb-3 text-lg font-semibold">{{ t('home.quickNavigation') }}</h2>
           <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
@@ -572,7 +574,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
         :animation="uiStore.reduceMotion ? 0 : 150"
         class="custom-scrollbar max-h-[55vh] space-y-2 overflow-y-auto"
       >
-        <template #item="{ element: id, index }">
+        <template #item="{ element: id }">
           <div class="flex items-center gap-3 rounded-lg border border-border p-3">
             <span class="home-drag-handle cursor-grab text-text-l" :title="t('home.layout.drag')">
               <SvgIcon name="common-drag-handle" class-name="size-4" />
@@ -580,22 +582,6 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
             <span :id="`home-section-${id}`" class="min-w-0 flex-1 text-sm">
               {{ t(sectionLabels[id as HomeSection]) }}
             </span>
-            <button
-              class="btn-hover p-1 disabled:opacity-30"
-              :disabled="index === 0"
-              :aria-label="t('home.layout.moveUp', { name: t(sectionLabels[id as HomeSection]) })"
-              @click="moveSection(index, -1)"
-            >
-              <SvgIcon name="common-expand-up" class-name="size-4" />
-            </button>
-            <button
-              class="btn-hover p-1 disabled:opacity-30"
-              :disabled="index === sectionOrder.length - 1"
-              :aria-label="t('home.layout.moveDown', { name: t(sectionLabels[id as HomeSection]) })"
-              @click="moveSection(index, 1)"
-            >
-              <SvgIcon name="common-expand-down" class-name="size-4" />
-            </button>
             <BaseSwitch
               :model-value="isSectionVisible(id)"
               :aria-labelledby="`home-section-${id}`"

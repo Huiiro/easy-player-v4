@@ -62,6 +62,7 @@ export const useUIStore = defineStore(
     const showWelcomeText = ref(true)
     const homeSectionOrder = ref<string[]>([
       'welcome',
+      'clock',
       'navigation',
       'playlists',
       'overview',
@@ -70,6 +71,7 @@ export const useUIStore = defineStore(
       'topDuration'
     ])
     const hiddenHomeSections = ref<string[]>([])
+    const homeClockEnabled = ref(false)
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
@@ -649,6 +651,7 @@ export const useUIStore = defineStore(
       showWelcomeText,
       homeSectionOrder,
       hiddenHomeSections,
+      homeClockEnabled,
       customFontFamily,
       customFonts,
       customThemeColor,
@@ -748,6 +751,7 @@ export const useUIStore = defineStore(
         'showWelcomeText',
         'homeSectionOrder',
         'hiddenHomeSections',
+        'homeClockEnabled',
         'customFontFamily',
         'customThemeColor',
         'systemBackground',
