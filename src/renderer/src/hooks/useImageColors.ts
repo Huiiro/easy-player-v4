@@ -10,17 +10,14 @@ interface RgbColor {
   blue: number
 }
 
-interface CachedAnalysis {
-  primary: string
-  secondary: string
-  lyricsDark: number
-}
-
 interface LyricsAnalysis {
   averageLuminance: number
   brightRatio: number
   nearWhite: number
   lowContrastRisk: number
+  lightContrast: number
+  darkContrast: number
+  darkReadableRatio: number
   useDarkText: boolean
 }
 
@@ -28,7 +25,7 @@ interface AnalysisResult {
   palette: Palette
   useDarkLyrics: boolean
   source: 'cache' | 'sampled' | 'failed'
-  result?: LyricsAnalysis
+  result?: LyricsAnalysis | null
 }
 
 interface AnalyzeOptions {
@@ -45,6 +42,7 @@ interface AnalyzeOptions {
   isPanelBackground: boolean
   useLiquidBackground: boolean
   coverAnalysisVersion: number
+  backgroundFilter?: string
   getLyricsRegion: (image: HTMLImageElement) => [number, number, number, number] | null
   onCacheUpdate?: (
     songId: string,
@@ -59,6 +57,65 @@ interface AnalyzeOptions {
 }
 
 export class CoverAnalyzer {
+  // Capture the original right-side viewport region once when artwork loads.
+  static getLyricsRegion(
+    image: HTMLImageElement,
+    viewport: { width: number; height: number }
+  ): [number, number, number, number] | null {
+    if (!image.naturalWidth || !image.naturalHeight) return null
+    const bounds = image.getBoundingClientRect()
+    if (!bounds.width || !bounds.height) return null
+    const left = Math.max(viewport.width * 0.55, bounds.left)
+    const top = Math.max(viewport.height * 0.14, bounds.top)
+    const right = Math.min(viewport.width * 0.85, bounds.right)
+    const bottom = Math.min(viewport.height * 0.86, bounds.bottom)
+    if (right <= left || bottom <= top) return null
+    const scale = Math.max(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight)
+    const originX = bounds.left + (bounds.width - image.naturalWidth * scale) / 2
+    const originY = bounds.top + (bounds.height - image.naturalHeight * scale) / 2
+    return [
+      (left - originX) / scale,
+      (top - originY) / scale,
+      (right - left) / scale,
+      (bottom - top) / scale
+    ]
+  }
+
+  // Project the fixed artwork region through centered object-fit: cover.
+  // This is only display geometry; it never participates in contrast analysis.
+  static getLyricsRegionBounds(
+    image: HTMLImageElement,
+    region: [number, number, number, number]
+  ): {
+    left: number
+    top: number
+    width: number
+    height: number
+  } | null {
+    const bounds = image.getBoundingClientRect()
+    if (!bounds.width || !bounds.height) return null
+    const scale = Math.max(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight)
+    return {
+      left: bounds.left + (bounds.width - image.naturalWidth * scale) / 2 + region[0] * scale,
+      top: bounds.top + (bounds.height - image.naturalHeight * scale) / 2 + region[1] * scale,
+      width: region[2] * scale,
+      height: region[3] * scale
+    }
+  }
+
+  private static readonly linearChannels = Array.from({ length: 256 }, (_, value) => {
+    const channel = value / 255
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  })
+  private static relativeLuminance(red: number, green: number, blue: number): number {
+    const channels = this.linearChannels
+    return (
+      channels[Math.round(red)] * 0.2126 +
+      channels[Math.round(green)] * 0.7152 +
+      channels[Math.round(blue)] * 0.0722
+    )
+  }
+
   private static readonly SAMPLE_SIZE = 32
   private static readonly recentPalettes = new Map<string, Palette>()
 
@@ -107,6 +164,7 @@ export class CoverAnalyzer {
       useLiquidBackground,
       coverAnalysisVersion,
       getLyricsRegion,
+      backgroundFilter,
       onCacheUpdate
     } = options
 
@@ -114,36 +172,29 @@ export class CoverAnalyzer {
       return this.fallbackResult()
     }
 
-    const cached = this.getCachedAnalysis(song, coverAnalysisVersion, isPanelBackground)
-    if (cached) {
-      const palette = this.createPalette(cached.primary, cached.secondary)
-      this.rememberPalette(song, coverAnalysisVersion, useLiquidBackground, palette)
-      return {
-        palette,
-        useDarkLyrics: cached.lyricsDark === 1,
-        source: 'cache'
-      }
-    }
-
     try {
-      const pixelData = this.sampleImageData(image)
-      const palette = this.extractVibrantColors(pixelData, this.SAMPLE_SIZE, useLiquidBackground)
+      const cached = this.getCachedPalette(song, coverAnalysisVersion, useLiquidBackground)
+      const palette =
+        cached ??
+        this.extractVibrantColors(
+          this.sampleImageData(image),
+          this.SAMPLE_SIZE,
+          useLiquidBackground
+        )
       this.rememberPalette(song, coverAnalysisVersion, useLiquidBackground, palette)
 
       let useDarkLyrics = false
-      let result: LyricsAnalysis = null
+      let result: LyricsAnalysis | null = null
       if (isPanelBackground) {
         const region = getLyricsRegion(image)
         if (region) {
-          const analysis = this.analyzeRegion(image, region)
+          const analysis = this.analyzeBackground(image, region, backgroundFilter)
           result = analysis
           useDarkLyrics = analysis.useDarkText
         }
-      } else if (useLiquidBackground) {
-        const analysis = this.analyzeLiquid(pixelData)
-        result = analysis
-        useDarkLyrics = analysis.useDarkText
       }
+      // Liquid and ambient backgrounds have a permanent dark backdrop.
+      // Their source artwork does not represent rendered background contrast.
 
       if (isPanelBackground && song?.cover && onCacheUpdate) {
         onCacheUpdate(song.id, {
@@ -158,38 +209,11 @@ export class CoverAnalyzer {
       return {
         palette,
         useDarkLyrics,
-        source: 'sampled',
+        source: cached ? 'cache' : 'sampled',
         result: result
       }
     } catch {
       return this.fallbackResult()
-    }
-  }
-
-  /**
-   * 从缓存中获取分析结果
-   */
-  private static getCachedAnalysis(
-    song: AnalyzeOptions['song'],
-    version: number,
-    isPanelBackground: boolean
-  ): CachedAnalysis | null {
-    if (!isPanelBackground || !song) return null
-
-    const isValid =
-      song.coverAnalysisPath === song.cover &&
-      song.coverAnalysisVersion === version &&
-      song.coverPrimary &&
-      song.coverSecondary &&
-      song.coverLyricsDark !== null &&
-      song.coverLyricsDark !== undefined
-
-    if (!isValid) return null
-
-    return {
-      primary: song.coverPrimary!,
-      secondary: song.coverSecondary!,
-      lyricsDark: song.coverLyricsDark!
     }
   }
 
@@ -214,9 +238,10 @@ export class CoverAnalyzer {
   /**
    * 分析指定区域的歌词对比度
    */
-  private static analyzeRegion(
+  static analyzeBackground(
     image: HTMLImageElement,
-    region: [number, number, number, number]
+    region: [number, number, number, number],
+    filter = 'none'
   ): LyricsAnalysis {
     const canvas = document.createElement('canvas')
     const size = this.SAMPLE_SIZE
@@ -228,16 +253,37 @@ export class CoverAnalyzer {
       throw new Error('Failed to get canvas context')
     }
 
-    ctx.drawImage(image, ...region, 0, 0, size, size)
+    // Filter before cropping, including blur outside the lyric region.
+    const filtered = document.createElement('canvas')
+    const scale = Math.min(1, 256 / Math.max(image.naturalWidth, image.naturalHeight))
+    filtered.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    filtered.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const filteredContext = filtered.getContext('2d')
+    if (!filteredContext) throw new Error('Failed to get canvas context')
+    // Normalize blur against a 1024px artwork reference, so a resized window
+    // cannot alter the sampled pixels or the resulting lyric color.
+    const referenceScale = Math.max(image.naturalWidth, image.naturalHeight) / 1024
+    filteredContext.filter = filter.replace(
+      /blur\(([\d.]+)px\)/g,
+      (_, radius) => `blur(${Number(radius) * referenceScale * scale}px)`
+    )
+    filteredContext.drawImage(image, 0, 0, filtered.width, filtered.height)
+    // Transparent artwork uses the same backdrop as the playback panel.
+    ctx.fillStyle = '#101416'
+    ctx.fillRect(0, 0, size, size)
+    ctx.drawImage(
+      filtered,
+      region[0] * scale,
+      region[1] * scale,
+      region[2] * scale,
+      region[3] * scale,
+      0,
+      0,
+      size,
+      size
+    )
     const data = ctx.getImageData(0, 0, size, size).data
     return this.analyzeLyricsContrast(data)
-  }
-
-  /**
-   * 分析液态背景对比度
-   */
-  private static analyzeLiquid(pixelData: Uint8ClampedArray): LyricsAnalysis {
-    return this.analyzeLyricsContrast(pixelData, true)
   }
 
   /**
@@ -311,7 +357,8 @@ export class CoverAnalyzer {
   /**
    * 自动柔化颜色
    */
-  private static smartSoftenColor(color: RgbColor): RgbColor {
+  private static smartSoftenColor(color: RgbColor | undefined): RgbColor | undefined {
+    if (!color) return undefined
     const r = color.red
     const g = color.green
     const b = color.blue
@@ -397,15 +444,28 @@ export class CoverAnalyzer {
   /**
    * 分析歌词对比度
    */
-  private static analyzeLyricsContrast(
-    data: Uint8ClampedArray,
-    liquidBackground?: boolean
-  ): LyricsAnalysis {
+  private static analyzeLyricsContrast(data: Uint8ClampedArray): LyricsAnalysis {
     let visible = 0
     let luminanceSum = 0
     let bright = 0
     let nearWhite = 0
     let lowContrastRisk = 0
+    let lightContrastSum = 0
+    let darkContrastSum = 0
+    let darkReadable = 0
+    const darkHighlightLuminance = this.relativeLuminance(37, 42, 50)
+    // Active line, normal line, translation. Match the default light palette
+    // and .player-lyrics--dark-text, including dark text alpha compositing.
+    const lightColors = [
+      [255, 255, 255, 1, 0.6],
+      [174, 180, 192, 1, 0.25],
+      [217, 221, 228, 1, 0.15]
+    ]
+    const darkColors = [
+      [37, 42, 50, 1, 0.6],
+      [37, 42, 50, 0.8, 0.25],
+      [37, 42, 50, 0.72, 0.15]
+    ]
 
     for (let index = 0; index < data.length; index += 4) {
       const alpha = data[index + 3] / 255
@@ -419,6 +479,23 @@ export class CoverAnalyzer {
       const luminance = (red * 0.2126 + green * 0.7152 + blue * 0.0722) / 255
       const chroma = (Math.max(red, green, blue) - Math.min(red, green, blue)) / 255
 
+      const backgroundLuminance = this.relativeLuminance(red, green, blue)
+      if ((backgroundLuminance + 0.05) / (darkHighlightLuminance + 0.05) >= 3) darkReadable += alpha
+      const score = (colors: number[][]): number =>
+        colors.reduce((sum, [r, g, b, opacity, weight]) => {
+          const textLuminance = this.relativeLuminance(
+            r * opacity + red * (1 - opacity),
+            g * opacity + green * (1 - opacity),
+            b * opacity + blue * (1 - opacity)
+          )
+          return (
+            sum +
+            (weight * (Math.max(backgroundLuminance, textLuminance) + 0.05)) /
+              (Math.min(backgroundLuminance, textLuminance) + 0.05)
+          )
+        }, 0)
+      lightContrastSum += score(lightColors) * alpha
+      darkContrastSum += score(darkColors) * alpha
       visible += alpha
       luminanceSum += luminance * alpha
       if (luminance >= 0.72) bright += alpha
@@ -430,18 +507,22 @@ export class CoverAnalyzer {
     const brightRatio = visible ? bright / visible : 0
     const nearWhiteRatio = visible ? nearWhite / visible : 0
     const lowContrastRiskRatio = visible ? lowContrastRisk / visible : 0
-    const useDarkText = liquidBackground
-      ? (averageLuminance >= 0.79 && brightRatio >= 0.65) ||
-        nearWhiteRatio >= 0.55 ||
-        (averageLuminance >= 0.75 && lowContrastRiskRatio >= 0.72)
-      : (averageLuminance >= 0.74 && brightRatio >= 0.56) ||
-        nearWhiteRatio >= 0.42 ||
-        (averageLuminance >= 0.68 && lowContrastRiskRatio >= 0.62)
+    const lightContrast = visible ? lightContrastSum / visible : 0
+    const darkContrast = visible ? darkContrastSum / visible : 0
+    const darkReadableRatio = visible ? darkReadable / visible : 0
+    // Give dark text a modest preference on broadly light/gray backgrounds,
+    // while requiring readable active text over most of the sampled region.
+    const useDarkText =
+      darkContrast > lightContrast * 1.03 ||
+      (darkReadableRatio >= 0.75 && darkContrast >= lightContrast * 0.85)
     return {
       averageLuminance,
       brightRatio,
       nearWhite: nearWhiteRatio,
       lowContrastRisk: lowContrastRiskRatio,
+      lightContrast,
+      darkContrast,
+      darkReadableRatio,
       useDarkText
     }
   }

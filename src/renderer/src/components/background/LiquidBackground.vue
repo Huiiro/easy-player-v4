@@ -2,12 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import fragmentSource from '@/shaders/fragmentSource.glsl?raw'
 import vertexSource from '@/shaders/vertexSource.glsl?raw'
-import {
-  advanceLiquidMotion,
-  createLiquidMotion,
-  LIQUID_BASE_SPEED,
-  LIQUID_ENERGY_SPEED
-} from './liquidMotion'
+import { advanceLiquidMotion, createLiquidMotion } from './liquidMotion'
 
 const props = defineProps<{
   primary: string
@@ -19,20 +14,9 @@ const props = defineProps<{
   beat: number
   active: boolean
   reducedMotion: boolean
-  debug?: boolean
 }>()
 const emit = defineEmits<{
   unavailable: []
-  debug: [
-    state: {
-      width: number
-      height: number
-      time: number
-      flowSpeed: number
-      warpStrength: number
-      beat: number
-    }
-  ]
 }>()
 
 const canvas = ref<HTMLCanvasElement>()
@@ -40,8 +24,7 @@ let gl: WebGLRenderingContext | null = null
 let program: WebGLProgram | null = null
 let frame = 0,
   lastFrameAt = 0,
-  lastAnimationAt = 0,
-  lastDebugAt = 0
+  lastAnimationAt = 0
 let resizeObserver: ResizeObserver | undefined
 let resizeTimer: number | undefined
 let blurredCoverTexture: WebGLTexture | null = null
@@ -217,17 +200,6 @@ function render(now: number): void {
   gl.uniform1i(uniforms.coverBlurred!, 0)
   gl.uniform1f(uniforms.coverLoaded!, coverFade)
   gl.drawArrays(gl.TRIANGLES, 0, 3)
-  if (props.debug && now - lastDebugAt >= 200) {
-    lastDebugAt = now
-    emit('debug', {
-      width: drawingWidth || canvas.value.width,
-      height: drawingHeight || canvas.value.height,
-      time: motion.time,
-      flowSpeed: LIQUID_BASE_SPEED + smoothedEnergy * LIQUID_ENERGY_SPEED,
-      warpStrength: 1 + smoothedEnergy * 0.04 + smoothedBass * 0.055 + beatEnvelope * 0.025,
-      beat: beatEnvelope
-    })
-  }
 }
 
 function start(): void {

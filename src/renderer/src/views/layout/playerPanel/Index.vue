@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -18,9 +18,7 @@ import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { formatArtists } from '@/utils/artists'
 
-const showLyricsSamplingRegion = import.meta.env.DEV && false
-const showLiquidDebug = import.meta.env.DEV && false
-const COVER_ANALYSIS_VERSION = 5
+const COVER_ANALYSIS_VERSION = 11
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -127,7 +125,6 @@ onUnmounted(() => {
  */
 const liquidUnavailable = ref(false)
 const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
-const liquidDebug = ref({ width: 0, height: 0, time: 0, flowSpeed: 0, warpStrength: 0, beat: 0 })
 const defaultLiquidColors = {
   primary: '77 136 220',
   secondary: '205 78 165',
@@ -173,14 +170,19 @@ const initialPalette = CoverAnalyzer.getCachedPalette(
 )
 const coverColors = ref(initialPalette ?? { ...defaultLiquidColors })
 const paletteReady = ref(!coverUrl.value || Boolean(initialPalette))
-const lyricsContrastDebug = ref({
-  averageLuminance: 0,
-  brightRatio: 0,
-  nearWhite: 0,
-  lowContrastRisk: 0,
-  useDarkText: false
-})
 const useDarkLyrics = ref(false)
+const backgroundImage = ref<HTMLImageElement | null>(null)
+const analyzedBackgrounds = new WeakSet<HTMLImageElement>()
+// Cached images can load before Vue assigns the template ref.
+watch(
+  backgroundImage,
+  async (image) => {
+    await nextTick()
+    if (image && image === backgroundImage.value && image.complete && image.naturalWidth)
+      analyzeCoverImage(image)
+  },
+  { flush: 'post' }
+)
 const lyricColorStyle = computed(() => {
   if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
   return {
@@ -220,47 +222,28 @@ const analysisPollingRate = computed(() => {
   if (ui.showPlayerSpectrum) return 20
   return shouldAnimate.value ? 12 : 0
 })
-function getLyricsRegion(image: HTMLImageElement): [number, number, number, number] | null {
-  const bounds = image.getBoundingClientRect()
-  if (!bounds.width || !bounds.height || !image.naturalWidth || !image.naturalHeight) return null
-
-  const panelLeft = window.innerWidth * 0.55
-  const panelTop = window.innerHeight * 0.14
-  const panelRight = window.innerWidth * 0.85
-  const panelBottom = window.innerHeight * 0.86
-  const left = Math.max(panelLeft, bounds.left)
-  const top = Math.max(panelTop, bounds.top)
-  const right = Math.min(panelRight, bounds.right)
-  const bottom = Math.min(panelBottom, bounds.bottom)
-  if (right <= left || bottom <= top) return null
-
-  const scale = Math.max(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight)
-  const visibleWidth = bounds.width / scale
-  const visibleHeight = bounds.height / scale
-  const sourceLeft = (image.naturalWidth - visibleWidth) / 2
-  const sourceTop = (image.naturalHeight - visibleHeight) / 2
-  const toSourceX = (value: number): number =>
-    sourceLeft + ((value - bounds.left) / bounds.width) * visibleWidth
-  const toSourceY = (value: number): number =>
-    sourceTop + ((value - bounds.top) / bounds.height) * visibleHeight
-  return [
-    toSourceX(left),
-    toSourceY(top),
-    toSourceX(right) - toSourceX(left),
-    toSourceY(bottom) - toSourceY(top)
-  ]
-}
 function extractCoverColors(event: Event): void {
   const image = event.currentTarget as HTMLImageElement
+  if (image) analyzeCoverImage(image)
+}
+function analyzeCoverImage(image: HTMLImageElement): void {
+  const isBackground = image.classList.contains('panel-background-item') && useAlbumArtwork.value
+  if (isBackground && analyzedBackgrounds.has(image)) return
   const loadedSource = image.getAttribute('src')
   if (loadedSource && loadedSource !== coverUrl.value) return
   const result = CoverAnalyzer.analyze({
     image,
     song: player.currentQueueSong,
-    isPanelBackground: image.classList.contains('panel-background-item'),
+    isPanelBackground: isBackground,
+    backgroundFilter: getComputedStyle(image).filter,
     useLiquidBackground: useLiquidBackground.value,
     coverAnalysisVersion: COVER_ANALYSIS_VERSION,
-    getLyricsRegion,
+    getLyricsRegion: (loadedImage) => {
+      return CoverAnalyzer.getLyricsRegion(loadedImage, {
+        width: window.innerWidth,
+        height: window.innerHeight
+      })
+    },
     onCacheUpdate: (id, analysis) => {
       void window.api.database.command('updateSongCoverAnalysis', {
         id,
@@ -275,9 +258,12 @@ function extractCoverColors(event: Event): void {
   }
   coverColors.value = result.palette
   paletteReady.value = true
-  useDarkLyrics.value = result.useDarkLyrics
+  // Cover thumbnail load events must never overwrite background contrast.
+  if (isBackground) {
+    analyzedBackgrounds.add(image)
+    useDarkLyrics.value = result.useDarkLyrics
+  }
   coverColorSource.value = result.source
-  lyricsContrastDebug.value = result.result
 }
 function resetCoverPalette(source: 'idle' | 'loading' | 'failed', preserveColors = false): void {
   if (!preserveColors) coverColors.value = { ...defaultLiquidColors }
@@ -478,6 +464,7 @@ function changeLyricsOffset(event: WheelEvent): void {
       <Transition name="panel-background">
         <img
           v-if="backgroundSource"
+          ref="backgroundImage"
           :key="backgroundSource"
           :src="backgroundSource"
           :style="{ transform: `scale(${1.1 + rhythmAmount * 0.1})` }"
@@ -515,9 +502,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             :beat="liquidBeat"
             :active="player.isPlaying && isPanelVisible"
             :reduced-motion="player.rhythmVisualConfig.reducedMotion"
-            :debug="showLiquidDebug"
             @unavailable="liquidUnavailable = true"
-            @debug="liquidDebug = $event"
           />
           <div class="absolute inset-0 liquid-background-soften" />
         </div>
@@ -540,51 +525,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           :intensity="ambientIntensity"
         />
       </Transition>
-      <!-- dev debug -->
-      <div
-        v-if="showLyricsSamplingRegion"
-        class="pointer-events-none absolute bottom-[14%] left-[55%] right-[15%] top-[14%] border border-dashed border-amber-300/90 bg-amber-200/10"
-      >
-        <span
-          class="absolute left-2 top-2 rounded bg-amber-300/90 px-1.5 py-0.5 text-[10px] font-medium leading-5 text-slate-950"
-        >
-          歌词取色区域<br />
-          平均亮度 {{ lyricsContrastDebug?.averageLuminance.toFixed(3) }} / 阈值 0.74<br />
-          明亮像素 {{ (lyricsContrastDebug?.brightRatio * 100).toFixed(1) }}% / 阈值 56%<br />
-          近白 {{ (lyricsContrastDebug?.nearWhite * 100).toFixed(1) }}% / 阈值 42%<br />
-          低对比风险 {{ (lyricsContrastDebug?.lowContrastRisk * 100).toFixed(1) }}% / 阈值 62%<br />
-          判定：{{ lyricsContrastDebug?.useDarkText ? '深色歌词' : '浅色歌词' }}
-        </span>
-      </div>
     </div>
-    <!-- dev debug -->
-    <aside v-if="showLiquidDebug && useLiquidBackground" class="liquid-debug" aria-live="polite">
-      <strong>Liquid background · DEV</strong>
-      <span>颜色来源：{{ coverColorSource }}</span>
-      <span>
-        <i :style="{ background: `rgb(${coverColors.primary})` }" />主色
-        {{ coverColors.primary }}
-      </span>
-      <span>
-        <i :style="{ background: `rgb(${coverColors.secondary})` }" />副色
-        {{ coverColors.secondary }}
-      </span>
-      <span>
-        <i :style="{ background: `rgb(${coverColors.tertiary})` }" />牵制色
-        {{ coverColors.tertiary }}
-      </span>
-      <span>首尾相邻色由 Shader 实时计算</span>
-      <span>RMS {{ liquidEnergy.toFixed(3) }} · Bass {{ liquidBass.toFixed(3) }}</span>
-      <span>Beat {{ liquidDebug.beat.toFixed(3) }}</span>
-      <span>
-        速度 {{ liquidDebug.flowSpeed.toFixed(3) }} · 扰动
-        {{ liquidDebug.warpStrength.toFixed(3) }}
-      </span>
-      <span>
-        帧缓冲 {{ liquidDebug.width }}×{{ liquidDebug.height }} · t
-        {{ liquidDebug.time.toFixed(1) }}s
-      </span>
-    </aside>
     <!-- content -->
     <section
       class="relative z-10 size-full overflow-hidden bg-transparent"
@@ -979,7 +920,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             :auto-search-network="ui.autoSearchNetworkLyrics"
             :reload-token="lyricReloadToken"
             :layout-token="collapsed ? 1 : 0"
-            :dark-text="useDarkLyrics && !useLiquidBackground"
+            :dark-text="useDarkLyrics && !ui.lyricsColors.overrideAutoContrast"
             @seek="seekTo"
           />
         </section>
@@ -1011,40 +952,6 @@ function changeLyricsOffset(event: WheelEvent): void {
 .liquid-background-soften {
   background: rgb(8 11 20 / 48%);
   backdrop-filter: blur(6px) brightness(0.9) saturate(1.62) contrast(1.14);
-}
-.liquid-debug {
-  position: absolute;
-  top: 4.5rem;
-  left: 1rem;
-  z-index: 35;
-  display: grid;
-  gap: 0.25rem;
-  min-width: 16rem;
-  padding: 0.65rem 0.75rem;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 0.6rem;
-  color: rgb(255 255 255 / 86%);
-  background: rgb(5 8 16 / 72%);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 22%);
-  backdrop-filter: blur(12px);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 0.7rem;
-  line-height: 1.4;
-}
-.liquid-debug strong {
-  color: #fff;
-  font-size: 0.72rem;
-}
-.liquid-debug span {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.liquid-debug i {
-  width: 0.7rem;
-  height: 0.7rem;
-  border: 1px solid rgb(255 255 255 / 30%);
-  border-radius: 999px;
 }
 .panel-background-item {
   filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
