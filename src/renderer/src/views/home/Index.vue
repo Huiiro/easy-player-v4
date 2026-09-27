@@ -128,9 +128,10 @@ const heatmapDays = computed(() => {
 const maxHeat = computed(() => Math.max(1, ...heatmapDays.value.map((item) => item.seconds)))
 const monthMarkers = computed(() =>
   heatmapDays.value
-    .map((day, index) => ({ day, week: Math.floor(index / 7) }))
-    .filter(({ day, week }) => week === 0 || day.date.endsWith('-01'))
+    .map((day, index) => ({ day, index, week: Math.floor(index / 7) }))
+    .filter(({ day, index }) => index === 0 || day.date.endsWith('-01'))
     .map(({ day, week }) => ({
+      date: day.date,
       week,
       label: new Intl.DateTimeFormat(uiStore.locale === 'zh' ? 'zh-CN' : 'en-US', {
         month: 'short'
@@ -389,7 +390,7 @@ onBeforeUnmount(() => eventBus.off('playlistsChanged', loadPlaylists))
           <div class="relative mb-1 h-4 text-[10px] text-text-l">
             <span
               v-for="marker in monthMarkers"
-              :key="`${marker.week}-${marker.label}`"
+              :key="marker.date"
               class="absolute whitespace-nowrap"
               :style="{ left: `${marker.week * 16}px` }"
               >{{ marker.label }}</span

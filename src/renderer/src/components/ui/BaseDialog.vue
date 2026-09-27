@@ -55,8 +55,14 @@ const footerClass = computed(() => {
 </script>
 
 <template>
+  <!-- TransitionRoot owns unmounting so the portal stays intact during leave. -->
   <TransitionRoot :show="modelValue" as="template">
-    <Dialog as="div" class="pointer-events-auto fixed inset-0 z-50 text-text" @close="handleClose">
+    <Dialog
+      static
+      as="div"
+      class="pointer-events-auto fixed inset-0 z-50 text-text"
+      @close="handleClose"
+    >
       <!-- overlay -->
       <TransitionChild
         as="template"
