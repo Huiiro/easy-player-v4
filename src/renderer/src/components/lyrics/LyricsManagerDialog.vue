@@ -132,9 +132,9 @@ function selectCandidate(index: number): void {
     lyric.value = item.lrc
     lyricFormat.value = item.format
     translation.value = item.translation || ''
-    translationFormat.value = item.translation ? 'lrc' : undefined
+    translationFormat.value = item.translationFormat ?? (item.translation ? 'lrc' : undefined)
     romanization.value = item.romanization || ''
-    romanizationFormat.value = item.romanization ? 'lrc' : undefined
+    romanizationFormat.value = item.romanizationFormat ?? (item.romanization ? 'lrc' : undefined)
   }
 }
 async function search(): Promise<void> {
@@ -179,10 +179,10 @@ async function save(): Promise<void> {
     :model-value="props.modelValue"
     :title="t('playerPanel.lyricManage')"
     :close-on-overlay="false"
-    width="max-w-4xl"
+    width="max-w-5xl"
     @update:model-value="updateVisible"
   >
-    <div class="grid h-[min(64vh,42rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
+    <div class="grid h-[min(68vh,45rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
       <div class="custom-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
         <div>
           <p class="text-xs text-text-l">{{ t('playerPanel.lyricBrowseSource') }}</p>
@@ -207,6 +207,18 @@ async function save(): Promise<void> {
                 class="ml-1 text-[10px] opacity-75"
                 >· {{ sourceLabel }}
               </span>
+            </button>
+            <button
+              class="manager-button w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
+              type="button"
+              :disabled="previewSource === ui.lyricSourceMode"
+              @click="applyPlaybackSource"
+            >
+              {{
+                previewSource === ui.lyricSourceMode
+                  ? t('playerPanel.lyricSourceCurrentSelection')
+                  : t('playerPanel.lyricSourceApply')
+              }}
             </button>
           </div>
         </div>
@@ -259,6 +271,19 @@ async function save(): Promise<void> {
                 )
               }}
               · {{ candidate.title }} — {{ candidate.artist }}
+              <span
+                class="ml-2 inline-flex items-center gap-1 rounded bg-text/10 px-1.5 py-0.5 text-[10px]"
+              >
+                {{ (candidate.format || 'lrc').toUpperCase() }}
+                ·
+                {{
+                  t(
+                    candidate.supportsWordTiming
+                      ? 'playerPanel.lyricWordTimed'
+                      : 'playerPanel.lyricLineTimed'
+                  )
+                }}
+              </span>
             </button>
           </div>
         </div>
@@ -290,18 +315,6 @@ async function save(): Promise<void> {
         @click="emit('update:modelValue', false)"
       >
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
-        type="button"
-        :disabled="previewSource === ui.lyricSourceMode"
-        @click="applyPlaybackSource"
-      >
-        {{
-          previewSource === ui.lyricSourceMode
-            ? t('playerPanel.lyricSourceCurrentSelection')
-            : t('playerPanel.lyricSourceApply')
-        }}
       </button>
       <button
         class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"

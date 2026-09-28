@@ -323,7 +323,7 @@ declare global {
           success: boolean
           data?: {
             content: string
-            format: 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+            format: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
             path?: string
           } | null
           error?: string
@@ -341,9 +341,12 @@ declare global {
             artist: string
             album?: string
             lrc: string
-            format?: 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+            format?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
+            supportsWordTiming: boolean
             translation?: string
+            translationFormat?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
             romanization?: string
+            romanizationFormat?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
           }>
           error?: string
         }>

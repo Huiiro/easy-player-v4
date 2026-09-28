@@ -695,6 +695,8 @@ export default {
     lyricRomanizationPlaceholder: '在此编辑罗马音歌词（可选，支持 ELRC/YRC 逐词时间）…',
     lyricProviderNetease: '网易云',
     lyricProviderKugou: '酷狗',
+    lyricWordTimed: '逐字',
+    lyricLineTimed: '逐行',
     lyricSourceNone: '未找到歌词'
   },
   lyrics: {

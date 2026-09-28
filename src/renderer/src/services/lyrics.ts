@@ -1,5 +1,5 @@
 export type LyricSource = 'embedded' | 'database' | 'local' | 'network'
-export type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+export type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
 
 export interface LyricPayload {
   content: string
@@ -86,8 +86,11 @@ export interface NetworkLyricCandidate {
   album?: string
   lrc: string
   format?: LyricFormat
+  supportsWordTiming: boolean
   translation?: string
+  translationFormat?: LyricFormat
   romanization?: string
+  romanizationFormat?: LyricFormat
 }
 
 interface ParsedLrcTrack {
@@ -102,6 +105,8 @@ const LRC_TIME_TAG = /\[(\d+):(\d{1,2}(?:[.:]\d{1,3})?)\]/g
 const ELRC_WORD_TAG = /<(\d+):(\d{1,2}(?:[.:]\d{1,3})?)>([^<]*)/g
 const YRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
 const YRC_WORD_TAG = /\((\d+),(\d+),\d+\)([^()]+)/g
+const KRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
+const KRC_WORD_TAG = /<(\d+),(\d+),\d+>([^<]*)/g
 const MAX_LYRIC_CONTENT_LENGTH = 1_000_000
 const MAX_LYRIC_LINES = 5_000
 const MAX_LYRIC_WORDS = 50_000
@@ -117,12 +122,13 @@ function emptyMetadata(): LyricDocument['metadata'] {
 }
 
 export function isLyricFormat(value: unknown): value is LyricFormat {
-  return ['lrc', 'elrc', 'yrc', 'ttml', 'plain'].includes(String(value))
+  return ['lrc', 'elrc', 'yrc', 'krc', 'ttml', 'plain'].includes(String(value))
 }
 
 function detectLyricFormat(content: string): LyricFormat {
   const source = content.replace(/^\uFEFF/, '').trim()
   if (/<tt(?:\s|>)/i.test(source)) return 'ttml'
+  if (/^\s*\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(source)) return 'krc'
   if (/^\s*\[\d+,\d+\]\s*\(\d+,\d+,\d+\)/m.test(source)) return 'yrc'
   if (ELRC_WORD_TAG.test(source)) {
     ELRC_WORD_TAG.lastIndex = 0
@@ -292,6 +298,94 @@ function parseYrcTrack(source: string): ParsedLrcTrack {
       })
   }
   return { metadata, lines }
+}
+
+function parseKrcTrack(source: string): ParsedLrcTrack {
+  const metadata = emptyMetadata()
+  const lines: LyricLine[] = []
+  let wordCount = 0
+
+  for (const rawLine of source.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    if (lines.length >= MAX_LYRIC_LINES || wordCount >= MAX_LYRIC_WORDS) break
+    const line = rawLine.trim()
+    const tag = line.match(/^\[(ti|ar|al|offset):([^\]]*)\]$/i)
+    if (tag) {
+      const value = tag[2].trim()
+      if (tag[1].toLowerCase() === 'ti') metadata.title = value
+      else if (tag[1].toLowerCase() === 'ar') metadata.artist = value
+      else if (tag[1].toLowerCase() === 'al') metadata.album = value
+      else if (Number.isFinite(Number(value))) metadata.offsetMs = Math.round(Number(value))
+      continue
+    }
+    const match = line.match(KRC_LINE_TAG)
+    if (!match) continue
+    const timeMs = Number(match[1])
+    const durationMs = Number(match[2])
+    if (!Number.isFinite(timeMs) || !Number.isFinite(durationMs) || timeMs < 0 || durationMs < 0)
+      continue
+
+    const words: LyricWord[] = []
+    for (const token of match[3].matchAll(KRC_WORD_TAG)) {
+      if (wordCount >= MAX_LYRIC_WORDS) break
+      const relativeStart = Number(token[1])
+      const wordDuration = Number(token[2])
+      const text = token[3]
+      if (!text || !Number.isFinite(relativeStart) || !Number.isFinite(wordDuration)) continue
+      const startMs = timeMs + relativeStart
+      words.push({ text, startMs, endMs: Math.max(startMs + 1, startMs + wordDuration) })
+      wordCount += 1
+    }
+    const text = words.map((word) => word.text).join('')
+    if (text.trim())
+      lines.push({
+        timeMs,
+        endMs: Math.max(timeMs + 1, timeMs + durationMs),
+        text,
+        words
+      })
+  }
+
+  const languageTag = source.match(/^\[language:([^\]]+)\]/m)?.[1]
+  if (!languageTag || !lines.length) return { metadata, lines }
+  try {
+    const bytes = Uint8Array.from(atob(languageTag), (character) => character.charCodeAt(0))
+    const parsed = JSON.parse(new TextDecoder().decode(bytes)) as {
+      content?: Array<{ type?: number; lyricContent?: string[][] }>
+    }
+    const translations: LyricLine[] = []
+    const romanizations: LyricLine[] = []
+    for (const language of parsed.content ?? []) {
+      if (!Array.isArray(language.lyricContent)) continue
+      for (const [index, line] of lines.entries()) {
+        const row = language.lyricContent[index]
+        if (!Array.isArray(row)) continue
+        if (language.type === 1 && typeof row[0] === 'string' && row[0].trim())
+          translations.push({ timeMs: line.timeMs, endMs: line.endMs, text: row[0] })
+        if (language.type === 0 && line.words?.length === row.length) {
+          const words = line.words.flatMap((word, wordIndex) =>
+            typeof row[wordIndex] === 'string' && row[wordIndex]
+              ? [{ text: row[wordIndex], startMs: word.startMs, endMs: word.endMs }]
+              : []
+          )
+          if (words.length)
+            romanizations.push({
+              timeMs: line.timeMs,
+              endMs: line.endMs,
+              text: words.map((word) => word.text).join(''),
+              words
+            })
+        }
+      }
+    }
+    return {
+      metadata,
+      lines,
+      embeddedTranslationLines: translations.length ? translations : undefined,
+      embeddedRomanizationLines: romanizations.length ? romanizations : undefined
+    }
+  } catch {
+    return { metadata, lines }
+  }
 }
 
 interface TtmlTimeParameters {
@@ -702,7 +796,8 @@ function findTrackLine(track: LyricLine[], timeMs: number): LyricLine | undefine
       difference = distance
     }
   }
-  return difference <= 30 ? closest : undefined
+  // Provider translation timestamps can differ slightly from the word-timed main track.
+  return difference <= 500 ? closest : undefined
 }
 
 function finalizeWordTiming(lines: LyricLine[]): LyricLine[] {
@@ -784,6 +879,7 @@ export function parseLyrics(payload: LyricPayload): LyricDocument {
   const parseTrack = (content: string, trackFormat?: LyricFormat): ParsedLrcTrack => {
     const resolvedFormat = trackFormat || detectLyricFormat(content)
     if (resolvedFormat === 'yrc') return parseYrcTrack(content)
+    if (resolvedFormat === 'krc') return parseKrcTrack(content)
     if (resolvedFormat === 'ttml') return parseTtmlTrack(content)
     return parseLrcTrack(content)
   }
@@ -802,6 +898,7 @@ export function parseLyrics(payload: LyricPayload): LyricDocument {
     track.lines.map((line) => ({
       ...line,
       timeMs: line.timeMs + offsetMs,
+      endMs: line.endMs === undefined ? undefined : line.endMs + offsetMs,
       words: line.words?.map((word) => ({
         ...word,
         startMs: word.startMs + offsetMs,
@@ -916,24 +1013,20 @@ export async function resolveLyrics(
         artist: song.artist,
         album: song.album
       })
-      const candidate = response.success ? response.data?.[0] : null
+      const candidate = response.success
+        ? response.data?.find((item) =>
+            parseLyrics({ content: item.lrc, format: item.format, source: 'network' }).lines.some(
+              (line) => line.text.trim()
+            )
+          )
+        : null
       if (!candidate) continue
       lrc = candidate.lrc
       format = candidate.format
       translation = candidate.translation
-      translationFormat = 'lrc'
+      translationFormat = candidate.translationFormat ?? (translation ? 'lrc' : undefined)
       romanization = candidate.romanization
-      romanizationFormat = 'lrc'
-      // Automatic lookup deliberately accepts the first match and caches it.
-      await window.api.database.command('updateSongLyrics', {
-        id: song.id,
-        lrc,
-        lyricFormat: format,
-        translation,
-        translationFormat,
-        romanization,
-        romanizationFormat
-      })
+      romanizationFormat = candidate.romanizationFormat ?? (romanization ? 'lrc' : undefined)
     } else {
       const response = await window.api.lyrics.loadSource(song.audio, source)
       lrc = response.success ? response.data?.content : null
@@ -949,7 +1042,17 @@ export async function resolveLyrics(
         : undefined,
       source
     }).lines
-    if (lines.length)
+    if (lines.length) {
+      if (source === 'network')
+        await window.api.database.command('updateSongLyrics', {
+          id: song.id,
+          lrc,
+          lyricFormat: format,
+          translation,
+          translationFormat,
+          romanization,
+          romanizationFormat
+        })
       return {
         lines,
         source,
@@ -960,6 +1063,7 @@ export async function resolveLyrics(
         romanization: romanization || undefined,
         romanizationFormat
       }
+    }
   }
   return { lines: [], source: null }
 }

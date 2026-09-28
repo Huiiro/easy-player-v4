@@ -7,12 +7,14 @@ import { basename, dirname, extname, join } from 'node:path'
 import { parseFile } from 'music-metadata'
 import {
   lyric as getNeteaseLyric,
+  lyric_new as getNeteaseLyricNew,
   search as searchNetease
 } from '@neteasecloudmusicapienhanced/api'
 import kugouApi from 'kugoumusicapi'
+import { cleanNetworkLyric, normalizeKrc } from '../service/networkLyricNormalizer'
 
 export type LyricsSource = 'embedded' | 'local' | 'network'
-type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'ttml' | 'plain'
+type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
 interface LyricLoadPayload {
   content: string
   format: LyricFormat
@@ -31,8 +33,23 @@ export interface NetworkLyricCandidate {
   album?: string
   lrc: string
   format?: LyricFormat
+  supportsWordTiming: boolean
   translation?: string
+  translationFormat?: LyricFormat
   romanization?: string
+  romanizationFormat?: LyricFormat
+}
+
+interface NeteaseLyricResponse {
+  status?: number
+  body?: {
+    lrc?: { lyric?: string }
+    yrc?: { lyric?: string }
+    tlyric?: { lyric?: string }
+    ytlrc?: { lyric?: string }
+    romalrc?: { lyric?: string }
+    yromalrc?: { lyric?: string }
+  }
 }
 
 const KUGOU_COOKIE = 'dfid=test;userid=0;token='
@@ -64,15 +81,14 @@ function rankCandidates(
       matchScore(candidate.title, request.title) * 0.7 +
       matchScore(candidate.artist, request.artist) * 0.2 +
       matchScore(candidate.album, request.album) * 0.1
-    return score(right) - score(left)
+    return (
+      score(right) -
+      score(left) +
+      (Number(right.format === 'yrc' || right.format === 'krc') -
+        Number(left.format === 'yrc' || left.format === 'krc')) *
+        0.01
+    )
   })
-}
-
-function normalizeLyric(text: string): string {
-  return text
-    .split(/\r?\n/)
-    .filter((line) => line.trim() && !/^\[(?:offset|ti|ar|al|by):/i.test(line))
-    .join('\n')
 }
 
 async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
@@ -85,22 +101,32 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
   }
   if (response.status !== 200) return []
   const songs = response.body?.result?.songs ?? []
-  const candidates: Array<NetworkLyricCandidate | null> = await Promise.all(
-    songs.slice(0, 6).map(async (song) => {
+  const candidates = await Promise.allSettled(
+    songs.slice(0, 6).map(async (song): Promise<NetworkLyricCandidate | null> => {
       const id = song.id as string | number | undefined
       if (id === undefined) return null
-      const result = (await getNeteaseLyric({ id })) as unknown as {
-        status?: number
-        body?: {
-          lrc?: { lyric?: string }
-          yrc?: { lyric?: string }
-          tlyric?: { lyric?: string }
-          romalrc?: { lyric?: string }
-        }
+      let result: NeteaseLyricResponse
+      try {
+        result = (await getNeteaseLyricNew({ id })) as NeteaseLyricResponse
+        const hasYrc = /^\[\d+,\d+\].*\(\d+,\d+,\d+\)/m.test(result.body?.yrc?.lyric ?? '')
+        const hasLrc = /^\[\d+:\d/m.test(result.body?.lrc?.lyric ?? '')
+        if (result.status !== 200 || (!hasYrc && !hasLrc))
+          result = (await getNeteaseLyric({ id })) as NeteaseLyricResponse
+      } catch {
+        result = (await getNeteaseLyric({ id })) as NeteaseLyricResponse
       }
-      const yrc = result.body?.yrc?.lyric?.trim()
-      const lrc = yrc || result.body?.lrc?.lyric?.trim()
+      const yrcText = result.body?.yrc?.lyric?.trim()
+      const yrc = yrcText && /^\[\d+,\d+\].*\(\d+,\d+,\d+\)/m.test(yrcText) ? yrcText : undefined
+      const lrc = cleanNetworkLyric(yrc || result.body?.lrc?.lyric || '', yrc ? 'yrc' : 'lrc')
       if (result.status !== 200 || !lrc) return null
+      const translation = cleanNetworkLyric(
+        (yrc && result.body?.ytlrc?.lyric?.trim()) || result.body?.tlyric?.lyric || '',
+        'lrc'
+      )
+      const romanization = cleanNetworkLyric(
+        (yrc && result.body?.yromalrc?.lyric?.trim()) || result.body?.romalrc?.lyric || '',
+        'lrc'
+      )
       const artists = Array.isArray(song.artists)
         ? song.artists
             .map((artist) => String((artist as { name?: string }).name ?? ''))
@@ -116,12 +142,17 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
         album,
         lrc,
         format: yrc ? 'yrc' : 'lrc',
-        translation: result.body?.tlyric?.lyric?.trim() || undefined,
-        romanization: result.body?.romalrc?.lyric?.trim() || undefined
+        supportsWordTiming: Boolean(yrc),
+        translation: translation || undefined,
+        translationFormat: translation ? 'lrc' : undefined,
+        romanization: romanization || undefined,
+        romanizationFormat: romanization ? 'lrc' : undefined
       }
     })
   )
-  return candidates.filter((candidate): candidate is NetworkLyricCandidate => candidate !== null)
+  return candidates.flatMap((result) =>
+    result.status === 'fulfilled' && result.value ? [result.value] : []
+  )
 }
 
 async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
@@ -130,8 +161,8 @@ async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLy
     cookie: KUGOU_COOKIE
   })) as unknown as { body?: { data?: { lists?: Array<Record<string, unknown>> } } }
   const songs = response.body?.data?.lists ?? []
-  const candidates: Array<NetworkLyricCandidate | null> = await Promise.all(
-    songs.slice(0, 4).map(async (song) => {
+  const candidates = await Promise.allSettled(
+    songs.slice(0, 4).map(async (song): Promise<NetworkLyricCandidate | null> => {
       const hash = String(song.FileHash ?? '')
       if (!hash) return null
       const matches = (await kugouApi.search_lyric({ hash })) as unknown as {
@@ -139,13 +170,33 @@ async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLy
       }
       const match = matches.body?.candidates?.[0]
       if (!match?.id || !match.accesskey) return null
-      const lyricResult = (await kugouApi.lyric({
-        id: String(match.id),
-        accesskey: match.accesskey,
-        decode: true,
-        fmt: 'lrc'
-      })) as unknown as { body?: { decodeContent?: string } }
-      const lrc = normalizeLyric(lyricResult.body?.decodeContent ?? '')
+      let krc = ''
+      try {
+        const krcResult = (await kugouApi.lyric({
+          id: String(match.id),
+          accesskey: match.accesskey,
+          decode: true,
+          fmt: 'krc'
+        })) as { body?: { decodeContent?: string } }
+        krc = krcResult.body?.decodeContent?.trim() ?? ''
+      } catch {
+        // The normal LRC endpoint can still succeed for this lyric candidate.
+      }
+      const hasWordTiming = /^\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(krc)
+      const normalized = hasWordTiming ? normalizeKrc(krc) : undefined
+      const lrc = hasWordTiming
+        ? normalized!.lrc
+        : cleanNetworkLyric(
+            (
+              (await kugouApi.lyric({
+                id: String(match.id),
+                accesskey: match.accesskey,
+                decode: true,
+                fmt: 'lrc'
+              })) as { body?: { decodeContent?: string } }
+            ).body?.decodeContent ?? '',
+            'lrc'
+          )
       if (!lrc) return null
       return {
         id: `kugou:${match.id}`,
@@ -153,11 +204,19 @@ async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLy
         title: String(song.SongName ?? request.title),
         artist: String(song.SingerName ?? request.artist ?? ''),
         album: typeof song.AlbumName === 'string' ? song.AlbumName : undefined,
-        lrc
+        lrc,
+        format: hasWordTiming ? 'krc' : 'lrc',
+        supportsWordTiming: hasWordTiming,
+        translation: normalized?.translation,
+        translationFormat: normalized?.translationFormat,
+        romanization: normalized?.romanization,
+        romanizationFormat: normalized?.romanizationFormat
       }
     })
   )
-  return candidates.filter((candidate): candidate is NetworkLyricCandidate => candidate !== null)
+  return candidates.flatMap((result) =>
+    result.status === 'fulfilled' && result.value ? [result.value] : []
+  )
 }
 
 async function searchNetworkLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
@@ -175,7 +234,7 @@ async function searchNetworkLyrics(request: LyricSearchRequest): Promise<Network
 function readLocalLyrics(audioPath: string): LyricLoadPayload | null {
   const directory = dirname(audioPath)
   const stem = basename(audioPath, extname(audioPath))
-  const formats: LyricFormat[] = ['elrc', 'yrc', 'ttml', 'lrc']
+  const formats: LyricFormat[] = ['elrc', 'yrc', 'krc', 'ttml', 'lrc']
   for (const name of [stem, 'lyrics']) {
     for (const format of formats) {
       const path = join(directory, `${name}.${format}`)
