@@ -4,11 +4,22 @@ import BlackHoleBackground from './themes/BlackHoleBackground.vue'
 import ForestBackground from './themes/ForestBackground.vue'
 import MatrixBackground from './themes/MatrixBackground.vue'
 import OceanBackground from './themes/OceanBackground.vue'
+import RainyBackground from './themes/RainyBackground.vue'
+import StarfieldBackground from './themes/StarfieldBackground.vue'
 import SunsetBackground from './themes/SunsetBackground.vue'
 import SolidBackground from './SolidBackground.vue'
 
 export type SystemBackground =
-  'none' | 'aurora' | 'ocean' | 'sunset' | 'forest' | 'matrix' | 'blackhole' | 'solid'
+  | 'none'
+  | 'aurora'
+  | 'ocean'
+  | 'sunset'
+  | 'forest'
+  | 'matrix'
+  | 'blackhole'
+  | 'rainy'
+  | 'starfield'
+  | 'solid'
 
 export interface SystemBackgroundTheme {
   id: SystemBackground
@@ -90,6 +101,26 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
     footerBackground: 'rgb(4 28 17 / 0.9)',
     chromeBorder: 'rgb(103 255 169 / 0.28)',
     component: MatrixBackground
+  },
+  {
+    id: 'rainy',
+    labelKey: 'settings.systemBackgroundRainy',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.78 0.12 72)',
+    headerBackground: 'rgb(20 23 31 / 0.83)',
+    footerBackground: 'rgb(24 25 31 / 0.86)',
+    chromeBorder: 'rgb(238 184 117 / 0.27)',
+    component: RainyBackground
+  },
+  {
+    id: 'starfield',
+    labelKey: 'settings.systemBackgroundStarfield',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.78 0.12 264)',
+    headerBackground: 'rgb(12 18 40 / 0.84)',
+    footerBackground: 'rgb(14 20 45 / 0.87)',
+    chromeBorder: 'rgb(153 181 255 / 0.24)',
+    component: StarfieldBackground
   },
   {
     id: 'blackhole',

@@ -1163,6 +1163,21 @@ onBeforeUnmount(() => {
     linear-gradient(90deg, rgb(104 255 168 / 0.16) 1px, transparent 1px), #06150e;
   background-size: 9px 9px;
 }
+.system-background-preview--rainy .preview-window {
+  background:
+    radial-gradient(circle at 27% 68%, rgb(255 191 100 / 75%), transparent 29%),
+    radial-gradient(circle at 73% 43%, rgb(246 155 92 / 58%), transparent 25%),
+    linear-gradient(150deg, #423448, #17273b 58%, #111923);
+}
+.system-background-preview--starfield .preview-window {
+  background:
+    radial-gradient(circle at 19% 25%, #ecf4ff 0 1px, transparent 2px),
+    radial-gradient(circle at 74% 36%, #c4d7ff 0 1px, transparent 2px),
+    radial-gradient(circle at 56% 78%, #ffe9c8 0 1px, transparent 2px),
+    radial-gradient(ellipse at 26% 74%, rgb(63 102 185 / 32%), transparent 59%),
+    radial-gradient(ellipse at 63% 50%, rgb(133 83 177 / 43%), transparent 62%),
+    linear-gradient(145deg, #040915, #111936 58%, #060a19);
+}
 .system-background-preview--blackhole .preview-window {
   background:
     radial-gradient(circle at 58% 48%, #04040a 0 14%, transparent 16%),
@@ -1182,7 +1197,11 @@ onBeforeUnmount(() => {
 .system-background-preview--forest i,
 .system-background-preview--forest b,
 .system-background-preview--matrix i,
-.system-background-preview--matrix b {
+.system-background-preview--matrix b,
+.system-background-preview--rainy i,
+.system-background-preview--rainy b,
+.system-background-preview--starfield i,
+.system-background-preview--starfield b {
   background: rgb(255 255 255 / 16%);
 }
 .album-background-preview .preview-window {

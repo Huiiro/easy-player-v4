@@ -92,13 +92,22 @@ onBeforeUnmount(() => {
                   active: isBackgroundActive && !ui.showPlayer,
                   reducedMotion: ui.reduceMotion
                 }
-              : activeTheme.id === 'blackhole'
-                ? { paused: !isBackgroundActive || ui.showPlayer }
+              : activeTheme.id === 'blackhole' ||
+                  activeTheme.id === 'rainy' ||
+                  activeTheme.id === 'starfield'
+                ? { paused: !isBackgroundActive || ui.showPlayer || ui.reduceMotion }
                 : {}
           "
         />
       </div>
-      <div v-if="!isSolidTheme" class="app-background-scrim app-background-scrim--system" />
+      <div
+        v-if="!isSolidTheme"
+        class="app-background-scrim app-background-scrim--system"
+        :class="{
+          'app-background-scrim--rainy': ui.systemBackground === 'rainy',
+          'app-background-scrim--starfield': ui.systemBackground === 'starfield'
+        }"
+      />
     </div>
   </Transition>
 </template>
@@ -130,6 +139,14 @@ onBeforeUnmount(() => {
 
 .app-background-scrim--system {
   background: color-mix(in srgb, var(--color-bg) 62%, transparent);
+}
+
+.app-background-scrim--rainy {
+  background: color-mix(in srgb, var(--color-bg) 48%, transparent);
+}
+
+.app-background-scrim--starfield {
+  background: color-mix(in srgb, var(--color-bg) 22%, transparent);
 }
 
 .app-background-host--paused :deep(*) {

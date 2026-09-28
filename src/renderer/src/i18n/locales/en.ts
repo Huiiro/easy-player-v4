@@ -469,6 +469,8 @@ export default {
     systemBackgroundForest: 'Forest',
     systemBackgroundMatrix: 'Matrix',
     systemBackgroundBlackHole: 'Black Hole',
+    systemBackgroundRainy: 'Rainy Evening',
+    systemBackgroundStarfield: 'Starfield',
     themeColor: 'Theme Color',
     themeColorDescription: 'Used for progress, selection states, and primary actions.',
     customBackground: 'Custom Background',
