@@ -42,7 +42,7 @@ function createRandom(seed: number): () => number {
 }
 
 const random = createRandom(88427)
-const stars: Star[] = Array.from({ length: 900 }, () => {
+const stars: Star[] = Array.from({ length: 1600 }, () => {
   const x = random()
   const clustered = random() < 0.55
   const bandY = 0.77 - x * 0.53 + (random() + random() + random() - 1.5) * 0.15
@@ -98,15 +98,15 @@ function renderNebula(boundsWidth: number, boundsHeight: number): void {
     const u = x / nextWidth
     for (let y = 0; y < nextHeight; y++) {
       const v = y / nextHeight
-      const warp = softNoise(u * 3.2 + 11.4, v * 3.2 + 5.7) - 0.5
-      const broad = softNoise(u * 4.3 + 4.3, v * 4.3 + 6.4)
-      const detail = softNoise(u * 9.1 + 18.3, v * 9.1 + 8.7)
-      const wisps = softNoise(u * 18.0 + 6.8, v * 18.0 + 24.1)
-      const center = 0.78 - u * 0.53 + warp * 0.24 + (detail - 0.5) * 0.13
-      const reach = 0.15 + (broad - 0.5) * 0.32 + (detail - 0.5) * 0.22
+      const warp = softNoise(u * 9.9, v * 1.9)
+      const broad = softNoise(u * 11.5, v * 13.4)
+      const detail = softNoise(u * 14.2, v * 14.7)
+      const wisps = softNoise(u * 28.0, v * 18.0)
+      const center = 0.58 - u * 0.53 + warp * 0.24 + (detail - 0.5) * 0.13
+      const reach = 0.12 + (broad - 0.5) * 0.32 + (detail - 0.5) * 0.22
       const contour = Math.max(0, Math.min(1, (reach - Math.abs(v - center) + 0.025) / 0.09))
-      const cloud = broad * 0.58 + detail * 0.3 + wisps * 0.12
-      let density = contour * Math.max(0, Math.min(1, (cloud - 0.25) / 0.45))
+      const cloud = broad * 0.24 + detail * 0.24 + wisps * 0.12
+      let density = contour * Math.max(0, Math.min(1, (cloud - 0.28) / 0.78))
       density = density * density * (3 - 2 * density)
       const dust = Math.max(0, (softNoise(u * 9.2 + 34.0, v * 9.2 + 6.0) - 0.62) / 0.38)
       density *= 1 - dust * 0.75
@@ -163,7 +163,7 @@ function createGlowSprite(rgb: string): HTMLCanvasElement {
 function draw(): void {
   if (!context) return
   context.clearRect(0, 0, width, height)
-  const count = Math.min(stars.length, Math.round((width * height) / 1100))
+  const count = Math.min(stars.length, Math.round((width * height) / 600))
   const sizeScale = Math.max(0.72, Math.min(1.3, height / 750))
   for (let index = 0; index < count; index++) {
     const star = stars[index]
