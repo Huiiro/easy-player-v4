@@ -313,6 +313,9 @@ onMounted(() => {
   worker.postMessage(null)
 })
 onBeforeUnmount(() => {
+  // The parent transition keeps this DOM visible after unmount. Hide the
+  // canvas before losing its context so the static fallback covers the exit.
+  if (canvas.value) canvas.value.style.display = 'none'
   disposed = true
   worker?.terminate()
   observer?.disconnect()

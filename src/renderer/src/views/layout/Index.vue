@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
   <DesktopLyricsSync />
   <div
     class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
-    :class="ui.hasBackground || ui.useMica ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
+    :class="ui.useMica ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
     <AppBackground />

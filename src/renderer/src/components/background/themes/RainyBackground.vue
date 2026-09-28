@@ -186,6 +186,9 @@ onMounted(() => {
   image.src = rainyImage
 })
 onBeforeUnmount(() => {
+  // The leaving DOM outlives the component during the background transition.
+  // A lost WebGL context must never replace the street image with a blank frame.
+  if (canvas.value) canvas.value.style.display = 'none'
   disposed = true
   observer?.disconnect()
   motion?.removeEventListener('change', syncAnimation)
@@ -217,7 +220,8 @@ onBeforeUnmount(() => {
   contain: strict;
   background:
     linear-gradient(rgb(15 19 30 / 15%), rgb(9 15 24 / 28%)),
-    url('@/assets/img/rainy_bg.jpg') center / cover;
+    url('@/assets/img/rainy_bg.jpg') center / cover,
+    #0f131e;
 }
 
 canvas {
