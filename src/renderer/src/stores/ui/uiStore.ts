@@ -74,6 +74,8 @@ export const useUIStore = defineStore(
     const hiddenHomeSections = ref<string[]>([])
     const homeClockEnabled = ref(false)
     const homeLayoutOpen = ref(false)
+    const sidebarExpanded = ref(true)
+    const sidebarPlaylistsExpanded = ref(true)
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
@@ -114,6 +116,7 @@ export const useUIStore = defineStore(
     const lyricsFontPadding = ref(30)
     const lyricsOffsetMs = ref(0)
     const lyricsStyle = ref<'none' | 'glow' | 'follow'>('none')
+    const karaokeAnimation = ref<'wave' | 'float'>('wave')
     const lyricsColors = reactive({
       default: '#AEB4C0',
       highlight: '#FFFFFF',
@@ -656,6 +659,8 @@ export const useUIStore = defineStore(
       hiddenHomeSections,
       homeClockEnabled,
       homeLayoutOpen,
+      sidebarExpanded,
+      sidebarPlaylistsExpanded,
       customFontFamily,
       customFonts,
       customThemeColor,
@@ -671,6 +676,7 @@ export const useUIStore = defineStore(
       lyricsFontPadding,
       lyricsOffsetMs,
       lyricsStyle,
+      karaokeAnimation,
       lyricsColors,
       lyricsFontSizeIndex,
       showLyricsSizeSlider,
@@ -757,6 +763,8 @@ export const useUIStore = defineStore(
         'homeSectionOrder',
         'hiddenHomeSections',
         'homeClockEnabled',
+        'sidebarExpanded',
+        'sidebarPlaylistsExpanded',
         'customFontFamily',
         'customThemeColor',
         'systemBackground',
@@ -769,6 +777,7 @@ export const useUIStore = defineStore(
         'lyricsFontPadding',
         'lyricsOffsetMs',
         'lyricsStyle',
+        'karaokeAnimation',
         'lyricsColors',
         'lyricsFontSizeIndex',
         'showLyricsTranslation',

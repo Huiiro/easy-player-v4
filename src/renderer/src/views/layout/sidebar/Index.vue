@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -6,6 +7,7 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import CreatePlaylistDialog from '@/components/playlist/CreatePlaylistDialog.vue'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
+import { useUIStore } from '@/stores/ui/uiStore'
 
 interface NavigationItem {
   labelKey: string
@@ -22,8 +24,8 @@ interface Playlist {
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
-const expanded = ref(true)
-const playlistsExpanded = ref(true)
+const { sidebarExpanded: expanded, sidebarPlaylistsExpanded: playlistsExpanded } =
+  storeToRefs(useUIStore())
 const playlists = ref<Playlist[]>([])
 const playlistDialogOpen = ref(false)
 const draggedPlaylistId = ref<number | null>(null)

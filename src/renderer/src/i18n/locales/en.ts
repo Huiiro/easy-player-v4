@@ -585,7 +585,11 @@ export default {
     playerCoverStyleStandard: 'Standard cover',
     playerCoverStyleVinyl: 'Vinyl record',
     lyrics: 'Lyrics',
-    lyricsDescription: 'Set the lyrics loading method.',
+    lyricsDescription: 'Set how lyrics load and animate.',
+    karaokeAnimation: 'Karaoke animation',
+    karaokeAnimationDescription: 'Choose how timed lyric characters move during playback.',
+    karaokeAnimationWave: 'Wave',
+    karaokeAnimationFloat: 'Float',
     lyricsPriority: 'Lyrics Priority',
     lyricsPriorityDescription:
       'Set the lyrics priority order. When the current source is unavailable, it automatically searches the next one.',

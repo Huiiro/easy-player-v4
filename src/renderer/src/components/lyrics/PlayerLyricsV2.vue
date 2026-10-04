@@ -469,15 +469,25 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
     } else {
       emphasis = emphasisProgress + 2.2 * emphasisProgress ** 3 * (1 - emphasisProgress)
     }
-    // One asymmetric Dock-like wave affects several neighboring glyphs. Its
-    // narrow leading edge rises quickly, while the wider trailing edge lets
-    // highlighted glyphs settle slowly as one coherent group.
-    const distanceFromWave = index - waveCenter
-    const waveWidth = distanceFromWave < 0 ? 1.9 : 0.82
-    const lift =
-      distanceFromWave <= -5 || distanceFromWave > 3
-        ? 0
-        : Math.exp(-0.5 * (distanceFromWave / waveWidth) ** 2)
+    // Float lifts each glyph on its own timing; wave lifts its neighbors together.
+    let lift: number
+    if (ui.karaokeAnimation === 'float') {
+      const floatProgress =
+        entry.emphasisStart === undefined
+          ? emphasisProgress
+          : Math.max(
+              0,
+              Math.min(1, (time - entry.emphasisStart + 80) / Math.max(800, entry.emphasisDuration))
+            )
+      lift = floatProgress * floatProgress * (3 - 2 * floatProgress)
+    } else {
+      const distanceFromWave = index - waveCenter
+      const waveWidth = distanceFromWave < 0 ? 1.9 : 0.82
+      lift =
+        distanceFromWave <= -5 || distanceFromWave > 3
+          ? 0
+          : Math.exp(-0.5 * (distanceFromWave / waveWidth) ** 2)
+    }
     if (
       entry.previous === progress &&
       entry.previousEmphasis === emphasisProgress &&
@@ -736,6 +746,7 @@ watch(
   [
     () => ui.showLyricsRomanization,
     () => ui.lyricsStyle,
+    () => ui.karaokeAnimation,
     () => ui.reduceMotion,
     () => props.allowTransform
   ],
@@ -785,6 +796,7 @@ onUnmounted(() => {
     class="lyric-viewport"
     :class="[
       props.darkText && 'player-lyrics--dark-text',
+      ui.karaokeAnimation === 'float' && 'lyric-viewport--float',
       ui.reduceMotion && 'reduce-motion',
       !props.allowTransform && 'no-transform'
     ]"
@@ -1132,11 +1144,14 @@ onUnmounted(() => {
 }
 .lyric-karaoke-char {
   font-size: inherit;
-  transform: translateY(calc(var(--lift, 0) * -4px)) scale(calc(1.03 + var(--lift, 0) * 0.08));
+  transform: translateY(calc(var(--lift, 0) * -3px)) scale(calc(1.03 + var(--lift, 0) * 0.06));
   opacity: clamp(0.25, calc(0.25 + var(--emphasis, 0) * 0.75), 1);
   transform-origin: center bottom;
   will-change: transform, opacity;
   scale: 1.06;
+}
+.lyric-viewport--float .lyric-karaoke-char {
+  transform: translateY(calc(var(--lift, 0) * -4px)) scale(calc(1.03 + var(--lift, 0) * 0.01));
 }
 .reduce-motion .lyric-karaoke-char,
 .no-transform .lyric-karaoke-char {

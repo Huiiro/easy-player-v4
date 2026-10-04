@@ -54,6 +54,10 @@ const languageOptions = computed(() => [
   { label: t('settings.languageChinese'), value: 'zh' },
   { label: t('settings.languageEnglish'), value: 'en' }
 ])
+const karaokeAnimationOptions = computed(() => [
+  { label: t('settings.karaokeAnimationWave'), value: 'wave' },
+  { label: t('settings.karaokeAnimationFloat'), value: 'float' }
+])
 type ThemeBackgroundChoice = SystemBackground | 'light' | 'dark' | 'custom'
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
@@ -632,6 +636,18 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.karaokeAnimation') }}</h3>
+                <p>{{ t('settings.karaokeAnimationDescription') }}</p>
+              </div>
+              <BaseSelect
+                v-model="ui.karaokeAnimation"
+                :options="karaokeAnimationOptions"
+                teleport
+                class="w-64"
+              />
+            </div>
             <div class="setting-row">
               <div>
                 <h3>{{ t('settings.lyricsPriority') }}</h3>
