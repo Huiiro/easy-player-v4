@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import CreatePlaylistDialog from '@/components/playlist/CreatePlaylistDialog.vue'
+import RenamePlaylistDialog from '@/components/playlist/RenamePlaylistDialog.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
@@ -21,6 +22,7 @@ interface Playlist {
   id: number
   name: string
   cover: string | null
+  description: string | null
   position: number
 }
 
@@ -37,6 +39,8 @@ const menuPlaylist = ref<Playlist | null>(null)
 const menuPosition = ref({ left: 0, top: 0 })
 const menuRef = ref<HTMLElement | null>(null)
 const deletePlaylistTarget = ref<Playlist | null>(null)
+const renamePlaylistTarget = ref<Playlist | null>(null)
+const renameDialogOpen = ref(false)
 const deleteDialogOpen = ref(false)
 const deletingPlaylist = ref(false)
 const playingPlaylistId = ref<number | null>(null)
@@ -98,7 +102,7 @@ function openPlaylistMenu(playlist: Playlist, event: MouseEvent): void {
   event.preventDefault()
   menuPosition.value = {
     left: Math.max(8, Math.min(event.clientX, window.innerWidth - 184)),
-    top: Math.max(8, Math.min(event.clientY, window.innerHeight - 96))
+    top: Math.max(8, Math.min(event.clientY, window.innerHeight - 136))
   }
   menuTrigger = (event.target as HTMLElement).closest('button')
   menuPlaylist.value = playlist
@@ -151,6 +155,11 @@ function confirmDeletePlaylist(playlist: Playlist): void {
   closePlaylistMenu()
   deletePlaylistTarget.value = playlist
   deleteDialogOpen.value = true
+}
+function renamePlaylist(playlist: Playlist): void {
+  closePlaylistMenu()
+  renamePlaylistTarget.value = playlist
+  renameDialogOpen.value = true
 }
 async function deletePlaylist(): Promise<void> {
   const playlist = deletePlaylistTarget.value
@@ -422,6 +431,15 @@ onBeforeUnmount(() => {
       <button
         type="button"
         role="menuitem"
+        class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-hover"
+        @click="renamePlaylist(menuPlaylist)"
+      >
+        <SvgIcon name="common-edit" class-name="size-4" />
+        {{ t('playlist.rename') }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
         class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-hover"
         @click="confirmDeletePlaylist(menuPlaylist)"
       >
@@ -430,6 +448,7 @@ onBeforeUnmount(() => {
       </button>
     </div>
   </Teleport>
+  <RenamePlaylistDialog v-model="renameDialogOpen" :playlist="renamePlaylistTarget" />
   <BaseDialog v-model="deleteDialogOpen" :title="t('playlist.delete')" width="max-w-sm">
     <p class="text-sm text-text-l">
       {{ t('playlist.confirmDelete', { name: deletePlaylistTarget?.name ?? '' }) }}

@@ -212,6 +212,7 @@ export default {
     createdAt: 'Created {date}',
     edit: 'Edit playlist',
     editName: 'Edit playlist name',
+    rename: 'Rename playlist',
     createNew: 'Create new playlist',
     namePlaceholder: 'Enter playlist name',
     nameRequired: 'Enter a playlist name',

@@ -211,6 +211,7 @@ export default {
     createdAt: '创建于 {date}',
     edit: '编辑歌单',
     editName: '编辑歌单名称',
+    rename: '重命名歌单',
     createNew: '新建歌单',
     namePlaceholder: '输入歌单名称',
     nameRequired: '请输入歌单名称',

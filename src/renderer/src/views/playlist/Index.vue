@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
@@ -153,7 +153,14 @@ async function deletePlaylist(): Promise<void> {
   await router.replace('/song')
 }
 
-onMounted(() => void load())
+function handlePlaylistRenamed(id: number): void {
+  if (id === playlistId.value) void load()
+}
+onMounted(() => {
+  void load()
+  eventBus.on('playlistRenamed', handlePlaylistRenamed)
+})
+onBeforeUnmount(() => eventBus.off('playlistRenamed', handlePlaylistRenamed))
 watch(playlistId, () => void load())
 </script>
 

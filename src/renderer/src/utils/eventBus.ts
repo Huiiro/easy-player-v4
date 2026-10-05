@@ -4,8 +4,8 @@ type Events = {
   event: void
   scanFinished: void // 添加歌曲扫描结束
   playlistsChanged: void
+  playlistRenamed: number
   tagsChanged: void
-  lyricsUpdated: number
   lyricsUpdated: number
   songActionsMenuOpened: 'footer' | 'songlist'
   locateCurrentSong: void
