@@ -337,6 +337,67 @@ export function getLocalFolderSongs(folderId: number): Song[] {
     .all(folderId)
   return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
+export function deleteLocalFolderSongs(folderId: number): {
+  deleted: number
+  removedFolders: number
+  songIds: number[]
+} {
+  const db = getDatabase()
+  const folder = db
+    .prepare('SELECT id, pid FROM folder WHERE id = ? AND full_path NOT LIKE ?')
+    .get(folderId, 'remote://%') as { id: number; pid: number | null } | undefined
+  if (!folder) return { deleted: 0, removedFolders: 0, songIds: [] }
+
+  const descendants = db
+    .prepare(
+      `WITH RECURSIVE descendants(id, depth) AS (
+        SELECT id, 0 FROM folder WHERE id = ?
+        UNION ALL
+        SELECT child.id, parent.depth + 1
+        FROM folder child JOIN descendants parent ON child.pid = parent.id
+      )
+      SELECT id FROM descendants ORDER BY depth DESC`
+    )
+    .all(folderId) as Array<{ id: number }>
+  const songIds = db
+    .prepare(
+      `WITH RECURSIVE descendants(id) AS (
+        SELECT id FROM folder WHERE id = ?
+        UNION ALL
+        SELECT child.id FROM folder child JOIN descendants parent ON child.pid = parent.id
+      )
+      SELECT song.id FROM song JOIN descendants ON song.folder_id = descendants.id
+      WHERE song.source_id IS NULL`
+    )
+    .all(folderId) as Array<{ id: number }>
+
+  let deleted = 0
+  for (let start = 0; start < songIds.length; start += 500) {
+    deleted += deleteSongs(
+      songIds.slice(start, start + 500).map((song) => song.id),
+      false
+    ).deleted
+  }
+
+  const removeIfEmpty = db.prepare(
+    `DELETE FROM folder WHERE id = ?
+      AND NOT EXISTS (SELECT 1 FROM song WHERE folder_id = ?)
+      AND NOT EXISTS (SELECT 1 FROM folder WHERE pid = ?)`
+  )
+  let removedFolders = 0
+  db.transaction(() => {
+    for (const { id } of descendants) removedFolders += removeIfEmpty.run(id, id, id).changes
+    let parentId = folder.pid
+    while (parentId !== null) {
+      const parent = db.prepare('SELECT pid FROM folder WHERE id = ?').get(parentId) as
+        { pid: number | null } | undefined
+      if (!parent || !removeIfEmpty.run(parentId, parentId, parentId).changes) break
+      removedFolders++
+      parentId = parent.pid
+    }
+  })()
+  return { deleted, removedFolders, songIds: songIds.map((song) => song.id) }
+}
 export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
   const keyword = search.trim()

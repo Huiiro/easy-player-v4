@@ -113,6 +113,8 @@ const handlers = {
   rebuildLocalFolders: () => library.rebuildLocalFolders(),
   getLocalFolderSongs: ({ folderId }: { folderId: number }) =>
     library.getLocalFolderSongs(folderId),
+  deleteLocalFolderSongs: ({ folderId }: { folderId: number }) =>
+    library.deleteLocalFolderSongs(folderId),
   getSource: ({ id }: { id: number }) => library.getSource(id),
   createSource: (params: Parameters<typeof library.createSource>[0]) =>
     library.createSource(params),

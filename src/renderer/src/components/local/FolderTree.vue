@@ -16,7 +16,10 @@ const props = defineProps<{
   depth?: number
 }>()
 
-const emit = defineEmits<{ select: [id: number] }>()
+const emit = defineEmits<{
+  select: [id: number]
+  contextmenu: [node: FolderTreeNode, event: MouseEvent]
+}>()
 const { t } = useI18n()
 const expanded = ref<Set<number>>(new Set(props.nodes.map((node) => node.id)))
 const level = computed(() => props.depth ?? 0)
@@ -39,6 +42,7 @@ function toggle(id: number): void {
             : ''
         "
         :style="{ paddingLeft: `${level * 14 + 4}px` }"
+        @contextmenu.prevent="emit('contextmenu', node, $event)"
       >
         <button
           class="grid size-6 shrink-0 place-items-center"
@@ -67,6 +71,7 @@ function toggle(id: number): void {
         :selected-id="selectedId"
         :depth="level + 1"
         @select="emit('select', $event)"
+        @contextmenu="(folder, event) => emit('contextmenu', folder, event)"
       />
     </li>
   </ul>

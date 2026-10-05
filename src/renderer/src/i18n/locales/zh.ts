@@ -23,7 +23,12 @@ export default {
     title: '本地文件',
     empty: '暂无已导入的本地文件夹',
     expand: '展开目录',
-    collapse: '折叠目录'
+    collapse: '折叠目录',
+    deleteSongs: '删除文件夹中的歌曲',
+    confirmDeleteSongs:
+      '确定从资料库删除文件夹“{name}”、其子文件夹及其中的 {count} 首歌曲吗？关联的歌单、标签和播放历史也会移除。磁盘上的文件和文件夹不会删除。',
+    deleted: '已移除文件夹记录及 {count} 首歌曲',
+    deleteFailed: '删除文件夹中的歌曲失败'
   },
   home: {
     layout: {

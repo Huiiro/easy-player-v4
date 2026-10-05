@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FolderTree, { type FolderTreeNode } from '@/components/local/FolderTree.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import SongListView from '@/components/songlist/SongListView.vue'
 import { useMessage } from '@/components/ui/useMessage'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
+import { usePlayerStore } from '@/stores/player/playerStore'
 import eventBus from '@/utils/eventBus'
 
 interface LocalFolder {
@@ -17,13 +19,20 @@ interface LocalFolder {
 }
 
 const { t } = useI18n()
-const { success } = useMessage()
+const { success, error: showError } = useMessage()
+const player = usePlayerStore()
 const folders = ref<LocalFolder[]>([])
 const sectionRef = ref<HTMLElement | null>(null)
 const selectedFolderId = ref<number | null>(null)
 const sidebarWidth = ref(Number(localStorage.getItem('easy-player:local-sidebar-width')) || 256)
 const isResizing = ref(false)
 const listRefreshKey = ref(0)
+const menuFolder = ref<FolderTreeNode | null>(null)
+const menuPosition = ref({ left: 0, top: 0 })
+const menuRef = ref<HTMLElement | null>(null)
+const deleteFolder = ref<FolderTreeNode | null>(null)
+const deleteDialogOpen = ref(false)
+const deleting = ref(false)
 const tree = computed<FolderTreeNode[]>(() => {
   const nodes = new Map<number, FolderTreeNode>()
   folders.value.forEach((folder) => nodes.set(folder.id, { ...folder, children: [] }))
@@ -55,6 +64,65 @@ async function rebuildFolders(): Promise<void> {
   eventBus.emit('scanFinished')
   success(t('localFiles.rebuildDone', { count: response.data as number }))
 }
+function closeMenu(): void {
+  menuFolder.value = null
+}
+function openFolderMenu(folder: FolderTreeNode, event: MouseEvent): void {
+  menuPosition.value = {
+    left: Math.max(8, Math.min(event.clientX, window.innerWidth - 240)),
+    top: Math.max(8, Math.min(event.clientY, window.innerHeight - 56))
+  }
+  menuFolder.value = folder
+  void nextTick(() => menuRef.value?.querySelector('button')?.focus())
+}
+function handleOutsidePointer(event: PointerEvent): void {
+  if (!menuRef.value?.contains(event.target as Node)) closeMenu()
+}
+function confirmDeleteFolderSongs(folder: FolderTreeNode): void {
+  closeMenu()
+  deleteFolder.value = folder
+  deleteDialogOpen.value = true
+}
+function updateDeleteDialogOpen(value: boolean): void {
+  if (!deleting.value) deleteDialogOpen.value = value
+}
+async function deleteFolderSongs(): Promise<void> {
+  const folder = deleteFolder.value
+  if (!folder || deleting.value) return
+  deleting.value = true
+  try {
+    const response = await window.api.database.command('deleteLocalFolderSongs', {
+      folderId: folder.id
+    })
+    if (!response.success) {
+      showError(response.error || t('localFiles.deleteFailed'))
+      return
+    }
+    const result = response.data as { deleted: number; removedFolders: number; songIds: number[] }
+    const deletedIds = new Set(result.songIds)
+    const currentSongId = player.currentQueueSong?.id
+    for (let index = player.queue.length - 1; index >= 0; index--) {
+      const song = player.queue[index]
+      if (song && song.id !== currentSongId && deletedIds.has(song.id)) {
+        await player.removeQueueItem(index)
+      }
+    }
+    if (currentSongId !== undefined && deletedIds.has(currentSongId)) {
+      const currentIndex = player.queue.findIndex((song) => song.id === currentSongId)
+      if (currentIndex >= 0) await player.removeQueueItem(currentIndex)
+    }
+    deleteDialogOpen.value = false
+    deleteFolder.value = null
+    await loadFolders()
+    listRefreshKey.value++
+    eventBus.emit('scanFinished')
+    eventBus.emit('playlistsChanged')
+    eventBus.emit('tagsChanged')
+    success(t('localFiles.deleted', { count: result.deleted }))
+  } finally {
+    deleting.value = false
+  }
+}
 function startResize(event: PointerEvent): void {
   isResizing.value = true
   event.currentTarget instanceof HTMLElement &&
@@ -75,8 +143,14 @@ function endResize(): void {
 onMounted(() => {
   void loadFolders()
   eventBus.on('scanFinished', loadFolders)
+  document.addEventListener('pointerdown', handleOutsidePointer)
+  window.addEventListener('resize', closeMenu)
 })
-onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
+onBeforeUnmount(() => {
+  eventBus.off('scanFinished', loadFolders)
+  document.removeEventListener('pointerdown', handleOutsidePointer)
+  window.removeEventListener('resize', closeMenu)
+})
 </script>
 
 <template>
@@ -84,6 +158,7 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
     <aside
       class="custom-scrollbar shrink-0 overflow-y-auto p-3"
       :style="{ width: `${sidebarWidth}px` }"
+      @scroll="closeMenu"
     >
       <div class="mb-3 flex items-center justify-between gap-2 px-1">
         <h1 class="text-lg font-bold">{{ t('localFiles.title') }}</h1>
@@ -103,6 +178,7 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
         :nodes="tree"
         :selected-id="selectedFolderId"
         @select="selectedFolderId = $event"
+        @contextmenu="openFolderMenu"
       />
       <div class="h-20" />
     </aside>
@@ -131,6 +207,58 @@ onBeforeUnmount(() => eventBus.off('scanFinished', loadFolders))
       <p v-else class="p-6 text-sm text-text-l">{{ t('localFiles.empty') }}</p>
     </main>
   </section>
+  <Teleport to="body">
+    <div
+      v-if="menuFolder"
+      ref="menuRef"
+      role="menu"
+      class="fixed z-50 w-max min-w-44 rounded-xl border border-border bg-bg-l p-1 text-text shadow-xl"
+      :style="{ left: `${menuPosition.left}px`, top: `${menuPosition.top}px` }"
+      @keydown.esc.prevent="closeMenu"
+    >
+      <button
+        type="button"
+        role="menuitem"
+        class="flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-hover"
+        @click="confirmDeleteFolderSongs(menuFolder)"
+      >
+        <SvgIcon name="common-delete" class-name="size-4" />
+        {{ t('localFiles.deleteSongs') }}
+      </button>
+    </div>
+  </Teleport>
+  <BaseDialog
+    :model-value="deleteDialogOpen"
+    :title="t('localFiles.deleteSongs')"
+    width="max-w-sm"
+    :close-on-overlay="!deleting"
+    @update:model-value="updateDeleteDialogOpen"
+  >
+    <p class="text-sm text-text-l">
+      {{
+        t('localFiles.confirmDeleteSongs', {
+          name: deleteFolder?.name ?? '',
+          count: deleteFolder?.songCount ?? 0
+        })
+      }}
+    </p>
+    <template #footer>
+      <button
+        class="btn-hover rounded-lg px-3 py-1.5 text-sm"
+        :disabled="deleting"
+        @click="deleteDialogOpen = false"
+      >
+        {{ t('common.cancel') }}
+      </button>
+      <button
+        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        :disabled="deleting"
+        @click="deleteFolderSongs"
+      >
+        {{ t('localFiles.deleteSongs') }}
+      </button>
+    </template>
+  </BaseDialog>
 </template>
 
 <style scoped>

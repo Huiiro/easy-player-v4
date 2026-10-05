@@ -391,6 +391,13 @@ export const usePlayerStore = defineStore('player', () => {
     if (!queue.value.length) {
       currentQueueIndex.value = -1
       await stop()
+      queuePlaylistId.value = null
+      currentFile.value = null
+      trackInfo.value = null
+      positionMs.value = 0
+      durationMs.value = 0
+      deferredRestore = null
+      savePlaybackSessionSync()
       return
     }
     currentQueueIndex.value = Math.min(index, queue.value.length - 1)

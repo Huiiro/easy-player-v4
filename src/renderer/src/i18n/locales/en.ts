@@ -23,7 +23,12 @@ export default {
     title: 'Local files',
     empty: 'No imported local folders',
     expand: 'Expand folder',
-    collapse: 'Collapse folder'
+    collapse: 'Collapse folder',
+    deleteSongs: 'Delete songs in folder',
+    confirmDeleteSongs:
+      'Remove “{name}”, its subfolders, and {count} songs from the library? Playlist, tag, and play history links will also be removed. Files and folders on disk will be kept.',
+    deleted: 'Removed folder records and {count} songs',
+    deleteFailed: 'Unable to delete songs in folder'
   },
   home: {
     layout: {
