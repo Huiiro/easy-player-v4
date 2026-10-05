@@ -3,6 +3,7 @@ import mitt from 'mitt'
 type Events = {
   event: void
   scanFinished: void // 添加歌曲扫描结束
+  importLocalMusic: void
   playlistsChanged: void
   playlistRenamed: number
   tagsChanged: void

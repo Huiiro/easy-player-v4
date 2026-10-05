@@ -76,6 +76,15 @@ onBeforeUnmount(() => offProgress?.())
 </script>
 
 <template>
+  <div class="setting-row">
+    <div>
+      <h3>{{ t('settings.importSongs') }}</h3>
+      <p>{{ t('settings.importSongsDescription') }}</p>
+    </div>
+    <button class="btn-hover-base text-sm" type="button" @click="eventBus.emit('importLocalMusic')">
+      {{ t('settings.importSongs') }}
+    </button>
+  </div>
   <div class="setting-row text-nowrap">
     <div>
       <h3>{{ t('settings.artistSeparator') }}</h3>

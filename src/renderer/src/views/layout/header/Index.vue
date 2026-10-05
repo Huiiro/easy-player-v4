@@ -7,6 +7,7 @@ import { useRoute } from 'vue-router'
 import router from '@/router'
 import { useI18n } from 'vue-i18n'
 import { VERSION } from '@/consts'
+import eventBus from '@/utils/eventBus'
 
 const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
 const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
@@ -45,6 +46,7 @@ const removeWindowStateListener = window.api.window.onState((state) => {
 onBeforeUnmount(() => {
   removeScanProgressListener()
   removeWindowStateListener()
+  eventBus.off('importLocalMusic', uploadLocalFiles)
 })
 
 function go(path: string): void {
@@ -81,6 +83,7 @@ async function uploadLocalFiles(): Promise<void> {
     if (scanVisible.value) scanning.value = false
   }
 }
+eventBus.on('importLocalMusic', uploadLocalFiles)
 </script>
 
 <template>

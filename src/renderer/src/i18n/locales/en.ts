@@ -630,6 +630,8 @@ export default {
     cacheManagement: 'Cache Management',
     cacheManagementDescription: 'Manage the remote music cache location and storage limit.',
     libraryBackup: 'Library Backup',
+    importSongs: 'Import songs',
+    importSongsDescription: 'Choose a local music folder to import its songs into the library.',
     libraryBackupDescription: 'Export or import songs, playlists, tags, and settings.',
     exportLibrary: 'Export Backup',
     importLibrary: 'Import Backup',

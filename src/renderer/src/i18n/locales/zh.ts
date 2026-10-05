@@ -607,6 +607,8 @@ export default {
     cacheManagement: '缓存管理',
     cacheManagementDescription: '管理远程音乐的缓存位置和空间上限。',
     libraryBackup: '音乐库备份',
+    importSongs: '导入歌曲',
+    importSongsDescription: '选择本地音乐文件夹，将其中的歌曲导入资料库。',
     libraryBackupDescription: '导出或导入歌曲、歌单、标签和设置。',
     exportLibrary: '导出备份',
     importLibrary: '导入备份',
