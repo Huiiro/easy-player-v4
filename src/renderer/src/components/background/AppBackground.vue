@@ -134,7 +134,7 @@ onBeforeUnmount(() => {
 }
 
 .app-background-scrim--custom {
-  background: color-mix(in srgb, var(--color-bg) 76%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 42%, transparent);
 }
 
 .app-background-scrim--system {

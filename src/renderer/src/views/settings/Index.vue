@@ -650,6 +650,13 @@ onBeforeUnmount(() => {
             </div>
             <div class="setting-row">
               <div>
+                <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
+                <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
+              </div>
+              <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
+            </div>
+            <div class="setting-row">
+              <div>
                 <h3>{{ t('settings.lyricsPriority') }}</h3>
                 <p>{{ t('settings.lyricsPriorityDescription') }}</p>
               </div>
@@ -675,13 +682,6 @@ onBeforeUnmount(() => {
                 </div>
               </template>
             </Draggable>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
-                <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
-              </div>
-              <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-            </div>
           </div>
         </section>
         <!-- desktop lyrics -->

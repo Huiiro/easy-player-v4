@@ -215,14 +215,13 @@ export const useUIStore = defineStore(
     }
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
     const getBackgroundStyle = computed(() => {
-      const brightness = customBg.brightness / 100
       const blur = customBg.blur ?? 0
       return {
         backgroundImage: customBg.url ? `url(${customBg.url})` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        filter: `brightness(${brightness}) blur(${blur}px)`
+        filter: `blur(${blur}px)`
       }
     })
     const hasBackground = computed(() => useCustomBg.value || systemBackground.value !== 'none')
@@ -476,7 +475,7 @@ export const useUIStore = defineStore(
         customBg.url = typeof background.url === 'string' ? background.url : ''
         customBg.path = typeof background.path === 'string' ? background.path : ''
         customBg.blur = Number(background.blur) || 0
-        customBg.brightness = Number(background.brightness) || 100
+        customBg.brightness = Math.max(30, Math.min(100, Number(background.brightness) || 100))
         customBg.headerBackground =
           typeof background.headerBackground === 'string'
             ? background.headerBackground
