@@ -17,6 +17,21 @@ interface Playlist {
 const { t } = useI18n()
 const player = usePlayerStore()
 const ui = useUIStore()
+const cardViewRef = ref<HTMLElement | null>(null)
+const playlistsVisible = ref(true)
+let playlistsHideTimer: ReturnType<typeof setTimeout> | undefined
+function showPlaylists(): void {
+  playlistsVisible.value = true
+  if (playlistsHideTimer) clearTimeout(playlistsHideTimer)
+  playlistsHideTimer = setTimeout(() => {
+    playlistsVisible.value = false
+    playlistsHideTimer = undefined
+  }, 5000)
+}
+function revealPlaylistsNearTop(event: MouseEvent): void {
+  const top = cardViewRef.value?.getBoundingClientRect().top
+  if (top !== undefined && event.clientY - top <= 120) showPlaylists()
+}
 const songs = ref<LibrarySong[]>([])
 const playlists = ref<Playlist[]>([])
 const activePlaylistId = ref<number | null>(null)
@@ -343,6 +358,7 @@ watch(
 )
 
 onMounted(async () => {
+  showPlaylists()
   await Promise.all([loadPlaylists(), loadSongs()])
   resizeObserver = new ResizeObserver(() => {
     updateCardWidth()
@@ -357,6 +373,7 @@ onMounted(async () => {
   eventBus.on('locateCurrentSong', locateCurrentSong)
 })
 onBeforeUnmount(() => {
+  if (playlistsHideTimer) clearTimeout(playlistsHideTimer)
   resizeObserver?.disconnect()
   stopInertia()
   stopMotion()
@@ -366,10 +383,19 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="card-view flex h-full min-h-0 flex-col overflow-hidden pb-30 text-text">
+  <main
+    ref="cardViewRef"
+    class="card-view flex h-full min-h-0 flex-col overflow-hidden pb-30 text-text"
+    @mousemove="revealPlaylistsNearTop"
+    @focusin="showPlaylists"
+  >
     <nav
       class="card-playlists flex shrink-0 items-center justify-center px-8 pb-3 pt-7"
+      :class="{ 'is-collapsed': !playlistsVisible }"
       :aria-label="t('sidebar.playlists')"
+      :aria-hidden="!playlistsVisible"
+      :inert="!playlistsVisible"
+      @pointerdown="showPlaylists"
     >
       <div class="playlist-strip-wrap">
         <div
@@ -595,12 +621,23 @@ onBeforeUnmount(() => {
 }
 .card-playlists {
   background: transparent;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-standard),
+    transform var(--motion-duration-standard) var(--motion-ease-standard);
+}
+.card-playlists.is-collapsed {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.75rem);
 }
 .playlist-strip {
   display: flex;
-  width: 100%;
+  width: calc(100% + 2.5rem);
   gap: 0.4rem;
   overflow-x: auto;
+  /* Keep pill shadows and the hover lift inside the scrollport. */
+  margin: -1.25rem;
+  padding: 1.25rem;
   scrollbar-width: none;
   cursor: grab;
   user-select: none;
