@@ -354,7 +354,7 @@ onBeforeUnmount(() => {
         </section>
         <section v-if="section === 'playlists'" class="xl:col-span-2">
           <h2 class="mb-3 text-lg font-semibold">{{ t('home.playlists') }}</h2>
-          <div v-if="playlists.length" class="custom-scrollbar flex gap-4 overflow-x-auto pb-3">
+          <div v-if="playlists.length" class="flex flex-wrap gap-4">
             <article v-for="playlist in playlists" :key="playlist.id" class="w-36 shrink-0">
               <button
                 class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l"
