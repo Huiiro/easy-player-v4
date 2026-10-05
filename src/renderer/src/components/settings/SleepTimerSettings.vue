@@ -49,7 +49,7 @@ onBeforeUnmount(clearTimer)
 </script>
 
 <template>
-  <div class="setting-row sleep-timer-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.sleepTimer') }}</h3>
       <p>{{ t('settings.sleepTimerDescription') }}</p>
@@ -69,7 +69,7 @@ onBeforeUnmount(clearTimer)
       </button>
     </div>
   </div>
-  <div class="setting-row sleep-timer-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.stopAfterCurrent') }}</h3>
       <p>{{ t('settings.stopAfterCurrentDescription') }}</p>
@@ -77,38 +77,3 @@ onBeforeUnmount(clearTimer)
     <BaseSwitch v-model="finishCurrentTrack" size="md" />
   </div>
 </template>
-
-<style scoped>
-.sleep-timer-row {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.1rem 1.25rem;
-}
-.sleep-timer-row h3 {
-  color: var(--color-text);
-  font-size: 0.9rem;
-  font-weight: 550;
-}
-.sleep-timer-row p {
-  margin-top: 0.25rem;
-  color: var(--color-text-l);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
-.secondary-button {
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  padding: 0.45rem 0.7rem;
-  color: var(--color-text);
-  font-size: 0.78rem;
-  transition:
-    background-color var(--motion-duration-standard) var(--motion-ease-standard),
-    color var(--motion-duration-standard) var(--motion-ease-standard);
-}
-.secondary-button:hover {
-  background: var(--color-hover);
-}
-</style>

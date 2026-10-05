@@ -98,7 +98,7 @@ watch(
 </script>
 
 <template>
-  <div class="system-row welcome-row">
+  <div class="setting-row welcome-row">
     <div>
       <h3 id="home-welcome-label">{{ t('settings.homeWelcomeText') }}</h3>
       <p id="home-welcome-description">{{ t('settings.homeWelcomeTextDescription') }}</p>
@@ -112,7 +112,7 @@ watch(
       class="w-full sm:w-72 sm:shrink-0"
     />
   </div>
-  <div v-if="ui.platform === 'win'" class="system-row">
+  <div v-if="ui.platform === 'win'" class="setting-row">
     <div>
       <h3>{{ t('settings.fileAssociation') }}</h3>
       <p>{{ t('settings.fileAssociationDescription') }}</p>
@@ -125,21 +125,21 @@ watch(
       {{ t('settings.configureFileAssociation') }}
     </button>
   </div>
-  <div class="system-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.closeToTray') }}</h3>
       <p>{{ t('settings.closeToTrayDescription') }}</p>
     </div>
     <BaseSwitch v-model="ui.closeToTray" size="md" />
   </div>
-  <div class="system-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.autoStart') }}</h3>
       <p>{{ t('settings.autoStartDescription') }}</p>
     </div>
     <BaseSwitch v-model="ui.autoStart" size="md" />
   </div>
-  <div class="system-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.logLevel') }}</h3>
       <p>{{ t('settings.logLevelDescription') }}</p>
@@ -154,7 +154,7 @@ watch(
       @update:model-value="changeLogLevel"
     />
   </div>
-  <div class="system-row">
+  <div class="setting-row">
     <div>
       <h3>{{ t('settings.appUpdate') }}</h3>
       <p v-if="updateStatus.state === 'available'">
@@ -201,25 +201,6 @@ watch(
 </template>
 
 <style scoped>
-.system-row {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.1rem 1.25rem;
-}
-.system-row h3 {
-  color: var(--color-text);
-  font-size: 0.9rem;
-  font-weight: 550;
-}
-.system-row p {
-  margin-top: 0.25rem;
-  color: var(--color-text-l);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
 .welcome-row {
   flex-wrap: wrap;
   gap: 1rem;

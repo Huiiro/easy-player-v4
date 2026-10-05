@@ -43,7 +43,7 @@ onMounted(() => {
 
 <template>
   <div class="file-management">
-    <div class="file-row">
+    <div class="setting-row">
       <div>
         <h3>{{ t('remote.cacheDirectory') }}</h3>
         <p>{{ t('remote.cacheUsed', { size: formatBytes(cacheUsed) }) }}</p>
@@ -59,7 +59,7 @@ onMounted(() => {
         </button>
       </div>
     </div>
-    <div class="file-row">
+    <div class="setting-row">
       <div>
         <h3>{{ t('remote.cacheLimit') }}</h3>
         <p>{{ t('remote.cacheDescription') }}</p>
@@ -81,26 +81,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.file-row {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.1rem 1.25rem;
-}
-
-.file-row h3 {
-  color: var(--color-text);
-  font-size: 0.9rem;
-  font-weight: 550;
-}
-.file-row p {
-  margin-top: 0.25rem;
-  color: var(--color-text-l);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
 .file-path-control,
 .file-actions {
   display: flex;

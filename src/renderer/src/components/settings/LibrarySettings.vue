@@ -170,26 +170,6 @@ onBeforeUnmount(() => offProgress?.())
 </template>
 
 <style scoped>
-.setting-row {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.1rem 1.25rem;
-}
-
-.setting-row h3 {
-  color: var(--color-text);
-  font-size: 0.9rem;
-  font-weight: 550;
-}
-.setting-row p {
-  margin-top: 0.25rem;
-  color: var(--color-text-l);
-  font-size: 0.8125rem;
-  line-height: 1.45;
-}
 .actions {
   display: flex;
   gap: 0.5rem;

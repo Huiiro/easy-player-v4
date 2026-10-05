@@ -1,0 +1,328 @@
+.settings-page .settings-card {
+  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--color-bg-l) 24%, transparent);
+  box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
+  backdrop-filter: blur(8px);
+  transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.settings-page .settings-card.muted {
+  opacity: 0.58;
+}
+
+.settings-page .setting-row {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.settings-page .setting-row h3 {
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 550;
+}
+
+.settings-page .setting-row p {
+  margin-top: 0.25rem;
+  color: var(--color-text-l);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.settings-page .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  padding: 0.45rem 0.7rem;
+  color: var(--color-text);
+  font-size: 0.78rem;
+  transition:
+    border-color var(--motion-duration-standard) var(--motion-ease-standard),
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.settings-page .secondary-button:hover {
+  border-color: var(--color-primary);
+  background: var(--color-hover);
+  color: var(--color-primary);
+}
+
+@scope (.settings-page) {
+  .settings-section {
+    margin-top: 2.5rem;
+    scroll-margin-top: 1.5rem;
+  }
+  .section-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.9rem;
+  }
+  .section-heading h2 {
+    color: var(--color-text);
+    font-size: 1rem;
+    font-weight: 650;
+  }
+  .section-heading p {
+    margin-top: 0.25rem;
+    color: var(--color-text-l);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .custom-background-chrome {
+    border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+    padding: 1.1rem 1.25rem 1.25rem;
+  }
+  .custom-background-chrome-heading h3 {
+    color: var(--color-text);
+    font-size: 0.9rem;
+    font-weight: 550;
+  }
+  .custom-background-chrome-heading p {
+    margin-top: 0.25rem;
+    color: var(--color-text-l);
+    font-size: 0.8125rem;
+    line-height: 1.45;
+  }
+  .custom-background-color-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(8.5rem, 1fr));
+    gap: 0.75rem;
+    margin-top: 1rem;
+    overflow-x: auto;
+    padding-bottom: 0.15rem;
+  }
+  .custom-background-color-control {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.45rem;
+    color: var(--color-text-l);
+    font-size: 0.75rem;
+  }
+  .setting-row-stack {
+    align-items: flex-start;
+  }
+  .theme-options {
+    display: flex;
+    gap: 0.65rem;
+  }
+  .theme-option {
+    display: grid;
+    gap: 0.45rem;
+    width: 104px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    padding: 0.5rem;
+    color: var(--color-text-l);
+    font-size: 0.75rem;
+    text-align: left;
+    transition:
+      border-color var(--motion-duration-standard) var(--motion-ease-standard),
+      box-shadow var(--motion-duration-standard) var(--motion-ease-standard),
+      color var(--motion-duration-standard) var(--motion-ease-standard);
+  }
+  .system-background-preview--solid .preview-window {
+    background: #25352f;
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
+  }
+  .system-background-preview--solid i,
+  .system-background-preview--solid b {
+    background: rgb(255 255 255 / 10%);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%);
+  }
+  .theme-option:hover {
+    border-color: var(--color-primary);
+    color: var(--color-text);
+  }
+  .theme-option.selected {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+    color: var(--color-primary);
+  }
+  .preview-window {
+    display: flex;
+    height: 47px;
+    overflow: hidden;
+    border-radius: 6px;
+    padding: 8px;
+    gap: 5px;
+  }
+  .preview-window i {
+    width: 18%;
+    border-radius: 3px;
+  }
+  .preview-window b {
+    flex: 1;
+    border-radius: 3px;
+  }
+  .light-preview .preview-window {
+    background: rgba(248, 250, 249, 0.6);
+  }
+  .light-preview i {
+    background: rgba(229, 233, 231, 0.6);
+  }
+  .light-preview b {
+    background: rgba(255, 255, 255, 0.6);
+  }
+  .dark-preview .preview-window {
+    background: #151a18;
+  }
+  .dark-preview i {
+    background: #252d2a;
+  }
+  .dark-preview b {
+    background: #1d2421;
+  }
+  .custom-preview .preview-window {
+    background: linear-gradient(135deg, #37524d, #16231f);
+  }
+  .custom-preview i {
+    background: rgb(255 255 255 / 18%);
+  }
+  .custom-preview b {
+    background: rgb(255 255 255 / 10%);
+  }
+  .system-background-options {
+    flex-wrap: wrap;
+  }
+  .system-background-preview--none .preview-window {
+    background: var(--color-bg);
+  }
+  .system-background-preview--none i {
+    background: var(--color-bg-l);
+  }
+  .system-background-preview--none b {
+    background: var(--color-hover);
+  }
+  .system-background-preview--aurora .preview-window {
+    background:
+      radial-gradient(circle at 12% 14%, #56debc, transparent 37%),
+      radial-gradient(circle at 84% 22%, #5b74ff, transparent 42%), #172345;
+  }
+  .system-background-preview--ocean .preview-window {
+    background:
+      radial-gradient(circle at 78% 15%, #5bd3ff, transparent 36%),
+      radial-gradient(circle at 18% 82%, #2370c9, transparent 43%), #0d3c5e;
+  }
+  .system-background-preview--sunset .preview-window {
+    background:
+      radial-gradient(circle at 18% 20%, #ffbc70, transparent 35%),
+      radial-gradient(circle at 82% 72%, #d3539e, transparent 42%), #73394c;
+  }
+  .system-background-preview--forest .preview-window {
+    background:
+      radial-gradient(circle at 22% 22%, #86cf69, transparent 35%),
+      radial-gradient(circle at 83% 70%, #2c9183, transparent 40%), #1b4a35;
+  }
+  .system-background-preview--matrix .preview-window {
+    background:
+      linear-gradient(rgb(104 255 168 / 0.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(104 255 168 / 0.16) 1px, transparent 1px), #06150e;
+    background-size: 9px 9px;
+  }
+  .system-background-preview--rainy .preview-window {
+    background:
+      radial-gradient(circle at 27% 68%, rgb(255 191 100 / 75%), transparent 29%),
+      radial-gradient(circle at 73% 43%, rgb(246 155 92 / 58%), transparent 25%),
+      linear-gradient(150deg, #423448, #17273b 58%, #111923);
+  }
+  .system-background-preview--starfield .preview-window {
+    background:
+      radial-gradient(circle at 19% 25%, #ecf4ff 0 1px, transparent 2px),
+      radial-gradient(circle at 74% 36%, #c4d7ff 0 1px, transparent 2px),
+      radial-gradient(circle at 56% 78%, #ffe9c8 0 1px, transparent 2px),
+      radial-gradient(ellipse at 26% 74%, rgb(63 102 185 / 32%), transparent 59%),
+      radial-gradient(ellipse at 63% 50%, rgb(133 83 177 / 43%), transparent 62%),
+      linear-gradient(145deg, #040915, #111936 58%, #060a19);
+  }
+  .system-background-preview--blackhole .preview-window {
+    background:
+      radial-gradient(circle at 58% 48%, #04040a 0 14%, transparent 16%),
+      radial-gradient(
+        ellipse at 58% 52%,
+        transparent 20%,
+        #ffd6a0 23%,
+        #b77347 27%,
+        transparent 37%
+      ),
+      radial-gradient(circle at 58% 48%, transparent 19%, #e6ab76 22%, transparent 31%), #090914;
+  }
+  .system-background-preview--blackhole i,
+  .system-background-preview--blackhole b {
+    background: rgb(255 255 255 / 7%);
+  }
+  .system-background-preview--aurora i,
+  .system-background-preview--aurora b,
+  .system-background-preview--ocean i,
+  .system-background-preview--ocean b,
+  .system-background-preview--sunset i,
+  .system-background-preview--sunset b,
+  .system-background-preview--forest i,
+  .system-background-preview--forest b,
+  .system-background-preview--matrix i,
+  .system-background-preview--matrix b,
+  .system-background-preview--rainy i,
+  .system-background-preview--rainy b,
+  .system-background-preview--starfield i,
+  .system-background-preview--starfield b {
+    background: rgb(255 255 255 / 16%);
+  }
+  .background-row {
+    border-bottom: 1px solid var(--color-border);
+  }
+  .slider-row {
+    padding: 1rem 1.25rem;
+  }
+  .slider-row + .slider-row {
+    padding-top: 0.25rem;
+  }
+  .slider-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.45rem;
+    color: var(--color-text-l);
+    font-size: 0.8125rem;
+  }
+  .slider-label strong {
+    color: var(--color-text);
+    font-weight: 550;
+  }
+}
+
+.settings-page .icon-button {
+  width: 31px;
+  border-radius: 7px;
+  color: var(--color-text-l);
+  font-size: 1.15rem;
+  transition:
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.settings-page .icon-button:hover {
+  background: var(--color-hover);
+}
+
+.settings-page .reset-button {
+  border-radius: 7px;
+  padding: 0.35rem 0.5rem;
+  color: var(--color-text-l);
+  font-size: 0.78rem;
+  transition:
+    background-color var(--motion-duration-standard) var(--motion-ease-standard),
+    color var(--motion-duration-standard) var(--motion-ease-standard);
+}
+
+.settings-page .reset-button:hover {
+  background: var(--color-hover);
+}

@@ -32,7 +32,7 @@ function reset(): void {
 </script>
 <template>
   <div class="settings-card shortcut-card">
-    <div class="toolbar">
+    <div class="setting-row toolbar">
       <div>
         <h3>{{ t('settings.globalShortcuts') }}</h3>
         <p>{{ t('settings.globalShortcutsDescription') }}</p>
@@ -61,37 +61,20 @@ function reset(): void {
 <style scoped>
 .settings-card {
   overflow: hidden;
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--color-bg-l) 35%, transparent);
 }
 .toolbar {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 2rem;
-  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
 }
-.toolbar h3,
 .action {
   color: var(--color-text);
   font-size: 0.9rem;
   font-weight: 550;
 }
-.toolbar p,
 .hint {
   margin-top: 0.25rem;
   color: var(--color-text-l);
   font-size: 0.8125rem;
   line-height: 1.45;
-}
-.secondary-button {
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  padding: 0.45rem 0.7rem;
-  color: var(--color-text);
-  font-size: 0.78rem;
 }
 .shortcut-grid {
   display: grid;
