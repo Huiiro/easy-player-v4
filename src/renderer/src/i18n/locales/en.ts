@@ -101,6 +101,7 @@ export default {
     ariaLabel: 'Player navigation',
     library: 'Library',
     playlists: 'My Playlists',
+    playing: 'Playing',
     more: 'More',
     collapse: 'Collapse sidebar',
     expand: 'Expand sidebar',

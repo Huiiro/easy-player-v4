@@ -100,6 +100,7 @@ export default {
     ariaLabel: '播放器导航',
     library: '音乐库',
     playlists: '我的歌单',
+    playing: '播放中',
     more: '更多',
     collapse: '收起侧边栏',
     expand: '展开侧边栏',

@@ -667,19 +667,19 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
           {{ t('songList.reloadFromDisk') }}
         </button>
         <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="copyActiveMenuSongName"
+        >
+          <svgIcon name="common-text-case" class-name="size-4" />
+          {{ t('songList.copyName') }}
+        </button>
+        <button
           v-if="source.type === 'playlist'"
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
           @click="removeActiveMenuSong"
         >
           <svgIcon name="common-delete" class-name="size-4" />
           {{ t('songList.removeFromPlaylist') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="copyActiveMenuSongName"
-        >
-          <svgIcon name="common-text-case" class-name="size-4" />
-          {{ t('songList.copyName') }}
         </button>
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
