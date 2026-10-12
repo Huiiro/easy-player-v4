@@ -251,7 +251,7 @@ function analyzeCoverImage(image: HTMLImageElement): void {
       })
     }
   })
-  if (useLiquidBackground.value && result.source === 'failed') {
+  if ((useLiquidBackground.value || useAmbientBackground.value) && result.source === 'failed') {
     resetCoverPalette('failed')
     paletteReady.value = true
     return

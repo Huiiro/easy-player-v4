@@ -65,8 +65,53 @@ function parseColor(value: string): [number, number, number] {
   return parts?.length === 3 ? [parts[0], parts[1], parts[2]] : [110, 160, 220]
 }
 
+function ambientColor(
+  color: RgbColor,
+  fallbackHue: number,
+  hueOverride?: number
+): { rgb: RgbColor; hue: number } {
+  const channels = color.map((channel) => Math.max(0, Math.min(255, channel)) / 255)
+  const maximum = Math.max(...channels)
+  const minimum = Math.min(...channels)
+  const chroma = maximum - minimum
+  const originalLightness = (maximum + minimum) / 2
+  let hue = hueOverride ?? fallbackHue
+  if (hueOverride === undefined && chroma > 0.08) {
+    const [red, green, blue] = channels
+    if (maximum === red) hue = ((green - blue) / chroma + (green < blue ? 6 : 0)) * 60
+    else if (maximum === green) hue = ((blue - red) / chroma + 2) * 60
+    else hue = ((red - green) / chroma + 4) * 60
+  }
+  const saturation = chroma / (1 - Math.abs(2 * originalLightness - 1) || 1)
+  const lightness = Math.max(0.44, Math.min(0.6, originalLightness))
+  const vividness = Math.max(0.55, Math.min(0.82, saturation))
+  const channelChroma = (1 - Math.abs(2 * lightness - 1)) * vividness
+  const alternate = channelChroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const offset = lightness - channelChroma / 2
+  const sectors: RgbColor[] = [
+    [channelChroma, alternate, 0],
+    [alternate, channelChroma, 0],
+    [0, channelChroma, alternate],
+    [0, alternate, channelChroma],
+    [alternate, 0, channelChroma],
+    [channelChroma, 0, alternate]
+  ]
+  const rgb = sectors[Math.floor(hue / 60) % 6].map((channel) =>
+    Math.round((channel + offset) * 255)
+  ) as RgbColor
+  return { rgb, hue }
+}
+
 function readPalette(): Palette {
-  return [parseColor(props.primary), parseColor(props.secondary), parseColor(props.tertiary)]
+  const primary = ambientColor(parseColor(props.primary), 215)
+  const secondary = ambientColor(parseColor(props.secondary), 315)
+  const tertiary = ambientColor(parseColor(props.tertiary), 165)
+  const hueDifference = Math.abs(((secondary.hue - primary.hue + 540) % 360) - 180)
+  const secondColor =
+    hueDifference < 28
+      ? ambientColor(secondary.rgb, 315, (primary.hue + 42) % 360).rgb
+      : secondary.rgb
+  return [primary.rgb, secondColor, tertiary.rgb]
 }
 
 let palette = readPalette()
@@ -268,22 +313,31 @@ function drawBase(timestamp = performance.now()): void {
   const strength = props.intensity
   context.globalCompositeOperation = 'screen'
   drawGlow(
-    width * 0.2,
-    height * 0.26,
-    Math.max(width, height) * 0.58,
-    1.12,
-    0.82,
+    width * 0.19,
+    height * 0.25,
+    Math.max(width, height) * 0.46,
+    1.08,
+    0.88,
     palette[0],
-    0.2 * strength
+    0.38 * strength
   )
   drawGlow(
-    width * 0.8,
-    height * 0.72,
-    Math.max(width, height) * 0.62,
-    1.1,
-    0.84,
+    width * 0.81,
+    height * 0.68,
+    Math.max(width, height) * 0.48,
+    1.06,
+    0.9,
     palette[1],
-    0.19 * strength
+    0.35 * strength
+  )
+  drawGlow(
+    width * 0.52,
+    height * 0.92,
+    Math.max(width, height) * 0.36,
+    1.12,
+    0.72,
+    palette[2],
+    0.18 * strength
   )
   context.globalCompositeOperation = 'source-over'
   if (noisePattern) {

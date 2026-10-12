@@ -1043,6 +1043,7 @@ onUnmounted(() => {
   font-size: var(--lrc-size);
   line-height: var(--lrc-height);
   font-weight: 700;
+  letter-spacing: 0.025em;
   overflow-wrap: anywhere;
   word-break: normal;
   white-space: pre-line;
@@ -1146,14 +1147,14 @@ onUnmounted(() => {
 }
 .lyric-karaoke-char {
   font-size: inherit;
-  transform: translateY(calc(var(--lift, 0) * -3px)) scale(calc(1.03 + var(--lift, 0) * 0.06));
+  transform: translateY(calc(var(--lift, 0) * -3px)) scale(calc(1.01 + var(--lift, 0) * 0.02));
   opacity: clamp(0.25, calc(0.25 + var(--emphasis, 0) * 0.75), 1);
   transform-origin: center bottom;
   will-change: transform, opacity;
-  scale: 1.06;
+  scale: 1.01;
 }
 .lyric-viewport--float .lyric-karaoke-char {
-  transform: translateY(calc(var(--lift, 0) * -4px)) scale(calc(1.03 + var(--lift, 0) * 0.01));
+  transform: translateY(calc(var(--lift, 0) * -5px)) scale(calc(1.01 + var(--lift, 0) * 0.02));
 }
 .reduce-motion .lyric-karaoke-char,
 .no-transform .lyric-karaoke-char {
