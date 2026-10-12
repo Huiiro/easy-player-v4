@@ -10,6 +10,7 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
+import { chooseSpectrumColor } from '@/components/player/spectrumColor'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
@@ -169,6 +170,10 @@ const initialPalette = CoverAnalyzer.getCachedPalette(
   useLiquidBackground.value
 )
 const coverColors = ref(initialPalette ?? { ...defaultLiquidColors })
+const spectrumBackgroundLuminance = ref(0.1)
+const spectrumColor = computed(() =>
+  chooseSpectrumColor(coverColors.value, spectrumBackgroundLuminance.value)
+)
 const paletteReady = ref(!coverUrl.value || Boolean(initialPalette))
 const useDarkLyrics = ref(false)
 const backgroundImage = ref<HTMLImageElement | null>(null)
@@ -262,12 +267,15 @@ function analyzeCoverImage(image: HTMLImageElement): void {
   if (isBackground) {
     analyzedBackgrounds.add(image)
     useDarkLyrics.value = result.useDarkLyrics
+    spectrumBackgroundLuminance.value =
+      result.result?.averageLuminance ?? (result.useDarkLyrics ? 0.75 : 0.1)
   }
   coverColorSource.value = result.source
 }
 function resetCoverPalette(source: 'idle' | 'loading' | 'failed', preserveColors = false): void {
   if (!preserveColors) coverColors.value = { ...defaultLiquidColors }
   useDarkLyrics.value = false
+  spectrumBackgroundLuminance.value = 0.1
   coverColorSource.value = source
 }
 function handleCoverError(event: Event): void {
@@ -327,6 +335,7 @@ watch(
 watch(backgroundSource, (source) => {
   if (!source) {
     useDarkLyrics.value = false
+    spectrumBackgroundLuminance.value = 0.1
     if (!coverUrl.value) resetCoverPalette('idle')
   }
 })
@@ -936,11 +945,11 @@ function changeLyricsOffset(event: WheelEvent): void {
       <!-- play spectrum-->
       <div
         v-if="ui.showPlayer && ui.showPlayerSpectrum"
-        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-80"
+        class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-90"
       >
         <PlayerSpectrum
           :spectrum="player.audioAnalysis.spectrum"
-          :color="coverColors.primary"
+          :color="spectrumColor"
           :active="player.isPlaying && isPanelVisible"
         />
       </div>

@@ -142,6 +142,7 @@ export const useUIStore = defineStore(
     const showLyricsSettings = ref(false)
     const showDisplaySettings = ref(false)
     const showPlayerSpectrum = ref(false)
+    const playerSpectrumStyle = ref<'bars' | 'dots'>('bars')
     const showPlayer = ref(false)
     const footerOpenMode = ref<'all' | 'cover'>('all')
     const autoHideFooter = ref(false)
@@ -719,6 +720,7 @@ export const useUIStore = defineStore(
       showLyricsSettings,
       showDisplaySettings,
       showPlayerSpectrum,
+      playerSpectrumStyle,
       showPlayer,
       footerOpenMode,
       autoHideFooter,
@@ -813,6 +815,7 @@ export const useUIStore = defineStore(
         'playerCoverStyle',
         'playerDisplayMode',
         'showPlayerSpectrum',
+        'playerSpectrumStyle',
         'footerOpenMode',
         'autoHideFooter',
         'allowSwitchCoverStyle',

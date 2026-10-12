@@ -58,7 +58,7 @@ function render(): void {
   const color = props.color || '77 136 220'
   if (!gradient || gradientHeight !== height || gradientColor !== color) {
     gradient = c.createLinearGradient(0, height, 0, 0)
-    gradient.addColorStop(0, `rgb(${color} / .32)`)
+    gradient.addColorStop(0, `rgb(${color} / .55)`)
     gradient.addColorStop(1, `rgb(${color} / .98)`)
     gradientHeight = height
     gradientColor = color
@@ -66,16 +66,32 @@ function render(): void {
 
   const bw = width / barCount
   const barWidth = Math.max(1, bw * 0.58)
+  const dotSize = Math.min(barWidth, 3 * pixelScale)
+  const dotStep = dotSize + Math.max(pixelScale, dotSize * 0.5)
   c.fillStyle = gradient
   for (let index = 0; index < barCount; index += 1) {
     const value = bars[index]
     levels[index] += (Math.max(0, Math.min(1, value)) - levels[index]) * 0.28
     const barHeight = Math.max(2 * pixelScale, levels[index] * height)
-    c.fillRect(index * bw + (bw - barWidth) / 2, height - barHeight, barWidth, barHeight)
+    if (ui.playerSpectrumStyle === 'dots') {
+      const x = index * bw + (bw - dotSize) / 2
+      const dotCount = Math.min(Math.ceil(height / dotStep), Math.max(1, Math.ceil(barHeight / dotStep)))
+      for (let row = 0; row < dotCount; row += 1)
+        c.fillRect(x, height - dotSize - row * dotStep, dotSize, dotSize)
+    } else {
+      c.fillRect(index * bw + (bw - barWidth) / 2, height - barHeight, barWidth, barHeight)
+    }
   }
   scheduleRender()
 }
 watch(() => props.spectrum, updateTarget, { immediate: true })
+watch(
+  () => ui.playerSpectrumStyle,
+  () => {
+    if (ui.reduceMotion || props.active === false) render()
+    else scheduleRender()
+  }
+)
 function handleVisibilityChange(): void {
   if (document.hidden) {
     cancelAnimationFrame(raf)

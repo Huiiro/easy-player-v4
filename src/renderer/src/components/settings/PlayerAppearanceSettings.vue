@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { PlayerBgType, PlayerCoverStyle } from '@/consts'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 const ui = useUIStore()
 const { t } = useI18n()
+const spectrumStyleOptions = computed(() => [
+  { label: t('settings.playerSpectrumBars'), value: 'bars' },
+  { label: t('settings.playerSpectrumDots'), value: 'dots' }
+])
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
   set: (value) => {
@@ -109,6 +114,18 @@ const openFooterAnywhere = computed({
           <span>{{ t('settings.playerCoverStyleVinyl') }}</span>
         </button>
       </div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.playerSpectrumStyle') }}</h3>
+        <p>{{ t('settings.playerSpectrumStyleDescription') }}</p>
+      </div>
+      <BaseSelect
+        v-model="ui.playerSpectrumStyle"
+        :options="spectrumStyleOptions"
+        teleport
+        class="w-32"
+      />
     </div>
     <div class="setting-row">
       <div>
