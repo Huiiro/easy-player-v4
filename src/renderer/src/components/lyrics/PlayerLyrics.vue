@@ -45,7 +45,7 @@ const isAutoScrolling = ref(false)
 const enableAutoScroll = computed(() => {
   return !isUserScrolling.value
 })
-let scrollTimer: ReturnType<typeof setTimeout> | null = null
+let scrollTimer: number | null = null
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let snapTimer: ReturnType<typeof setTimeout> | null = null
 let autoScrollTimer: ReturnType<typeof setTimeout> | null = null
@@ -326,7 +326,7 @@ watch(
 watch(
   currentIndex,
   (newIndex, oldIndex) => {
-    const distance = Math.abs(newIndex - oldIndex)
+    const distance = Math.abs(newIndex - (oldIndex ?? newIndex))
     velocity.value = Math.min(10 + distance * 5, 40)
     if (enableAutoScroll.value) {
       snapToCurrent()

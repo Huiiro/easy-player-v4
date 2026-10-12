@@ -305,6 +305,12 @@ function setLimiterEnabled(enabled: boolean | string | number): void {
   player.limiterConfig.enabled = enabled === true
   updateLimiter()
 }
+function startDragNode(index: number): void {
+  draggingNodeIndex = index
+}
+function endDragNode(): void {
+  draggingNodeIndex = null
+}
 function dropDspNode(targetIndex: number): void {
   if (draggingNodeIndex === null || draggingNodeIndex === targetIndex) return
   const [node] = player.dspNodes.splice(draggingNodeIndex, 1)
@@ -505,8 +511,8 @@ function refreshOutputDevices(): void {
           >
           <span>|</span>
           <span class="mt-0.5 truncate">
-            {{ player.trackInfo.format }} · {{ player.trackInfo.sampleRate }} Hz ·
-            {{ player.trackInfo.bitDepth }} bit · {{ player.trackInfo.channels }}
+            {{ player.trackInfo?.format }} · {{ player.trackInfo?.sampleRate }} Hz ·
+            {{ player.trackInfo?.bitDepth }} bit · {{ player.trackInfo?.channels }}
             {{ t('ap.channels') }}
           </span>
         </div>
@@ -1004,8 +1010,8 @@ function refreshOutputDevices(): void {
               draggable="true"
               class="cursor-grab text-text-l active:cursor-grabbing"
               :title="t('ap.dragSort')"
-              @dragstart="draggingNodeIndex = index"
-              @dragend="draggingNodeIndex = null"
+              @dragstart="startDragNode(index)"
+              @dragend="endDragNode"
               >⠿</span
             >
             <div class="min-w-0 flex-1">

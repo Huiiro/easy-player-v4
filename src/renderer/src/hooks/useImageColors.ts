@@ -31,12 +31,12 @@ interface AnalysisResult {
 interface AnalyzeOptions {
   image: HTMLImageElement
   song?: {
-    id: string
-    cover: string
-    coverAnalysisPath?: string
-    coverAnalysisVersion?: number
-    coverPrimary?: string
-    coverSecondary?: string
+    id: number
+    cover: string | null
+    coverAnalysisPath?: string | null
+    coverAnalysisVersion?: number | null
+    coverPrimary?: string | null
+    coverSecondary?: string | null
     coverLyricsDark?: number | null
   }
   isPanelBackground: boolean
@@ -45,7 +45,7 @@ interface AnalyzeOptions {
   backgroundFilter?: string
   getLyricsRegion: (image: HTMLImageElement) => [number, number, number, number] | null
   onCacheUpdate?: (
-    songId: string,
+    songId: number,
     analysis: {
       path: string
       primary: string

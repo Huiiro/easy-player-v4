@@ -53,7 +53,7 @@ watch(
     image.crossOrigin = 'anonymous'
     image.onload = () => {
       if (cancelled) return
-      const color = SystemThemeColorAnalyzer.getSystemThemeColor(image, song.cover)
+      const color = SystemThemeColorAnalyzer.getSystemThemeColor(image, song.cover!)
       ui.songThemeColor = color ? `rgb(${color})` : null
     }
     image.onerror = () => {

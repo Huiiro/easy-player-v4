@@ -10,7 +10,7 @@ const minutes = ref(30)
 const deadline = ref<number | null>(null)
 const now = ref(Date.now())
 const finishCurrentTrack = ref(false)
-let timer: ReturnType<typeof setInterval> | undefined
+let timer: number | undefined
 
 const remainingSeconds = computed(() =>
   deadline.value ? Math.max(0, Math.ceil((deadline.value - now.value) / 1000)) : 0

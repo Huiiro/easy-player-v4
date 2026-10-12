@@ -139,7 +139,7 @@ const maxHeightStyle = computed(() => {
 const defaultIconClass = 'w-4 h-4 text-current'
 
 function iconClass(item: MenuItemType): string[] {
-  return [defaultIconClass, item.iconClass]
+  return [defaultIconClass, item.iconClass ?? '']
 }
 
 function isSelected(item: MenuItemType): boolean {

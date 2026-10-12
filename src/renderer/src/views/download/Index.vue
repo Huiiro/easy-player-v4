@@ -18,6 +18,7 @@ interface ResultItem {
   thumbnailUrl?: string | null
   duration: number | null
   uploader: string | null
+  selected?: boolean
   status: DownloadStatus
   progress: number
 }
@@ -99,13 +100,19 @@ async function loadHistory(): Promise<void> {
   }
 }
 async function showInFolder(filePath: string | null): Promise<void> {
-  if (!filePath) return error(t('download.noFile'))
+  if (!filePath) {
+    error(t('download.noFile'))
+    return
+  }
   const result = await window.api.downloads.showInFolder(filePath)
   if (!result.success) error(result.error || t('download.openFailed'))
 }
 async function loadResults(): Promise<void> {
   const value = query.value.trim()
-  if (!value) return error(t('download.inputRequired'))
+  if (!value) {
+    error(t('download.inputRequired'))
+    return
+  }
   loading.value = true
   try {
     const items = isDirectUrl.value
@@ -186,8 +193,14 @@ async function download(item: ResultItem, notifyMissingDirectory = true): Promis
   }
 }
 async function downloadSelected(): Promise<void> {
-  if (!directory.value) return error(t('download.chooseDirectoryFirst'))
-  if (!selectedResults.value.length) return error(t('download.selectAtLeastOne'))
+  if (!directory.value) {
+    error(t('download.chooseDirectoryFirst'))
+    return
+  }
+  if (!selectedResults.value.length) {
+    error(t('download.selectAtLeastOne'))
+    return
+  }
   let started = 0
   for (const item of selectedResults.value) if (await download(item, false)) started += 1
   if (started) success(t('download.queued', { count: started }))

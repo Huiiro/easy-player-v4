@@ -14,9 +14,10 @@ const i18n = createI18n({
 /**
  * 暴露方法
  * @param key
+ * @param named
  */
-export const t = (key: string): string => {
-  return i18n.global.t(key)
+export const t = (key: string, named?: Record<string, string | number>): string => {
+  return named ? i18n.global.t(key, named) : i18n.global.t(key)
 }
 
 /**
@@ -31,7 +32,7 @@ export const t = (key: string): string => {
  *     }
  *   }
  */
-export function registerPluginI18n(i18nOptions: Record<string, string>): void {
+export function registerPluginI18n(i18nOptions: Record<string, Record<string, string>>): void {
   const global = i18n.global
 
   Object.entries(i18nOptions).forEach(([lang, messages]) => {
