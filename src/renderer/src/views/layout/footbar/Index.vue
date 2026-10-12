@@ -474,7 +474,8 @@ async function loadLyricSourceOptions(): Promise<
     window.api.lyrics.searchNetwork({
       title: song.title,
       artist: song.artist,
-      album: song.album
+      album: song.album,
+      preferWordTimed: ui.preferWordTimedNetworkLyrics
     })
   ])
   const databaseSong = database.success

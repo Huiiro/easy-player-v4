@@ -427,12 +427,14 @@ const lyricsAPI = {
   searchNetwork: ({
     title,
     artist,
-    album
+    album,
+    preferWordTimed
   }: {
     title: string
     artist?: string | null
     album?: string | null
-  }) => ipcRenderer.invoke('lyrics:search-network', { title, artist, album })
+    preferWordTimed?: boolean
+  }) => ipcRenderer.invoke('lyrics:search-network', { title, artist, album, preferWordTimed })
 }
 const fontsAPI = {
   list: () => ipcRenderer.invoke('fonts:list'),

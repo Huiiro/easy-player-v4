@@ -24,6 +24,7 @@ export interface LyricSearchRequest {
   title: string
   artist?: string | null
   album?: string | null
+  preferWordTimed?: boolean
 }
 export interface NetworkLyricCandidate {
   id: string
@@ -76,22 +77,19 @@ function rankCandidates(
   candidates: NetworkLyricCandidate[],
   request: LyricSearchRequest
 ): NetworkLyricCandidate[] {
+  const score = (candidate: NetworkLyricCandidate): number =>
+    matchScore(candidate.title, request.title) * 0.7 +
+    matchScore(candidate.artist, request.artist) * 0.2 +
+    matchScore(candidate.album, request.album) * 0.1
   return candidates.sort((left, right) => {
-    const score = (candidate: NetworkLyricCandidate): number =>
-      matchScore(candidate.title, request.title) * 0.7 +
-      matchScore(candidate.artist, request.artist) * 0.2 +
-      matchScore(candidate.album, request.album) * 0.1
-    return (
-      score(right) -
-      score(left) +
-      (Number(right.format === 'yrc' || right.format === 'krc') -
-        Number(left.format === 'yrc' || left.format === 'krc')) *
-        0.01
-    )
+    return score(right) - score(left)
   })
 }
 
-async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
+async function searchNeteaseLyrics(
+  request: LyricSearchRequest,
+  wordTimed: boolean
+): Promise<NetworkLyricCandidate[]> {
   const response = (await searchNetease({
     keywords: searchKeyword(request),
     limit: 8
@@ -117,16 +115,9 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
       }
       const yrcText = result.body?.yrc?.lyric?.trim()
       const yrc = yrcText && /^\[\d+,\d+\].*\(\d+,\d+,\d+\)/m.test(yrcText) ? yrcText : undefined
-      const lrc = cleanNetworkLyric(yrc || result.body?.lrc?.lyric || '', yrc ? 'yrc' : 'lrc')
+      const format = wordTimed ? 'yrc' : 'lrc'
+      const lrc = cleanNetworkLyric(wordTimed ? yrc || '' : result.body?.lrc?.lyric || '', format)
       if (result.status !== 200 || !lrc) return null
-      const translation = cleanNetworkLyric(
-        (yrc && result.body?.ytlrc?.lyric?.trim()) || result.body?.tlyric?.lyric || '',
-        'lrc'
-      )
-      const romanization = cleanNetworkLyric(
-        (yrc && result.body?.yromalrc?.lyric?.trim()) || result.body?.romalrc?.lyric || '',
-        'lrc'
-      )
       const artists = Array.isArray(song.artists)
         ? song.artists
             .map((artist) => String((artist as { name?: string }).name ?? ''))
@@ -134,15 +125,27 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
             .join(' / ')
         : ''
       const album = (song.album as { name?: string } | undefined)?.name
+      const translation = cleanNetworkLyric(
+        (wordTimed
+          ? result.body?.ytlrc?.lyric || result.body?.tlyric?.lyric
+          : result.body?.tlyric?.lyric || result.body?.ytlrc?.lyric) || '',
+        'lrc'
+      )
+      const romanization = cleanNetworkLyric(
+        (wordTimed
+          ? result.body?.yromalrc?.lyric || result.body?.romalrc?.lyric
+          : result.body?.romalrc?.lyric || result.body?.yromalrc?.lyric) || '',
+        'lrc'
+      )
       return {
-        id: `netease:${id}`,
-        provider: 'netease' as const,
+        id: `netease:${id}:${format}`,
+        provider: 'netease',
         title: String(song.name ?? request.title),
         artist: artists || request.artist || '',
         album,
         lrc,
-        format: yrc ? 'yrc' : 'lrc',
-        supportsWordTiming: Boolean(yrc),
+        format,
+        supportsWordTiming: wordTimed,
         translation: translation || undefined,
         translationFormat: translation ? 'lrc' : undefined,
         romanization: romanization || undefined,
@@ -155,7 +158,10 @@ async function searchNeteaseLyrics(request: LyricSearchRequest): Promise<Network
   )
 }
 
-async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
+async function searchKugouLyrics(
+  request: LyricSearchRequest,
+  wordTimed: boolean
+): Promise<NetworkLyricCandidate[]> {
   const response = (await kugouApi.search({
     keywords: searchKeyword(request),
     cookie: KUGOU_COOKIE
@@ -170,43 +176,33 @@ async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLy
       }
       const match = matches.body?.candidates?.[0]
       if (!match?.id || !match.accesskey) return null
-      let krc = ''
+      const format = wordTimed ? 'krc' : 'lrc'
+      let content = ''
       try {
-        const krcResult = (await kugouApi.lyric({
+        const lyricResult = (await kugouApi.lyric({
           id: String(match.id),
           accesskey: match.accesskey,
           decode: true,
-          fmt: 'krc'
+          fmt: format
         })) as { body?: { decodeContent?: string } }
-        krc = krcResult.body?.decodeContent?.trim() ?? ''
+        content = lyricResult.body?.decodeContent?.trim() ?? ''
       } catch {
-        // The normal LRC endpoint can still succeed for this lyric candidate.
+        return null
       }
-      const hasWordTiming = /^\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(krc)
-      const normalized = hasWordTiming ? normalizeKrc(krc) : undefined
-      const lrc = hasWordTiming
-        ? normalized!.lrc
-        : cleanNetworkLyric(
-            (
-              (await kugouApi.lyric({
-                id: String(match.id),
-                accesskey: match.accesskey,
-                decode: true,
-                fmt: 'lrc'
-              })) as { body?: { decodeContent?: string } }
-            ).body?.decodeContent ?? '',
-            'lrc'
-          )
+      const hasWordTiming = /^\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(content)
+      if (wordTimed && !hasWordTiming) return null
+      const normalized = wordTimed ? normalizeKrc(content) : undefined
+      const lrc = wordTimed ? normalized?.lrc : cleanNetworkLyric(content, 'lrc')
       if (!lrc) return null
       return {
-        id: `kugou:${match.id}`,
-        provider: 'kugou' as const,
+        id: `kugou:${match.id}:${format}`,
+        provider: 'kugou',
         title: String(song.SongName ?? request.title),
         artist: String(song.SingerName ?? request.artist ?? ''),
         album: typeof song.AlbumName === 'string' ? song.AlbumName : undefined,
         lrc,
-        format: hasWordTiming ? 'krc' : 'lrc',
-        supportsWordTiming: hasWordTiming,
+        format,
+        supportsWordTiming: wordTimed,
         translation: normalized?.translation,
         translationFormat: normalized?.translationFormat,
         romanization: normalized?.romanization,
@@ -221,12 +217,16 @@ async function searchKugouLyrics(request: LyricSearchRequest): Promise<NetworkLy
 
 async function searchNetworkLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
   if (!request?.title?.trim()) return []
-  const results = await Promise.allSettled([
-    searchNeteaseLyrics(request),
-    searchKugouLyrics(request)
-  ])
+  const searchFormat = async (wordTimed: boolean): Promise<NetworkLyricCandidate[]> => {
+    const results = await Promise.allSettled([
+      searchNeteaseLyrics(request, wordTimed),
+      searchKugouLyrics(request, wordTimed)
+    ])
+    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []))
+  }
+  const preferred = await searchFormat(request.preferWordTimed !== false)
   return rankCandidates(
-    results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
+    preferred.length ? preferred : await searchFormat(request.preferWordTimed === false),
     request
   )
 }

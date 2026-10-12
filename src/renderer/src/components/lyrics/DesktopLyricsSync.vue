@@ -18,7 +18,13 @@ async function loadLyrics(): Promise<void> {
     lyrics.value = []
     return
   }
-  const result = await resolveLyrics(song, ui.lyricSourceOrder, ui.lyricSourceMode)
+  const result = await resolveLyrics(
+    song,
+    ui.lyricSourceOrder,
+    ui.lyricSourceMode,
+    ui.autoSearchNetworkLyrics,
+    ui.preferWordTimedNetworkLyrics
+  )
   if (id === requestId) {
     lyrics.value = result.lines
     lyricRevision += 1
@@ -125,7 +131,13 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => [player.currentQueueSong?.id, ui.lyricSourceOrder.join('|'), ui.lyricSourceMode],
+  () => [
+    player.currentQueueSong?.id,
+    ui.lyricSourceOrder.join('|'),
+    ui.lyricSourceMode,
+    ui.autoSearchNetworkLyrics,
+    ui.preferWordTimedNetworkLyrics
+  ],
   () => void loadLyrics(),
   { immediate: true }
 )

@@ -57,7 +57,8 @@ async function loadDraft(source = previewSource.value): Promise<void> {
       song,
       ui.lyricSourceOrder,
       'auto',
-      ui.autoSearchNetworkLyrics
+      ui.autoSearchNetworkLyrics,
+      ui.preferWordTimedNetworkLyrics
     )
     resolvedSource.value = result.source
     lyric.value = result.content || ''
@@ -143,7 +144,10 @@ async function search(): Promise<void> {
   error.value = ''
   candidates.value = []
   try {
-    const response = await window.api.lyrics.searchNetwork({ ...query.value })
+    const response = await window.api.lyrics.searchNetwork({
+      ...query.value,
+      preferWordTimed: ui.preferWordTimedNetworkLyrics
+    })
     if (!response.success) throw new Error(response.error)
     candidates.value = response.data || []
     if (candidates.value.length) selectCandidate(0)

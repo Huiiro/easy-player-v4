@@ -27,7 +27,7 @@ const lyricSourceKey = (source: string): string => source
         v-model="ui.karaokeAnimation"
         :options="karaokeAnimationOptions"
         teleport
-        class="w-64"
+        class="w-32"
       />
     </div>
     <div class="setting-row">
@@ -39,13 +39,20 @@ const lyricSourceKey = (source: string): string => source
     </div>
     <div class="setting-row">
       <div>
+        <h3>{{ t('settings.preferWordTimedNetworkLyrics') }}</h3>
+        <p>{{ t('settings.preferWordTimedNetworkLyricsDescription') }}</p>
+      </div>
+      <BaseSwitch v-model="ui.preferWordTimedNetworkLyrics" size="md" />
+    </div>
+    <div class="setting-row">
+      <div>
         <h3>{{ t('settings.lyricsPriority') }}</h3>
         <p>{{ t('settings.lyricsPriorityDescription') }}</p>
       </div>
     </div>
     <Draggable v-model="ui.lyricSourceOrder" :item-key="lyricSourceKey" handle=".lyric-drag-handle">
       <template #item="{ element: source, index }">
-        <div class="setting-row">
+        <div class="setting-row lyric-source-item">
           <div class="flex items-center gap-3">
             <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
               <SvgIcon name="common-drag" class-name="size-4" />
@@ -64,6 +71,18 @@ const lyricSourceKey = (source: string): string => source
 </template>
 
 <style scoped>
+.lyric-source-item + .lyric-source-item {
+  position: relative;
+}
+.lyric-source-item + .lyric-source-item::before {
+  position: absolute;
+  top: 0;
+  right: 1.25rem;
+  left: 1.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  content: '';
+}
+
 .lyric-drag-handle {
   display: grid;
   cursor: grab;

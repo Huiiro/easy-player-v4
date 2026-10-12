@@ -243,7 +243,8 @@ async function load(): Promise<void> {
       song,
       props.sourceOrder,
       props.forcedSource,
-      props.autoSearchNetwork
+      props.autoSearchNetwork,
+      ui.preferWordTimedNetworkLyrics
     )
   } catch (error) {
     if (!isUnmounted && loadId === lyricLoadId) console.warn('Unable to load lyrics', error)
@@ -665,6 +666,7 @@ watch(
     () => props.sourceOrder.join('|'),
     () => props.forcedSource,
     () => props.autoSearchNetwork,
+    () => ui.preferWordTimedNetworkLyrics,
     () => props.reloadToken
   ],
   () => void load(),

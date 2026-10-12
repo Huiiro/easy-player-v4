@@ -338,6 +338,7 @@ declare global {
           title: string
           artist?: string | null
           album?: string | null
+          preferWordTimed?: boolean
         }): Promise<{
           success: boolean
           data?: Array<{

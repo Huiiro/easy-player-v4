@@ -611,7 +611,10 @@ export default {
     lyricsFallback: 'Used when earlier sources are unavailable',
     autoSearchNetworkLyrics: 'Automatically search network lyrics',
     autoSearchNetworkLyricsDescription:
-      'Only in Auto mode, when embedded, database, and local lyrics are unavailable, use the first match.',
+      'When enabled, automatically searches online for lyrics when local lyrics are missing.',
+    preferWordTimedNetworkLyrics: 'Prefer word-timed lyrics',
+    preferWordTimedNetworkLyricsDescription:
+      'When enabled, word-timed lyrics are prioritized; otherwise, standard lyrics are matched.',
     desktopLyrics: 'Desktop lyrics',
     desktopLyricsDescription: 'Configure the display effects of desktop lyrics.',
     desktopLyricsEnabled: 'Enable desktop lyrics',
@@ -627,6 +630,7 @@ export default {
     desktopLyricsAutoHide: 'Auto-hide background',
     desktopLyricsFontFamily: 'Font',
     desktopLyricsFontInherit: 'Follow main window',
+    desktopLyricsPreview: 'Preview',
     desktopLyricsPreviewLine: 'Current lyric preview',
     desktopLyricsPreviewTranslation: 'Lyrics translation preview',
     desktopLyricsPreviewNext: 'Next lyric preview',

@@ -131,7 +131,8 @@ async function load(): Promise<void> {
     song,
     props.sourceOrder,
     props.forcedSource,
-    props.autoSearchNetwork
+    props.autoSearchNetwork,
+    ui.preferWordTimedNetworkLyrics
   )
   if (isUnmounted || loadId !== lyricLoadId) return
   lyrics.value = result.lines
@@ -315,6 +316,7 @@ watch(
     props.sourceOrder.join('|'),
     props.forcedSource,
     props.autoSearchNetwork,
+    ui.preferWordTimedNetworkLyrics,
     props.reloadToken
   ],
   () => void load(),

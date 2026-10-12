@@ -52,6 +52,16 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
 
 <template>
   <div class="settings-card" :class="{ muted: ui.followSystemTheme || ui.useMica }">
+    <div v-if="ui.micaAvailable" class="setting-row">
+      <div>
+        <h3>{{ t('settings.micaEffect') }}</h3>
+        <p>{{ t('settings.micaEffectDescription') }}</p>
+      </div>
+      <BaseSwitch
+        :model-value="ui.useMica"
+        @update:model-value="ui.setMicaEnabled(Boolean($event))"
+      />
+    </div>
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.followSystemTheme') }}</h3>
@@ -63,18 +73,17 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
         @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
       />
     </div>
-    <div v-if="ui.micaAvailable" class="setting-row">
+    <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
       <div>
-        <h3>{{ t('settings.micaEffect') }}</h3>
-        <p>{{ t('settings.micaEffectDescription') }}</p>
+        <h3>{{ t('settings.themeColor') }}</h3>
+        <p>{{ t('settings.themeColorDescription') }}</p>
       </div>
-      <BaseSwitch
-        :model-value="ui.useMica"
-        @update:model-value="ui.setMicaEnabled(Boolean($event))"
-      />
+      <div>
+        <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
+      </div>
     </div>
     <div
-      class="setting-row setting-row-stack"
+      class="setting-row theme-background-row"
       :class="{ 'pointer-events-none': ui.followSystemTheme || ui.useMica }"
     >
       <div>
@@ -108,16 +117,6 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           <span class="preview-window"><i /><b /></span>
           <span>{{ background.label }}</span>
         </button>
-      </div>
-    </div>
-
-    <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
-      <div>
-        <h3>{{ t('settings.themeColor') }}</h3>
-        <p>{{ t('settings.themeColorDescription') }}</p>
-      </div>
-      <div>
-        <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
       </div>
     </div>
   </div>

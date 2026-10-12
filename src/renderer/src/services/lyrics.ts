@@ -957,7 +957,8 @@ export async function resolveLyrics(
   },
   order: LyricSource[],
   forcedSource: LyricSource | 'auto' = 'auto',
-  allowAutoNetworkSearch = true
+  allowAutoNetworkSearch = true,
+  preferWordTimedNetworkLyrics = true
 ): Promise<{
   lines: LyricLine[]
   source: LyricSource | null
@@ -1011,7 +1012,8 @@ export async function resolveLyrics(
       const response = await window.api.lyrics.searchNetwork({
         title: song.title || '',
         artist: song.artist,
-        album: song.album
+        album: song.album,
+        preferWordTimed: preferWordTimedNetworkLyrics
       })
       const candidate = response.success
         ? response.data?.find((item) =>

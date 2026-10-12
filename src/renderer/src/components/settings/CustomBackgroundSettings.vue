@@ -91,7 +91,7 @@ function clearBackground(): void {
       'pointer-events-none': ui.followSystemTheme
     }"
   >
-    <div class="setting-row background-row">
+    <div class="setting-row">
       <div>
         <h3>{{ t('settings.backgroundMedia') }}</h3>
         <p>{{ ui.customBg.path || t('settings.noBackgroundSelected') }}</p>

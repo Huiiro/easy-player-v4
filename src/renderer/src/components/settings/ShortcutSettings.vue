@@ -32,13 +32,13 @@ function reset(): void {
 </script>
 <template>
   <div class="settings-card shortcut-card">
-    <div class="setting-row toolbar">
+    <div class="setting-row">
       <div>
         <h3>{{ t('settings.globalShortcuts') }}</h3>
         <p>{{ t('settings.globalShortcutsDescription') }}</p>
       </div>
       <div class="flex items-center gap-3">
-        <button class="secondary-button" @click="reset">
+        <button class="btn-hover-base text-sm" type="button" @click="reset">
           {{ t('settings.resetShortcutDefaults') }}
         </button>
         <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
@@ -61,9 +61,6 @@ function reset(): void {
 <style scoped>
 .settings-card {
   overflow: hidden;
-}
-.toolbar {
-  border-bottom: 1px solid var(--color-border);
 }
 .action {
   color: var(--color-text);

@@ -90,7 +90,7 @@ onBeforeUnmount(() => offProgress?.())
       <h3>{{ t('settings.artistSeparator') }}</h3>
       <p>{{ t('settings.artistSeparatorDescription') }}</p>
     </div>
-    <div class="w-120">
+    <div class="w-64">
       <input
         v-model="ui.artistSeparator"
         class="input-base text-center"

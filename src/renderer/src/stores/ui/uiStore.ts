@@ -113,6 +113,7 @@ export const useUIStore = defineStore(
     const lyricsAlignment = ref<'left' | 'center' | 'right'>('center')
     const lyricSourceMode = ref<'auto' | LyricSource>('auto')
     const autoSearchNetworkLyrics = ref(true)
+    const preferWordTimedNetworkLyrics = ref(true)
     const lyricsFontSize = ref(2.4)
     const lyricsFontPadding = ref(30)
     const lyricsOffsetMs = ref(0)
@@ -693,6 +694,7 @@ export const useUIStore = defineStore(
       lyricsAlignment,
       lyricSourceMode,
       autoSearchNetworkLyrics,
+      preferWordTimedNetworkLyrics,
       lyricsFontSize,
       lyricsFontPadding,
       lyricsOffsetMs,
@@ -795,6 +797,7 @@ export const useUIStore = defineStore(
         'lyricsAlignment',
         'lyricSourceMode',
         'autoSearchNetworkLyrics',
+        'preferWordTimedNetworkLyrics',
         'lyricsFontSize',
         'lyricsFontPadding',
         'lyricsOffsetMs',
