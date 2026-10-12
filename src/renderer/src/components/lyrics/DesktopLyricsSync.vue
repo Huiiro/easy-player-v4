@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { type LyricLine, resolveLyrics } from '@/services/lyrics'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -8,6 +8,9 @@ import eventBus from '@/utils/eventBus'
 const player = usePlayerStore()
 const ui = useUIStore()
 const lyrics = ref<LyricLine[]>([])
+// Timestamp-only rows mark pauses in the full lyric view, but must not occupy
+// either of the two text slots in the desktop overlay.
+const displayLyrics = computed(() => lyrics.value.filter((line) => line.text.trim()))
 let requestId = 0
 let lyricRevision = 0
 
@@ -33,15 +36,15 @@ async function loadLyrics(): Promise<void> {
 }
 
 function currentIndex(): number {
-  for (let index = lyrics.value.length - 1; index >= 0; index -= 1)
-    if (player.positionMs >= lyrics.value[index].timeMs) return index
+  for (let index = displayLyrics.value.length - 1; index >= 0; index -= 1)
+    if (player.positionMs >= displayLyrics.value[index].timeMs) return index
   return 0
 }
 
 function activeLines(): LyricLine[] {
-  return lyrics.value.filter((line, index) => {
+  return displayLyrics.value.filter((line, index) => {
     if (line.untimed || player.positionMs < line.timeMs) return false
-    const endMs = line.endMs ?? lyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
+    const endMs = line.endMs ?? displayLyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
     return player.positionMs < endMs
   })
 }
@@ -65,15 +68,28 @@ function publish(): void {
   const active = activeLines()
   const fallbackIndex = currentIndex()
   const current =
-    active.find((line) => !line.isBackground) ?? active[0] ?? lyrics.value[fallbackIndex]
-  const index = current ? lyrics.value.indexOf(current) : fallbackIndex
+    active.find((line) => !line.isBackground) ?? active[0] ?? displayLyrics.value[fallbackIndex]
+  const index = current ? displayLyrics.value.indexOf(current) : fallbackIndex
   const overlapping = active.find((line) => line !== current)
-  const next = overlapping ?? lyrics.value[index + 1]
+  const next = overlapping ?? displayLyrics.value[index + 1]
   const sweepRange = lyricSweepRange(current, next)
+  const estimatedLastLineEnd = current
+    ? current.timeMs + Math.max(3000, Array.from(current.text).length * 180)
+    : undefined
+  const currentEndMs = current
+    ? !next && !current.words?.length && (current.endMs ?? 0) <= current.timeMs + 300
+      ? Math.min(
+          estimatedLastLineEnd ?? current.timeMs + 3000,
+          player.durationMs > current.timeMs ? player.durationMs : Number.POSITIVE_INFINITY
+        )
+      : (current.endMs ?? next?.timeMs ?? estimatedLastLineEnd)
+    : undefined
   window.api.desktopLyrics.update({
     songId: player.currentQueueSong?.id,
     revision: lyricRevision,
     current: current?.text || player.currentQueueSong?.title || '',
+    currentStartMs: current?.untimed ? undefined : current?.timeMs,
+    currentEndMs: current?.untimed ? undefined : currentEndMs,
     next: next?.text || '',
     translation:
       !overlapping && ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',

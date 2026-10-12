@@ -6,6 +6,8 @@ interface DesktopState {
   songId?: number
   revision?: number
   current: string
+  currentStartMs?: number
+  currentEndMs?: number
   next: string
   translation: string
   positionMs?: number
@@ -38,16 +40,19 @@ const secondBox = ref<HTMLElement>()
 const secondText = ref<HTMLElement>()
 const currentOverflows = ref(false)
 const secondOverflows = ref(false)
+const currentOverflowDistance = ref(0)
+const secondOverflowDistance = ref(0)
 const displayedFirst = ref('')
 const displayedSecond = ref('')
 let previousCurrent = ''
+let previousCurrentStartMs: number | undefined
 let previousSongId: number | undefined
 let previousRevision: number | undefined
 let hasReceivedState = false
 let lastReportedFontSize: number | undefined
-let replaceFirst = true
 const activeSlot = ref<'first' | 'second'>('first')
 const animatedSweepProgress = ref(0)
+const displayPositionMs = ref(0)
 let sweepPositionAnchor = { positionMs: 0, receivedAt: performance.now() }
 let sweepAnimationFrame: number | undefined
 const state = ref<DesktopState>({
@@ -105,29 +110,54 @@ const inactiveStyle = computed(() => ({
 const sweepProgress = computed(() => animatedSweepProgress.value)
 
 function updateSweepProgress(now = performance.now()): void {
+  const elapsedMs = state.value.isPlaying ? Math.max(0, now - sweepPositionAnchor.receivedAt) : 0
+  const positionMs = sweepPositionAnchor.positionMs + elapsedMs
+  displayPositionMs.value = positionMs
   const startMs = state.value.sweepStartMs
   const endMs = state.value.sweepEndMs
   if (typeof startMs !== 'number' || typeof endMs !== 'number' || endMs <= startMs) {
     animatedSweepProgress.value = 0
     return
   }
-  const elapsedMs = state.value.isPlaying ? Math.max(0, now - sweepPositionAnchor.receivedAt) : 0
-  const positionMs = sweepPositionAnchor.positionMs + elapsedMs
   animatedSweepProgress.value = Math.max(0, Math.min(1, (positionMs - startMs) / (endMs - startMs)))
 }
 
+const hasMarqueeTiming = computed(
+  () =>
+    typeof state.value.currentStartMs === 'number' &&
+    typeof state.value.currentEndMs === 'number' &&
+    state.value.currentEndMs > state.value.currentStartMs
+)
+const marqueeProgress = computed(() => {
+  const startMs = state.value.currentStartMs
+  const endMs = state.value.currentEndMs
+  if (typeof startMs !== 'number' || typeof endMs !== 'number' || endMs <= startMs) return 0
+  return Math.max(0, Math.min(1, (displayPositionMs.value - startMs) / (endMs - startMs)))
+})
+const activeOverflows = computed(() =>
+  activeSlot.value === 'first' ? currentOverflows.value : !state.value.translation && secondOverflows.value
+)
+
 function animateSweep(now: number): void {
   updateSweepProgress(now)
-  if (state.value.styles.sweep && state.value.isPlaying)
+  if (
+    state.value.isPlaying &&
+    (state.value.styles.sweep ||
+      (activeOverflows.value && hasMarqueeTiming.value && marqueeProgress.value < 1))
+  )
     sweepAnimationFrame = requestAnimationFrame(animateSweep)
   else sweepAnimationFrame = undefined
 }
 
 function syncSweepAnimation(): void {
   updateSweepProgress()
-  if (state.value.styles.sweep && state.value.isPlaying && sweepAnimationFrame === undefined)
+  const shouldAnimate =
+    state.value.isPlaying &&
+    (state.value.styles.sweep ||
+      (activeOverflows.value && hasMarqueeTiming.value && marqueeProgress.value < 1))
+  if (shouldAnimate && sweepAnimationFrame === undefined)
     sweepAnimationFrame = requestAnimationFrame(animateSweep)
-  if ((!state.value.styles.sweep || !state.value.isPlaying) && sweepAnimationFrame !== undefined) {
+  if (!shouldAnimate && sweepAnimationFrame !== undefined) {
     cancelAnimationFrame(sweepAnimationFrame)
     sweepAnimationFrame = undefined
   }
@@ -135,7 +165,11 @@ function syncSweepAnimation(): void {
 
 function lineStyle(slot: 'first' | 'second'): CSSProperties {
   const active = activeSlot.value === slot
-  const style = active ? currentStyle.value : inactiveStyle.value
+  const style: CSSProperties = { ...(active ? currentStyle.value : inactiveStyle.value) }
+  if (active) {
+    const distance = slot === 'first' ? currentOverflowDistance.value : secondOverflowDistance.value
+    if (distance > 0) style.transform = `translate3d(${-distance * marqueeProgress.value}px, 0, 0)`
+  }
   if (!active || !state.value.styles.sweep) return style
   const progress = `${(sweepProgress.value * 100).toFixed(2)}%`
   return {
@@ -150,24 +184,17 @@ function lineStyle(slot: 'first' | 'second'): CSSProperties {
 
 async function checkOverflow(): Promise<void> {
   await nextTick()
-  currentOverflows.value =
-    !!currentBox.value &&
-    !!currentText.value &&
-    currentText.value.scrollWidth > currentBox.value.clientWidth
-  secondOverflows.value =
-    !!secondBox.value &&
-    !!secondText.value &&
-    secondText.value.scrollWidth > secondBox.value.clientWidth
-  if (currentBox.value && currentText.value)
-    currentText.value.style.setProperty(
-      '--marquee-distance',
-      `${-Math.max(0, currentText.value.scrollWidth - currentBox.value.clientWidth)}px`
-    )
-  if (secondBox.value && secondText.value)
-    secondText.value.style.setProperty(
-      '--marquee-distance',
-      `${-Math.max(0, secondText.value.scrollWidth - secondBox.value.clientWidth)}px`
-    )
+  currentOverflowDistance.value =
+    currentBox.value && currentText.value
+      ? Math.max(0, currentText.value.scrollWidth - currentBox.value.clientWidth)
+      : 0
+  secondOverflowDistance.value =
+    secondBox.value && secondText.value
+      ? Math.max(0, secondText.value.scrollWidth - secondBox.value.clientWidth)
+      : 0
+  currentOverflows.value = currentOverflowDistance.value > 0
+  secondOverflows.value = secondOverflowDistance.value > 0
+  syncSweepAnimation()
 }
 function scheduleHide(): void {
   if (hideTimer) clearTimeout(hideTimer)
@@ -227,7 +254,7 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
     next.styles.fontSize !== previousState.styles.fontSize
   const fontSizeCameFromWindow =
     typeof next.styles?.fontSize === 'number' && next.styles.fontSize === lastReportedFontSize
-  // Playback progress arrives frequently while sweep mode is active. Measuring
+  // Playback progress arrives frequently. Measuring
   // scroll widths forces layout, so reserve that work for text/metric changes
   // rather than every gradient-progress update.
   const needsOverflowCheck =
@@ -246,7 +273,6 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   }
   if (typeof next.positionMs === 'number')
     sweepPositionAnchor = { positionMs: next.positionMs, receivedAt: performance.now() }
-  syncSweepAnimation()
   if (
     !previousCurrent ||
     !next.current ||
@@ -255,31 +281,40 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
   ) {
     displayedFirst.value = state.value.current
     displayedSecond.value = state.value.next
-    replaceFirst = true
     activeSlot.value = 'first'
-  } else if (next.current !== previousCurrent) {
-    const replacement = state.value.next || state.value.current
+  } else if (
+    next.current !== previousCurrent ||
+    next.currentStartMs !== previousCurrentStartMs
+  ) {
     if (state.value.translation) {
       displayedFirst.value = state.value.current
+      displayedSecond.value = state.value.next
       activeSlot.value = 'first'
-    } else if (replaceFirst) {
-      displayedFirst.value = replacement
-      replaceFirst = false
-      // The unchanged second slot is the lyric currently being played.
+    } else if (activeSlot.value === 'first' && displayedSecond.value === state.value.current) {
+      displayedFirst.value = state.value.next
       activeSlot.value = 'second'
+    } else if (activeSlot.value === 'second' && displayedFirst.value === state.value.current) {
+      displayedSecond.value = state.value.next
+      activeSlot.value = 'first'
     } else {
-      displayedSecond.value = replacement
-      replaceFirst = true
-      // The unchanged first slot is the lyric currently being played.
+      // A seek or a missing upcoming line can skip the prepared slot.
+      displayedFirst.value = state.value.current
+      displayedSecond.value = state.value.next
       activeSlot.value = 'first'
     }
+  } else if (next.translation !== previousState.translation) {
+    displayedFirst.value = state.value.current
+    displayedSecond.value = state.value.next
+    activeSlot.value = 'first'
   } else if (next.next !== previousState.next && !state.value.translation) {
     if (activeSlot.value === 'first') displayedSecond.value = state.value.next
     else displayedFirst.value = state.value.next
   }
   previousCurrent = state.value.current
+  previousCurrentStartMs = state.value.currentStartMs
   previousSongId = state.value.songId
   previousRevision = state.value.revision
+  syncSweepAnimation()
   // On the first update, keep restored bounds when they exist; a brand-new
   // window can still auto-size for a non-default persisted font. Later font
   // changes resize the window and are saved normally.
@@ -373,21 +408,19 @@ onUnmounted(() => {
         </button>
       </div>
       <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 text-center">
-        <div ref="currentBox" class="marquee-box">
+        <div ref="currentBox" class="marquee-box" :class="currentOverflows && 'marquee-box--overflow'">
           <p
             ref="currentText"
             class="marquee-text"
-            :class="currentOverflows && 'marquee-text--scroll'"
             :style="lineStyle('first')"
           >
             {{ displayedFirst }}
           </p>
         </div>
-        <div ref="secondBox" class="marquee-box">
+        <div ref="secondBox" class="marquee-box" :class="secondOverflows && 'marquee-box--overflow'">
           <p
             ref="secondText"
             class="marquee-text"
-            :class="secondOverflows && 'marquee-text--scroll'"
             :style="state.translation ? inactiveStyle : lineStyle('second')"
           >
             {{ state.translation || displayedSecond }}
@@ -425,24 +458,16 @@ body,
 }
 .marquee-box {
   width: 100%;
-  overflow: hidden;
+  overflow-x: clip;
+  overflow-y: visible;
+}
+.marquee-box--overflow {
+  text-align: left;
 }
 .marquee-text {
   display: inline-block;
   max-width: none;
   padding-block: 0.08em;
   white-space: nowrap;
-}
-.marquee-text--scroll {
-  padding-right: 4rem;
-  animation: lyric-marquee 8s linear infinite;
-}
-@keyframes lyric-marquee {
-  from {
-    transform: translateX(0);
-  }
-  to {
-    transform: translateX(var(--marquee-distance));
-  }
 }
 </style>
