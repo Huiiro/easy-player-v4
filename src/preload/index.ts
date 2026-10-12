@@ -252,6 +252,9 @@ const libraryAPI = {
 }
 
 const filesAPI = {
+  removeBackgroundVideo: (url: string) => ipcRenderer.invoke('files:remove-background-video', url),
+  importBackgroundVideo: (path: string) =>
+    ipcRenderer.invoke('files:import-background-video', path),
   exportLibrary: (parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>) =>
     ipcRenderer.invoke('files:export-library', parts),
   importLibrary: () => ipcRenderer.invoke('files:import-library'),

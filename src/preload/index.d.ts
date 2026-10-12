@@ -288,6 +288,12 @@ declare global {
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }
       files: {
+        removeBackgroundVideo(url: string): Promise<{ success: boolean }>
+        importBackgroundVideo(path: string): Promise<{
+          success: boolean
+          data?: { url: string }
+          error?: string
+        }>
         exportLibrary(parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>): Promise<{
           success: boolean
           cancelled?: boolean

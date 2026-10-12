@@ -1,16 +1,33 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getSystemBackgroundTheme } from './systemBackgroundRegistry'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { SystemThemeColorAnalyzer } from './songThemeColors'
+import { useMessage } from '@/components/ui/useMessage'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+const { t } = useI18n()
+const { error: showError } = useMessage()
 const activeTheme = computed(() => getSystemBackgroundTheme(ui.systemBackground))
 const isSystemTheme = computed(() => !ui.useCustomBg && ui.systemBackground !== 'none')
 const isBackgroundActive = ref(!document.hidden && document.hasFocus())
 const isSolidTheme = computed(() => isSystemTheme.value && ui.systemBackground === 'solid')
+const video = ref<HTMLVideoElement | null>(null)
+const customMotionPaused = computed(
+  () => !isBackgroundActive.value || ui.showPlayer || ui.reduceMotion
+)
+function syncCustomVideo(): void {
+  if (!video.value) return
+  if (customMotionPaused.value) video.value.pause()
+  else video.value.play().catch(() => undefined)
+}
+
+watch([video, customMotionPaused, () => ui.customBg.url, () => ui.customBg.kind], syncCustomVideo, {
+  flush: 'post'
+})
 
 watch(
   () => [isSolidTheme.value, player.currentQueueSong?.id, player.currentQueueSong?.cover],
@@ -68,9 +85,27 @@ onBeforeUnmount(() => {
   <Transition name="app-theme-background">
     <div v-if="ui.useCustomBg" key="custom" class="app-background-layer" aria-hidden="true">
       <div
+        v-if="ui.customBg.kind === 'image'"
         class="absolute -inset-6 bg-cover bg-center transition-[filter] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-standard)]"
         :style="ui.getBackgroundStyle"
       />
+      <div
+        v-else-if="ui.customBg.kind === 'video'"
+        class="custom-background-media transition-[filter] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-standard)]"
+        :style="{ filter: ui.getBackgroundFilter }"
+      >
+        <video
+          v-if="ui.customBg.url"
+          ref="video"
+          :src="ui.customBg.url"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+          @loadeddata="syncCustomVideo"
+          @error="showError(t('settings.backgroundVideoUnsupported'))"
+        />
+      </div>
       <div class="app-background-scrim app-background-scrim--custom" />
     </div>
     <div
@@ -126,6 +161,16 @@ onBeforeUnmount(() => {
   position: absolute;
   inset: 0;
   overflow: hidden;
+}
+.custom-background-media {
+  position: absolute;
+  inset: -24px;
+  overflow: hidden;
+}
+.custom-background-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .app-background-scrim {

@@ -95,6 +95,7 @@ export const useUIStore = defineStore(
       return customThemeColor.value
     })
     const customBg = reactive({
+      kind: 'image' as 'image' | 'video',
       url: '',
       path: '',
       blur: 0,
@@ -216,14 +217,18 @@ export const useUIStore = defineStore(
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
     const getBackgroundStyle = computed(() => {
       const blur = customBg.blur ?? 0
+      const brightness = customBg.brightness ?? 100
       return {
         backgroundImage: customBg.url ? `url(${customBg.url})` : 'none',
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundRepeat: 'no-repeat',
-        filter: `blur(${blur}px)`
+        filter: `blur(${blur}px) brightness(${brightness}%)`
       }
     })
+    const getBackgroundFilter = computed(
+      () => `blur(${customBg.blur ?? 0}px) brightness(${customBg.brightness ?? 100}%)`
+    )
     const hasBackground = computed(() => useCustomBg.value || systemBackground.value !== 'none')
     function toggleCardStyle(): void {
       useCardView.value = !useCardView.value
@@ -405,6 +410,16 @@ export const useUIStore = defineStore(
 
     async function initializeTheme(): Promise<void> {
       await loadCustomFonts()
+      // Discard shader preferences saved by earlier builds of the custom background feature.
+      if ((customBg.kind as string | undefined) === 'shader') {
+        customBg.kind = 'image'
+        customBg.url = ''
+        customBg.path = ''
+        useCustomBg.value = false
+      } else if (customBg.kind !== 'video') {
+        customBg.kind = 'image'
+      }
+      delete (customBg as typeof customBg & { shaderSource?: string }).shaderSource
       try {
         const mica = await window.api.system.getMicaState()
         if (mica.success && mica.data) {
@@ -472,10 +487,16 @@ export const useUIStore = defineStore(
       }
       if (saved.customBg && typeof saved.customBg === 'object') {
         const background = saved.customBg as Record<string, unknown>
+        customBg.kind = background.kind === 'video' ? 'video' : 'image'
         customBg.url = typeof background.url === 'string' ? background.url : ''
         customBg.path = typeof background.path === 'string' ? background.path : ''
+        if (background.kind === 'shader') {
+          customBg.url = ''
+          customBg.path = ''
+          useCustomBg.value = false
+        }
         customBg.blur = Number(background.blur) || 0
-        customBg.brightness = Math.max(30, Math.min(100, Number(background.brightness) || 100))
+        customBg.brightness = Math.max(10, Math.min(110, Number(background.brightness) || 100))
         customBg.headerBackground =
           typeof background.headerBackground === 'string'
             ? background.headerBackground
@@ -547,6 +568,7 @@ export const useUIStore = defineStore(
       setPlayerBgType(DEFAULT_PLAYER_BG_TYPE)
       setPlayerCoverStyle(DEFAULT_PLAYER_COVER_STYLE)
       Object.assign(customBg, {
+        kind: 'image',
         url: '',
         path: '',
         blur: 0,
@@ -715,6 +737,7 @@ export const useUIStore = defineStore(
       getCustomFontStyle,
       hasBackground,
       getBackgroundStyle,
+      getBackgroundFilter,
       initializeTheme,
       loadCustomFonts,
       setTheme,

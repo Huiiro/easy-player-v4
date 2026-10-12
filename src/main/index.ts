@@ -14,7 +14,8 @@ import {
   screen,
   Tray
 } from 'electron'
-import { existsSync, promises as fs } from 'node:fs'
+import { createReadStream, existsSync, promises as fs } from 'node:fs'
+import { Readable } from 'node:stream'
 import { release as osRelease } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -378,12 +379,15 @@ function scheduleDesktopLyricsWindowStateSave(): void {
 function registerMediaProtocol(): void {
   protocol.handle('easy-player-media', async (request) => {
     const url = new URL(request.url)
-    const requestedPath = ['cover', 'cover-thumb', 'font'].includes(url.hostname)
+    const requestedPath = ['cover', 'cover-thumb', 'font', 'background'].includes(url.hostname)
       ? url.searchParams.get('path')
       : null
     if (!requestedPath) return new Response('Not Found', { status: 404 })
 
-    const coverDirectory = resolve(getDataPath(), url.hostname === 'font' ? 'ttf' : 'covers')
+    const coverDirectory = resolve(
+      getDataPath(),
+      url.hostname === 'font' ? 'ttf' : url.hostname === 'background' ? 'backgrounds' : 'covers'
+    )
     const coverPath = resolve(requestedPath)
     const pathRelativeToCovers = relative(coverDirectory, coverPath)
     if (
@@ -392,6 +396,42 @@ function registerMediaProtocol(): void {
       !existsSync(coverPath)
     ) {
       return new Response('Not Found', { status: 404 })
+    }
+
+    if (url.hostname === 'background') {
+      if (!coverPath.toLowerCase().endsWith('.mp4'))
+        return new Response('Not Found', { status: 404 })
+      const { size } = await fs.stat(coverPath)
+      const range = request.headers.get('range')
+      const match = range?.match(/^bytes=(\d*)-(\d*)$/)
+      if (range && !match)
+        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } })
+      let start = match?.[1] ? Number(match[1]) : 0
+      let end = match?.[2] ? Number(match[2]) : size - 1
+      if (match && !match[1] && match[2]) {
+        start = Math.max(0, size - Number(match[2]))
+        end = size - 1
+      }
+      if (
+        start >= size ||
+        end < start ||
+        !Number.isSafeInteger(start) ||
+        !Number.isSafeInteger(end)
+      )
+        return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } })
+      end = Math.min(end, size - 1)
+      const headers = {
+        'Content-Type': 'video/mp4',
+        'Content-Length': String(end - start + 1),
+        'Accept-Ranges': 'bytes',
+        'Access-Control-Allow-Origin': '*',
+        ...(match ? { 'Content-Range': `bytes ${start}-${end}/${size}` } : {})
+      }
+      const stream = Readable.toWeb(createReadStream(coverPath, { start, end }))
+      return new Response(stream as unknown as ReadableStream<Uint8Array>, {
+        status: match ? 206 : 200,
+        headers
+      })
     }
 
     const size = Math.min(1024, Math.max(64, Number(url.searchParams.get('size')) || 0))
