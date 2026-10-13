@@ -266,7 +266,10 @@ onBeforeUnmount(() => {
                 "
                 @click="setPreference(song, song.preference === 1 ? 0 : 1)"
               >
-                <SvgIcon name="play-like" class-name="size-5" />
+                <SvgIcon
+                  :name="song.preference === 1 ? 'play-like-fill' : 'play-like'"
+                  class-name="size-5"
+                />
               </button>
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"

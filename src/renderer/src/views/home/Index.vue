@@ -12,6 +12,11 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
 import HomeClock from '@/components/home/HomeClock.vue'
+import HomeHeatmap from './HomeHeatmap.vue'
+import HomeOverview from './HomeOverview.vue'
+import HomePlaylists from './HomePlaylists.vue'
+import HomeRankedList from './HomeRankedList.vue'
+import HomeRecommendations from './HomeRecommendations.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -23,44 +28,9 @@ import {
 } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
-import { formatArtists } from '@/utils/artists'
 import eventBus from '@/utils/eventBus'
-
-interface OverviewStats {
-  songCount: number
-  albumCount: number
-  artistCount: number
-  librarySize: number
-  totalPlaySeconds: number
-  todayPlaySeconds: number
-  eligiblePlays: number
-  completedPlays: number
-  timePeriods: Array<{
-    id: 'lateNight' | 'morning' | 'noon' | 'earlyAfternoon' | 'afternoon' | 'evening'
-    playedSeconds: number
-    plays: number
-  }>
-}
-interface HistoryDay {
-  date: string
-  seconds: number
-}
-interface RankedSong extends LibrarySong {
-  value: number
-}
-interface Playlist {
-  id: number
-  name: string
-  cover: string | null
-  description: string | null
-}
-type RecommendationGroup = 'recommended' | 'discovery'
-interface RecommendationCard {
-  group: RecommendationGroup
-  generatedFor: string
-  songs: LibrarySong[]
-  total: number
-}
+import type { OverviewStats, HistoryDay, RankedSong, Playlist, RecommendationCard } from './types'
+import './home.css'
 
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
@@ -165,6 +135,13 @@ const stats = ref<OverviewStats>({
   todayPlaySeconds: 0,
   eligiblePlays: 0,
   completedPlays: 0,
+  quality: {
+    standard: { count: 0, bytes: 0 },
+    high: { count: 0, bytes: 0 },
+    lossless: { count: 0, bytes: 0 },
+    unknownCount: 0,
+    thresholds: { highMiB: 10, losslessMiB: 30 }
+  },
   timePeriods: []
 })
 
@@ -173,10 +150,6 @@ const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
 const playlists = ref<Playlist[]>([])
 const playingPlaylistId = ref<number | null>(null)
-const recommendationIcons: Record<RecommendationGroup, string> = {
-  recommended: 'play-like',
-  discovery: 'control-shuffle'
-}
 const recommendationCards = ref<RecommendationCard[]>([])
 const recommendationGeneratedFor = computed(
   () => recommendationCards.value.find((card) => card.group === 'recommended')?.generatedFor ?? ''
@@ -228,168 +201,9 @@ const navigation = computed(() => [
   { label: t('nav.history'), path: '/history', icon: 'menu-history' },
   { label: t('nav.settings'), path: '/settings', icon: 'menu-settings' }
 ])
-const statCards = computed(() => [
-  { label: t('home.stats.songs'), value: String(stats.value.songCount), icon: 'menu-song' },
-  {
-    label: t('home.stats.albums'),
-    value: String(stats.value.albumCount),
-    icon: 'common-album-light'
-  },
-  { label: t('home.stats.artists'), value: String(stats.value.artistCount), icon: 'menu-artist' },
-  {
-    label: t('home.stats.librarySize'),
-    value: formatBytes(stats.value.librarySize),
-    icon: 'common-database'
-  },
-  {
-    label: t('home.stats.totalDuration'),
-    value: formatHours(stats.value.totalPlaySeconds),
-    icon: 'common-time'
-  },
-  {
-    label: t('home.stats.todayDuration'),
-    value: formatTodayDuration(stats.value.todayPlaySeconds),
-    icon: 'common-time'
-  },
-  {
-    label: t('home.stats.completionRate'),
-    value: stats.value.eligiblePlays
-      ? `${((stats.value.completedPlays / stats.value.eligiblePlays) * 100).toFixed(1)}%`
-      : '—',
-    icon: 'common-task',
-    hint: t('home.completionCounts', {
-      completed: stats.value.completedPlays,
-      eligible: stats.value.eligiblePlays
-    }),
-    title: t('home.completionRule')
-  }
-])
-const periodColors = ['#5e9cce', '#64bdae', '#a48ad4', '#e5a971', '#d8799b', '#8fbe6d']
-const periodCircumference = 2 * Math.PI * 19
-const hoveredPeriodId = ref<OverviewStats['timePeriods'][number]['id'] | null>(null)
-const totalPeriodSeconds = computed(() =>
-  stats.value.timePeriods.reduce((sum, period) => sum + period.playedSeconds, 0)
-)
-const periodSegments = computed(() => {
-  let start = 0
-  return stats.value.timePeriods.flatMap((period, index) => {
-    if (!period.playedSeconds || !totalPeriodSeconds.value) return []
-    const length = (period.playedSeconds / totalPeriodSeconds.value) * periodCircumference
-    const segment = {
-      ...period,
-      color: periodColors[index],
-      dasharray: `${length} ${periodCircumference}`,
-      dashoffset: -start
-    }
-    start += length
-    return [segment]
-  })
-})
-const longestPeriod = computed(() =>
-  totalPeriodSeconds.value
-    ? stats.value.timePeriods.reduce((longest, period) =>
-        period.playedSeconds > longest.playedSeconds ? period : longest
-      )
-    : null
-)
-const displayedPeriod = computed(
-  () =>
-    stats.value.timePeriods.find((period) => period.id === hoveredPeriodId.value) ??
-    longestPeriod.value
-)
-const historyMap = computed(
-  () => new Map(historyDays.value.map((item) => [item.date, item.seconds]))
-)
-const heatmapDays = computed(() => {
-  const days: Array<{ date: string; seconds: number }> = []
-  const today = new Date()
-  for (let index = 364; index >= 0; index--) {
-    const date = new Date(today)
-    date.setDate(today.getDate() - index)
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    days.push({ date: key, seconds: historyMap.value.get(key) || 0 })
-  }
-  return days
-})
-const maxHeat = computed(() => Math.max(1, ...heatmapDays.value.map((item) => item.seconds)))
-const monthMarkers = computed(() =>
-  heatmapDays.value
-    .map((day, index) => ({ day, index, week: Math.floor(index / 7) }))
-    .filter(({ day, index }) => index === 0 || day.date.endsWith('-01'))
-    .map(({ day, week }) => ({
-      date: day.date,
-      week,
-      label: new Intl.DateTimeFormat(uiStore.locale === 'zh' ? 'zh-CN' : 'en-US', {
-        month: 'short'
-      }).format(new Date(`${day.date}T00:00:00`))
-    }))
-)
 
-function formatDuration(seconds: number): string {
-  if (!seconds) return t('home.duration.zero')
-  const days = Math.floor(seconds / 86400)
-  const hours = Math.floor((seconds % 86400) / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
-  if (days) return t('home.duration.dayHour', { days, hours })
-  if (hours) return t('home.duration.hourMinute', { hours, minutes })
-  return t('home.duration.minute', { minutes: Math.max(1, minutes) })
-}
-function formatHours(seconds: number): string {
-  return `${(Math.max(0, seconds) / 3600).toFixed(1)} h`
-}
-function formatTodayDuration(seconds: number): string {
-  const hours = Math.floor(Math.max(0, seconds) / 3600)
-  const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60)
-  if (hours) return `${hours} h ${minutes} m`
-  return `${seconds > 0 ? Math.max(1, minutes) : 0} m`
-}
-function formatPeriodDuration(seconds: number): string {
-  if (seconds >= 3600) return formatHours(seconds)
-  if (seconds >= 60) return t('home.duration.minuteDecimal', { minutes: (seconds / 60).toFixed(1) })
-  return seconds > 0
-    ? t('home.duration.second', { seconds: Math.max(1, Math.round(seconds)) })
-    : t('home.duration.zero')
-}
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
-  const value = bytes / 1024 ** index
-  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[index]}`
-}
-function heatClass(seconds: number): string {
-  if (!seconds) return 'bg-hover'
-
-  const ratio = seconds / maxHeat.value
-
-  switch (true) {
-    case ratio > 0.75:
-      return 'bg-primary'
-    case ratio > 0.45:
-      return 'bg-primary/70'
-    case ratio > 0.2:
-      return 'bg-primary/40'
-    default:
-      return 'bg-primary/20'
-  }
-}
-function coverUrl(song: RankedSong): string | null {
-  return song.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
-}
-function playlistCoverUrl(playlist: Playlist): string | null {
-  return playlist.cover
-    ? `easy-player-media://cover?path=${encodeURIComponent(playlist.cover)}`
-    : null
-}
 function recommendationCardKey(card: RecommendationCard): string {
   return `${card.group}:${card.generatedFor}`
-}
-function recommendationCardName(card: RecommendationCard): string {
-  return `${t(`recommendation.${card.group}`)} · ${card.generatedFor}`
-}
-function recommendationCoverUrl(card: RecommendationCard): string | null {
-  const cover = card.songs.find((song) => song.cover)?.cover
-  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
 }
 function todayKey(): string {
   const date = new Date()
@@ -525,7 +339,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text">
+  <main class="home-page custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text">
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <template v-for="section in visibleSections" :key="section">
         <section v-if="section === 'welcome'" class="xl:col-span-2">
@@ -549,366 +363,44 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </section>
-        <section v-if="section === 'recommendations'" class="xl:col-span-2">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">{{ t('recommendation.title') }}</h2>
-            <button
-              class="text-sm text-text-l hover:text-primary"
-              @click="router.push('/recommend')"
-            >
-              {{ t('home.viewRecommendations') }}
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-4">
-            <article
-              v-for="card in recommendationCards"
-              :key="recommendationCardKey(card)"
-              class="w-36 shrink-0"
-            >
-              <button
-                class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l disabled:cursor-not-allowed disabled:opacity-50"
-                :aria-label="
-                  activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
-                    ? t('footer.pause')
-                    : t('home.playRecommendation', { name: recommendationCardName(card) })
-                "
-                :title="
-                  activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
-                    ? t('footer.pause')
-                    : t('home.playRecommendation', { name: recommendationCardName(card) })
-                "
-                :disabled="
-                  pendingRecommendationCard !== null ||
-                  playingPlaylistId !== null ||
-                  card.total === 0
-                "
-                @click="playRecommendation(card)"
-              >
-                <img
-                  v-if="recommendationCoverUrl(card)"
-                  :src="recommendationCoverUrl(card)!"
-                  class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
-                  :alt="t(`recommendation.${card.group}`)"
-                />
-                <SvgIcon
-                  v-else
-                  :name="recommendationIcons[card.group]"
-                  class-name="size-12 text-primary"
-                />
-                <span
-                  v-if="card.total > 0"
-                  class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
-                  aria-hidden="true"
-                />
-                <span
-                  v-if="card.total > 0"
-                  class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
-                >
-                  <SvgIcon
-                    :name="
-                      activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
-                        ? 'play-pause'
-                        : 'play-play'
-                    "
-                    class-name="size-6"
-                  />
-                </span>
-              </button>
-              <button
-                class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary disabled:cursor-not-allowed"
-                :class="
-                  activeRecommendationCard === recommendationCardKey(card) ? 'text-primary' : ''
-                "
-                :aria-label="recommendationCardName(card)"
-                :title="recommendationCardName(card)"
-                :disabled="
-                  pendingRecommendationCard !== null ||
-                  playingPlaylistId !== null ||
-                  card.total === 0
-                "
-                @click="playRecommendation(card)"
-              >
-                {{ t(`recommendation.${card.group}`) }}
-              </button>
-              <p class="text-center text-xs text-text-l">{{ card.generatedFor }}</p>
-              <p class="text-center text-xs text-text-l">
-                {{ t('home.recommendationCount', { count: card.total }) }}
-              </p>
-            </article>
-          </div>
-        </section>
-        <section v-if="section === 'playlists'" class="xl:col-span-2">
-          <h2 class="mb-3 text-lg font-semibold">{{ t('home.playlists') }}</h2>
-          <div v-if="playlists.length" class="flex flex-wrap gap-4">
-            <article v-for="playlist in playlists" :key="playlist.id" class="w-36 shrink-0">
-              <button
-                class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l"
-                :aria-label="
-                  activePlaylistId === playlist.id && player.isPlaying
-                    ? t('footer.pause')
-                    : t('home.playPlaylist', { name: playlist.name })
-                "
-                :title="
-                  activePlaylistId === playlist.id && player.isPlaying
-                    ? t('footer.pause')
-                    : t('home.playPlaylist', { name: playlist.name })
-                "
-                :disabled="playingPlaylistId !== null"
-                @click="playPlaylist(playlist)"
-              >
-                <img
-                  v-if="playlistCoverUrl(playlist)"
-                  :src="playlistCoverUrl(playlist)!"
-                  class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
-                  :alt="playlist.name"
-                />
-                <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
-                <span
-                  class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
-                  aria-hidden="true"
-                />
-                <span
-                  class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
-                >
-                  <SvgIcon
-                    :name="
-                      activePlaylistId === playlist.id && player.isPlaying
-                        ? 'play-pause'
-                        : 'play-play'
-                    "
-                    class-name="size-6"
-                  />
-                </span>
-              </button>
-              <button
-                class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary"
-                :class="activePlaylistId === playlist.id ? 'text-primary' : ''"
-                :aria-label="
-                  activePlaylistId === playlist.id
-                    ? `${playlist.name} · ${t('home.nowPlaying')}`
-                    : playlist.name
-                "
-                :title="playlist.name"
-                @click="router.push(`/playlist/${playlist.id}`)"
-              >
-                {{ playlist.name }}
-              </button>
-              <p
-                v-if="playlist.description"
-                class="truncate text-center text-xs text-text-l"
-                :title="playlist.description"
-              >
-                {{ playlist.description }}
-              </p>
-            </article>
-          </div>
-          <p v-else-if="!loading" class="py-6 text-center text-sm text-text-l">
-            {{ t('home.noPlaylists') }}
-          </p>
-        </section>
-        <section v-if="section === 'overview'" class="xl:col-span-2">
-          <div class="mb-3 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">{{ t('home.overview') }}</h2>
-            <button
-              class="btn-hover flex items-center gap-1.5 px-2 py-1 text-sm"
-              :disabled="refreshing"
-              @click="refresh"
-            >
-              <SvgIcon
-                name="common-refresh"
-                class-name="size-4"
-                :class="refreshing ? 'animate-spin' : ''"
-              />
-              {{ t('home.refresh') }}
-            </button>
-          </div>
-          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <article
-              v-for="item in statCards"
-              :key="item.label"
-              class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
-              :title="item.title"
-            >
-              <span
-                class="grid size-14 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
-              >
-                <SvgIcon :name="item.icon" class-name="size-5" />
-              </span>
-              <div>
-                <p class="text-xs text-text-l">{{ item.label }}</p>
-                <p class="mt-1 text-2xl font-semibold">{{ loading ? '—' : item.value }}</p>
-                <p v-if="item.hint && !loading" class="mt-1 text-xs text-text-l">
-                  {{ item.hint }}
-                </p>
-              </div>
-            </article>
-            <article
-              class="home-surface home-stat flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
-              :title="t('home.listeningPeriodsHint')"
-            >
-              <svg
-                class="size-14 shrink-0"
-                viewBox="0 0 48 48"
-                role="group"
-                :aria-label="t('home.listeningPeriods')"
-              >
-                <circle
-                  cx="24"
-                  cy="24"
-                  r="19"
-                  fill="none"
-                  stroke="var(--color-border)"
-                  stroke-width="8"
-                />
-                <circle
-                  v-for="period in periodSegments"
-                  :key="period.id"
-                  cx="24"
-                  cy="24"
-                  r="19"
-                  fill="none"
-                  :stroke="period.color"
-                  stroke-width="8"
-                  :stroke-dasharray="period.dasharray"
-                  :stroke-dashoffset="period.dashoffset"
-                  transform="rotate(-90 24 24)"
-                  tabindex="0"
-                  :aria-label="`${t(`home.periods.${period.id}`)} · ${t(`home.periodRanges.${period.id}`)} · ${t('home.listeningPeriodTooltip', { count: period.plays, duration: formatPeriodDuration(period.playedSeconds) })}`"
-                  @mouseenter="hoveredPeriodId = period.id"
-                  @mouseleave="hoveredPeriodId = null"
-                  @focus="hoveredPeriodId = period.id"
-                  @blur="hoveredPeriodId = null"
-                >
-                  <title>
-                    {{ t(`home.periods.${period.id}`) }} ·
-                    {{ t(`home.periodRanges.${period.id}`) }} ·
-                    {{
-                      t('home.listeningPeriodTooltip', {
-                        count: period.plays,
-                        duration: formatPeriodDuration(period.playedSeconds)
-                      })
-                    }}
-                  </title>
-                </circle>
-              </svg>
-              <div class="min-w-0">
-                <p class="text-xs text-text-l">{{ t('home.listeningPeriods') }}</p>
-                <p class="mt-1 truncate text-xl font-semibold">
-                  {{ !loading && displayedPeriod ? t(`home.periods.${displayedPeriod.id}`) : '—' }}
-                </p>
-                <p v-if="!loading && displayedPeriod" class="mt-1 text-xs text-text-l">
-                  {{ formatPeriodDuration(displayedPeriod.playedSeconds) }} ·
-                  {{ Math.round((displayedPeriod.playedSeconds / totalPeriodSeconds) * 100) }}%
-                </p>
-              </div>
-            </article>
-          </div>
-        </section>
-        <section v-if="section === 'heatmap'" class="home-surface rounded-xl p-5 xl:col-span-2">
-          <div class="mb-4 flex items-center justify-between">
-            <h2 class="text-lg font-semibold">{{ t('home.heatmap') }}</h2>
-            <span class="text-xs text-text-l">{{ t('home.lastYear') }}</span>
-          </div>
-          <div class="overflow-x-auto pb-1">
-            <div class="w-max min-w-[53rem]">
-              <div class="relative mb-1 h-4 text-[10px] text-text-l">
-                <span
-                  v-for="marker in monthMarkers"
-                  :key="marker.date"
-                  class="absolute whitespace-nowrap"
-                  :style="{ left: `${marker.week * 16}px` }"
-                  >{{ marker.label }}</span
-                >
-              </div>
-              <div class="grid grid-flow-col grid-rows-7 gap-1 [grid-auto-columns:0.75rem]">
-                <span
-                  v-for="day in heatmapDays"
-                  :key="day.date"
-                  class="size-3 rounded-sm"
-                  :class="heatClass(day.seconds)"
-                  :title="
-                    t('home.heatmapValue', { date: day.date, value: formatDuration(day.seconds) })
-                  "
-                />
-              </div>
-            </div>
-          </div>
-          <p class="mt-3 text-xs text-text-l">{{ t('home.heatmapHint') }}</p>
-        </section>
-        <article v-if="section === 'topPlayed'" class="home-surface rounded-xl p-5">
-          <h2 class="mb-3 text-lg font-semibold">{{ t('home.topPlayed') }}</h2>
-          <ol v-if="topPlayed.length" class="space-y-1">
-            <li v-for="(song, index) in topPlayed" :key="song.id">
-              <button
-                class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
-                @dblclick="playRanked(topPlayed, song)"
-              >
-                <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
-                <img
-                  v-if="coverUrl(song)"
-                  :src="coverUrl(song)!"
-                  class="size-9 shrink-0 rounded-md object-cover"
-                  :alt="song.title"
-                />
-                <span v-else class="grid size-9 shrink-0 place-items-center rounded-md bg-hover">
-                  <SvgIcon name="common-music" class-name="size-4" />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm">{{ song.title }}</span>
-                  <span class="block truncate text-xs text-text-l">{{
-                    formatArtists(
-                      song.artist,
-                      uiStore.artistSeparator,
-                      uiStore.normalizeArtistSeparator
-                    ) || t('songList.unknownArtist')
-                  }}</span>
-                </span>
-                <span class="text-xs text-text-l">{{
-                  t('home.playCount', { count: song.value })
-                }}</span>
-              </button>
-            </li>
-          </ol>
-          <p v-else class="py-8 text-center text-sm text-text-l">
-            {{ t('home.noStats') }}
-          </p>
-        </article>
-        <article v-if="section === 'topDuration'" class="home-surface rounded-xl p-5">
-          <h2 class="mb-3 text-lg font-semibold">{{ t('home.topDuration') }}</h2>
-          <ol v-if="topDuration.length" class="space-y-1">
-            <li v-for="(song, index) in topDuration" :key="song.id">
-              <button
-                class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
-                @dblclick="playRanked(topDuration, song)"
-              >
-                <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
-                <img
-                  v-if="coverUrl(song)"
-                  :src="coverUrl(song)!"
-                  class="size-9 shrink-0 rounded-md object-cover"
-                  :alt="song.title"
-                />
-                <span v-else class="grid size-9 shrink-0 place-items-center rounded-md bg-hover">
-                  <SvgIcon name="common-music" class-name="size-4" />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate text-sm">{{ song.title }}</span>
-                  <span class="block truncate text-xs text-text-l">{{
-                    formatArtists(
-                      song.artist,
-                      uiStore.artistSeparator,
-                      uiStore.normalizeArtistSeparator
-                    ) || t('songList.unknownArtist')
-                  }}</span>
-                </span>
-                <span class="text-xs text-text-l">{{ formatDuration(song.value) }}</span>
-              </button>
-            </li>
-          </ol>
-          <p v-else class="py-8 text-center text-sm text-text-l">
-            {{ t('home.noStats') }}
-          </p>
-        </article>
+        <HomeRecommendations
+          v-if="section === 'recommendations'"
+          :cards="recommendationCards"
+          :active-card="activeRecommendationCard"
+          :pending="pendingRecommendationCard !== null"
+          :playlist-busy="playingPlaylistId !== null"
+          :is-playing="player.isPlaying"
+          @play="playRecommendation"
+        />
+        <HomePlaylists
+          v-if="section === 'playlists'"
+          :playlists="playlists"
+          :loading="loading"
+          :active-playlist-id="activePlaylistId"
+          :busy="playingPlaylistId !== null"
+          :is-playing="player.isPlaying"
+          @play="playPlaylist"
+        />
+        <HomeOverview
+          v-if="section === 'overview'"
+          :stats="stats"
+          :loading="loading"
+          :refreshing="refreshing"
+          @refresh="refresh"
+        />
+        <HomeHeatmap v-if="section === 'heatmap'" :history-days="historyDays" />
+        <HomeRankedList
+          v-if="section === 'topPlayed'"
+          :songs="topPlayed"
+          kind="played"
+          @play="playRanked(topPlayed, $event)"
+        />
+        <HomeRankedList
+          v-if="section === 'topDuration'"
+          :songs="topDuration"
+          kind="duration"
+          @play="playRanked(topDuration, $event)"
+        />
       </template>
     </div>
     <p v-if="!visibleSections.length" class="py-16 text-center text-sm text-text-l">
@@ -955,30 +447,3 @@ onBeforeUnmount(() => {
     <div class="h-20" />
   </main>
 </template>
-
-<style scoped>
-.home-surface {
-  border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
-  background: color-mix(in srgb, var(--color-bg-l) 24%, transparent);
-  box-shadow: 0 1px 1px color-mix(in srgb, var(--color-black-20) 30%, transparent);
-  backdrop-filter: blur(8px);
-}
-.home-nav:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 42%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
-}
-.home-stat:hover {
-  border-color: color-mix(in srgb, var(--color-primary) 32%, var(--color-border));
-  background: color-mix(in srgb, var(--color-bg-l) 34%, transparent);
-  box-shadow: 0 12px 26px color-mix(in srgb, var(--color-black-20) 48%, transparent);
-}
-@media (hover: none) {
-  .playlist-cover-overlay,
-  .playlist-cover-action {
-    opacity: 1;
-  }
-  .playlist-cover-action {
-    scale: 1;
-  }
-}
-</style>

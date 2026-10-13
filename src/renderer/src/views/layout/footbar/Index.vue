@@ -742,7 +742,10 @@ onBeforeUnmount(() => {
           :title="t('recommendation.like')"
           @click.stop="markCurrent(1)"
         >
-          <SvgIcon name="play-like" class-name="size-5" />
+          <SvgIcon
+            :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
+            class-name="size-5"
+          />
         </button>
         <button
           class="grid size-8 place-items-center rounded-full transition hover:bg-text/10"

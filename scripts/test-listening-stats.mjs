@@ -12,17 +12,26 @@ const compiled = ts.transpileModule(source, {
 const moduleRef = { exports: {} }
 vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports })
 const { getListeningInsights } = moduleRef.exports
+const qualitySource = readFileSync(resolve('src/main/database/libraryQuality.ts'), 'utf8')
+const qualityModule = { exports: {} }
+vm.runInNewContext(
+  ts.transpileModule(qualitySource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  { module: qualityModule, exports: qualityModule.exports }
+)
+const { getLibraryQualityStats } = qualityModule.exports
 
 const db = new Database(':memory:')
 db.exec(`
-  CREATE TABLE song (id INTEGER PRIMARY KEY, duration INTEGER);
+  CREATE TABLE song (id INTEGER PRIMARY KEY, duration INTEGER, file_size INTEGER);
   CREATE TABLE play_history (
     song_id INTEGER NOT NULL,
     started_at INTEGER NOT NULL,
     played_ms INTEGER NOT NULL,
     duration_ms INTEGER
   );
-  INSERT INTO song (id, duration) VALUES (1, 100), (2, NULL);
+  INSERT INTO song (id, duration, file_size) VALUES (1, 100, 9437184), (2, NULL, NULL);
 `)
 const insert = db.prepare(
   'INSERT INTO play_history (song_id, started_at, played_ms, duration_ms) VALUES (?, ?, ?, ?)'
@@ -51,7 +60,20 @@ assert.equal(
   ])
 )
 assert.equal(Math.round(insights.timePeriods[3].playedSeconds * 1000), 89_999)
+db.exec(`
+  INSERT INTO song (id, file_size) VALUES
+    (3, 10485760), (4, 31457280), (5, 0), (6, -1);
+`)
+const quality = getLibraryQualityStats(db)
+assert.equal(quality.standard.count, 1, 'files below 10 MiB are standard')
+assert.equal(quality.high.count, 1, '10 MiB is high quality')
+assert.equal(quality.lossless.count, 1, '30 MiB is lossless size tier')
+assert.equal(quality.unknownCount, 3, 'missing and non-positive sizes remain unknown')
+assert.equal(quality.high.bytes, 10 * 1024 * 1024)
 db.exec('DELETE FROM play_history')
 assert.equal(getListeningInsights(db).eligiblePlays, 0)
+db.exec('DELETE FROM song')
+assert.equal(getLibraryQualityStats(db).unknownCount, 0)
+assert.equal(getLibraryQualityStats(db).standard.count, 0)
 db.close()
 process.stdout.write('Listening statistics fixtures passed\n')

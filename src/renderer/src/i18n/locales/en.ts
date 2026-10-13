@@ -6,7 +6,7 @@ export default {
   },
   nav: {
     home: 'Home',
-    recommend: 'For you',
+    recommend: 'Recommendation',
     songs: 'Songs',
     artists: 'Artists',
     albums: 'Albums',
@@ -74,9 +74,26 @@ export default {
     refreshSuccess: 'Data updated',
     completionCounts: '{completed} completed / {eligible} eligible plays',
     completionRule: 'Plays under 5 seconds are excluded; 90% of track duration counts as complete',
-    listeningPeriods: 'Listening by time of day',
+    listeningPeriods: 'Preferred Time Period',
     listeningPeriodsHint: 'Listening time grouped by when playback started',
     listeningPeriodTooltip: '{count} plays · {duration}',
+    qualityStats: 'Audio quality mix',
+    qualityHint: 'Estimated from file size only; encoding quality cannot be confirmed',
+    qualitySongCount: '{count} songs',
+    qualityUnknown: '{count} songs have no valid file size and are excluded from percentages',
+    qualityLevels: {
+      standard: 'Standard',
+      high: 'High',
+      lossless: 'Lossless'
+    },
+    qualityRanges: {
+      standard: 'Under {high} MiB',
+      high: '{high} to under {lossless} MiB',
+      lossless: 'At least {lossless} MiB'
+    },
+    showDetails: 'Show {item} details',
+    hideDetails: 'Hide {item} details',
+    closeDetails: 'Close details',
     periods: {
       lateNight: 'Late night',
       morning: 'Morning',
@@ -86,12 +103,12 @@ export default {
       evening: 'Evening'
     },
     periodRanges: {
-      lateNight: '00–05',
-      morning: '06–10',
-      noon: '11–12',
-      earlyAfternoon: '13–14',
-      afternoon: '15–17',
-      evening: '18–23'
+      lateNight: '00:00–05:59',
+      morning: '06:00–10:59',
+      noon: '11:00–12:59',
+      earlyAfternoon: '13:00–14:59',
+      afternoon: '15:00–17:59',
+      evening: '18:00–23:59'
     },
     duration: {
       zero: '0 min',
@@ -433,16 +450,13 @@ export default {
     trackSkipped: 'Unable to play “{title}”; skipped automatically.'
   },
   recommendation: {
-    title: 'For you',
-    description:
-      'Generates recommendations daily from listening data through yesterday and available song attributes. Discover mixes in underplayed tracks; each group shows up to 100 songs.',
-    dailySnapshot:
-      'Today’s list stays fixed · listening data through {date}; feedback affects smart shuffle now and recommendations tomorrow',
+    title: 'Recommendation',
+    description: 'A recommended playlist generated based on your listening preferences.',
+    dailySnapshot: 'listening data through {date}.',
     recommended: 'Favorites',
     discovery: 'Discover',
     coldPick: 'Underplayed pick',
-    coldHelp:
-      'Prioritizes low local play counts and weaker matches to known preferences, not global popularity.',
+    coldHelp: 'Less Played Songs.',
     lessRecommended: 'Show less',
     empty: 'Keep listening to build your preferences.',
     refresh: 'Refresh',

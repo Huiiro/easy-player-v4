@@ -145,6 +145,7 @@ const { savePlayHistory } = loadTypeScript(
     '../service/loggerService': { Logger: {} },
     './newestSongs': {},
     './listeningStats': {},
+    './libraryQuality': {},
     '../utils/pathUtils': {}
   }
 )

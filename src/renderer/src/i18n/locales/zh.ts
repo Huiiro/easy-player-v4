@@ -6,7 +6,7 @@ export default {
   },
   nav: {
     home: '主页',
-    recommend: '智能推荐',
+    recommend: '今日推荐',
     songs: '歌曲',
     artists: '歌手',
     albums: '专辑',
@@ -73,9 +73,26 @@ export default {
     refreshSuccess: '数据已更新',
     completionCounts: '完播 {completed} / 有效播放 {eligible} 次',
     completionRule: '播放至少 5 秒纳入统计；达到歌曲时长的 90% 视为完播',
-    listeningPeriods: '播放时间段',
+    listeningPeriods: '偏好时段',
     listeningPeriodsHint: '按播放开始时段归类的累计收听时长',
     listeningPeriodTooltip: '{count} 次播放 · {duration}',
+    qualityStats: '音质分布',
+    qualityHint: '仅按歌曲文件大小估算，不能确定真实编码品质',
+    qualitySongCount: '{count} 首',
+    qualityUnknown: '{count} 首歌曲缺少有效文件大小，未参与比例计算',
+    qualityLevels: {
+      standard: '标清',
+      high: '高清',
+      lossless: '无损'
+    },
+    qualityRanges: {
+      standard: '小于 {high} MiB',
+      high: '{high} MiB 至不足 {lossless} MiB',
+      lossless: '至少 {lossless} MiB'
+    },
+    showDetails: '查看{item}详情',
+    hideDetails: '收起{item}详情',
+    closeDetails: '关闭详情',
     periods: {
       lateNight: '深夜',
       morning: '早晨',
@@ -85,12 +102,12 @@ export default {
       evening: '晚上'
     },
     periodRanges: {
-      lateNight: '00–05',
-      morning: '06–10',
-      noon: '11–12',
-      earlyAfternoon: '13–14',
-      afternoon: '15–17',
-      evening: '18–23'
+      lateNight: '00:00–05:59',
+      morning: '06:00–10:59',
+      noon: '11:00–12:59',
+      earlyAfternoon: '13:00–14:59',
+      afternoon: '15:00–17:59',
+      evening: '18:00–23:59'
     },
     duration: {
       zero: '0 分钟',
@@ -429,14 +446,13 @@ export default {
     trackSkipped: '无法播放“{title}”，已自动跳过。'
   },
   recommendation: {
-    title: '智能推荐',
-    description:
-      '每天生成一次推荐，播放统计截至昨天；结合收听行为与可用的歌曲属性。探索列表穿插低播放量歌曲，每组最多展示 100 首。',
-    dailySnapshot: '今日列表全天固定 · 播放统计截至 {date}；偏好即时用于智能随机，明日更新推荐',
-    recommended: '常听喜爱',
-    discovery: '值得探索',
+    title: '今日推荐',
+    description: '根据您的听歌喜好生成的推荐播放列表',
+    dailySnapshot: '播放统计截至 {date}。',
+    recommended: '猜你喜欢',
+    discovery: '探索发现',
     coldPick: '冷门探索',
-    coldHelp: '优先选本地低播放量、现有偏好属性匹配较弱的歌曲，不代表全网热度。',
+    coldHelp: '较少收听的歌曲。',
     lessRecommended: '减少推荐',
     empty: '继续听歌后，这里会逐渐形成你的偏好。',
     refresh: '刷新',
@@ -450,7 +466,7 @@ export default {
     failed: '保存偏好失败',
     showMore: '显示更多',
     reasons: {
-      liked: '你标记了喜欢',
+      liked: '标记了喜欢',
       replayed: '多次完整收听',
       finished: '曾完整收听',
       similarArtist: '常听的歌手',
@@ -588,10 +604,10 @@ export default {
     autoStartDescription: '登录系统后自动启动 Easy Player。',
     logLevel: '日志记录级别',
     logLevelDescription: '记录所选级别及更严重的日志，修改后立即生效，默认 Info。',
-    logLevelDebug: 'Debug（调试）',
-    logLevelInfo: 'Info（信息）',
-    logLevelWarn: 'Warn（警告）',
-    logLevelError: 'Error（错误）',
+    logLevelDebug: 'Debug',
+    logLevelInfo: 'Info',
+    logLevelWarn: 'Warn',
+    logLevelError: 'Error',
     logLevelSaveFailed: '保存日志级别失败，请重试。',
     logLevelLoadFailed: '读取日志级别失败，请重新打开设置。',
     appUpdate: '应用更新',

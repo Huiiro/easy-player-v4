@@ -1,3 +1,5 @@
+import type { LibraryQualityStats } from './libraryQuality'
+
 export type SortOrder = 'asc' | 'desc'
 export type SongSource = 'local' | 'remote' | 'all'
 
@@ -153,6 +155,7 @@ export interface OverviewStats {
   todayPlaySeconds: number
   eligiblePlays: number
   completedPlays: number
+  quality: LibraryQualityStats
   timePeriods: Array<{
     id: 'lateNight' | 'morning' | 'noon' | 'earlyAfternoon' | 'afternoon' | 'evening'
     playedSeconds: number

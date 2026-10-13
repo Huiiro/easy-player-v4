@@ -13,6 +13,7 @@ import type { RecommendationScore } from './recommendations'
 import { Logger } from '../service/loggerService'
 import { refreshNewestSongs } from './newestSongs'
 import { getListeningInsights } from './listeningStats'
+import { getLibraryQualityStats } from './libraryQuality'
 
 export function getAppSetting(key: string): unknown | null {
   const row = getDatabase().prepare('SELECT value_json FROM app_setting WHERE key = ?').get(key) as
@@ -1320,5 +1321,5 @@ export function getOverviewStats(): OverviewStats {
     | 'totalPlaySeconds'
     | 'todayPlaySeconds'
   >
-  return { ...overview, ...getListeningInsights(db) }
+  return { ...overview, ...getListeningInsights(db), quality: getLibraryQualityStats(db) }
 }
