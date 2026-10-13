@@ -38,6 +38,7 @@ export interface Song {
   songStatus: number
   sourceId: number | null
   remoteId: string | null
+  preference: -1 | 0 | 1
   createdAt: string
   tags?: Tag[]
 }
@@ -150,6 +151,13 @@ export interface OverviewStats {
   librarySize: number
   totalPlaySeconds: number
   todayPlaySeconds: number
+  eligiblePlays: number
+  completedPlays: number
+  timePeriods: Array<{
+    id: 'lateNight' | 'morning' | 'noon' | 'earlyAfternoon' | 'afternoon' | 'evening'
+    playedSeconds: number
+    plays: number
+  }>
 }
 export interface Album {
   albumName: string | null
@@ -168,13 +176,6 @@ export interface Genre {
 }
 export interface PlaylistMembership extends Playlist {
   isIncluded: boolean
-}
-export interface PlayHistoryInput {
-  songId: number
-  playlistId?: number | null
-  playlistName?: string | null
-  playedSeconds?: number
-  startedAt: number
 }
 export interface PlayHistoryDay {
   date: string

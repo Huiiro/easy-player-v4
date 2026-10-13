@@ -9,6 +9,7 @@ type Events = {
   tagsChanged: void
   lyricsUpdated: number
   songActionsMenuOpened: 'footer' | 'songlist'
+  songPreferenceChanged: { songId: number; preference: -1 | 0 | 1 }
   locateCurrentSong: void
   openAudioControls: void
 }

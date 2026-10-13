@@ -16,6 +16,7 @@ import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { getDatabase } from '../database'
+import { refreshNewestSongs } from '../database/newestSongs'
 import {
   getAppSetting,
   getSong,
@@ -507,6 +508,7 @@ export async function syncRemoteSource(
       )
       touchSource(sourceId)
       updateSourceStats(sourceId, tracks.length, tracks.length)
+      if (tracks.length) refreshNewestSongs(getDatabase())
       return { imported: tracks.length, total: tracks.length }
     },
     { successLevel: 'info', warnOnFalse: false }

@@ -299,7 +299,7 @@ const playSong = async (song: LibrarySong): Promise<void> => {
       player.addToQueue([song], true)
       queueIndex = player.queue.findIndex((queuedSong) => queuedSong.id === song.id)
     }
-    if (queueIndex >= 0) await player.playQueueItem(queueIndex)
+    if (queueIndex >= 0) await player.playQueueItem(queueIndex, -1, 'selected', 'search')
     return
   }
   await player.playCollection(
@@ -332,6 +332,13 @@ const addActiveMenuSongToQueue = (): void => {
 const playActiveMenuSong = (): void => {
   if (activeMenuSong.value) void playSong(activeMenuSong.value)
   closeMenu()
+}
+async function setActiveMenuSongPreference(preference: -1 | 1): Promise<void> {
+  const song = activeMenuSong.value
+  closeMenu()
+  if (!song) return
+  const next = song.preference === preference ? 0 : preference
+  if (!(await player.setPreference(song.id, next))) showError(t('recommendation.failed'))
 }
 async function copyActiveMenuSongName(): Promise<void> {
   const song = activeMenuSong.value
@@ -484,6 +491,17 @@ function reloadSelectedSongsFromDisk(): void {
 }
 const onScanFinished = (): void => void load()
 const onTagsChanged = (): void => void load()
+const onSongPreferenceChanged = ({
+  songId,
+  preference
+}: {
+  songId: number
+  preference: -1 | 0 | 1
+}): void => {
+  for (const song of songs.value) {
+    if (song.id === songId) song.preference = preference
+  }
+}
 const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
   if (source !== 'songlist') closeMenu()
 }
@@ -502,6 +520,7 @@ onMounted(() => {
   void loadRemoteSources()
   eventBus.on('scanFinished', onScanFinished)
   eventBus.on('tagsChanged', onTagsChanged)
+  eventBus.on('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.on('locateCurrentSong', locateCurrentSong)
   window.addEventListener('click', closeMenu)
@@ -510,6 +529,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   eventBus.off('scanFinished', onScanFinished)
   eventBus.off('tagsChanged', onTagsChanged)
+  eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.off('locateCurrentSong', locateCurrentSong)
   window.removeEventListener('click', closeMenu)
@@ -629,6 +649,24 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         >
           <svgIcon name="common-plus" class-name="size-4" />
           {{ t('songList.addToPlaylist') }}
+        </button>
+        <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          :class="activeMenuSong.preference === 1 ? 'text-primary' : ''"
+          :aria-pressed="activeMenuSong.preference === 1"
+          @click="setActiveMenuSongPreference(1)"
+        >
+          <svgIcon name="play-like" class-name="size-4" />
+          {{ t(activeMenuSong.preference === 1 ? 'songList.cancelLike' : 'songList.like') }}
+        </button>
+        <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          :class="activeMenuSong.preference === -1 ? 'text-red-400' : ''"
+          :aria-pressed="activeMenuSong.preference === -1"
+          @click="setActiveMenuSongPreference(-1)"
+        >
+          <svgIcon name="play-dislike" class-name="size-5" />
+          {{ t(activeMenuSong.preference === -1 ? 'songList.cancelDislike' : 'songList.dislike') }}
         </button>
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"

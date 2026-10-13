@@ -23,6 +23,15 @@ const player = usePlayerStore()
 const { t } = useI18n()
 const router = useRouter()
 const { error } = useMessage()
+const currentPreference = computed(() =>
+  player.currentQueueSong ? player.getSongPreference(player.currentQueueSong.id) : 0
+)
+async function markCurrent(preference: -1 | 1): Promise<void> {
+  const song = player.currentQueueSong
+  if (!song) return
+  const next = currentPreference.value === preference ? 0 : preference
+  if (!(await player.setPreference(song.id, next))) error(t('recommendation.failed'))
+}
 const collapsed = ref(false)
 const footerRoot = ref<HTMLElement | null>(null)
 const footerHidden = ref(false)
@@ -725,6 +734,24 @@ onBeforeUnmount(() => {
           @click.stop="cyclePlayMode"
         >
           <SvgIcon :name="playModeIcon" class-name="size-5" />
+        </button>
+        <button
+          class="grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+          :class="currentPreference === 1 ? 'text-primary' : 'text-text'"
+          :disabled="!player.currentQueueSong"
+          :title="t('recommendation.like')"
+          @click.stop="markCurrent(1)"
+        >
+          <SvgIcon name="play-like" class-name="size-5" />
+        </button>
+        <button
+          class="grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+          :class="currentPreference === -1 ? 'text-red-400' : 'text-text'"
+          :disabled="!player.currentQueueSong"
+          :title="t('recommendation.dislike')"
+          @click.stop="markCurrent(-1)"
+        >
+          <SvgIcon name="play-dislike" class-name="size-6" />
         </button>
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"

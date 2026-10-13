@@ -7,6 +7,7 @@ import { parseFile } from 'music-metadata'
 import { getDatabase } from '../database'
 import { getDataPath } from '../utils/pathUtils'
 import { Logger } from './loggerService'
+import { refreshNewestSongs } from '../database/newestSongs'
 
 export interface ScanCallback {
   (current: number, total: number, added: number, duplicates: number): void
@@ -130,7 +131,6 @@ export async function scanMusicDirectory(
       const existsSong = db.prepare('SELECT 1 FROM song WHERE audio = ?')
       const coverDir = path.join(getDataPath(), 'covers')
       await fs.promises.mkdir(coverDir, { recursive: true })
-      if (!selectedFiles) db.prepare('UPDATE song SET is_newest = 0').run()
 
       callback?.(0, files.length, 0, 0)
 
@@ -204,6 +204,8 @@ export async function scanMusicDirectory(
           failed,
           total: files.length
         })
+      if (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get())
+        refreshNewestSongs(db)
       return { added, duplicates, total: files.length }
     },
     { successLevel: 'info', warnOnFalse: false }

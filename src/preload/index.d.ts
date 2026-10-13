@@ -213,6 +213,14 @@ declare global {
         command(action: DatabaseAction, params?: unknown): Promise<DatabaseResponse>
         saveSync(key: string, value: unknown): { success: boolean; error?: string }
         getSync(key: string): { success: boolean; data?: unknown; error?: string }
+        recordPlayEventSync(input: {
+          songId: number
+          startedAt: number
+          playedMs: number
+          durationMs: number
+          endReason: 'closed'
+          startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation'
+        }): { success: boolean; error?: string }
       }
       downloads: {
         chooseDirectory(): Promise<string | null>

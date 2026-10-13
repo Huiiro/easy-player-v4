@@ -173,6 +173,18 @@ const databaseAPI = {
       success: boolean
       data?: unknown
       error?: string
+    },
+  recordPlayEventSync: (input: {
+    songId: number
+    startedAt: number
+    playedMs: number
+    durationMs: number
+    endReason: 'closed'
+    startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation'
+  }) =>
+    ipcRenderer.sendSync('database:record-play-event-sync', input) as {
+      success: boolean
+      error?: string
     }
 }
 

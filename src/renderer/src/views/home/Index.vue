@@ -1,5 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import {
+  computed,
+  onActivated,
+  onBeforeUnmount,
+  onDeactivated,
+  onMounted,
+  ref,
+  shallowRef
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
@@ -8,7 +16,11 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
-import { useUIStore } from '@/stores/ui/uiStore'
+import {
+  DEFAULT_HIDDEN_HOME_SECTIONS,
+  DEFAULT_HOME_SECTION_ORDER,
+  useUIStore
+} from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import { formatArtists } from '@/utils/artists'
@@ -21,6 +33,13 @@ interface OverviewStats {
   librarySize: number
   totalPlaySeconds: number
   todayPlaySeconds: number
+  eligiblePlays: number
+  completedPlays: number
+  timePeriods: Array<{
+    id: 'lateNight' | 'morning' | 'noon' | 'earlyAfternoon' | 'afternoon' | 'evening'
+    playedSeconds: number
+    plays: number
+  }>
 }
 interface HistoryDay {
   date: string
@@ -35,6 +54,13 @@ interface Playlist {
   cover: string | null
   description: string | null
 }
+type RecommendationGroup = 'recommended' | 'discovery'
+interface RecommendationCard {
+  group: RecommendationGroup
+  generatedFor: string
+  songs: LibrarySong[]
+  total: number
+}
 
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
@@ -42,21 +68,27 @@ const router = useRouter()
 const player = usePlayerStore()
 const uiStore = useUIStore()
 const loading = ref(true)
-const defaultSectionOrder = [
-  'welcome',
-  'clock',
-  'navigation',
-  'playlists',
-  'overview',
-  'heatmap',
-  'topPlayed',
-  'topDuration'
-] as const
+const defaultSectionOrder = DEFAULT_HOME_SECTION_ORDER
+const legacyDefaultSectionOrders = [
+  [
+    'welcome',
+    'clock',
+    'navigation',
+    'recommendations',
+    'playlists',
+    'overview',
+    'heatmap',
+    'topPlayed',
+    'topDuration'
+  ],
+  ['welcome', 'clock', 'navigation', 'playlists', 'overview', 'heatmap', 'topPlayed', 'topDuration']
+]
 type HomeSection = (typeof defaultSectionOrder)[number]
 const sectionLabels: Record<HomeSection, string> = {
   welcome: 'home.layout.welcome',
   clock: 'home.layout.clock',
   navigation: 'home.quickNavigation',
+  recommendations: 'recommendation.title',
   playlists: 'home.playlists',
   overview: 'home.overview',
   heatmap: 'home.heatmap',
@@ -66,7 +98,12 @@ const sectionLabels: Record<HomeSection, string> = {
 const sectionOrder = computed<HomeSection[]>({
   get: () => {
     const saved = Array.isArray(uiStore.homeSectionOrder) ? uiStore.homeSectionOrder : []
-    return [...new Set([...saved, ...defaultSectionOrder])].filter((id): id is HomeSection =>
+    const order = [...saved]
+    if (!order.includes('recommendations')) {
+      const playlistIndex = order.indexOf('playlists')
+      order.splice(playlistIndex < 0 ? order.length : playlistIndex + 1, 0, 'recommendations')
+    }
+    return [...new Set([...order, ...defaultSectionOrder])].filter((id): id is HomeSection =>
       defaultSectionOrder.includes(id as HomeSection)
     )
   },
@@ -99,10 +136,25 @@ function setSectionVisible(id: HomeSection, visible: boolean | string | number):
 }
 function resetLayout(): void {
   sectionOrder.value = [...defaultSectionOrder]
-  uiStore.hiddenHomeSections = []
+  uiStore.hiddenHomeSections = [...DEFAULT_HIDDEN_HOME_SECTIONS]
   uiStore.homeClockEnabled = false
   uiStore.showWelcomeText = true
 }
+function migrateLegacyDefaultLayout(): void {
+  const saved = uiStore.homeSectionOrder
+  const isLegacyDefault = legacyDefaultSectionOrders.some(
+    (order) => saved.length === order.length && saved.every((id, index) => id === order[index])
+  )
+  if (
+    !isLegacyDefault ||
+    !uiStore.showWelcomeText ||
+    uiStore.homeClockEnabled ||
+    uiStore.hiddenHomeSections.length
+  )
+    return
+  resetLayout()
+}
+migrateLegacyDefaultLayout()
 
 const stats = ref<OverviewStats>({
   songCount: 0,
@@ -110,7 +162,10 @@ const stats = ref<OverviewStats>({
   artistCount: 0,
   librarySize: 0,
   totalPlaySeconds: 0,
-  todayPlaySeconds: 0
+  todayPlaySeconds: 0,
+  eligiblePlays: 0,
+  completedPlays: 0,
+  timePeriods: []
 })
 
 const historyDays = ref<HistoryDay[]>([])
@@ -118,9 +173,28 @@ const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
 const playlists = ref<Playlist[]>([])
 const playingPlaylistId = ref<number | null>(null)
+const recommendationIcons: Record<RecommendationGroup, string> = {
+  recommended: 'play-like',
+  discovery: 'control-shuffle'
+}
+const recommendationCards = ref<RecommendationCard[]>([])
+const recommendationGeneratedFor = computed(
+  () => recommendationCards.value.find((card) => card.group === 'recommended')?.generatedFor ?? ''
+)
+const playingRecommendationCard = ref<string | null>(null)
+const recommendationQueue = shallowRef<LibrarySong[] | null>(null)
+const pendingRecommendationCard = ref<string | null>(null)
 const refreshing = ref(false)
+let recommendationDateTimer: ReturnType<typeof setInterval> | undefined
 const activePlaylistId = computed(() =>
   player.currentQueueSong && (player.isPlaying || player.isPaused) ? player.queuePlaylistId : null
+)
+const activeRecommendationCard = computed(() =>
+  player.currentQueueSong &&
+  (player.isPlaying || player.isPaused) &&
+  recommendationQueue.value === player.queue
+    ? playingRecommendationCard.value
+    : null
 )
 
 const greeting = computed(() => {
@@ -169,15 +243,60 @@ const statCards = computed(() => [
   },
   {
     label: t('home.stats.totalDuration'),
-    value: formatDuration(stats.value.totalPlaySeconds),
+    value: formatHours(stats.value.totalPlaySeconds),
     icon: 'common-time'
   },
   {
     label: t('home.stats.todayDuration'),
-    value: formatDuration(stats.value.todayPlaySeconds),
+    value: formatTodayDuration(stats.value.todayPlaySeconds),
     icon: 'common-time'
+  },
+  {
+    label: t('home.stats.completionRate'),
+    value: stats.value.eligiblePlays
+      ? `${((stats.value.completedPlays / stats.value.eligiblePlays) * 100).toFixed(1)}%`
+      : '—',
+    icon: 'common-task',
+    hint: t('home.completionCounts', {
+      completed: stats.value.completedPlays,
+      eligible: stats.value.eligiblePlays
+    }),
+    title: t('home.completionRule')
   }
 ])
+const periodColors = ['#5e9cce', '#64bdae', '#a48ad4', '#e5a971', '#d8799b', '#8fbe6d']
+const periodCircumference = 2 * Math.PI * 19
+const hoveredPeriodId = ref<OverviewStats['timePeriods'][number]['id'] | null>(null)
+const totalPeriodSeconds = computed(() =>
+  stats.value.timePeriods.reduce((sum, period) => sum + period.playedSeconds, 0)
+)
+const periodSegments = computed(() => {
+  let start = 0
+  return stats.value.timePeriods.flatMap((period, index) => {
+    if (!period.playedSeconds || !totalPeriodSeconds.value) return []
+    const length = (period.playedSeconds / totalPeriodSeconds.value) * periodCircumference
+    const segment = {
+      ...period,
+      color: periodColors[index],
+      dasharray: `${length} ${periodCircumference}`,
+      dashoffset: -start
+    }
+    start += length
+    return [segment]
+  })
+})
+const longestPeriod = computed(() =>
+  totalPeriodSeconds.value
+    ? stats.value.timePeriods.reduce((longest, period) =>
+        period.playedSeconds > longest.playedSeconds ? period : longest
+      )
+    : null
+)
+const displayedPeriod = computed(
+  () =>
+    stats.value.timePeriods.find((period) => period.id === hoveredPeriodId.value) ??
+    longestPeriod.value
+)
 const historyMap = computed(
   () => new Map(historyDays.value.map((item) => [item.date, item.seconds]))
 )
@@ -215,6 +334,22 @@ function formatDuration(seconds: number): string {
   if (hours) return t('home.duration.hourMinute', { hours, minutes })
   return t('home.duration.minute', { minutes: Math.max(1, minutes) })
 }
+function formatHours(seconds: number): string {
+  return `${(Math.max(0, seconds) / 3600).toFixed(1)} h`
+}
+function formatTodayDuration(seconds: number): string {
+  const hours = Math.floor(Math.max(0, seconds) / 3600)
+  const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60)
+  if (hours) return `${hours} h ${minutes} m`
+  return `${seconds > 0 ? Math.max(1, minutes) : 0} m`
+}
+function formatPeriodDuration(seconds: number): string {
+  if (seconds >= 3600) return formatHours(seconds)
+  if (seconds >= 60) return t('home.duration.minuteDecimal', { minutes: (seconds / 60).toFixed(1) })
+  return seconds > 0
+    ? t('home.duration.second', { seconds: Math.max(1, Math.round(seconds)) })
+    : t('home.duration.zero')
+}
 function formatBytes(bytes: number): string {
   if (!bytes) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
@@ -246,12 +381,31 @@ function playlistCoverUrl(playlist: Playlist): string | null {
     ? `easy-player-media://cover?path=${encodeURIComponent(playlist.cover)}`
     : null
 }
+function recommendationCardKey(card: RecommendationCard): string {
+  return `${card.group}:${card.generatedFor}`
+}
+function recommendationCardName(card: RecommendationCard): string {
+  return `${t(`recommendation.${card.group}`)} · ${card.generatedFor}`
+}
+function recommendationCoverUrl(card: RecommendationCard): string | null {
+  const cover = card.songs.find((song) => song.cover)?.cover
+  return cover ? `easy-player-media://cover?path=${encodeURIComponent(cover)}` : null
+}
+function todayKey(): string {
+  const date = new Date()
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
+async function loadRecommendations(): Promise<void> {
+  const response = await window.api.database.command('getHomeRecommendations')
+  if (!response.success) return
+  recommendationCards.value = response.data as RecommendationCard[]
+}
 async function loadPlaylists(): Promise<void> {
   const response = await window.api.database.command('listPlaylists')
   if (response.success) playlists.value = response.data as Playlist[]
 }
 async function playPlaylist(playlist: Playlist): Promise<void> {
-  if (playingPlaylistId.value !== null) return
+  if (playingPlaylistId.value !== null || pendingRecommendationCard.value !== null) return
   playingPlaylistId.value = playlist.id
   try {
     if (activePlaylistId.value === playlist.id) {
@@ -278,6 +432,40 @@ async function playPlaylist(playlist: Playlist): Promise<void> {
     playingPlaylistId.value = null
   }
 }
+async function playRecommendation(card: RecommendationCard): Promise<void> {
+  if (pendingRecommendationCard.value !== null || playingPlaylistId.value !== null) return
+  const cardKey = recommendationCardKey(card)
+  pendingRecommendationCard.value = cardKey
+  try {
+    if (activeRecommendationCard.value === cardKey) {
+      const changed = player.isPlaying ? await player.pause() : await player.play()
+      if (!changed) showError(t('home.playRecommendationFailed'))
+      return
+    }
+    const response = await window.api.database.command('getHomeRecommendationSongs', {
+      group: card.group,
+      generatedFor: card.generatedFor
+    })
+    if (!response.success) {
+      showError(response.error || t('home.playRecommendationFailed'))
+      return
+    }
+    const songs = (response.data as LibrarySong[]).filter((song) => song.songStatus !== 0)
+    if (!songs.length) {
+      warning(t('home.noRecommendationSongs'))
+      void loadRecommendations()
+      return
+    }
+    if (!(await player.playCollection(songs, songs[0].id, null, 'recommendation'))) {
+      showError(t('home.playRecommendationFailed'))
+      return
+    }
+    playingRecommendationCard.value = cardKey
+    recommendationQueue.value = player.queue
+  } finally {
+    pendingRecommendationCard.value = null
+  }
+}
 async function playRanked(songs: RankedSong[], song: RankedSong): Promise<void> {
   const index = songs.findIndex((item) => item.id === song.id)
   if (index < 0) return
@@ -293,7 +481,8 @@ async function load(): Promise<void> {
         window.api.database.command('getPlayHistoryDays', { days: 365 }),
         window.api.database.command('getTopPlayedSongs', { limit: 10 }),
         window.api.database.command('getTopDurationSongs', { limit: 10 }),
-        window.api.database.command('listPlaylists')
+        window.api.database.command('listPlaylists'),
+        loadRecommendations()
       ])
     if (statsResult.success) stats.value = statsResult.data as OverviewStats
     if (daysResult.success) historyDays.value = daysResult.data as HistoryDay[]
@@ -317,6 +506,13 @@ async function refresh(): Promise<void> {
 onMounted(() => {
   void load()
   eventBus.on('playlistsChanged', loadPlaylists)
+  recommendationDateTimer = setInterval(() => {
+    if (recommendationGeneratedFor.value && recommendationGeneratedFor.value !== todayKey())
+      void loadRecommendations()
+  }, 60_000)
+})
+onActivated(() => {
+  if (!loading.value) void loadRecommendations()
 })
 onDeactivated(() => {
   uiStore.homeLayoutOpen = false
@@ -324,6 +520,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   uiStore.homeLayoutOpen = false
   eventBus.off('playlistsChanged', loadPlaylists)
+  if (recommendationDateTimer) clearInterval(recommendationDateTimer)
 })
 </script>
 
@@ -350,6 +547,94 @@ onBeforeUnmount(() => {
               <SvgIcon :name="item.icon" class-name="size-5 text-primary" />
               <span class="mt-3 truncate text-sm">{{ item.label }}</span>
             </button>
+          </div>
+        </section>
+        <section v-if="section === 'recommendations'" class="xl:col-span-2">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-lg font-semibold">{{ t('recommendation.title') }}</h2>
+            <button
+              class="text-sm text-text-l hover:text-primary"
+              @click="router.push('/recommend')"
+            >
+              {{ t('home.viewRecommendations') }}
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-4">
+            <article
+              v-for="card in recommendationCards"
+              :key="recommendationCardKey(card)"
+              class="w-36 shrink-0"
+            >
+              <button
+                class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l disabled:cursor-not-allowed disabled:opacity-50"
+                :aria-label="
+                  activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
+                    ? t('footer.pause')
+                    : t('home.playRecommendation', { name: recommendationCardName(card) })
+                "
+                :title="
+                  activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
+                    ? t('footer.pause')
+                    : t('home.playRecommendation', { name: recommendationCardName(card) })
+                "
+                :disabled="
+                  pendingRecommendationCard !== null ||
+                  playingPlaylistId !== null ||
+                  card.total === 0
+                "
+                @click="playRecommendation(card)"
+              >
+                <img
+                  v-if="recommendationCoverUrl(card)"
+                  :src="recommendationCoverUrl(card)!"
+                  class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
+                  :alt="t(`recommendation.${card.group}`)"
+                />
+                <SvgIcon
+                  v-else
+                  :name="recommendationIcons[card.group]"
+                  class-name="size-12 text-primary"
+                />
+                <span
+                  v-if="card.total > 0"
+                  class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
+                  aria-hidden="true"
+                />
+                <span
+                  v-if="card.total > 0"
+                  class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
+                >
+                  <SvgIcon
+                    :name="
+                      activeRecommendationCard === recommendationCardKey(card) && player.isPlaying
+                        ? 'play-pause'
+                        : 'play-play'
+                    "
+                    class-name="size-6"
+                  />
+                </span>
+              </button>
+              <button
+                class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary disabled:cursor-not-allowed"
+                :class="
+                  activeRecommendationCard === recommendationCardKey(card) ? 'text-primary' : ''
+                "
+                :aria-label="recommendationCardName(card)"
+                :title="recommendationCardName(card)"
+                :disabled="
+                  pendingRecommendationCard !== null ||
+                  playingPlaylistId !== null ||
+                  card.total === 0
+                "
+                @click="playRecommendation(card)"
+              >
+                {{ t(`recommendation.${card.group}`) }}
+              </button>
+              <p class="text-center text-xs text-text-l">{{ card.generatedFor }}</p>
+              <p class="text-center text-xs text-text-l">
+                {{ t('home.recommendationCount', { count: card.total }) }}
+              </p>
+            </article>
           </div>
         </section>
         <section v-if="section === 'playlists'" class="xl:col-span-2">
@@ -441,16 +726,80 @@ onBeforeUnmount(() => {
             <article
               v-for="item in statCards"
               :key="item.label"
-              class="home-surface home-stat group flex items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
+              class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
+              :title="item.title"
             >
               <span
-                class="grid size-10 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
+                class="grid size-14 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
               >
                 <SvgIcon :name="item.icon" class-name="size-5" />
               </span>
               <div>
                 <p class="text-xs text-text-l">{{ item.label }}</p>
-                <p class="mt-1 text-xl font-semibold">{{ loading ? '—' : item.value }}</p>
+                <p class="mt-1 text-2xl font-semibold">{{ loading ? '—' : item.value }}</p>
+                <p v-if="item.hint && !loading" class="mt-1 text-xs text-text-l">
+                  {{ item.hint }}
+                </p>
+              </div>
+            </article>
+            <article
+              class="home-surface home-stat flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
+              :title="t('home.listeningPeriodsHint')"
+            >
+              <svg
+                class="size-14 shrink-0"
+                viewBox="0 0 48 48"
+                role="group"
+                :aria-label="t('home.listeningPeriods')"
+              >
+                <circle
+                  cx="24"
+                  cy="24"
+                  r="19"
+                  fill="none"
+                  stroke="var(--color-border)"
+                  stroke-width="8"
+                />
+                <circle
+                  v-for="period in periodSegments"
+                  :key="period.id"
+                  cx="24"
+                  cy="24"
+                  r="19"
+                  fill="none"
+                  :stroke="period.color"
+                  stroke-width="8"
+                  :stroke-dasharray="period.dasharray"
+                  :stroke-dashoffset="period.dashoffset"
+                  transform="rotate(-90 24 24)"
+                  tabindex="0"
+                  :aria-label="`${t(`home.periods.${period.id}`)} · ${t(`home.periodRanges.${period.id}`)} · ${t('home.listeningPeriodTooltip', { count: period.plays, duration: formatPeriodDuration(period.playedSeconds) })}`"
+                  @mouseenter="hoveredPeriodId = period.id"
+                  @mouseleave="hoveredPeriodId = null"
+                  @focus="hoveredPeriodId = period.id"
+                  @blur="hoveredPeriodId = null"
+                >
+                  <title>
+                    {{ t(`home.periods.${period.id}`) }} ·
+                    {{ t(`home.periodRanges.${period.id}`) }} ·
+                    {{
+                      t('home.listeningPeriodTooltip', {
+                        count: period.plays,
+                        duration: formatPeriodDuration(period.playedSeconds)
+                      })
+                    }}
+                  </title>
+                </circle>
+              </svg>
+              <div class="min-w-0">
+                <p class="text-xs text-text-l">{{ t('home.listeningPeriods') }}</p>
+                <p class="mt-1 truncate text-xl font-semibold">
+                  {{ !loading && displayedPeriod ? t(`home.periods.${displayedPeriod.id}`) : '—' }}
+                </p>
+                <p v-if="!loading && displayedPeriod" class="mt-1 text-xs text-text-l">
+                  {{ formatPeriodDuration(displayedPeriod.playedSeconds) }} ·
+                  {{ Math.round((displayedPeriod.playedSeconds / totalPeriodSeconds) * 100) }}%
+                </p>
               </div>
             </article>
           </div>

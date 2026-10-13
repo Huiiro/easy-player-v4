@@ -42,6 +42,7 @@ watch(
 onMounted(async () => {
   await ui.initializeTheme()
   player.subscribeToEvents()
+  await player.loadSmartShuffleConfig()
   await player.loadRhythmVisualConfig()
   await player.initializePersistentState()
   const hasPendingFiles = await window.api.system.hasPendingAudioFiles()
@@ -64,6 +65,7 @@ onMounted(async () => {
     showError(i18n.global.t('settings.openAudioFailed'))
   )
   window.api.system.audioFilesReady(true)
+  window.addEventListener('beforeunload', player.finishHistoryOnUnload)
   window.addEventListener('beforeunload', player.savePlaybackSessionSync)
 })
 onBeforeUnmount(() => {
@@ -71,6 +73,7 @@ onBeforeUnmount(() => {
   stopFileListener?.()
   stopFileErrorListener?.()
   window.removeEventListener('beforeunload', player.savePlaybackSessionSync)
+  window.removeEventListener('beforeunload', player.finishHistoryOnUnload)
   player.savePlaybackSessionSync()
   player.unsubscribe()
 })

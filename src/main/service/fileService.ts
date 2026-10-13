@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto'
 import { parseFile } from 'music-metadata'
 import { getDataPath } from '../utils/pathUtils'
 import { getDatabase } from '../database'
+import { refreshNewestSongs } from '../database/newestSongs'
 
 type BackupPart = 'songs' | 'playlists' | 'tags' | 'settings'
 type BackupManifest = {
@@ -245,6 +246,7 @@ export async function importLibrary(
           progress?.(index + 1, imported.length)
         }
       }
+      if (added) refreshNewestSongs(db)
       return { added, skipped }
     },
     { successLevel: 'info', warnOnFalse: false }

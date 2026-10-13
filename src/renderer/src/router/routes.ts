@@ -85,6 +85,12 @@ export const constRoutes = [
         component: () => import('@/views/home/Index.vue')
       },
       {
+        path: '/recommend',
+        name: 'Recommend',
+        meta: { title: '智能推荐' },
+        component: () => import('@/views/recommend/Index.vue')
+      },
+      {
         path: '/settings',
         name: 'Settings',
         meta: { title: '设置' },

@@ -134,6 +134,18 @@ function openAlbum(): void {
               </template>
             </span>
             <SvgIcon
+              v-if="song.preference === 1"
+              name="play-like"
+              class-name="size-3.5 shrink-0 text-primary"
+              :title="t('songList.like')"
+            />
+            <SvgIcon
+              v-else-if="song.preference === -1"
+              name="play-dislike"
+              class-name="size-4 shrink-0 text-red-400"
+              :title="t('songList.dislike')"
+            />
+            <SvgIcon
               v-if="song.sourceId !== null"
               name="menu-remote"
               class-name="size-3.5 shrink-0 text-primary"

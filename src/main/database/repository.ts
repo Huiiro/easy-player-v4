@@ -4,7 +4,15 @@ import { safeStorage } from 'electron'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from './index'
+import {
+  getDailyRecommendationGroups,
+  getRecentDiscoveryGroups,
+  invalidateDailyRecommendations
+} from './recommendations'
+import type { RecommendationScore } from './recommendations'
 import { Logger } from '../service/loggerService'
+import { refreshNewestSongs } from './newestSongs'
+import { getListeningInsights } from './listeningStats'
 
 export function getAppSetting(key: string): unknown | null {
   const row = getDatabase().prepare('SELECT value_json FROM app_setting WHERE key = ?').get(key) as
@@ -39,7 +47,6 @@ import type {
   OverviewStats,
   PagedResult,
   PlayHistoryDay,
-  PlayHistoryInput,
   Playlist,
   PlaylistInput,
   PlaylistMembership,
@@ -50,7 +57,7 @@ import type {
   TagInput
 } from './types'
 
-const songColumns = `id, title, artist, album, duration, cover, cover_analysis_path AS coverAnalysisPath, cover_primary AS coverPrimary, cover_secondary AS coverSecondary, cover_lyrics_dark AS coverLyricsDark, cover_analysis_version AS coverAnalysisVersion, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, created_at AS createdAt`
+const songColumns = `id, title, artist, album, duration, cover, cover_analysis_path AS coverAnalysisPath, cover_primary AS coverPrimary, cover_secondary AS coverSecondary, cover_lyrics_dark AS coverLyricsDark, cover_analysis_version AS coverAnalysisVersion, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, preference, created_at AS createdAt`
 const songColumnsFor = (alias: string): string =>
   songColumns
     .split(', ')
@@ -134,6 +141,111 @@ export function getSong(id: number): Song | null {
   const row = getDatabase().prepare(`SELECT ${songColumns} FROM song WHERE id = ?`).get(id) as
     SongRow | undefined
   return row ? attachTags([mapSong(row)])[0] : null
+}
+
+type RecommendationGroup = 'recommended' | 'discovery' | 'lessRecommended'
+type RecommendationSong = Song & RecommendationScore
+type HomeRecommendationGroup = 'recommended' | 'discovery'
+type HomeRecommendationCard = {
+  group: HomeRecommendationGroup
+  generatedFor: string
+  songs: RecommendationSong[]
+  total: number
+}
+
+function attachRecommendationSongs(items: RecommendationScore[]): RecommendationSong[] {
+  if (!items.length) return []
+  const ids = items.map((score) => score.songId)
+  const rows = getDatabase()
+    .prepare(`SELECT ${songColumns} FROM song WHERE id IN (${ids.map(() => '?').join(',')})`)
+    .all(...ids) as SongRow[]
+  const songs = new Map(attachTags(rows.map(mapSong)).map((song) => [song.id, song]))
+  return items.flatMap((score) => {
+    const song = songs.get(score.songId)
+    return song ? [{ ...song, ...score, preference: song.preference }] : []
+  })
+}
+
+export function getHomeRecommendations(): HomeRecommendationCard[] {
+  const today = getDailyRecommendationGroups()
+  const favorite: HomeRecommendationCard = {
+    group: 'recommended',
+    generatedFor: today.generatedFor,
+    songs: attachRecommendationSongs(today.recommended.slice(0, 20)),
+    total: today.recommended.length
+  }
+  const discovery = getRecentDiscoveryGroups()
+    .filter(({ scores }) => scores.length > 0)
+    .map(({ generatedFor, scores }): HomeRecommendationCard => ({
+      group: 'discovery',
+      generatedFor,
+      songs: attachRecommendationSongs(scores.slice(0, 20)),
+      total: scores.length
+    }))
+  return [favorite, ...discovery]
+}
+
+export function getHomeRecommendationSongs(
+  group: HomeRecommendationGroup,
+  generatedFor: string
+): RecommendationSong[] {
+  if (group === 'recommended') {
+    const today = getDailyRecommendationGroups()
+    return generatedFor === today.generatedFor ? attachRecommendationSongs(today.recommended) : []
+  }
+  if (group === 'discovery') {
+    const snapshot = getRecentDiscoveryGroups().find((item) => item.generatedFor === generatedFor)
+    return snapshot ? attachRecommendationSongs(snapshot.scores) : []
+  }
+  return []
+}
+
+export function getRecommendations(limit = 24): {
+  recommended: Array<Song & RecommendationScore>
+  discovery: Array<Song & RecommendationScore>
+  lessRecommended: Array<Song & RecommendationScore>
+  totals: Record<RecommendationGroup, number>
+  generatedFor: string
+  dataThrough: string
+} {
+  const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 24
+  const groups = getDailyRecommendationGroups()
+  return {
+    recommended: attachRecommendationSongs(groups.recommended.slice(0, bounded)),
+    discovery: attachRecommendationSongs(groups.discovery.slice(0, bounded)),
+    lessRecommended: attachRecommendationSongs(groups.lessRecommended.slice(0, bounded)),
+    totals: {
+      recommended: groups.recommended.length,
+      discovery: groups.discovery.length,
+      lessRecommended: groups.lessRecommended.length
+    },
+    generatedFor: groups.generatedFor,
+    dataThrough: groups.dataThrough
+  }
+}
+
+export function getRecommendationPage(
+  group: RecommendationGroup,
+  excludeSongIds: number[] = [],
+  limit = 20
+): { items: RecommendationSong[]; total: number; generatedFor: string } {
+  if (!['recommended', 'discovery', 'lessRecommended'].includes(group))
+    return { items: [], total: 0, generatedFor: '' }
+  const excluded = new Set(
+    Array.isArray(excludeSongIds)
+      ? excludeSongIds.filter((id) => Number.isInteger(id) && id > 0)
+      : []
+  )
+  const size = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 24
+  const daily = getDailyRecommendationGroups()
+  const scores = daily[group]
+  return {
+    items: attachRecommendationSongs(
+      scores.filter((score) => !excluded.has(score.songId)).slice(0, size)
+    ),
+    total: scores.length,
+    generatedFor: daily.generatedFor
+  }
 }
 
 export function updateSongCoverAnalysis(
@@ -539,13 +651,24 @@ export function checkMissingSongs(): { songIds: number[] } {
   })()
   return { songIds: missingIds }
 }
-export function savePlayHistory(songId: number): void {
+export function savePlayHistory(
+  songId: number,
+  startedAt: number,
+  startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation'
+): void {
+  if (!Number.isInteger(songId) || songId <= 0 || !Number.isFinite(startedAt)) return
   const db = getDatabase()
   db.transaction(() => {
     db.prepare(
       `INSERT INTO history (song_id, play_time) VALUES (?, CURRENT_TIMESTAMP) ON CONFLICT(song_id) DO UPDATE SET play_time = CURRENT_TIMESTAMP`
     ).run(songId)
     db.prepare('UPDATE song SET play_times = play_times + 1 WHERE id = ?').run(songId)
+    db.prepare(
+      `INSERT INTO play_history (song_id, started_at, start_origin)
+       SELECT ?, ?, ? WHERE NOT EXISTS (
+         SELECT 1 FROM play_history WHERE song_id = ? AND started_at = ?
+       )`
+    ).run(songId, Math.trunc(startedAt), startOrigin, songId, Math.trunc(startedAt))
   })()
 }
 export function queryRecentPlayedSongs(
@@ -597,23 +720,10 @@ export function queryRecentPlayedSongs(
 export function clearRecentPlayedSongs(): void {
   getDatabase().prepare('DELETE FROM history').run()
 }
-export function savePlayHistoryDetail(input: PlayHistoryInput): void {
-  getDatabase()
-    .prepare(
-      'INSERT INTO play_history (song_id, playlist_id, playlist_name, played_seconds, started_at) VALUES (?, ?, ?, ?, ?)'
-    )
-    .run(
-      input.songId,
-      input.playlistId ?? null,
-      input.playlistName ?? null,
-      input.playedSeconds ?? 0,
-      input.startedAt
-    )
-}
 export function getPlayHistoryDays(days = 365): PlayHistoryDay[] {
   return getDatabase()
     .prepare(
-      "SELECT DATE(started_at / 1000, 'unixepoch', 'localtime') AS date, SUM(played_seconds) AS seconds FROM play_history WHERE started_at >= (strftime('%s', DATE('now', 'localtime', '-' || ? || ' days')) * 1000) GROUP BY DATE(started_at / 1000, 'unixepoch', 'localtime') ORDER BY date"
+      "SELECT DATE(started_at / 1000, 'unixepoch', 'localtime') AS date, CAST(SUM(played_ms) / 1000 AS INTEGER) AS seconds FROM play_history WHERE started_at >= (strftime('%s', DATE('now', 'localtime', '-' || ? || ' days')) * 1000) GROUP BY DATE(started_at / 1000, 'unixepoch', 'localtime') ORDER BY date"
     )
     .all(Math.max(1, days)) as PlayHistoryDay[]
 }
@@ -631,7 +741,7 @@ export function getTopPlayedSongs(limit = 10): RankedSong[] {
 export function getTopDurationSongs(limit = 10): RankedSong[] {
   return getDatabase()
     .prepare(
-      `SELECT ${songColumnsFor('song.')}, COALESCE(SUM(ph.played_seconds), 0) AS value FROM play_history ph JOIN song ON song.id = ph.song_id GROUP BY song.id ORDER BY value DESC LIMIT ?`
+      `SELECT ${songColumnsFor('song.')}, CAST(COALESCE(SUM(ph.played_ms), 0) / 1000 AS INTEGER) AS value FROM play_history ph JOIN song ON song.id = ph.song_id GROUP BY song.id ORDER BY value DESC LIMIT ?`
     )
     .all(Math.max(1, limit))
     .map((row) => ({
@@ -807,6 +917,10 @@ export function deleteSongs(songIds: number[], deleteLocalFiles = false): Delete
 
   const deleted = db.transaction(() => {
     const count = db.prepare(`DELETE FROM song WHERE id IN (${placeholders})`).run(...ids).changes
+    if (count) {
+      refreshNewestSongs(db)
+      invalidateDailyRecommendations()
+    }
     affectedPlaylistIds.forEach(refreshPlaylistCover)
     return count
   })()
@@ -1113,7 +1227,13 @@ export function updateSource(source: MusicSource): boolean {
 }
 export function deleteSource(id: number): boolean {
   sourceCredentialWarnings.delete(id)
-  return getDatabase().prepare('DELETE FROM music_source WHERE id = ?').run(id).changes > 0
+  const db = getDatabase()
+  const deleted = db.prepare('DELETE FROM music_source WHERE id = ?').run(id).changes > 0
+  if (deleted) {
+    refreshNewestSongs(db)
+    invalidateDailyRecommendations()
+  }
+  return deleted
 }
 export function getSource(id: number): MusicSource | null {
   const source = getDatabase()
@@ -1186,9 +1306,19 @@ export function hasCompletedDownload(platform: string, resourceId: string, subId
   )
 }
 export function getOverviewStats(): OverviewStats {
-  return getDatabase()
+  const db = getDatabase()
+  const overview = db
     .prepare(
-      `SELECT COUNT(*) AS songCount, COUNT(DISTINCT NULLIF(album, '')) AS albumCount, COUNT(DISTINCT NULLIF(artist, '')) AS artistCount, COALESCE(SUM(file_size), 0) AS librarySize, (SELECT COALESCE(SUM(played_seconds), 0) FROM play_history) AS totalPlaySeconds, (SELECT COALESCE(SUM(played_seconds), 0) FROM play_history WHERE date(started_at / 1000, 'unixepoch', 'localtime') = date('now', 'localtime')) AS todayPlaySeconds FROM song`
+      `SELECT COUNT(*) AS songCount, COUNT(DISTINCT NULLIF(album, '')) AS albumCount, COUNT(DISTINCT NULLIF(artist, '')) AS artistCount, COALESCE(SUM(file_size), 0) AS librarySize, (SELECT CAST(COALESCE(SUM(played_ms), 0) / 1000 AS INTEGER) FROM play_history) AS totalPlaySeconds, (SELECT CAST(COALESCE(SUM(played_ms), 0) / 1000 AS INTEGER) FROM play_history WHERE date(started_at / 1000, 'unixepoch', 'localtime') = date('now', 'localtime')) AS todayPlaySeconds FROM song`
     )
-    .get() as OverviewStats
+    .get() as Pick<
+    OverviewStats,
+    | 'songCount'
+    | 'albumCount'
+    | 'artistCount'
+    | 'librarySize'
+    | 'totalPlaySeconds'
+    | 'todayPlaySeconds'
+  >
+  return { ...overview, ...getListeningInsights(db) }
 }

@@ -1,6 +1,11 @@
 import { t } from '../i18n'
 import { ipcMain } from 'electron'
 import * as library from '../database/repository'
+import {
+  getRecommendationScores,
+  recordPlayEvent,
+  setSongPreference
+} from '../database/recommendations'
 import { Logger } from '../service/loggerService'
 import { logOperation, logParams } from '../service/operationLogger'
 
@@ -48,15 +53,43 @@ const handlers = {
     library.setSongStatus(id, status),
   refreshMissingSongStatus: () => library.refreshMissingSongStatus(),
   checkMissingSongs: () => library.checkMissingSongs(),
-  savePlayHistory: ({ songId }: { songId: number }) => library.savePlayHistory(songId),
+  savePlayHistory: ({
+    songId,
+    startedAt,
+    startOrigin
+  }: {
+    songId: number
+    startedAt: number
+    startOrigin: Parameters<typeof library.savePlayHistory>[2]
+  }) => library.savePlayHistory(songId, startedAt, startOrigin),
   queryRecentPlayedSongs: (params: Parameters<typeof library.queryRecentPlayedSongs>[0]) =>
     library.queryRecentPlayedSongs(params),
   clearRecentPlayedSongs: () => library.clearRecentPlayedSongs(),
-  savePlayHistoryDetail: (params: Parameters<typeof library.savePlayHistoryDetail>[0]) =>
-    library.savePlayHistoryDetail(params),
   getPlayHistoryDays: ({ days }: { days?: number } = {}) => library.getPlayHistoryDays(days),
   getTopPlayedSongs: ({ limit }: { limit?: number } = {}) => library.getTopPlayedSongs(limit),
   getTopDurationSongs: ({ limit }: { limit?: number } = {}) => library.getTopDurationSongs(limit),
+  getRecommendationScores: () => getRecommendationScores(),
+  getRecommendations: ({ limit }: { limit?: number } = {}) => library.getRecommendations(limit),
+  getHomeRecommendations: () => library.getHomeRecommendations(),
+  getHomeRecommendationSongs: ({
+    group,
+    generatedFor
+  }: {
+    group: Parameters<typeof library.getHomeRecommendationSongs>[0]
+    generatedFor: string
+  }) => library.getHomeRecommendationSongs(group, generatedFor),
+  getRecommendationPage: ({
+    group,
+    excludeSongIds,
+    limit
+  }: {
+    group: Parameters<typeof library.getRecommendationPage>[0]
+    excludeSongIds?: number[]
+    limit?: number
+  }) => library.getRecommendationPage(group, excludeSongIds, limit),
+  recordPlayEvent: (params: Parameters<typeof recordPlayEvent>[0]) => recordPlayEvent(params),
+  setSongPreference: ({ songId, preference }: { songId: number; preference: -1 | 0 | 1 }) =>
+    setSongPreference(songId, preference),
 
   listPlaylists: () => library.listPlaylists(),
   getPlaylist: ({ id }: { id: number }) => library.getPlaylist(id),
@@ -159,6 +192,20 @@ export type DatabaseResponse<T = unknown> =
   { success: true; data: T } | { success: false; error: string }
 
 export function registerDatabaseIpcHandlers(): void {
+  ipcMain.on(
+    'database:record-play-event-sync',
+    (event, input: Parameters<typeof recordPlayEvent>[0]) => {
+      try {
+        recordPlayEvent(input)
+        event.returnValue = { success: true }
+      } catch (error) {
+        event.returnValue = {
+          success: false,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  )
   ipcMain.handle(DATABASE_IPC_CHANNEL, (_event, request: DatabaseRequest): DatabaseResponse => {
     if (!request || typeof request.action !== 'string') {
       Logger.warn('[Database IPC] invalid request')
