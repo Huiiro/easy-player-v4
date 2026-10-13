@@ -24,7 +24,7 @@ const { getLibraryQualityStats } = qualityModule.exports
 
 const db = new Database(':memory:')
 db.exec(`
-  CREATE TABLE song (id INTEGER PRIMARY KEY, duration INTEGER, file_size INTEGER);
+  CREATE TABLE song (id INTEGER PRIMARY KEY, duration INTEGER, bitrate INTEGER, file_size INTEGER);
   CREATE TABLE play_history (
     song_id INTEGER NOT NULL,
     started_at INTEGER NOT NULL,
@@ -61,15 +61,21 @@ assert.equal(
 )
 assert.equal(Math.round(insights.timePeriods[3].playedSeconds * 1000), 89_999)
 db.exec(`
-  INSERT INTO song (id, file_size) VALUES
-    (3, 10485760), (4, 31457280), (5, 0), (6, -1);
+  INSERT INTO song (id, bitrate, file_size) VALUES
+    (3, 319, 41943040), (4, 320, 1048576), (5, 499, NULL),
+    (6, 500, 1048576), (7, 799, 1048576), (8, 800, 1048576),
+    (9, NULL, 10485760), (10, 0, 20971520), (11, -1, 31457280),
+    (12, NULL, 0), (13, NULL, -1);
 `)
 const quality = getLibraryQualityStats(db)
-assert.equal(quality.standard.count, 1, 'files below 10 MiB are standard')
-assert.equal(quality.high.count, 1, '10 MiB is high quality')
-assert.equal(quality.lossless.count, 1, '30 MiB is lossless size tier')
-assert.equal(quality.unknownCount, 3, 'missing and non-positive sizes remain unknown')
-assert.equal(quality.high.bytes, 10 * 1024 * 1024)
+assert.equal(quality.standard.count, 2, '319 kbps overrides a large file size')
+assert.equal(quality.high.count, 3, '320-499 kbps and 10 MiB fallback are high')
+assert.equal(quality.ultra.count, 3, '500-799 kbps and 20 MiB fallback are ultra')
+assert.equal(quality.lossless.count, 2, '800 kbps and 30 MiB fallback are lossless tier')
+assert.equal(quality.bitrateCount, 6)
+assert.equal(quality.sizeFallbackCount, 4)
+assert.equal(quality.unknownCount, 3, 'missing or non-positive bitrate and size remain unknown')
+assert.equal(quality.high.bytes, 11 * 1024 * 1024)
 db.exec('DELETE FROM play_history')
 assert.equal(getListeningInsights(db).eligiblePlays, 0)
 db.exec('DELETE FROM song')

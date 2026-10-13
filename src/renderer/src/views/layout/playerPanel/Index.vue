@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -18,12 +18,29 @@ import LiquidBackground from '@/components/background/LiquidBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { formatArtists } from '@/utils/artists'
+import type { SongDetails } from '@/types/library'
 
 const COVER_ANALYSIS_VERSION = 11
 
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
+const currentSongDetails = shallowRef<SongDetails | null>(null)
+watch(
+  () => player.currentQueueSong?.id,
+  async (id) => {
+    currentSongDetails.value = null
+    if (id == null) return
+    try {
+      const response = await window.api.database.command('getSong', { id })
+      if (response.success && player.currentQueueSong?.id === id)
+        currentSongDetails.value = response.data as SongDetails | null
+    } catch (error) {
+      console.warn('[PlayerPanel] Failed to load song details:', error)
+    }
+  },
+  { immediate: true }
+)
 
 const coverFailed = ref(false)
 const showQueue = ref(false)
@@ -351,34 +368,42 @@ onUnmounted(() => player.setAudioAnalysisPollingRate(0))
  */
 const audioDetails = computed(() => {
   const info = player.trackInfo
-  if (!info) return []
+  const song = currentSongDetails.value
+  if (!info && !song) return []
+  const channelCount = info?.channels || song?.channels
+  const sampleRate = info?.sampleRate || song?.sampleRate
+  const bitDepth = info?.bitDepth || song?.bitDepth
+  const bitrate = info?.bitrateKbps || song?.bitrate
   const channels =
-    info.channels === 1
+    channelCount === 1
       ? t('playerPanel.mono')
-      : info.channels === 2
+      : channelCount === 2
         ? t('playerPanel.stereo')
-        : t('playerPanel.channels', { count: info.channels })
+        : channelCount
+          ? t('playerPanel.channels', { count: channelCount })
+          : t('playerPanel.unavailable')
   return [
     [
       t('playerPanel.format'),
-      info.format?.toUpperCase() || info.codecName || t('playerPanel.unavailable')
+      info?.format?.toUpperCase() ||
+        info?.codecName ||
+        song?.format?.toUpperCase() ||
+        t('playerPanel.unavailable')
     ],
     [
       t('playerPanel.sampleRate'),
-      info.sampleRate
-        ? `${info.sampleRate / 1000} ${t('playerPanel.kilohertz')}`
+      sampleRate
+        ? `${sampleRate / 1000} ${t('playerPanel.kilohertz')}`
         : t('playerPanel.unavailable')
     ],
     [
       t('playerPanel.bitDepth'),
-      info.bitDepth ? `${info.bitDepth} ${t('playerPanel.bit')}` : t('playerPanel.unavailable')
+      bitDepth ? `${bitDepth} ${t('playerPanel.bit')}` : t('playerPanel.unavailable')
     ],
     [t('playerPanel.channel'), channels],
     [
       t('playerPanel.bitrate'),
-      info.bitrateKbps
-        ? `${info.bitrateKbps} ${t('playerPanel.kilobitsPerSecond')}`
-        : t('playerPanel.unavailable')
+      bitrate ? `${bitrate} ${t('playerPanel.kilobitsPerSecond')}` : t('playerPanel.unavailable')
     ]
   ]
 })

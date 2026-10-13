@@ -77,18 +77,23 @@ export default {
     listeningPeriodsHint: '按播放开始时段归类的累计收听时长',
     listeningPeriodTooltip: '{count} 次播放 · {duration}',
     qualityStats: '音质分布',
-    qualityHint: '仅按歌曲文件大小估算，不能确定真实编码品质',
+    qualityHint: '优先按码率估算，缺失时按文件大小替补；不能据此确认真实无损编码',
     qualitySongCount: '{count} 首',
-    qualityUnknown: '{count} 首歌曲缺少有效文件大小，未参与比例计算',
+    qualityMethodCounts: '按码率 {bitrate} 首 · 文件大小替补 {fallback} 首',
+    qualitySizeFallbackRule:
+      '大小替补分档：小于 {high} / {high}–不足 {ultra} / {ultra}–不足 {lossless} / 至少 {lossless} MiB',
+    qualityUnknown: '{count} 首歌曲缺少有效码率和文件大小，未参与比例计算',
     qualityLevels: {
       standard: '标清',
       high: '高清',
+      ultra: '超清',
       lossless: '无损'
     },
     qualityRanges: {
-      standard: '小于 {high} MiB',
-      high: '{high} MiB 至不足 {lossless} MiB',
-      lossless: '至少 {lossless} MiB'
+      standard: '小于 {high} kbps',
+      high: '{high} 至不足 {ultra} kbps',
+      ultra: '{ultra} 至不足 {lossless} kbps',
+      lossless: '至少 {lossless} kbps'
     },
     showDetails: '查看{item}详情',
     hideDetails: '收起{item}详情',

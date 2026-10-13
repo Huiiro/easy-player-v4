@@ -138,9 +138,19 @@ const stats = ref<OverviewStats>({
   quality: {
     standard: { count: 0, bytes: 0 },
     high: { count: 0, bytes: 0 },
+    ultra: { count: 0, bytes: 0 },
     lossless: { count: 0, bytes: 0 },
+    bitrateCount: 0,
+    sizeFallbackCount: 0,
     unknownCount: 0,
-    thresholds: { highMiB: 10, losslessMiB: 30 }
+    thresholds: {
+      highKbps: 320,
+      ultraKbps: 500,
+      losslessKbps: 800,
+      highMiB: 10,
+      ultraMiB: 20,
+      losslessMiB: 30
+    }
   },
   timePeriods: []
 })

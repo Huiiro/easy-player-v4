@@ -56,7 +56,7 @@ const statCards = computed(() => [
   }
 ])
 const periodColors = ['#5e9cce', '#64bdae', '#a48ad4', '#e5a971', '#d8799b', '#8fbe6d']
-const qualityColors = ['#5e9cce', '#64bdae', '#a48ad4']
+const qualityColors = ['#5e9cce', '#64bdae', '#a48ad4', '#e5a971']
 const totalPeriodSeconds = computed(() =>
   props.stats.timePeriods.reduce((sum, period) => sum + period.playedSeconds, 0)
 )
@@ -72,6 +72,7 @@ const qualityLevels = computed(() =>
     [
       { id: 'standard', ...props.stats.quality.standard },
       { id: 'high', ...props.stats.quality.high },
+      { id: 'ultra', ...props.stats.quality.ultra },
       { id: 'lossless', ...props.stats.quality.lossless }
     ] as const
   ).map((level, index) => ({ ...level, color: qualityColors[index] }))
@@ -228,9 +229,13 @@ function formatPeriodDuration(seconds: number): string {
 function percentage(part: number, total: number): number {
   return total > 0 ? Math.round((part / total) * 100) : 0
 }
-function qualityRange(id: 'standard' | 'high' | 'lossless'): string {
-  const { highMiB, losslessMiB } = props.stats.quality.thresholds
-  return t(`home.qualityRanges.${id}`, { high: highMiB, lossless: losslessMiB })
+function qualityRange(id: 'standard' | 'high' | 'ultra' | 'lossless'): string {
+  const { highKbps, ultraKbps, losslessKbps } = props.stats.quality.thresholds
+  return t(`home.qualityRanges.${id}`, {
+    high: highKbps,
+    ultra: ultraKbps,
+    lossless: losslessKbps
+  })
 }
 function formatBytes(bytes: number): string {
   if (!bytes) return '0 B'
@@ -550,12 +555,28 @@ watch(
                   {{ formatBytes(level.bytes) }}
                 </p>
               </div>
-              <p
-                v-if="stats.quality.unknownCount"
-                class="border-t border-border pt-2 text-xs text-text-l"
-              >
-                {{ t('home.qualityUnknown', { count: stats.quality.unknownCount }) }}
-              </p>
+              <div class="space-y-1 border-t border-border pt-2 text-xs text-text-l">
+                <p>
+                  {{
+                    t('home.qualityMethodCounts', {
+                      bitrate: stats.quality.bitrateCount,
+                      fallback: stats.quality.sizeFallbackCount
+                    })
+                  }}
+                </p>
+                <p v-if="stats.quality.sizeFallbackCount">
+                  {{
+                    t('home.qualitySizeFallbackRule', {
+                      high: stats.quality.thresholds.highMiB,
+                      ultra: stats.quality.thresholds.ultraMiB,
+                      lossless: stats.quality.thresholds.losslessMiB
+                    })
+                  }}
+                </p>
+                <p v-if="stats.quality.unknownCount">
+                  {{ t('home.qualityUnknown', { count: stats.quality.unknownCount }) }}
+                </p>
+              </div>
             </div>
           </div>
         </div>

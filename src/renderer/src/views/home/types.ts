@@ -12,9 +12,19 @@ export interface OverviewStats {
   quality: {
     standard: { count: number; bytes: number }
     high: { count: number; bytes: number }
+    ultra: { count: number; bytes: number }
     lossless: { count: number; bytes: number }
+    bitrateCount: number
+    sizeFallbackCount: number
     unknownCount: number
-    thresholds: { highMiB: number; losslessMiB: number }
+    thresholds: {
+      highKbps: number
+      ultraKbps: number
+      losslessKbps: number
+      highMiB: number
+      ultraMiB: number
+      losslessMiB: number
+    }
   }
   timePeriods: Array<{
     id: 'lateNight' | 'morning' | 'noon' | 'earlyAfternoon' | 'afternoon' | 'evening'

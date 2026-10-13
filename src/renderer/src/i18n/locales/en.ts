@@ -78,18 +78,25 @@ export default {
     listeningPeriodsHint: 'Listening time grouped by when playback started',
     listeningPeriodTooltip: '{count} plays · {duration}',
     qualityStats: 'Audio quality mix',
-    qualityHint: 'Estimated from file size only; encoding quality cannot be confirmed',
+    qualityHint:
+      'Estimated from bitrate, with file size as fallback; true lossless encoding is unconfirmed',
     qualitySongCount: '{count} songs',
-    qualityUnknown: '{count} songs have no valid file size and are excluded from percentages',
+    qualityMethodCounts: '{bitrate} by bitrate · {fallback} by file-size fallback',
+    qualitySizeFallbackRule:
+      'Size fallback: under {high} / {high}–under {ultra} / {ultra}–under {lossless} / at least {lossless} MiB',
+    qualityUnknown:
+      '{count} songs have no valid bitrate or file size and are excluded from percentages',
     qualityLevels: {
       standard: 'Standard',
       high: 'High',
+      ultra: 'Ultra',
       lossless: 'Lossless'
     },
     qualityRanges: {
-      standard: 'Under {high} MiB',
-      high: '{high} to under {lossless} MiB',
-      lossless: 'At least {lossless} MiB'
+      standard: 'Under {high} kbps',
+      high: '{high} to under {ultra} kbps',
+      ultra: '{ultra} to under {lossless} kbps',
+      lossless: 'At least {lossless} kbps'
     },
     showDetails: 'Show {item} details',
     hideDetails: 'Hide {item} details',
