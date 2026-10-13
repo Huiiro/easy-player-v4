@@ -6,6 +6,7 @@ export default {
   },
   nav: {
     home: 'Home',
+    recommend: 'For you',
     songs: 'Songs',
     artists: 'Artists',
     albums: 'Albums',
@@ -51,6 +52,11 @@ export default {
     },
     quickNavigation: 'Quick navigation',
     playlists: 'My playlists',
+    viewRecommendations: 'View recommendations',
+    playRecommendation: 'Play “{name}”',
+    recommendationCount: '{count} songs',
+    noRecommendationSongs: 'No playable songs in this recommendation group',
+    playRecommendationFailed: 'Could not play recommended songs',
     playPlaylist: 'Play playlist “{name}”',
     nowPlaying: 'Now playing',
     noPlaylists: 'No playlists yet',
@@ -66,8 +72,31 @@ export default {
     refresh: 'Refresh',
     backToTop: 'Back to top',
     refreshSuccess: 'Data updated',
+    completionCounts: '{completed} completed / {eligible} eligible plays',
+    completionRule: 'Plays under 5 seconds are excluded; 90% of track duration counts as complete',
+    listeningPeriods: 'Listening by time of day',
+    listeningPeriodsHint: 'Listening time grouped by when playback started',
+    listeningPeriodTooltip: '{count} plays · {duration}',
+    periods: {
+      lateNight: 'Late night',
+      morning: 'Morning',
+      noon: 'Noon',
+      earlyAfternoon: 'Early afternoon',
+      afternoon: 'Afternoon',
+      evening: 'Evening'
+    },
+    periodRanges: {
+      lateNight: '00–05',
+      morning: '06–10',
+      noon: '11–12',
+      earlyAfternoon: '13–14',
+      afternoon: '15–17',
+      evening: '18–23'
+    },
     duration: {
       zero: '0 min',
+      second: '{seconds} sec',
+      minuteDecimal: '{minutes} min',
       minute: '{minutes} min',
       hourMinute: '{hours} hr {minutes} min',
       dayHour: '{days} d {hours} hr'
@@ -78,7 +107,8 @@ export default {
       artists: 'Artists',
       librarySize: 'Library',
       totalDuration: 'Total Duration',
-      todayDuration: "Today's Duration"
+      todayDuration: "Today's Duration",
+      completionRate: 'Completion rate'
     }
   },
   history: {
@@ -171,6 +201,10 @@ export default {
     selectNewest: 'Select recently added',
     selected: '{count} selected',
     play: 'Play',
+    like: 'Like',
+    dislike: 'Dislike',
+    cancelLike: 'Remove like',
+    cancelDislike: 'Remove dislike',
     copyName: 'Copy name',
     nameCopied: 'Song name copied',
     copyNameFailed: 'Unable to copy song name',
@@ -398,6 +432,46 @@ export default {
     unknownTrack: 'Unknown track',
     trackSkipped: 'Unable to play “{title}”; skipped automatically.'
   },
+  recommendation: {
+    title: 'For you',
+    description:
+      'Generates recommendations daily from listening data through yesterday and available song attributes. Discover mixes in underplayed tracks; each group shows up to 100 songs.',
+    dailySnapshot:
+      'Today’s list stays fixed · listening data through {date}; feedback affects smart shuffle now and recommendations tomorrow',
+    recommended: 'Favorites',
+    discovery: 'Discover',
+    coldPick: 'Underplayed pick',
+    coldHelp:
+      'Prioritizes low local play counts and weaker matches to known preferences, not global popularity.',
+    lessRecommended: 'Show less',
+    empty: 'Keep listening to build your preferences.',
+    refresh: 'Refresh',
+    play: 'Play',
+    pause: 'Pause',
+    expand: 'Expand',
+    collapse: 'Collapse',
+    like: 'Like',
+    dislike: 'Show less',
+    reset: 'Undo feedback',
+    failed: 'Could not save preference',
+    showMore: 'Show more',
+    reasons: {
+      liked: 'Marked as liked',
+      replayed: 'Played through repeatedly',
+      finished: 'Played through',
+      similarArtist: 'A familiar artist',
+      similarAlbum: 'A familiar album',
+      similarGenre: 'A familiar genre',
+      similarTag: 'Matches a familiar tag',
+      similarEra: 'A preferred era',
+      similarLength: 'A preferred song length',
+      unheard: 'Rarely played',
+      skipped: 'Skipped early several times',
+      activelyChosen: 'Searched or revisited',
+      recentlyAdded: 'Recently imported',
+      lessRecommended: 'Shown less often'
+    }
+  },
   header: {
     back: 'Back',
     importLocalMusic: 'Import local music',
@@ -564,6 +638,8 @@ export default {
     shortcutVolumeUp: 'Volume +',
     shortcutVolumeDown: 'Volume −',
     autoPlayOnRestore: 'Autoplay on startup',
+    smartShuffle: 'Smart shuffle',
+    smartShuffleDescription: 'Use listening, replays and skips to weight picks in random mode.',
     autoPlayOnRestoreDescription:
       'When enabled, playback will resume from where it left off after startup.',
     autoAdjustLyricsDisplay: 'Automatically size lyrics and spacing',

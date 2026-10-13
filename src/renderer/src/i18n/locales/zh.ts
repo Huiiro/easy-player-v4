@@ -6,6 +6,7 @@ export default {
   },
   nav: {
     home: '主页',
+    recommend: '智能推荐',
     songs: '歌曲',
     artists: '歌手',
     albums: '专辑',
@@ -51,6 +52,11 @@ export default {
     },
     quickNavigation: '快速导航',
     playlists: '我的歌单',
+    viewRecommendations: '查看推荐列表',
+    playRecommendation: '播放“{name}”',
+    recommendationCount: '{count} 首歌曲',
+    noRecommendationSongs: '这个推荐分区暂无可播放的歌曲',
+    playRecommendationFailed: '播放推荐歌曲失败',
     playPlaylist: '播放歌单“{name}”',
     nowPlaying: '正在播放',
     noPlaylists: '暂无歌单',
@@ -65,8 +71,31 @@ export default {
     noStats: '暂无播放统计',
     refresh: '刷新数据',
     refreshSuccess: '数据已更新',
+    completionCounts: '完播 {completed} / 有效播放 {eligible} 次',
+    completionRule: '播放至少 5 秒纳入统计；达到歌曲时长的 90% 视为完播',
+    listeningPeriods: '播放时间段',
+    listeningPeriodsHint: '按播放开始时段归类的累计收听时长',
+    listeningPeriodTooltip: '{count} 次播放 · {duration}',
+    periods: {
+      lateNight: '深夜',
+      morning: '早晨',
+      noon: '中午',
+      earlyAfternoon: '午后',
+      afternoon: '下午',
+      evening: '晚上'
+    },
+    periodRanges: {
+      lateNight: '00–05',
+      morning: '06–10',
+      noon: '11–12',
+      earlyAfternoon: '13–14',
+      afternoon: '15–17',
+      evening: '18–23'
+    },
     duration: {
       zero: '0 分钟',
+      second: '{seconds} 秒',
+      minuteDecimal: '{minutes} 分钟',
       minute: '{minutes} 分钟',
       hourMinute: '{hours} 小时 {minutes} 分钟',
       dayHour: '{days} 天 {hours} 小时'
@@ -77,7 +106,8 @@ export default {
       artists: '歌手',
       librarySize: '曲库',
       totalDuration: '总时长',
-      todayDuration: '今日时长'
+      todayDuration: '今日时长',
+      completionRate: '完播率'
     }
   },
   history: {
@@ -171,6 +201,10 @@ export default {
     selectNewest: '选择最近添加',
     selected: '已选择 {count} 首',
     play: '播放',
+    like: '喜欢',
+    dislike: '不喜欢',
+    cancelLike: '取消喜欢',
+    cancelDislike: '取消不喜欢',
     copyName: '复制名称',
     nameCopied: '已复制歌曲名称',
     copyNameFailed: '无法复制歌曲名称',
@@ -394,6 +428,44 @@ export default {
     unknownTrack: '未知歌曲',
     trackSkipped: '无法播放“{title}”，已自动跳过。'
   },
+  recommendation: {
+    title: '智能推荐',
+    description:
+      '每天生成一次推荐，播放统计截至昨天；结合收听行为与可用的歌曲属性。探索列表穿插低播放量歌曲，每组最多展示 100 首。',
+    dailySnapshot: '今日列表全天固定 · 播放统计截至 {date}；偏好即时用于智能随机，明日更新推荐',
+    recommended: '常听喜爱',
+    discovery: '值得探索',
+    coldPick: '冷门探索',
+    coldHelp: '优先选本地低播放量、现有偏好属性匹配较弱的歌曲，不代表全网热度。',
+    lessRecommended: '减少推荐',
+    empty: '继续听歌后，这里会逐渐形成你的偏好。',
+    refresh: '刷新',
+    play: '播放',
+    pause: '暂停',
+    expand: '展开',
+    collapse: '收起',
+    like: '喜欢',
+    dislike: '减少推荐',
+    reset: '撤销反馈',
+    failed: '保存偏好失败',
+    showMore: '显示更多',
+    reasons: {
+      liked: '你标记了喜欢',
+      replayed: '多次完整收听',
+      finished: '曾完整收听',
+      similarArtist: '常听的歌手',
+      similarAlbum: '常听的专辑',
+      similarGenre: '常听的流派',
+      similarTag: '符合常听标签',
+      similarEra: '偏好的年代',
+      similarLength: '偏好的歌曲时长',
+      unheard: '较少收听',
+      skipped: '多次短听跳过',
+      activelyChosen: '主动找来收听',
+      recentlyAdded: '最近导入',
+      lessRecommended: '已减少推荐'
+    }
+  },
   header: {
     back: '返回',
     importLocalMusic: '导入本地音乐',
@@ -548,6 +620,8 @@ export default {
     shortcutVolumeUp: '音量 +',
     shortcutVolumeDown: '音量 −',
     autoPlayOnRestore: '启动后自动播放',
+    smartShuffle: '智能随机',
+    smartShuffleDescription: '开启后，随机播放会根据收听、重听和跳过行为调整抽取权重。',
     autoPlayOnRestoreDescription: '开启后，将在启动后继续从上次中断的地方开始播放。',
     autoAdjustLyricsDisplay: '自动调整歌词大小与间距',
     autoAdjustLyricsDisplayDescription: '开启后，将自动调整播放页的歌词字号大小与歌词间隙。',

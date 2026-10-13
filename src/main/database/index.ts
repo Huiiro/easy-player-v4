@@ -3,7 +3,9 @@ import { logOperation } from '../service/operationLogger'
 import { Logger } from '../service/loggerService'
 import Database from 'better-sqlite3'
 import { join } from 'node:path'
-import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2, schemaV3, schemaV4 } from './schema'
+import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2, schemaV3, schemaV4, schemaV5 } from './schema'
+import { refreshNewestSongs } from './newestSongs'
+import { migratePlayHistory } from './playHistoryMigration'
 import { getDataPath } from '../utils/pathUtils'
 
 let database: Database.Database | undefined
@@ -52,6 +54,12 @@ function migrate(db: Database.Database): void {
           db.exec(schemaV4)
           db.prepare('INSERT OR IGNORE INTO schema_migration (version) VALUES (4)').run()
         }
+        if (version < 5) {
+          db.exec(schemaV5.addSongPreference)
+          const playHistoryMigration = migratePlayHistory(db, schemaV5)
+          Logger.info('[Database] migrated v4 play history', playHistoryMigration)
+          db.prepare('INSERT INTO schema_migration (version) VALUES (5)').run()
+        }
       })()
       Logger.info('[Database] schema migrated', {
         fromVersion: version,
@@ -76,6 +84,7 @@ export function initDatabase(overridePath?: string): Database.Database {
         db.pragma('journal_mode = WAL')
         db.pragma('busy_timeout = 5000')
         migrate(db)
+        refreshNewestSongs(db)
         database = db
         return db
       } catch (error) {

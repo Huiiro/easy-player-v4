@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 4
+export const DATABASE_SCHEMA_VERSION = 5
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -180,3 +180,39 @@ export const schemaV4 = `
     WHERE id = NEW.id;
   END;
 `
+
+export const schemaV5 = {
+  addSongPreference: `
+    ALTER TABLE song ADD COLUMN preference INTEGER NOT NULL DEFAULT 0
+      CHECK(preference IN (-1, 0, 1));
+  `,
+  prepare: `
+    CREATE TABLE play_history_v5 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      song_id INTEGER NOT NULL,
+      playlist_id INTEGER,
+      playlist_name TEXT,
+      started_at INTEGER NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      played_ms INTEGER NOT NULL DEFAULT 0,
+      duration_ms INTEGER,
+      end_reason TEXT,
+      start_origin TEXT NOT NULL DEFAULT 'automatic',
+      ended_at INTEGER,
+      FOREIGN KEY(song_id) REFERENCES song(id) ON DELETE CASCADE,
+      FOREIGN KEY(playlist_id) REFERENCES song_list(id) ON DELETE SET NULL
+    );
+  `,
+  complete: `
+    DROP TABLE play_history;
+    ALTER TABLE play_history_v5 RENAME TO play_history;
+    CREATE INDEX idx_play_history_song_id ON play_history(song_id);
+    CREATE INDEX idx_play_history_song_time ON play_history(song_id, started_at DESC);
+    CREATE TABLE recommendation_daily (
+      local_date TEXT PRIMARY KEY,
+      cutoff_at INTEGER NOT NULL,
+      groups_json TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+  `
+}

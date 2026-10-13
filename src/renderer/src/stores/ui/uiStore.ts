@@ -21,6 +21,19 @@ import {
 
 export type { SystemBackground } from '@/components/background/systemBackgroundRegistry'
 
+export const DEFAULT_HOME_SECTION_ORDER = [
+  'welcome',
+  'overview',
+  'playlists',
+  'recommendations',
+  'heatmap',
+  'topPlayed',
+  'topDuration',
+  'navigation',
+  'clock'
+] as const
+export const DEFAULT_HIDDEN_HOME_SECTIONS = ['navigation'] as const
+
 export const useUIStore = defineStore(
   'ui',
   () => {
@@ -61,17 +74,8 @@ export const useUIStore = defineStore(
     const closeToTray = ref(false)
     const autoStart = ref(false)
     const showWelcomeText = ref(true)
-    const homeSectionOrder = ref<string[]>([
-      'welcome',
-      'clock',
-      'navigation',
-      'playlists',
-      'overview',
-      'heatmap',
-      'topPlayed',
-      'topDuration'
-    ])
-    const hiddenHomeSections = ref<string[]>([])
+    const homeSectionOrder = ref<string[]>([...DEFAULT_HOME_SECTION_ORDER])
+    const hiddenHomeSections = ref<string[]>([...DEFAULT_HIDDEN_HOME_SECTIONS])
     const homeClockEnabled = ref(false)
     const homeLayoutOpen = ref(false)
     const sidebarExpanded = ref(true)
