@@ -4,16 +4,19 @@ import { shallowRef } from 'vue'
 import type {
   AudioChainStatus,
   ChannelMatrixConfig,
+  CrossfeedConfig,
   ChorusConfig,
   CompressorConfig,
   DelayConfig,
   DeviceInfo,
   DspNodeConfig,
   EqBand,
+  ImpulseResponseConfig,
   NoiseGateConfig,
   PhaserConfig,
   PlaybackState,
   ResamplerConfig,
+  StereoFieldConfig,
   TrackInfo,
   TransitionConfig
 } from '@/types/audio'
@@ -53,6 +56,8 @@ export const usePlayerStore = defineStore('player', () => {
     lowEnergy: 0,
     onsetStrength: 0,
     droppedFrames: 0,
+    clipGuardLimitedFrames: 0,
+    clipGuardReductionDb: 0,
     beatSequence: 0,
     bpm: 0,
     momentaryLufs: -70,
@@ -81,15 +86,25 @@ export const usePlayerStore = defineStore('player', () => {
     gaplessEnabled: true,
     crossfadeEnabled: false,
     crossfadeMs: 5000,
-    crossfadeAuto: false
+    crossfadeAuto: false,
+    pauseFadeEnabled: true,
+    pauseFadeMs: 180
   })
   const dspNodes = ref<DspNodeConfig[]>([
+    { id: 'channel_matrix', enabled: false },
+    { id: 'replay_gain', enabled: false },
+    { id: 'preamp', enabled: false },
+    { id: 'eq', enabled: false },
     { id: 'compressor', enabled: false },
     { id: 'delay', enabled: false },
     { id: 'reverb', enabled: false },
     { id: 'chorus', enabled: false },
     { id: 'noise_gate', enabled: false },
-    { id: 'phaser', enabled: false }
+    { id: 'phaser', enabled: false },
+    { id: 'stereo_field', enabled: false },
+    { id: 'crossfeed', enabled: false },
+    { id: 'impulse_response', enabled: false },
+    { id: 'limiter', enabled: false }
   ])
   const compressorConfig = ref<CompressorConfig>({
     thresholdDb: -18,
@@ -122,6 +137,25 @@ export const usePlayerStore = defineStore('player', () => {
     swapStereo: false,
     monoDownmix: false,
     outputGains: [1, 1, 1, 1, 1, 1, 1, 1]
+  })
+  const stereoFieldConfig = ref<StereoFieldConfig>({
+    enabled: false,
+    midDb: 0,
+    sideDb: 0,
+    width: 1
+  })
+  const crossfeedConfig = ref<CrossfeedConfig>({
+    enabled: false,
+    strength: 0.5,
+    cutoffHz: 700,
+    delayMs: 0.25
+  })
+  const impulseResponseConfig = ref<ImpulseResponseConfig>({
+    enabled: false,
+    path: '',
+    autoGain: true,
+    gainDb: 0,
+    autoPreampDb: 0
   })
   const queue = ref<LibrarySong[]>([])
   const queuePlaylistId = ref<number | null>(null)
@@ -875,6 +909,16 @@ export const usePlayerStore = defineStore('player', () => {
     preampEnabled.value = enabled
     await audioBridge.setPreamp(preampDb.value, preampEnabled.value)
   }
+  async function resetAudioProcessingSettings(): Promise<{ success: boolean; error?: string }> {
+    const result = await audioBridge.resetAudioProcessingSettings()
+    if (!result.success) return result
+    preampDb.value = 0
+    preampEnabled.value = false
+    await initializePersistentState()
+    await refreshAudioChain()
+    void syncNextTrack()
+    return result
+  }
   async function loadReplayGain(): Promise<void> {
     const c = await audioBridge.getReplayGain()
     if (c) replayGainConfig.value = c
@@ -948,12 +992,13 @@ export const usePlayerStore = defineStore('player', () => {
   }
   async function loadTransitionConfig(): Promise<void> {
     const config = await audioBridge.getTransitionConfig()
-    if (config) transitionConfig.value = config
+    if (config) transitionConfig.value = { ...transitionConfig.value, ...config }
   }
   async function setTransitionConfig(): Promise<boolean> {
     const next = {
       ...transitionConfig.value,
-      crossfadeMs: Math.max(0, Math.min(30000, transitionConfig.value.crossfadeMs))
+      crossfadeMs: Math.max(0, Math.min(30000, transitionConfig.value.crossfadeMs)),
+      pauseFadeMs: Math.max(0, Math.min(1000, transitionConfig.value.pauseFadeMs))
     }
     const ok = await audioBridge.setTransitionConfig(next)
     if (ok) {
@@ -985,7 +1030,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function loadDspNodes(): Promise<void> {
     const nodes = await audioBridge.getDspNodes()
-    if (nodes.length === 6) dspNodes.value = nodes
+    if (nodes.length === 14) dspNodes.value = nodes
   }
   async function loadCompressorConfig(): Promise<void> {
     const config = await audioBridge.getCompressorConfig()
@@ -1034,6 +1079,36 @@ export const usePlayerStore = defineStore('player', () => {
   async function loadChannelMatrixConfig(): Promise<void> {
     const c = await audioBridge.getChannelMatrixConfig()
     if (c) channelMatrixConfig.value = c
+  }
+  async function loadStereoFieldConfig(): Promise<void> {
+    const config = await audioBridge.getStereoFieldConfig()
+    if (config) stereoFieldConfig.value = config
+  }
+  async function setStereoFieldConfig(): Promise<boolean> {
+    const ok = await audioBridge.setStereoFieldConfig({ ...stereoFieldConfig.value })
+    if (ok) await refreshAudioChain()
+    return ok
+  }
+  async function loadCrossfeedConfig(): Promise<void> {
+    const config = await audioBridge.getCrossfeedConfig()
+    if (config) crossfeedConfig.value = config
+  }
+  async function setCrossfeedConfig(): Promise<boolean> {
+    const ok = await audioBridge.setCrossfeedConfig({ ...crossfeedConfig.value })
+    if (ok) await refreshAudioChain()
+    return ok
+  }
+  async function loadImpulseResponseConfig(): Promise<void> {
+    const config = await audioBridge.getImpulseResponseConfig()
+    if (config) impulseResponseConfig.value = config
+  }
+  async function setImpulseResponseConfig(): Promise<{ success: boolean; error?: string }> {
+    const result = await audioBridge.setImpulseResponseConfig({ ...impulseResponseConfig.value })
+    if (result.success) {
+      await loadImpulseResponseConfig()
+      await refreshAudioChain()
+    }
+    return result
   }
   async function setChannelMatrixConfig(): Promise<boolean> {
     const config = {
@@ -1167,6 +1242,8 @@ export const usePlayerStore = defineStore('player', () => {
     if (!snapshot) return
     audioAnalysis.value = {
       ...snapshot,
+      clipGuardLimitedFrames: snapshot.clipGuardLimitedFrames ?? 0,
+      clipGuardReductionDb: snapshot.clipGuardReductionDb ?? 0,
       spectrum: snapshot.spectrum ?? audioAnalysis.value.spectrum
     }
   }
@@ -1207,6 +1284,9 @@ export const usePlayerStore = defineStore('player', () => {
       loadNoiseGateConfig(),
       loadPhaserConfig(),
       loadChannelMatrixConfig(),
+      loadStereoFieldConfig(),
+      loadCrossfeedConfig(),
+      loadImpulseResponseConfig(),
       loadLimiter()
     ])
   }
@@ -1540,6 +1620,9 @@ export const usePlayerStore = defineStore('player', () => {
     noiseGateConfig,
     phaserConfig,
     channelMatrixConfig,
+    stereoFieldConfig,
+    crossfeedConfig,
+    impulseResponseConfig,
     queue,
     queuePlaylistId,
     currentQueueIndex,
@@ -1580,6 +1663,7 @@ export const usePlayerStore = defineStore('player', () => {
     seek,
     setVolume,
     setPreamp,
+    resetAudioProcessingSettings,
     loadReplayGain,
     setReplayGain,
     loadPlaybackSpeed,
@@ -1609,6 +1693,12 @@ export const usePlayerStore = defineStore('player', () => {
     setPhaserConfig,
     loadChannelMatrixConfig,
     setChannelMatrixConfig,
+    loadStereoFieldConfig,
+    setStereoFieldConfig,
+    loadCrossfeedConfig,
+    setCrossfeedConfig,
+    loadImpulseResponseConfig,
+    setImpulseResponseConfig,
     loadLimiter,
     setLimiter,
     setBackend,

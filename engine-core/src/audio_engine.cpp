@@ -4,8 +4,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <deque>
+#include <filesystem>
 #include <iomanip>
 #include <sstream>
 #include <vector>
@@ -146,6 +148,8 @@ AudioAnalysisSnapshot AudioEngine::audio_analysis_snapshot() const {
     snapshot.low_energy = analysis_low_energy_.load(std::memory_order_acquire);
     snapshot.onset_strength = analysis_onset_strength_.load(std::memory_order_acquire);
     snapshot.dropped_frames = analysis_dropped_frames_.load(std::memory_order_acquire);
+    snapshot.clip_guard_limited_frames = dsp_pipeline_.clip_guard_limited_frames();
+    snapshot.clip_guard_reduction_db = dsp_pipeline_.clip_guard_reduction_db();
     if (rate > 0) {
         snapshot.analysis_time_ms = analysis_processed_frames_.load(std::memory_order_acquire) * 1000.0 / rate;
         snapshot.analysis_latency_ms = std::max(0.0, snapshot.output_time_ms - snapshot.analysis_time_ms);
@@ -170,22 +174,97 @@ AudioChainStatus AudioEngine::audio_chain_status() const {
         }
         const auto transition = transition_config();
         if (transition.crossfade_enabled && transition.crossfade_ms > 0 && !track_info_.is_dsd) {
-            status.active_nodes.push_back("Crossfade");
+            // Crossfade mixes decoded tracks before the DSP pipeline.
+            status.active_nodes.insert(status.active_nodes.begin(), "Crossfade");
             status.bit_perfect_blockers.push_back("Crossfade mixes consecutive tracks");
             status.is_bit_perfect_eligible = false;
             status.bit_perfect_verification_state = "blocked";
             status.is_bit_perfect = false;
-        }
+        } else status.bypassed_nodes.insert(status.bypassed_nodes.begin(), "Crossfade");
+        if (transition.pause_fade_enabled && transition.pause_fade_ms > 0) {
+            status.active_nodes.emplace_back("Pause fade");
+            status.bit_perfect_blockers.push_back("Pause and resume use a PCM gain envelope");
+            status.is_bit_perfect_eligible = false;
+            status.bit_perfect_verification_state = "blocked";
+            status.is_bit_perfect = false;
+        } else status.bypassed_nodes.emplace_back("Pause fade");
         return status;
     }
     AudioChainStatus status{};
     status.source_format = {track_info_.dsd_sample_rate, 1, track_info_.channels};
     status.backend_format = backend_ ? backend_->current_format() : AudioFormat{};
     status.active_nodes = {"DoP encoded transport"};
+    status.bypassed_nodes = {"Pause fade"};
     status.bit_perfect_blockers = {"DoP is an encoded DSD transport, not PCM bit-perfect"};
     status.is_bit_perfect_eligible = false;
     status.bit_perfect_verification_state = "blocked";
     return status;
+}
+
+bool AudioEngine::set_impulse_response_config(const ImpulseResponseConfig& config) {
+    impulse_response_error_.clear();
+    const auto reject = [this](const char* reason) {
+        impulse_response_error_ = reason;
+        return false;
+    };
+    if (!std::isfinite(config.gain_db) || config.gain_db < -24.0f || config.gain_db > 12.0f) return reject("invalid_gain");
+    if (config.enabled == impulse_response_config_.enabled &&
+        config.path == impulse_response_config_.path) {
+        if (!dsp_pipeline_.set_ir_gain(config.auto_gain, config.gain_db)) return reject("invalid_gain");
+        impulse_response_config_ = config;
+        return true;
+    }
+    if (!config.enabled) {
+        dsp_pipeline_.set_impulse_response({}, 0, 0, false);
+        dsp_pipeline_.set_ir_gain(config.auto_gain, config.gain_db);
+        impulse_response_config_ = config;
+        return true;
+    }
+    std::vector<float> samples;
+    int sample_rate = 48000;
+    int channels = 1;
+    {
+        if (config.path.empty()) return reject("path_required");
+        const auto dot = config.path.find_last_of('.');
+        std::string extension = dot == std::string::npos ? "" : config.path.substr(dot);
+        std::transform(extension.begin(), extension.end(), extension.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (extension != ".wav") return reject("not_wav");
+        try {
+            std::error_code error;
+            const bool exists = std::filesystem::exists(std::filesystem::u8path(config.path), error);
+            if (error) return reject("file_unreadable");
+            if (!exists) return reject("file_not_found");
+        } catch (const std::exception&) {
+            return reject("file_unreadable");
+        }
+        Decoder decoder;
+        if (!decoder.open(config.path)) return reject("decode_open_failed");
+        const auto& info = decoder.track_info();
+        if (info.channels < 1 || info.channels > 2) return reject("unsupported_channels");
+        if (info.sample_rate <= 0 || info.sample_rate > 192000) return reject("unsupported_sample_rate");
+        constexpr size_t kMaxIrFrames = 131072;
+        if (info.duration_ms > 0 && info.duration_ms * info.sample_rate / 1000.0 > kMaxIrFrames + 1) {
+            return reject("too_many_frames");
+        }
+        sample_rate = info.sample_rate;
+        channels = info.channels;
+        std::vector<float> chunk(static_cast<size_t>(4096) * channels);
+        const size_t max_samples = kMaxIrFrames * channels;
+        while (samples.size() <= max_samples) {
+            const int decoded = decoder.decode(chunk.data(), 4096);
+            if (decoded < 0) return reject("decode_failed");
+            if (decoded == 0) break;
+            samples.insert(samples.end(), chunk.begin(), chunk.begin() + static_cast<size_t>(decoded) * channels);
+        }
+        if (samples.empty()) return reject("empty_ir");
+        if (samples.size() > max_samples) return reject("too_many_frames");
+        if (!std::all_of(samples.begin(), samples.end(), [](float sample) { return std::isfinite(sample); })) return reject("non_finite_ir");
+    }
+    if (!dsp_pipeline_.set_impulse_response(samples, sample_rate, channels, true)) return reject("output_rate_limit");
+    dsp_pipeline_.set_ir_gain(config.auto_gain, config.gain_db);
+    impulse_response_config_ = config;
+    return true;
 }
 
 bool AudioEngine::set_transition_config(const TransitionConfig& input) {
@@ -194,6 +273,8 @@ bool AudioEngine::set_transition_config(const TransitionConfig& input) {
     value.crossfade_enabled = input.crossfade_enabled;
     value.crossfade_ms = std::max(0, std::min(30000, input.crossfade_ms));
     value.crossfade_auto = input.crossfade_auto;
+    value.pause_fade_enabled = input.pause_fade_enabled;
+    value.pause_fade_ms = std::max(0, std::min(1000, input.pause_fade_ms));
     if (!value.gapless_enabled) value.crossfade_enabled = false;
     // DoP is encoded data, so mixing it would corrupt the transport.
     if (dop_transport_active_.load(std::memory_order_acquire) && value.crossfade_enabled) {
@@ -202,11 +283,15 @@ bool AudioEngine::set_transition_config(const TransitionConfig& input) {
     }
     LOG_DEBUG("Transition config: gapless=" + std::to_string(value.gapless_enabled) +
               ", crossfade=" + std::to_string(value.crossfade_enabled) + ", crossfade_ms=" +
-              std::to_string(value.crossfade_ms) + ", adaptive=" + std::to_string(value.crossfade_auto));
+              std::to_string(value.crossfade_ms) + ", adaptive=" + std::to_string(value.crossfade_auto) +
+              ", pause_fade=" + std::to_string(value.pause_fade_enabled) +
+              ", pause_fade_ms=" + std::to_string(value.pause_fade_ms));
     gapless_enabled_.store(value.gapless_enabled, std::memory_order_release);
     crossfade_enabled_.store(value.crossfade_enabled, std::memory_order_release);
     crossfade_ms_.store(value.crossfade_ms, std::memory_order_release);
     crossfade_auto_.store(value.crossfade_auto, std::memory_order_release);
+    pause_fade_enabled_.store(value.pause_fade_enabled, std::memory_order_release);
+    pause_fade_ms_.store(value.pause_fade_ms, std::memory_order_release);
     refresh_auto_fade_plan();
     return true;
 }
@@ -413,6 +498,8 @@ bool AudioEngine::open(const std::string& file_path) {
     track_start_frame_.store(0, std::memory_order_release);
     update_replay_gain_for_track();
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
+    pause_fade_live_ = 1.0f;
+    pause_fade_pending_.store(false, std::memory_order_release);
     played_frames_.store(0, std::memory_order_release);
     dop_carrier_frames_.store(0, std::memory_order_release);
     track_ended_fired_.store(false, std::memory_order_release);
@@ -493,8 +580,10 @@ bool AudioEngine::play() {
             track_info_.dsd_sample_rate > 0 && track_info_.channels >= 1 && track_info_.channels <= 8;
         if (request_dop) {
             const int carrier_rate = track_info_.dsd_sample_rate / 16;
+            const int64_t resume_carrier_frame = reopen_position_ms_ > 0
+                ? static_cast<int64_t>(reopen_position_ms_ * carrier_rate / 1000.0) : 0;
             AudioFormat dop_requested{carrier_rate, 24, track_info_.channels};
-            if (decoder_.begin_dop()) {
+            if (decoder_.begin_dop(resume_carrier_frame)) {
                 dop_ring_buffer_ = std::make_unique<ByteRingBuffer>(track_info_.channels * 3,
                     std::max(4096, static_cast<int>(carrier_rate * 0.75)));
                 dop_work_buffer_.assign(static_cast<size_t>(4096) * track_info_.channels * 3, 0);
@@ -520,6 +609,7 @@ bool AudioEngine::play() {
                         actual = {};
                     } else {
                         track_info_.dsd_transport = "dop";
+                        dop_carrier_frames_.store(resume_carrier_frame, std::memory_order_release);
                         LOG_DEBUG("DSD DoP active: " + std::to_string(track_info_.dsd_sample_rate) +
                                  "Hz -> PCM24 carrier " + std::to_string(carrier_rate) + "Hz; DSP, volume and analysis bypassed");
                     }
@@ -599,6 +689,21 @@ bool AudioEngine::play() {
         }
 
         if (!dop_transport_active_.load(std::memory_order_acquire)) {
+        if (!ring_buffer_) {
+            ring_buffer_ = std::make_unique<RingBuffer>(track_info_.channels,
+                static_cast<int>(track_info_.sample_rate * 0.75));
+        }
+        if (reopen_position_ms_ >= 0) {
+            const int64_t sample = static_cast<int64_t>(reopen_position_ms_ * track_info_.sample_rate / 1000.0);
+            if (!decoder_.seek(sample)) {
+                LOG_ERROR("Cannot restore PCM position after output reconfiguration");
+                return false;
+            }
+            ring_buffer_->reset();
+            played_frames_.store(track_start_frame_.load(std::memory_order_acquire) + sample,
+                                 std::memory_order_release);
+            track_info_.dsd_transport = track_info_.is_dsd ? "pcm_conversion" : "";
+        }
         dsp_pipeline_.configure(
             {track_info_.sample_rate, track_info_.bit_depth, track_info_.channels},
             actual,
@@ -670,6 +775,8 @@ bool AudioEngine::play() {
             backend_.reset();
             return false;
         }
+        if (!dop_transport_active_.load(std::memory_order_acquire))
+            pcm_output_sample_rate_.store(actual.sample_rate, std::memory_order_release);
     } else if (resuming && dop_transport_active_.load(std::memory_order_acquire)) {
         // DoP cannot be paused by feeding zero-valued PCM frames: that would
         // invalidate the marker sequence. pause() stops the device instead.
@@ -698,6 +805,8 @@ bool AudioEngine::play() {
         analysis_thread_ = std::make_unique<std::thread>(&AudioEngine::analysis_thread_func, this);
     }
 
+    pause_fade_pending_.store(false, std::memory_order_release);
+    reopen_position_ms_ = -1.0;
     set_state(EngineState::Playing);
     LOG_DEBUG(resuming ? "Playback resumed" : "Playback started: " + track_info_.file_path);
     return true;
@@ -705,7 +814,10 @@ bool AudioEngine::play() {
 
 bool AudioEngine::pause() {
     if (state_ != EngineState::Playing) return false;
-    if (dop_transport_active_.load(std::memory_order_acquire) && backend_) backend_->stop();
+    const bool dop = dop_transport_active_.load(std::memory_order_acquire);
+    pause_fade_pending_.store(!dop && pause_fade_enabled_.load(std::memory_order_acquire) &&
+        pause_fade_ms_.load(std::memory_order_acquire) > 0, std::memory_order_release);
+    if (dop && backend_) backend_->stop();
     set_state(EngineState::Paused);
     LOG_DEBUG("Playback paused: path=" + track_info_.file_path + ", position_ms=" + std::to_string(position_ms()));
     return true;
@@ -736,6 +848,9 @@ bool AudioEngine::stop() {
         backend_->close();
         backend_.reset();
     }
+    pause_fade_pending_.store(false, std::memory_order_release);
+    pause_fade_live_ = 1.0f;
+    pcm_output_sample_rate_.store(0, std::memory_order_release);
 
     analysis_ring_buffer_.reset();
     analysis_work_buffer_.clear();
@@ -760,6 +875,7 @@ bool AudioEngine::stop() {
     dsp_pipeline_.reset({track_info_.sample_rate, track_info_.bit_depth, track_info_.channels});
     played_frames_.store(0, std::memory_order_release);
     dop_carrier_frames_.store(0, std::memory_order_release);
+    reopen_position_ms_ = -1.0;
     track_ended_fired_.store(false, std::memory_order_release);
     decoder_failed_.store(false, std::memory_order_release);
     track_end_pending_.store(false, std::memory_order_release);
@@ -900,18 +1016,25 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
     if (force_output_rate_ == force_output_rate && target_sample_rate_ == target_sample_rate &&
         resampler_quality_ == quality) return true;
 
+    const bool reopen_output = force_output_rate_ != force_output_rate ||
+        (force_output_rate && target_sample_rate_ != target_sample_rate) ||
+        (resampler_quality_ != quality && !dop_transport_active_.load(std::memory_order_acquire));
     force_output_rate_ = force_output_rate;
     target_sample_rate_ = target_sample_rate;
     resampler_quality_ = quality;
-    dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
     LOG_DEBUG("Resampler configuration: " + std::string(force_output_rate ? "force " : "automatic ") +
              std::to_string(target_sample_rate) + "Hz, quality=" +
              (quality == 0 ? "best" : quality == 1 ? "medium" : "fast"));
+    if (!reopen_output) {
+        dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
+        return true;
+    }
 
     // An opened backend owns its output clock. Recreate it before playback
     // resumes so a target-rate change never reaches the audio callback half-applied.
     const bool resume = state_ == EngineState::Playing;
     if (backend_) {
+        reopen_position_ms_ = position_ms();
         stop_analysis_thread();
         if (resume) state_.store(EngineState::Paused, std::memory_order_release);
         backend_->stop();
@@ -927,9 +1050,14 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
             position_timer_->join();
             position_timer_.reset();
         }
+        dop_transport_active_.store(false, std::memory_order_release);
+        dop_ring_buffer_.reset();
+        dop_work_buffer_.clear();
+        if (ring_buffer_) ring_buffer_->reset();
         source_work_buffer_.clear();
         source_work_frames_ = 0;
     }
+    dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
     return !resume || play();
 }
 
@@ -1289,10 +1417,14 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
         std::atomic<int>& count;
         ~CallbackGuard() { count.fetch_sub(1, std::memory_order_release); }
     } guard{pcm_callbacks_in_flight_};
+    const EngineState playback_state = state_.load(std::memory_order_acquire);
+    const bool fading_out = playback_state == EngineState::Paused &&
+        pause_fade_pending_.load(std::memory_order_acquire) && pause_fade_live_ > 0.0f;
     if (pcm_io_resetting_.load(std::memory_order_acquire) ||
-        (state_ != EngineState::Playing && state_ != EngineState::Ready) || !ring_buffer_ ||
+        (playback_state != EngineState::Playing && playback_state != EngineState::Ready && !fading_out) || !ring_buffer_ ||
         source_work_buffer_.empty()) {
         // Paused or stopped: output silence
+        if (playback_state == EngineState::Paused && !fading_out) pause_fade_live_ = 0.0f;
         std::memset(output, 0, frames * channels * sizeof(float));
         return frames;
     }
@@ -1324,6 +1456,30 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
                              ring_buffer_->frames_available() == 0;
     const auto result = dsp_pipeline_.process(source_work_buffer_.data(), source_work_frames_,
                                               source_channels, input_ended, output, frames, channels);
+    // This final PCM envelope never changes the user's volume setting. Continue
+    // consuming source frames until the pause fade reaches silence, then leave
+    // the remaining queued audio untouched for resume.
+    const bool fade_enabled = pause_fade_enabled_.load(std::memory_order_acquire) &&
+        pause_fade_ms_.load(std::memory_order_acquire) > 0;
+    if (fade_enabled && playback_state != EngineState::Ready) {
+        const float target = playback_state == EngineState::Paused ? 0.0f : 1.0f;
+        const int rate = std::max(1, pcm_output_sample_rate_.load(std::memory_order_acquire));
+        const int fade_frames = std::max(1, rate * pause_fade_ms_.load(std::memory_order_acquire) / 1000);
+        const float step = 1.0f / static_cast<float>(fade_frames);
+        for (int frame = 0; frame < frames; ++frame) {
+            pause_fade_live_ = target < pause_fade_live_
+                ? std::max(target, pause_fade_live_ - step)
+                : std::min(target, pause_fade_live_ + step);
+            for (int channel = 0; channel < channels; ++channel)
+                output[static_cast<size_t>(frame) * channels + channel] *= pause_fade_live_;
+        }
+        if (target == 0.0f && pause_fade_live_ == 0.0f)
+            pause_fade_pending_.store(false, std::memory_order_release);
+    } else {
+        pause_fade_live_ = 1.0f;
+        if (playback_state == EngineState::Paused)
+            pause_fade_pending_.store(false, std::memory_order_release);
+    }
     played_frames_.fetch_add(result.input_frames_used, std::memory_order_relaxed);
     const int consumed = std::min(result.input_frames_used, source_work_frames_);
     const int remaining = source_work_frames_ - consumed;
@@ -1336,7 +1492,7 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
 
     // Wait until the SRC FIFO has been consumed as well; otherwise the last
     // resampler tail would be cut off when the decoder reaches EOF.
-    if (input_ended && source_work_frames_ == 0 && result.stream_drained &&
+    if (playback_state != EngineState::Paused && input_ended && source_work_frames_ == 0 && result.stream_drained &&
         !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
         mark_track_ended_pending();
     }

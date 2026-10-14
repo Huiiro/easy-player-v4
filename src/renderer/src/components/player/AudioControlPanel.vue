@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { usePlayerStore } from '@/stores/player/playerStore'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
@@ -13,14 +13,160 @@ import type { EqBand } from '@/types/audio'
 
 const player = usePlayerStore()
 const eqPresets = useEqPresetStore()
-const { t } = useI18n()
+const { t, te } = useI18n()
 const { success, warning } = useMessage()
 let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
 let draggingNodeIndex: number | null = null
 const savePresetDialogOpen = ref(false)
+const resetSettingsDialogOpen = ref(false)
+const resettingSettings = ref(false)
 const presetName = ref('')
 const editingPresetId = ref<string | undefined>()
 const lastSelectedEqPresetId = ref<string>()
+const irFileInput = ref<HTMLInputElement | null>(null)
+const irError = ref('')
+const clipGuardRecentlyActive = ref(false)
+let clipGuardActivityTimer: ReturnType<typeof setTimeout> | undefined
+watch(
+  () => player.audioAnalysis.clipGuardLimitedFrames,
+  (count, previous) => {
+    if (count <= previous) {
+      if (count < previous) clipGuardRecentlyActive.value = false
+      return
+    }
+    clipGuardRecentlyActive.value = true
+    if (clipGuardActivityTimer) clearTimeout(clipGuardActivityTimer)
+    clipGuardActivityTimer = setTimeout(() => {
+      clipGuardRecentlyActive.value = false
+      clipGuardActivityTimer = undefined
+    }, 1500)
+  }
+)
+const clipGuardStatus = computed(() => {
+  if (!player.audioChain) return t('ap.clipGuardStandingBy')
+  if (!player.audioChain.activeNodes.includes('Output clip guard')) return t('ap.clipGuardBypassed')
+  if (player.state !== 'playing') return t('ap.clipGuardStandingBy')
+  return clipGuardRecentlyActive.value ? t('ap.clipGuardWorking') : t('ap.clipGuardStandingBy')
+})
+const irAppliedGainDb = computed(
+  () =>
+    player.impulseResponseConfig.gainDb +
+    (player.impulseResponseConfig.autoGain ? (player.impulseResponseConfig.autoPreampDb ?? 0) : 0)
+)
+function showIrError(code?: string): void {
+  const key = `ap.irErrors.${code || 'unknown'}`
+  irError.value = te(key) ? t(key) : t('ap.irLoadFailed')
+  warning(irError.value)
+}
+const stereoPresetOptions = computed(() => [
+  { value: 'neutral', label: t('ap.stereoNeutral') },
+  { value: 'wide', label: t('ap.stereoWide') },
+  { value: 'focused', label: t('ap.stereoFocused') },
+  { value: 'custom', label: t('ap.stereoCustom') }
+])
+const stereoPreset = computed(() => {
+  const { enabled, midDb, sideDb, width } = player.stereoFieldConfig
+  if (!enabled || (midDb === 0 && sideDb === 0 && width === 1)) return 'neutral'
+  if (midDb === 0 && sideDb === 0 && width === 1.5) return 'wide'
+  if (midDb === 2 && sideDb === 0 && width === 0.75) return 'focused'
+  return 'custom'
+})
+
+function setStereoPreset(value: string | number | (string | number)[]): void {
+  if (typeof value !== 'string' || value === 'custom') return
+  player.stereoFieldConfig.enabled = value !== 'neutral'
+  player.stereoFieldConfig.midDb = value === 'focused' ? 2 : 0
+  player.stereoFieldConfig.sideDb = 0
+  player.stereoFieldConfig.width = value === 'wide' ? 1.5 : value === 'focused' ? 0.75 : 1
+  void player.setStereoFieldConfig()
+}
+function updateStereoField(): void {
+  player.stereoFieldConfig.midDb = clamp(player.stereoFieldConfig.midDb, -12, 6, 0)
+  player.stereoFieldConfig.sideDb = clamp(player.stereoFieldConfig.sideDb, -12, 6, 0)
+  player.stereoFieldConfig.width = clamp(player.stereoFieldConfig.width, 0, 2, 1)
+  player.stereoFieldConfig.enabled = true
+  void player.setStereoFieldConfig()
+}
+const crossfeedPresetOptions = computed(() => [
+  { value: 'off', label: t('ap.crossfeedOff') },
+  { value: 'light', label: t('ap.crossfeedLight') },
+  { value: 'standard', label: t('ap.crossfeedStandard') },
+  { value: 'custom', label: t('ap.stereoCustom') }
+])
+const crossfeedPreset = computed(() => {
+  const { enabled, strength, cutoffHz, delayMs } = player.crossfeedConfig
+  if (!enabled) return 'off'
+  if (strength === 0.25 && cutoffHz === 700 && delayMs === 0.2) return 'light'
+  if (strength === 0.5 && cutoffHz === 700 && delayMs === 0.25) return 'standard'
+  return 'custom'
+})
+function setCrossfeedPreset(value: string | number | (string | number)[]): void {
+  if (typeof value !== 'string' || value === 'custom') return
+  player.crossfeedConfig.enabled = value !== 'off'
+  if (value === 'light' || value === 'standard') {
+    player.crossfeedConfig.strength = value === 'light' ? 0.25 : 0.5
+    player.crossfeedConfig.cutoffHz = 700
+    player.crossfeedConfig.delayMs = value === 'light' ? 0.2 : 0.25
+  }
+  void player.setCrossfeedConfig()
+}
+function setCrossfeedEnabled(value: boolean | string | number): void {
+  player.crossfeedConfig.enabled = value === true
+  void player.setCrossfeedConfig()
+}
+function updateCrossfeed(): void {
+  player.crossfeedConfig.strength = clamp(player.crossfeedConfig.strength, 0, 1, 0.5)
+  player.crossfeedConfig.cutoffHz = clamp(player.crossfeedConfig.cutoffHz, 300, 1500, 700)
+  player.crossfeedConfig.delayMs = clamp(player.crossfeedConfig.delayMs, 0, 0.6, 0.25)
+  player.crossfeedConfig.enabled = true
+  void player.setCrossfeedConfig()
+}
+async function setIrEnabled(value: boolean | string | number): Promise<void> {
+  if (value === true && !player.impulseResponseConfig.path) {
+    irFileInput.value?.click()
+    return
+  }
+  const previous = { ...player.impulseResponseConfig }
+  player.impulseResponseConfig = {
+    ...previous,
+    enabled: value === true
+  }
+  const result = await player.setImpulseResponseConfig()
+  if (!result.success) {
+    player.impulseResponseConfig = previous
+    showIrError(result.error)
+  } else irError.value = ''
+}
+async function importIr(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  const path = window.api.audio.getFilePath(file)
+  if (!path) {
+    showIrError('path_unavailable')
+    return
+  }
+  const previous = { ...player.impulseResponseConfig }
+  player.impulseResponseConfig = { ...previous, enabled: true, path }
+  const result = await player.setImpulseResponseConfig()
+  if (!result.success) {
+    player.impulseResponseConfig = previous
+    showIrError(result.error)
+  } else irError.value = ''
+}
+async function updateIrGain(): Promise<void> {
+  player.impulseResponseConfig.gainDb = clamp(player.impulseResponseConfig.gainDb, -24, 12, 0)
+  const result = await player.setImpulseResponseConfig()
+  if (!result.success) {
+    await player.loadImpulseResponseConfig()
+    showIrError(result.error)
+  } else irError.value = ''
+}
+function setIrAutoGain(enabled: boolean | string | number): void {
+  player.impulseResponseConfig.autoGain = enabled === true
+  void updateIrGain()
+}
 
 const eqPresetOptions = computed(() => [
   ...BUILT_IN_EQ_PRESETS.map((preset) => ({
@@ -124,6 +270,9 @@ async function initializeAudioControls(): Promise<void> {
     player.loadNoiseGateConfig(),
     player.loadPhaserConfig(),
     player.loadChannelMatrixConfig(),
+    player.loadStereoFieldConfig(),
+    player.loadCrossfeedConfig(),
+    player.loadImpulseResponseConfig(),
     player.loadLimiter()
   ])
 
@@ -139,6 +288,7 @@ onMounted(() => {
   void initializeAudioControls()
 })
 onBeforeUnmount(() => {
+  if (clipGuardActivityTimer) clearTimeout(clipGuardActivityTimer)
   player.setAudioControlAnalysisActive(false)
   player.setLoudnessAnalysisEnabled(false)
 })
@@ -151,6 +301,27 @@ function resetEqBands(): void {
   }
   lastSelectedEqPresetId.value = 'flat'
   commitEqBands()
+}
+async function resetAudioProcessingSettings(): Promise<void> {
+  if (resettingSettings.value) return
+  resettingSettings.value = true
+  if (eqCommitTimer) clearTimeout(eqCommitTimer)
+  eqCommitTimer = undefined
+  try {
+    const result = await player.resetAudioProcessingSettings()
+    if (!result.success) {
+      warning(t('ap.resetAudioSettingsFailed', { reason: result.error ?? 'unknown' }))
+      return
+    }
+    lastSelectedEqPresetId.value = 'flat'
+    irError.value = ''
+    resetSettingsDialogOpen.value = false
+    success(t('ap.resetAudioSettingsDone'))
+  } catch (error) {
+    warning(t('ap.resetAudioSettingsFailed', { reason: String(error) }))
+  } finally {
+    resettingSettings.value = false
+  }
 }
 function commitEqBands(): void {
   if (eqCommitTimer) clearTimeout(eqCommitTimer)
@@ -181,12 +352,47 @@ function formatFrequency(hz: number): string {
 function updateDspNodes(): void {
   void player.commitDspNodes()
 }
+function isLegacyDspNode(id: string): boolean {
+  return ['compressor', 'delay', 'reverb', 'chorus', 'noise_gate', 'phaser'].includes(id)
+}
+function isNodeActive(id: string): boolean {
+  switch (id) {
+    case 'channel_matrix':
+      return player.channelMatrixConfig.enabled
+    case 'replay_gain':
+      return (
+        player.replayGainConfig.active && Math.abs(player.replayGainConfig.appliedGainDb) > 0.0001
+      )
+    case 'preamp':
+      return player.preampEnabled
+    case 'eq':
+      return player.eqBands.some((band) => band.enabled && Math.abs(band.gainDb) > 0.0001)
+    case 'stereo_field':
+      return player.stereoFieldConfig.enabled
+    case 'crossfeed':
+      return player.crossfeedConfig.enabled && player.crossfeedConfig.strength > 0
+    case 'impulse_response':
+      return player.impulseResponseConfig.enabled
+    case 'limiter':
+      return player.limiterConfig.enabled
+    default:
+      return player.dspNodes.find((node) => node.id === id)?.enabled ?? false
+  }
+}
 function setDspNodeEnabled(index: number, enabled: boolean | string | number): void {
   player.dspNodes[index].enabled = enabled === true
   updateDspNodes()
 }
 function nodeLabel(id: string): string {
   switch (id) {
+    case 'channel_matrix':
+      return t('ap.channelMatrix')
+    case 'replay_gain':
+      return t('ap.replayGain')
+    case 'preamp':
+      return t('ap.preamp')
+    case 'eq':
+      return t('ap.eq')
     case 'compressor':
       return t('ap.compressor')
     case 'delay':
@@ -197,8 +403,18 @@ function nodeLabel(id: string): string {
       return t('ap.chorus')
     case 'noise_gate':
       return t('ap.noiseGate')
-    default:
+    case 'phaser':
       return t('ap.phaser')
+    case 'stereo_field':
+      return t('ap.stereoField')
+    case 'crossfeed':
+      return t('ap.crossfeed')
+    case 'impulse_response':
+      return t('ap.irCorrection')
+    case 'limiter':
+      return t('ap.limiter')
+    default:
+      return id
   }
 }
 function updateCompressor(): void {
@@ -430,6 +646,17 @@ function bitPerfectLabel(): string {
     return t('ap.bitPerfectCandidate')
   return t('ap.bitPerfectUnavailable')
 }
+function pipelineNodeLabel(node: string): string {
+  if (node === 'Channel matrix') return t('ap.channelMatrix')
+  if (node === 'Parametric EQ' || node === 'EQ') return t('ap.eq')
+  if (node === 'Preamp') return t('ap.preamp')
+  if (node === 'Limiter') return t('ap.limiter')
+  if (node === 'Stereo field') return t('ap.stereoField')
+  if (node === 'Crossfeed') return t('ap.crossfeed')
+  if (node === 'Impulse response') return t('ap.irCorrection')
+  if (node === 'Output clip guard') return t('ap.outputClipGuard')
+  return node
+}
 const backendLabel: Record<string, string> = {
   asio: 'ASIO',
   wasapi_shared: 'WASAPI Shared',
@@ -461,6 +688,14 @@ function refreshOutputDevices(): void {
 
 <template>
   <div class="text-text select-none overflow-y-scroll no-scrollbar">
+    <div class="mb-3 flex justify-end">
+      <button
+        class="rounded-lg border border-border px-3 py-1.5 text-xs text-text hover:border-primary hover:text-primary"
+        @click="resetSettingsDialogOpen = true"
+      >
+        {{ t('ap.resetAudioSettings') }}
+      </button>
+    </div>
     <!-- audio pipeline -->
     <section v-if="player.audioChain" class="rounded-xl border border-border p-3">
       <div class="mb-4 flex items-center justify-between text-xs font-medium text-text">
@@ -516,20 +751,38 @@ function refreshOutputDevices(): void {
             {{ t('ap.channels') }}
           </span>
         </div>
-        <!-- node -->
-        <div class="mt-2 flex flex-wrap gap-1.5 rounded-lg border border-border-l p-2">
-          <span
-            v-for="node in player.audioChain.activeNodes"
-            :key="`active-${node}`"
-            class="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary"
-            >{{ node }}</span
-          >
-          <span
-            v-for="node in player.audioChain.bypassedNodes"
-            :key="`bypassed-${node}`"
-            class="rounded bg-bg-l px-1.5 py-0.5 text-[11px] text-text-l"
-            >{{ node }} · {{ t('ap.bypass') }}</span
-          >
+        <!-- active nodes follow the native PCM processing order -->
+        <div class="mt-2 rounded-lg border border-border-l p-2">
+          <div class="mb-1 text-[11px] text-text-l">{{ t('ap.signalPath') }}</div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <template
+              v-for="(node, index) in player.audioChain.activeNodes"
+              :key="`active-${node}`"
+            >
+              <span v-if="index > 0" class="text-[11px] text-text-l">→</span>
+              <span class="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
+                {{ pipelineNodeLabel(node) }}
+              </span>
+            </template>
+            <span v-if="!player.audioChain.activeNodes.length" class="text-[11px] text-text-l">
+              {{ t('ap.noActiveNodes') }}
+            </span>
+          </div>
+        </div>
+        <div
+          v-if="player.audioChain.bypassedNodes.length"
+          class="mt-2 rounded-lg border border-border-l p-2"
+        >
+          <div class="mb-1 text-[11px] text-text-l">{{ t('ap.bypass') }}</div>
+          <div class="flex flex-wrap gap-1.5">
+            <span
+              v-for="node in player.audioChain.bypassedNodes"
+              :key="`bypassed-${node}`"
+              class="rounded bg-bg-l px-1.5 py-0.5 text-[11px] text-text-l"
+            >
+              {{ pipelineNodeLabel(node) }}
+            </span>
+          </div>
         </div>
         <p
           v-if="player.audioChain.bitPerfectBlockers.length"
@@ -854,6 +1107,180 @@ function refreshOutputDevices(): void {
             </label>
           </div>
         </div>
+        <div class="mt-4 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-sm w-36">{{ t('ap.stereoField') }}</span>
+            <BaseSelect
+              :model-value="stereoPreset"
+              :options="stereoPresetOptions"
+              size="xs"
+              class="w-48"
+              @change="setStereoPreset"
+            />
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-3">
+            <label class="text-xs w-36">
+              {{ t('ap.stereoWidth') }} {{ Math.round(player.stereoFieldConfig.width * 100) }}%
+            </label>
+            <BaseSlider
+              v-model="player.stereoFieldConfig.width"
+              :min="0"
+              :max="2"
+              :step="0.05"
+              class="w-48"
+              @change="updateStereoField"
+            />
+          </div>
+          <div class="mt-2 flex flex-wrap items-center gap-3">
+            <label class="text-xs w-36"
+              >{{ t('ap.midGain') }} {{ player.stereoFieldConfig.midDb.toFixed(1) }} dB</label
+            >
+            <BaseSlider
+              v-model="player.stereoFieldConfig.midDb"
+              :min="-12"
+              :max="6"
+              :step="0.5"
+              class="w-48"
+              @change="updateStereoField"
+            />
+            <label class="text-xs w-36"
+              >{{ t('ap.sideGain') }} {{ player.stereoFieldConfig.sideDb.toFixed(1) }} dB</label
+            >
+            <BaseSlider
+              v-model="player.stereoFieldConfig.sideDb"
+              :min="-12"
+              :max="6"
+              :step="0.5"
+              class="w-48"
+              @change="updateStereoField"
+            />
+          </div>
+          <p class="mt-1 text-xs text-text-l">{{ t('ap.stereoFieldDesc') }}</p>
+        </div>
+        <div class="mt-4 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-sm w-36">{{ t('ap.crossfeed') }}</span>
+            <BaseSwitch
+              :model-value="player.crossfeedConfig.enabled"
+              size="sm"
+              @change="setCrossfeedEnabled"
+            />
+            <BaseSelect
+              :model-value="crossfeedPreset"
+              :options="crossfeedPresetOptions"
+              size="xs"
+              class="w-48"
+              @change="setCrossfeedPreset"
+            />
+          </div>
+          <div v-if="player.crossfeedConfig.enabled" class="mt-2 flex flex-wrap items-center gap-3">
+            <label class="text-xs w-36">
+              {{ t('ap.crossfeedStrength') }}
+              {{ Math.round(player.crossfeedConfig.strength * 100) }}%
+            </label>
+            <BaseSlider
+              v-model="player.crossfeedConfig.strength"
+              :min="0"
+              :max="1"
+              :step="0.05"
+              class="w-48"
+              @change="updateCrossfeed"
+            />
+          </div>
+          <div v-if="player.crossfeedConfig.enabled" class="mt-2 flex flex-wrap items-center gap-3">
+            <label class="text-xs w-36">
+              {{ t('ap.crossfeedCutoff') }} {{ player.crossfeedConfig.cutoffHz.toFixed(0) }} Hz
+            </label>
+            <BaseSlider
+              v-model="player.crossfeedConfig.cutoffHz"
+              :min="300"
+              :max="1500"
+              :step="50"
+              class="w-48"
+              @change="updateCrossfeed"
+            />
+            <label class="text-xs w-36">
+              {{ t('ap.crossfeedDelay') }} {{ player.crossfeedConfig.delayMs.toFixed(2) }} ms
+            </label>
+            <BaseSlider
+              v-model="player.crossfeedConfig.delayMs"
+              :min="0"
+              :max="0.6"
+              :step="0.05"
+              class="w-48"
+              @change="updateCrossfeed"
+            />
+          </div>
+          <p class="mt-1 text-xs text-text-l">{{ t('ap.crossfeedDesc') }}</p>
+        </div>
+        <div class="mt-4 border-t border-border pt-3">
+          <div class="flex flex-wrap items-center gap-3">
+            <span class="text-sm w-36">{{ t('ap.irCorrection') }}</span>
+            <BaseSwitch
+              :model-value="player.impulseResponseConfig.enabled"
+              size="sm"
+              @change="setIrEnabled"
+            />
+            <button class="btn-hover px-2 py-1 text-xs" @click="irFileInput?.click()">
+              {{ t('ap.irImport') }}
+            </button>
+            <input
+              ref="irFileInput"
+              class="hidden"
+              type="file"
+              accept=".wav,audio/wav"
+              @change="importIr"
+            />
+          </div>
+          <p
+            v-if="player.impulseResponseConfig.path"
+            class="mt-1 truncate text-xs text-text-l"
+            :title="player.impulseResponseConfig.path"
+          >
+            {{ player.impulseResponseConfig.path }}
+          </p>
+          <p class="mt-1 text-xs text-text-l">{{ t('ap.irDesc') }}</p>
+          <div
+            v-if="player.impulseResponseConfig.enabled"
+            class="mt-2 flex flex-wrap items-center gap-3"
+          >
+            <span class="text-xs w-36">{{ t('ap.irAutoGain') }}</span>
+            <BaseSwitch
+              :model-value="player.impulseResponseConfig.autoGain"
+              size="sm"
+              @change="setIrAutoGain"
+            />
+            <span class="text-xs text-text-l">
+              {{
+                player.impulseResponseConfig.autoGain
+                  ? (player.impulseResponseConfig.autoPreampDb ?? 0).toFixed(1)
+                  : '0.0'
+              }}
+              dB
+            </span>
+          </div>
+          <div
+            v-if="player.impulseResponseConfig.enabled"
+            class="mt-2 flex flex-wrap items-center gap-3"
+          >
+            <label class="text-xs w-36"
+              >{{ t('ap.irManualGain') }}
+              {{ player.impulseResponseConfig.gainDb.toFixed(1) }} dB</label
+            >
+            <BaseSlider
+              v-model="player.impulseResponseConfig.gainDb"
+              :min="-24"
+              :max="12"
+              :step="0.5"
+              class="w-48"
+              @change="updateIrGain"
+            />
+            <span class="text-xs text-text-l"
+              >{{ t('ap.irTotalGain') }} {{ irAppliedGainDb.toFixed(1) }} dB</span
+            >
+          </div>
+          <p v-if="irError" class="mt-1 text-xs text-red-500">{{ irError }}</p>
+        </div>
         <!-- Gapless -->
         <div class="flex items-center gap-3 mt-3">
           <span class="text-sm whitespace-nowrap w-36">{{ t('ap.gapless') }}</span>
@@ -884,16 +1311,21 @@ function refreshOutputDevices(): void {
               @change="updateTransitionConfig"
             />
           </div>
-          <span v-if="player.transitionConfig.crossfadeEnabled" class="text-xs text-text-l"
-            >{{ player.transitionConfig.crossfadeAuto ? t('ap.crossfadeMax') : 'ms' }}</span
-          >
+          <span v-if="player.transitionConfig.crossfadeEnabled" class="text-xs text-text-l">{{
+            player.transitionConfig.crossfadeAuto ? t('ap.crossfadeMax') : 'ms'
+          }}</span>
         </div>
         <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3 mt-2">
           <span class="text-sm whitespace-nowrap w-36">{{ t('ap.crossfadeAuto') }}</span>
           <BaseSwitch
             :model-value="player.transitionConfig.crossfadeAuto"
             size="sm"
-            @change="(enabled) => { player.transitionConfig.crossfadeAuto = enabled === true; updateTransitionConfig() }"
+            @change="
+              (enabled) => {
+                player.transitionConfig.crossfadeAuto = enabled === true
+                updateTransitionConfig()
+              }
+            "
           />
           <span class="text-xs text-text-l">{{ t('ap.crossfadeAutoDesc') }}</span>
         </div>
@@ -907,7 +1339,7 @@ function refreshOutputDevices(): void {
         <div class="flex items-center gap-2 text-sm text-text-l">
           <small>
             {{ player.eqBands.filter((b) => b.enabled && Math.abs(b.gainDb) >= 0.0001).length }}
-            {{ t('ap.eqActive') }} · ±12 dB · Q 1.0
+            {{ t('ap.eqActive') }} · ±12 dB · Q 1.0 · {{ t('ap.eqAutoPreamp') }}
           </small>
           <button
             class="px-2 py-0.5 rounded text-[11px] bg-bg border border-primary cursor-pointer hover:opacity-90 transition-opacity"
@@ -922,6 +1354,14 @@ function refreshOutputDevices(): void {
             {{ t('ap.resetEq') }}
           </button>
         </div>
+      </div>
+
+      <div class="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-text-l tabular-nums">
+        <span>{{ t('ap.eqPeak') }}: {{ player.audioChain?.eqPeakDb?.toFixed(1) ?? '—' }} dB</span>
+        <span
+          >{{ t('ap.eqAutoPreamp') }}:
+          {{ player.audioChain?.eqAutoPreampDb?.toFixed(1) ?? '—' }} dB</span
+        >
       </div>
 
       <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -1016,14 +1456,21 @@ function refreshOutputDevices(): void {
             >
             <div class="min-w-0 flex-1">
               <p class="text-sm font-medium text-text">{{ nodeLabel(node.id) }}</p>
-              <p class="truncate text-[11px] text-text-l">{{ node.id }}</p>
+              <p class="truncate text-[11px] text-text-l">
+                {{ isLegacyDspNode(node.id) ? node.id : t('ap.nodeSettingsElsewhere') }}
+              </p>
             </div>
             <BaseSwitch
+              v-if="isLegacyDspNode(node.id)"
               :model-value="node.enabled"
               size="sm"
               @change="(enabled) => setDspNodeEnabled(index, enabled)"
             />
+            <span v-else class="text-[11px] text-text-l">
+              {{ isNodeActive(node.id) ? t('ap.nodeActive') : t('ap.nodeBypassed') }}
+            </span>
             <button
+              v-if="isLegacyDspNode(node.id)"
               class="rounded border border-border px-1.5 py-0.5 text-[10px] text-text-l transition-colors hover:border-primary hover:text-primary"
               type="button"
               :title="t('ap.resetDspNode')"
@@ -1032,7 +1479,10 @@ function refreshOutputDevices(): void {
               {{ t('ap.reset') }}
             </button>
           </div>
-          <div v-if="node.enabled" class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+          <div
+            v-if="isLegacyDspNode(node.id) && node.enabled"
+            class="my-2 grid grid-cols-1 gap-2 text-xs sm:grid-cols-2"
+          >
             <template v-if="node.id === 'compressor'">
               <DspParameterField
                 v-model="player.compressorConfig.thresholdDb"
@@ -1238,7 +1688,7 @@ function refreshOutputDevices(): void {
                 @change="updateNoiseGate"
               />
             </template>
-            <template v-else>
+            <template v-else-if="node.id === 'phaser'">
               <DspParameterField
                 v-model="player.phaserConfig.rateHz"
                 :label="t('ap.rate')"
@@ -1337,10 +1787,56 @@ function refreshOutputDevices(): void {
               @change="updateLimiter"
             />
           </div>
+          <p class="mt-2 text-[11px] text-text-l">{{ t('ap.outputClipGuardDesc') }}</p>
+          <div class="mt-2 rounded border border-border px-2 py-1.5 text-[11px]">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-medium text-text">{{ t('ap.outputClipGuard') }}</span>
+              <span
+                :class="
+                  clipGuardRecentlyActive &&
+                  player.state === 'playing' &&
+                  player.audioChain?.activeNodes.includes('Output clip guard')
+                    ? 'text-amber-500'
+                    : 'text-text-l'
+                "
+                >{{ clipGuardStatus }}</span
+              >
+            </div>
+            <p class="mt-1 text-text-l">
+              {{ t('ap.clipGuardRecentReduction') }}:
+              {{
+                player.audioAnalysis.clipGuardLimitedFrames > 0
+                  ? `-${player.audioAnalysis.clipGuardReductionDb.toFixed(1)} dB`
+                  : '—'
+              }}
+              <span class="mx-1 text-border">·</span>
+              {{ t('ap.clipGuardLimitedFrames') }}:
+              {{ player.audioAnalysis.clipGuardLimitedFrames.toLocaleString() }}
+            </p>
+          </div>
         </div>
       </div>
     </section>
 
+    <BaseDialog
+      v-model="resetSettingsDialogOpen"
+      :title="t('ap.resetAudioSettings')"
+      width="max-w-sm"
+    >
+      <p class="text-sm text-text">{{ t('ap.resetAudioSettingsConfirm') }}</p>
+      <template #footer>
+        <button class="btn-hover px-3 py-1.5 text-sm" @click="resetSettingsDialogOpen = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          :disabled="resettingSettings"
+          @click="resetAudioProcessingSettings"
+        >
+          {{ t('ap.resetAudioSettings') }}
+        </button>
+      </template>
+    </BaseDialog>
     <BaseDialog
       v-model="savePresetDialogOpen"
       :title="editingPresetId ? t('ap.updateEqPreset') : t('ap.saveEqPreset')"

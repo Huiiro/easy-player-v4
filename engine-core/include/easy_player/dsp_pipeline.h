@@ -1,6 +1,9 @@
 #pragma once
 
 #include "audio_backend.h"
+#include "crossfeed_processor.h"
+#include "output_clip_guard.h"
+#include "partitioned_convolver.h"
 #include <samplerate.h>
 #include <soundtouch/SoundTouch.h>
 
@@ -8,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <memory>
@@ -22,6 +26,8 @@ struct AudioChainStatus {
     std::vector<std::string> active_nodes;
     std::vector<std::string> bypassed_nodes;
     std::vector<std::string> bit_perfect_blockers;
+    float eq_peak_db = 0.0f;
+    float eq_auto_preamp_db = 0.0f;
     // Eligible means software routing and negotiated format meet the strict
     // prerequisites. It is deliberately not a hardware-verification claim.
     bool is_bit_perfect_eligible = false;
@@ -31,6 +37,7 @@ struct AudioChainStatus {
 
 constexpr int kEqBandCount = 20;
 constexpr int kMaxAudioChannels = 8;
+constexpr size_t kOrderedDspNodeCount = 14;
 
 struct EqBand {
     bool enabled = false;
@@ -58,6 +65,7 @@ struct ChorusConfig { float rate_hz = 0.8f; float depth_ms = 8.0f; float mix = 0
 struct NoiseGateConfig { float threshold_db = -50.0f; float attack_ms = 5.0f; float hold_ms = 50.0f; float release_ms = 150.0f; float range_db = -80.0f; };
 struct PhaserConfig { float rate_hz = 0.4f; float depth = 0.6f; float center_hz = 800.0f; float feedback = 0.2f; float mix = 0.5f; };
 struct ChannelMatrixConfig { bool enabled = false; float balance = 0.0f; bool swap_stereo = false; bool mono_downmix = false; std::array<float, kMaxAudioChannels> output_gains{{1,1,1,1,1,1,1,1}}; };
+struct StereoFieldConfig { bool enabled = false; float mid_db = 0.0f; float side_db = 0.0f; float width = 1.0f; };
 struct ReplayGainConfig { bool enabled = false; float gain_db = 0.0f; float peak = 0.0f; bool prevent_clipping = true; };
 struct PlaybackSpeedConfig { bool enabled = false; float speed = 1.0f; };
 
@@ -73,6 +81,7 @@ public:
         bool stream_drained = false;
     };
     DspPipeline() {
+        ordered_nodes_.store(&default_order_, std::memory_order_relaxed);
         eq_bands_ = default_eq_bands();
         eq_config_.store(&eq_default_config_, std::memory_order_relaxed);
         compressor_config_.store(&compressor_default_config_, std::memory_order_relaxed);
@@ -83,6 +92,8 @@ public:
         noise_gate_config_.store(&noise_gate_default_config_, std::memory_order_relaxed);
         phaser_config_.store(&phaser_default_config_, std::memory_order_relaxed);
         channel_matrix_config_.store(&channel_matrix_default_config_, std::memory_order_relaxed);
+        stereo_field_config_.store(&stereo_field_default_config_, std::memory_order_relaxed);
+        crossfeed_config_.store(&crossfeed_default_config_, std::memory_order_relaxed);
         replay_gain_config_.store(&replay_gain_default_config_, std::memory_order_relaxed);
         playback_speed_config_.store(&playback_speed_default_config_, std::memory_order_relaxed);
     }
@@ -128,6 +139,7 @@ public:
         configured_ = backend_format.sample_rate > 0;
         configure_resampler(max_output_frames);
         publish_eq_config();
+        publish_ir_runtime();
         publish_compressor_config(compressor_config_.load(std::memory_order_acquire)->values);
         publish_noise_gate_config(noise_gate_config_.load(std::memory_order_acquire)->values);
         configure_delay(max_output_frames);
@@ -142,11 +154,13 @@ public:
         resampler_.reset();
         resample_buffer_.clear();
         delay_buffer_.clear(); delay_write_frame_ = 0;
+        reverb_buffer_.clear(); reverb_write_frame_ = 0;
         chorus_buffer_.clear(); chorus_write_frame_ = 0; chorus_phase_ = 0.0f;
         noise_gate_gain_ = 1.0f; noise_gate_hold_frames_ = 0;
         phaser_phase_ = 0.0f; phaser_feedback_.fill(0.0f);
         for (auto& stage : phaser_states_) stage.fill(0.0f);
         time_stretch_.clear();
+        crossfeed_processor_.reset();
         // Settings are restored before the first track is opened. Keep the
         // audio-thread gain state in sync here so the first callback does not
         // ramp from the default 100% level down to the persisted volume.
@@ -161,7 +175,14 @@ public:
             : 1.0f;
         master_volume_live_ = master_volume_target_.load(std::memory_order_acquire);
         limiter_gain_ = 1.0f;
+        clip_guard_limited_frames_.store(0, std::memory_order_release);
+        clip_guard_reduction_db_.store(0.0f, std::memory_order_release);
         publish_eq_config();
+        eq_headroom_live_ = eq_config_.load(std::memory_order_acquire)->headroom_gain;
+        ir_runtime_.store(nullptr);
+        ir_auto_preamp_db_.store(0.0f, std::memory_order_release);
+        reclaim_ir_runtimes();
+        ir_gain_live_ = 1.0f;
     }
 
     bool set_eq_bands(const std::array<EqBand, kEqBandCount>& bands) {
@@ -177,21 +198,20 @@ public:
 
     std::array<EqBand, kEqBandCount> eq_bands() const { return eq_bands_; }
     bool set_dsp_nodes(const std::vector<DspNodeConfig>& nodes) {
-        if (nodes.size() != 6) return false;
-        static const std::array<std::string, 6> allowed = {"compressor", "delay", "reverb", "chorus", "noise_gate", "phaser"};
-        std::array<bool, 6> seen{};
-        for (const auto& node : nodes) {
+        if (nodes.size() != kOrderedDspNodeCount) return false;
+        std::array<bool, kOrderedDspNodeCount> seen{};
+        auto order = std::make_unique<OrderedNodes>();
+        for (size_t position = 0; position < nodes.size(); ++position) {
+            const auto& node = nodes[position];
             const auto it = std::find(allowed.begin(), allowed.end(), node.id);
             if (it == allowed.end()) return false;
             const size_t index = static_cast<size_t>(std::distance(allowed.begin(), it));
             if (seen[index]) return false;
             seen[index] = true;
+            order->ids[position] = static_cast<uint8_t>(index);
         }
         dsp_nodes_ = nodes;
-        for (size_t position = 0; position < dsp_nodes_.size(); ++position) {
-            const auto& node = dsp_nodes_[position];
-            node_order_[position].store(node.id == "compressor" ? 0 : node.id == "delay" ? 1 : node.id == "reverb" ? 2 : node.id == "chorus" ? 3 : node.id == "noise_gate" ? 4 : 5,
-                                        std::memory_order_release);
+        for (const auto& node : dsp_nodes_) {
             if (node.id == "compressor") {
                 compressor_enabled_.store(node.enabled, std::memory_order_release);
             } else if (node.id == "delay") {
@@ -206,9 +226,25 @@ public:
                 phaser_enabled_.store(node.enabled, std::memory_order_release);
             }
         }
+        const auto* published = order.get();
+        retired_orders_.push_back(std::move(order));
+        ordered_nodes_.store(published, std::memory_order_release);
         return true;
     }
-    std::vector<DspNodeConfig> dsp_nodes() const { return dsp_nodes_; }
+    std::vector<DspNodeConfig> dsp_nodes() const {
+        auto nodes = dsp_nodes_;
+        for (auto& node : nodes) {
+            if (node.id == "channel_matrix") node.enabled = channel_matrix_config_.load()->enabled;
+            else if (node.id == "replay_gain") node.enabled = replay_gain_config_.load()->enabled;
+            else if (node.id == "preamp") node.enabled = preamp_enabled_.load();
+            else if (node.id == "eq") node.enabled = eq_config_.load()->has_active_bands;
+            else if (node.id == "stereo_field") node.enabled = stereo_field_config_.load()->enabled;
+            else if (node.id == "crossfeed") node.enabled = crossfeed_config_.load()->enabled;
+            else if (node.id == "impulse_response") node.enabled = ir_enabled_.load();
+            else if (node.id == "limiter") node.enabled = limiter_enabled();
+        }
+        return nodes;
+    }
     bool set_compressor_config(const CompressorConfig& config) {
         CompressorConfig clamped = config;
         clamped.threshold_db = std::max(-60.0f, std::min(0.0f, clamped.threshold_db));
@@ -283,6 +319,63 @@ public:
         channel_matrix_retired_configs_.push_back(std::move(owned)); channel_matrix_config_.store(raw, std::memory_order_release); return true;
     }
     ChannelMatrixConfig channel_matrix_config() const { return *channel_matrix_config_.load(std::memory_order_acquire); }
+    bool set_stereo_field_config(const StereoFieldConfig& input) {
+        if (!std::isfinite(input.mid_db) || !std::isfinite(input.side_db) || !std::isfinite(input.width)) return false;
+        StereoFieldConfig value{input.enabled, std::clamp(input.mid_db, -12.0f, 6.0f),
+                                std::clamp(input.side_db, -12.0f, 6.0f), std::clamp(input.width, 0.0f, 2.0f)};
+        auto owned = std::make_unique<StereoFieldConfig>(value);
+        const auto* raw = owned.get();
+        stereo_field_retired_configs_.push_back(std::move(owned));
+        stereo_field_config_.store(raw, std::memory_order_release);
+        return true;
+    }
+    StereoFieldConfig stereo_field_config() const { return *stereo_field_config_.load(std::memory_order_acquire); }
+    bool set_crossfeed_config(const CrossfeedConfig& input) {
+        if (!std::isfinite(input.strength) || !std::isfinite(input.cutoff_hz) ||
+            !std::isfinite(input.delay_ms)) return false;
+        CrossfeedConfig value{input.enabled, std::clamp(input.strength, 0.0f, 1.0f),
+                              std::clamp(input.cutoff_hz, 300.0f, 1500.0f),
+                              std::clamp(input.delay_ms, 0.0f, 0.6f)};
+        auto owned = std::make_unique<CrossfeedConfig>(value);
+        const auto* raw = owned.get();
+        crossfeed_retired_configs_.push_back(std::move(owned));
+        crossfeed_config_.store(raw, std::memory_order_release);
+        return true;
+    }
+    CrossfeedConfig crossfeed_config() const { return *crossfeed_config_.load(std::memory_order_acquire); }
+
+    bool set_impulse_response(const std::vector<float>& samples, int sample_rate, int channels, bool enabled) {
+        if (enabled && (samples.empty() || sample_rate <= 0 || channels < 1 || channels > 2 ||
+                        samples.size() % static_cast<size_t>(channels) != 0)) return false;
+        auto previous_source = std::move(ir_source_);
+        const int previous_rate = ir_source_rate_;
+        const int previous_channels = ir_source_channels_;
+        const bool previous_enabled = ir_enabled_.load(std::memory_order_acquire);
+        auto* previous_runtime = ir_runtime_.load();
+        const float previous_auto_db = ir_auto_preamp_db_.load(std::memory_order_acquire);
+        ir_source_ = samples;
+        ir_source_rate_ = sample_rate;
+        ir_source_channels_ = channels;
+        ir_enabled_.store(enabled, std::memory_order_release);
+        if (publish_ir_runtime()) return true;
+        ir_source_ = std::move(previous_source);
+        ir_source_rate_ = previous_rate;
+        ir_source_channels_ = previous_channels;
+        ir_runtime_.store(previous_runtime);
+        ir_auto_preamp_db_.store(previous_auto_db, std::memory_order_release);
+        ir_enabled_.store(previous_enabled, std::memory_order_release);
+        return false;
+    }
+    bool set_ir_gain(bool automatic, float gain_db) {
+        if (!std::isfinite(gain_db) || gain_db < -24.0f || gain_db > 12.0f) return false;
+        ir_manual_gain_.store(std::pow(10.0f, gain_db / 20.0f), std::memory_order_release);
+        ir_auto_gain_.store(automatic, std::memory_order_release);
+        return true;
+    }
+    float ir_auto_preamp_db() const {
+        return ir_auto_preamp_db_.load(std::memory_order_acquire);
+    }
+    bool impulse_response_enabled() const { return ir_enabled_.load(std::memory_order_acquire); }
     int active_eq_band_count() const {
         return eq_config_.load(std::memory_order_acquire)->active_band_count;
     }
@@ -303,12 +396,6 @@ public:
     ProcessResult process(const float* input, int input_frames, int input_channels,
                           bool end_of_input, float* output, int frames, int output_channels) noexcept {
         ProcessResult result;
-        // Gain nodes are ordered before EQ/DSP (preamp) and at the final PCM
-        // stage (master volume). Both use a one-buffer ramp to avoid clicks.
-        const bool preamp_enabled = preamp_enabled_.load(std::memory_order_acquire);
-        const float preamp_target = preamp_enabled
-            ? preamp_target_.load(std::memory_order_acquire)
-            : 1.0f;
         const int samples = frames * output_channels;
         if (samples <= 0 || input_channels <= 0 || output_channels <= 0) return result;
 
@@ -351,102 +438,78 @@ public:
         } else if (matrix_frames > 0) {
             apply_channel_matrix(matrix_input, input_channels, output, output_channels, matrix_frames);
         }
-        apply_channel_controls(output, frames, output_channels);
-        const auto* replay_gain = replay_gain_config_.load(std::memory_order_acquire);
-        apply_smoothed_gain(output, samples, replay_gain->enabled ? std::pow(10.0f, replay_gain->gain_db / 20.0f) : 1.0f, replay_gain_live_);
-        apply_smoothed_gain(output, samples, preamp_target, preamp_live_);
-        process_eq(output, frames, output_channels);
-        process_dsp_nodes(output, frames, output_channels);
-        process_limiter(output, frames, output_channels);
+        process_ordered_nodes(output, frames, output_channels);
         apply_smoothed_gain(
             output,
             samples,
             master_volume_target_.load(std::memory_order_acquire),
             master_volume_live_);
+        const auto clip_stats = OutputClipGuard::process(output, frames, output_channels);
+        if (clip_stats.limited_frames > 0) {
+            clip_guard_reduction_db_.store(clip_stats.max_reduction_db, std::memory_order_release);
+            clip_guard_limited_frames_.fetch_add(clip_stats.limited_frames, std::memory_order_release);
+        }
         return result;
+    }
+
+    uint64_t clip_guard_limited_frames() const noexcept {
+        return clip_guard_limited_frames_.load(std::memory_order_acquire);
+    }
+    float clip_guard_reduction_db() const noexcept {
+        return clip_guard_reduction_db_.load(std::memory_order_acquire);
     }
 
     AudioChainStatus status() const {
         AudioChainStatus result;
         result.source_format = source_format_;
         result.backend_format = backend_format_;
-        result.bypassed_nodes = {"Preamp", "EQ", "DSP nodes", "Resampler", "Channel matrix", "Master volume"};
-        const auto generic_dsp = std::find(result.bypassed_nodes.begin(), result.bypassed_nodes.end(), "DSP nodes");
-        if (generic_dsp != result.bypassed_nodes.end()) result.bypassed_nodes.erase(generic_dsp);
-        if (compressor_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Compressor");
-            result.bit_perfect_blockers.push_back("Compressor is enabled");
-        } else {
-            result.bypassed_nodes.push_back("Compressor");
-        }
-        if (delay_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Delay");
-            result.bit_perfect_blockers.push_back("Delay is enabled");
-        } else result.bypassed_nodes.push_back("Delay");
-        if (reverb_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Reverb");
-            result.bit_perfect_blockers.push_back("Reverb is enabled");
-        } else result.bypassed_nodes.push_back("Reverb");
-        if (chorus_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Chorus");
-            result.bit_perfect_blockers.push_back("Chorus is enabled");
-        } else result.bypassed_nodes.push_back("Chorus");
-        if (noise_gate_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Noise Gate");
-            result.bit_perfect_blockers.push_back("Noise Gate is enabled");
-        } else result.bypassed_nodes.push_back("Noise Gate");
-        if (phaser_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Phaser");
-            result.bit_perfect_blockers.push_back("Phaser is enabled");
-        } else result.bypassed_nodes.push_back("Phaser");
-        if (limiter_enabled()) { result.active_nodes.push_back("Limiter"); result.bit_perfect_blockers.push_back("Limiter is enabled"); }
-        else result.bypassed_nodes.push_back("Limiter");
-
-        if (preamp_enabled_.load(std::memory_order_acquire)) {
-            result.active_nodes.push_back("Preamp");
-            result.bypassed_nodes.erase(result.bypassed_nodes.begin());
-            result.bit_perfect_blockers.push_back("Preamp is enabled");
-        }
-        const auto* replay_gain = replay_gain_config_.load(std::memory_order_acquire);
-        if (replay_gain->enabled && std::abs(replay_gain->gain_db) >= 0.0001f) {
-            result.active_nodes.push_back("ReplayGain");
-            result.bit_perfect_blockers.push_back("ReplayGain is active");
-        } else result.bypassed_nodes.push_back("ReplayGain");
+        const auto add_node = [&result](const char* active_name, const char* bypass_name,
+                                        bool active, const char* blocker) {
+            if (active) {
+                result.active_nodes.emplace_back(active_name);
+                result.bit_perfect_blockers.emplace_back(blocker);
+            } else {
+                result.bypassed_nodes.emplace_back(bypass_name);
+            }
+        };
+        // Match process(): SRC -> routing -> tempo -> ordered DSP -> volume -> clip guard.
+        add_node("libsamplerate SRC (stateful)", "Resampler", resampler_ != nullptr,
+                 "Sample-rate conversion is active");
+        const bool channel_conversion = source_format_.channels > 0 && backend_format_.channels > 0 &&
+                                        source_format_.channels != backend_format_.channels;
+        add_node("Channel routing", "Channel routing", channel_conversion,
+                 "Channel count conversion is active");
         const auto* speed = playback_speed_config_.load(std::memory_order_acquire);
-        if (speed->enabled && std::abs(speed->speed - 1.0f) >= 0.0001f) {
-            result.active_nodes.push_back("SoundTouch tempo");
-            result.bit_perfect_blockers.push_back("Playback speed is not unity");
-        } else result.bypassed_nodes.push_back("Playback speed");
-
+        add_node("SoundTouch tempo", "Playback speed",
+                 speed->enabled && std::abs(speed->speed - 1.0f) >= 0.0001f,
+                 "Playback speed is not unity");
         const EqConfig* eq = eq_config_.load(std::memory_order_acquire);
-        if (eq->has_active_bands) {
-            result.active_nodes.push_back("Parametric EQ");
-            const auto it = std::find(result.bypassed_nodes.begin(), result.bypassed_nodes.end(), "EQ");
-            if (it != result.bypassed_nodes.end()) result.bypassed_nodes.erase(it);
-            result.bit_perfect_blockers.push_back("Parametric EQ is enabled");
+        result.eq_peak_db = eq->peak_db;
+        result.eq_auto_preamp_db = 20.0f * std::log10(eq->headroom_gain);
+        const auto* order = ordered_nodes_.load(std::memory_order_acquire);
+        for (const auto id : order->ids) {
+            switch (id) {
+                case 0: add_node("Channel matrix", "Channel matrix", channel_matrix_config_.load()->enabled, "Channel matrix controls are enabled"); break;
+                case 1: { const auto* rg = replay_gain_config_.load(); add_node("ReplayGain", "ReplayGain", rg->enabled && std::abs(rg->gain_db) >= 0.0001f, "ReplayGain is active"); break; }
+                case 2: add_node("Preamp", "Preamp", preamp_enabled_.load(), "Preamp is enabled"); break;
+                case 3: add_node("Parametric EQ", "EQ", eq->has_active_bands, "Parametric EQ is enabled"); break;
+                case 4: add_node("Compressor", "Compressor", compressor_enabled_.load(), "Compressor is enabled"); break;
+                case 5: add_node("Delay", "Delay", delay_enabled_.load(), "Delay is enabled"); break;
+                case 6: add_node("Reverb", "Reverb", reverb_enabled_.load(), "Reverb is enabled"); break;
+                case 7: add_node("Chorus", "Chorus", chorus_enabled_.load(), "Chorus is enabled"); break;
+                case 8: add_node("Noise Gate", "Noise Gate", noise_gate_enabled_.load(), "Noise Gate is enabled"); break;
+                case 9: add_node("Phaser", "Phaser", phaser_enabled_.load(), "Phaser is enabled"); break;
+                case 10: add_node("Stereo field", "Stereo field", backend_format_.channels == 2 && stereo_field_config_.load()->enabled, "Stereo field is enabled"); break;
+                case 11: { const auto* cf = crossfeed_config_.load(); add_node("Crossfeed", "Crossfeed", backend_format_.channels == 2 && cf->enabled && cf->strength > 0.0f, "Crossfeed is enabled"); break; }
+                case 12: add_node("Impulse response", "Impulse response", backend_format_.channels >= 1 && backend_format_.channels <= 2 && ir_enabled_.load() && ir_runtime_.load() != nullptr, "Impulse response is enabled"); break;
+                case 13: add_node("Limiter", "Limiter", limiter_enabled(), "Limiter is enabled"); break;
+                default: break;
+            }
         }
-
-        const auto* matrix = channel_matrix_config_.load(std::memory_order_acquire);
-        if ((source_format_.channels > 0 && backend_format_.channels > 0 &&
-             source_format_.channels != backend_format_.channels) || matrix->enabled) {
-            result.active_nodes.push_back("Channel matrix");
-            const auto it = std::find(result.bypassed_nodes.begin(), result.bypassed_nodes.end(), "Channel matrix");
-            if (it != result.bypassed_nodes.end()) result.bypassed_nodes.erase(it);
-            result.bit_perfect_blockers.push_back(matrix->enabled ? "Channel matrix controls are enabled" : "Channel count conversion is active");
-        }
-
-        if (resampler_) {
-            result.active_nodes.push_back("libsamplerate SRC (stateful)");
-            const auto it = std::find(result.bypassed_nodes.begin(), result.bypassed_nodes.end(), "Resampler");
-            if (it != result.bypassed_nodes.end()) result.bypassed_nodes.erase(it);
-            result.bit_perfect_blockers.push_back("Sample-rate conversion is active");
-        }
-
-        if (master_volume() != 1.0f) {
-            result.active_nodes.push_back("Master volume");
-            result.bypassed_nodes.pop_back();
-            result.bit_perfect_blockers.push_back("Master volume gain is not unity");
-        }
+        add_node("Master volume", "Master volume", master_volume() != 1.0f,
+                 "Master volume gain is not unity");
+        // This conditional stage is exactly transparent for in-range PCM.
+        result.active_nodes.emplace_back("Output clip guard");
 
         if (!configured_) {
             result.bit_perfect_blockers.push_back("Output backend is not active");
@@ -489,6 +552,13 @@ public:
     }
 
 private:
+    struct OrderedNodes {
+        std::array<uint8_t, kOrderedDspNodeCount> ids{};
+    };
+    inline static const std::array<std::string, kOrderedDspNodeCount> allowed = {
+        "channel_matrix", "replay_gain", "preamp", "eq", "compressor", "delay", "reverb",
+        "chorus", "noise_gate", "phaser", "stereo_field", "crossfeed", "impulse_response", "limiter"
+    };
     struct CompressorRuntimeConfig {
         CompressorConfig values{};
         float attack_coefficient = 0.0f;
@@ -530,12 +600,83 @@ private:
         time_stretch_.putSamples(time_stretch_buffer_.data(), static_cast<unsigned int>(time_stretch_capacity_frames_));
         time_stretch_.clear();
     }
+
+    bool publish_ir_runtime() {
+        if (!ir_enabled_.load(std::memory_order_acquire) || ir_source_.empty()) {
+            ir_runtime_.store(nullptr);
+            ir_auto_preamp_db_.store(0.0f, std::memory_order_release);
+            reclaim_ir_runtimes();
+            return true;
+        }
+        const int target_rate = backend_format_.sample_rate > 0 ? backend_format_.sample_rate : ir_source_rate_;
+        std::vector<float> samples = ir_source_;
+        constexpr int kMaxOutputIrFrames = 262144;
+        const auto fail = [this]() {
+            ir_runtime_.store(nullptr);
+            ir_auto_preamp_db_.store(0.0f, std::memory_order_release);
+            return false;
+        };
+        // Tiny preset filters are defined in samples and should retain their
+        // taps; sinc resamplers need much more input to produce any output.
+        if (target_rate != ir_source_rate_ && ir_source_.size() / ir_source_channels_ > 32) {
+            const int source_frames = static_cast<int>(ir_source_.size()) / ir_source_channels_;
+            const int target_frames = static_cast<int>(std::ceil(static_cast<double>(source_frames) * target_rate / ir_source_rate_)) + 64;
+            if (target_frames > kMaxOutputIrFrames) return fail();
+            samples.assign(static_cast<size_t>(target_frames) * ir_source_channels_, 0.0f);
+            SRC_DATA data{};
+            data.data_in = ir_source_.data();
+            data.input_frames = source_frames;
+            data.data_out = samples.data();
+            data.output_frames = target_frames;
+            data.src_ratio = static_cast<double>(target_rate) / ir_source_rate_;
+            data.end_of_input = 1;
+            if (src_simple(&data, SRC_SINC_BEST_QUALITY, ir_source_channels_) != 0 || data.output_frames_gen <= 0) {
+                return fail();
+            }
+            samples.resize(static_cast<size_t>(data.output_frames_gen) * ir_source_channels_);
+            const float gain = static_cast<float>(1.0 / data.src_ratio);
+            for (auto& sample : samples) sample *= gain;
+        }
+        if (samples.size() / ir_source_channels_ > kMaxOutputIrFrames) return fail();
+        auto owned = std::make_unique<PartitionedConvolver>(samples, ir_source_channels_);
+        auto* raw = owned.get();
+        ir_retired_runtimes_.push_back(std::move(owned));
+        ir_runtime_.store(raw);
+        ir_auto_preamp_db_.store(raw->auto_gain_db(), std::memory_order_release);
+        reclaim_ir_runtimes();
+        return true;
+    }
+    void reclaim_ir_runtimes() {
+        if (ir_readers_.load() != 0) return;
+        const auto* active = ir_runtime_.load();
+        ir_retired_runtimes_.erase(
+            std::remove_if(ir_retired_runtimes_.begin(), ir_retired_runtimes_.end(),
+                           [active](const auto& runtime) { return runtime.get() != active; }),
+            ir_retired_runtimes_.end());
+    }
+
+    void process_stereo_field(float* samples, int frames, int channels) noexcept {
+        const auto* config = stereo_field_config_.load(std::memory_order_acquire);
+        if (!config->enabled || channels != 2) return;
+        const float mid_gain = std::pow(10.0f, config->mid_db / 20.0f);
+        const float side_gain = std::pow(10.0f, config->side_db / 20.0f) * config->width;
+        const float headroom = 1.0f / std::max(1.0f, std::max(mid_gain, side_gain));
+        for (int frame = 0; frame < frames; ++frame) {
+            float* pair = samples + frame * channels;
+            const float mid = 0.5f * (pair[0] + pair[1]) * mid_gain * headroom;
+            const float side = 0.5f * (pair[0] - pair[1]) * side_gain * headroom;
+            pair[0] = mid + side;
+            pair[1] = mid - side;
+        }
+    }
     void configure_delay(int) {
         const int rate = backend_format_.sample_rate > 0 ? backend_format_.sample_rate : 48000;
         delay_channels_ = std::max(1, std::min(backend_format_.channels, kMaxAudioChannels));
         delay_capacity_frames_ = rate * 2;
         delay_buffer_.assign(static_cast<size_t>(delay_capacity_frames_) * delay_channels_, 0.0f);
         delay_write_frame_ = 0;
+        reverb_buffer_.assign(static_cast<size_t>(delay_capacity_frames_) * delay_channels_, 0.0f);
+        reverb_write_frame_ = 0;
     }
     void configure_chorus() {
         const int rate = backend_format_.sample_rate > 0 ? backend_format_.sample_rate : 48000;
@@ -596,8 +737,43 @@ private:
         std::array<BiquadCoefficients, kEqBandCount> coefficients{};
         bool has_active_bands = false;
         int active_band_count = 0;
+        float peak_db = 0.0f;
+        float headroom_gain = 1.0f;
         uint64_t generation = 0;
     };
+
+    static float eq_peak_db(const EqConfig& config, int sample_rate) {
+        if (!config.has_active_bands || sample_rate <= 0) return 0.0f;
+        const double nyquist = sample_rate * 0.5;
+        const double low = std::min(10.0, nyquist);
+        double peak_db = 0.0;
+        // A logarithmic grid resolves narrow low-frequency bands as well as
+        // the closely spaced high-frequency bands. This runs off the callback.
+        for (int point = 0; point <= 8192; ++point) {
+            const double frequency = low * std::pow(nyquist / low, point / 8192.0);
+            const double omega = 2.0 * 3.14159265358979323846 * frequency / sample_rate;
+            const double real = std::cos(omega);
+            const double imag = -std::sin(omega);
+            const double real2 = std::cos(2.0 * omega);
+            const double imag2 = -std::sin(2.0 * omega);
+            double response_db = 0.0;
+            for (const auto& c : config.coefficients) {
+                if (c.b0 == 1.0f && c.b1 == 0.0f && c.b2 == 0.0f &&
+                    c.a1 == 0.0f && c.a2 == 0.0f) continue;
+                const double numerator_real = c.b0 + c.b1 * real + c.b2 * real2;
+                const double numerator_imag = c.b1 * imag + c.b2 * imag2;
+                const double denominator_real = 1.0 + c.a1 * real + c.a2 * real2;
+                const double denominator_imag = c.a1 * imag + c.a2 * imag2;
+                const double numerator_power = numerator_real * numerator_real + numerator_imag * numerator_imag;
+                const double denominator_power = denominator_real * denominator_real + denominator_imag * denominator_imag;
+                if (numerator_power > 0.0 && denominator_power > 0.0) {
+                    response_db += 10.0 * std::log10(numerator_power / denominator_power);
+                }
+            }
+            peak_db = std::max(peak_db, response_db);
+        }
+        return static_cast<float>(peak_db);
+    }
 
     static BiquadCoefficients make_peaking_filter(const EqBand& band, int sample_rate) {
         if (!band.enabled || std::abs(band.gain_db) < 0.0001f || sample_rate <= 0) return {};
@@ -633,13 +809,16 @@ private:
                 ++config->active_band_count;
             }
         }
+        config->peak_db = eq_peak_db(*config, sample_rate);
+        // Leave a small margin for peaks between grid points and float rounding.
+        config->headroom_gain = config->peak_db > 0.0001f
+            ? std::pow(10.0f, -(config->peak_db + 0.25f) / 20.0f) : 1.0f;
         const EqConfig* raw = config.get();
         eq_retired_configs_.push_back(std::move(config));
         eq_config_.store(raw, std::memory_order_release);
     }
 
-    void process_eq(float* samples, int frames, int channels) noexcept {
-        const EqConfig* config = eq_config_.load(std::memory_order_acquire);
+    void process_eq(float* samples, int frames, int channels, const EqConfig* config) noexcept {
         if (config != eq_live_config_) {
             for (auto& band : eq_states_) {
                 for (auto& state : band) state = {};
@@ -666,17 +845,56 @@ private:
         }
     }
 
-    void process_dsp_nodes(float* samples, int frames, int channels) noexcept {
-        // Order is published by the control thread as atomics; the callback
-        // never reads the mutable UI-facing vector.
-        for (const auto& order : node_order_) {
-            switch (order.load(std::memory_order_acquire)) {
-                case 0: if (compressor_enabled_.load(std::memory_order_acquire)) process_compressor(samples, frames, channels); break;
-                case 1: process_delay(samples, frames, channels); break;
-                case 2: process_reverb(samples, frames, channels); break;
-                case 3: process_chorus(samples, frames, channels); break;
-                case 4: process_noise_gate(samples, frames, channels); break;
-                case 5: process_phaser(samples, frames, channels); break;
+    void process_ordered_nodes(float* samples, int frames, int channels) noexcept {
+        // One immutable order is loaded per callback. The control thread can
+        // publish a new permutation without exposing a half-written order.
+        const auto* order = ordered_nodes_.load(std::memory_order_acquire);
+        const int sample_count = frames * channels;
+        for (const auto id : order->ids) {
+            switch (id) {
+                case 0: apply_channel_controls(samples, frames, channels); break;
+                case 1: {
+                    const auto* rg = replay_gain_config_.load(std::memory_order_acquire);
+                    const float target = rg->enabled ? std::pow(10.0f, rg->gain_db / 20.0f) : 1.0f;
+                    apply_smoothed_gain(samples, sample_count, target, replay_gain_live_);
+                    break;
+                }
+                case 2: {
+                    const bool enabled = preamp_enabled_.load(std::memory_order_acquire);
+                    const float target = enabled ? preamp_target_.load(std::memory_order_acquire) : 1.0f;
+                    apply_smoothed_gain(samples, sample_count, target, preamp_live_);
+                    break;
+                }
+                case 3: {
+                    const auto* eq = eq_config_.load(std::memory_order_acquire);
+                    if (eq->headroom_gain < eq_headroom_live_) eq_headroom_live_ = eq->headroom_gain;
+                    apply_smoothed_gain(samples, sample_count, eq->headroom_gain, eq_headroom_live_);
+                    process_eq(samples, frames, channels, eq);
+                    break;
+                }
+                case 4: if (compressor_enabled_.load(std::memory_order_acquire)) process_compressor(samples, frames, channels); break;
+                case 5: process_delay(samples, frames, channels); break;
+                case 6: process_reverb(samples, frames, channels); break;
+                case 7: process_chorus(samples, frames, channels); break;
+                case 8: process_noise_gate(samples, frames, channels); break;
+                case 9: process_phaser(samples, frames, channels); break;
+                case 10: process_stereo_field(samples, frames, channels); break;
+                case 11: crossfeed_processor_.process(samples, frames, channels, backend_format_.sample_rate,
+                                                       *crossfeed_config_.load(std::memory_order_acquire)); break;
+                case 12:
+                    if (ir_enabled_.load(std::memory_order_acquire) && channels <= 2) {
+                        ir_readers_.fetch_add(1, std::memory_order_acq_rel);
+                        if (auto* ir = ir_runtime_.load(std::memory_order_acquire)) {
+                            ir->process(samples, frames, channels);
+                            const float automatic = ir_auto_gain_.load(std::memory_order_acquire) ? ir->auto_gain() : 1.0f;
+                            const float target = automatic * ir_manual_gain_.load(std::memory_order_acquire);
+                            apply_smoothed_gain(samples, sample_count, target, ir_gain_live_);
+                        }
+                        ir_readers_.fetch_sub(1, std::memory_order_acq_rel);
+                    }
+                    break;
+                case 13: process_limiter(samples, frames, channels); break;
+                default: break;
             }
         }
     }
@@ -723,7 +941,7 @@ private:
         }
     }
     void process_reverb(float* samples, int frames, int channels) noexcept {
-        if (!reverb_enabled_.load(std::memory_order_acquire) || delay_buffer_.empty()) return;
+        if (!reverb_enabled_.load(std::memory_order_acquire) || reverb_buffer_.empty()) return;
         const auto* config = reverb_config_.load(std::memory_order_acquire);
         const int active_channels = std::min(channels, delay_channels_);
         const int taps[3] = {29, 43, 61}; const float scale = 0.6f + config->room_size * 1.4f;
@@ -733,17 +951,13 @@ private:
                 float wet = 0.0f;
                 for (int tap : taps) {
                     const int offset = std::min(delay_capacity_frames_ - 1, static_cast<int>(tap * scale * backend_format_.sample_rate / 1000));
-                    const int read = (delay_write_frame_ - offset + delay_capacity_frames_) % delay_capacity_frames_;
-                    wet += delay_buffer_[static_cast<size_t>(read) * delay_channels_ + channel] * (0.4f + config->decay * 0.6f);
+                    const int read = (reverb_write_frame_ - offset + delay_capacity_frames_) % delay_capacity_frames_;
+                    wet += reverb_buffer_[static_cast<size_t>(read) * delay_channels_ + channel] * (0.4f + config->decay * 0.6f);
                 }
-                // Do not feed wet output back into the shared delay history.
-                // That path can self-excite when Delay is also active.
                 samples[frame * channels + channel] = dry * (1.0f - config->mix) + wet * (config->mix / 3.0f);
-                if (!delay_enabled_.load(std::memory_order_relaxed)) {
-                    delay_buffer_[static_cast<size_t>(delay_write_frame_) * delay_channels_ + channel] = dry;
-                }
+                reverb_buffer_[static_cast<size_t>(reverb_write_frame_) * delay_channels_ + channel] = dry;
             }
-            if (!delay_enabled_.load(std::memory_order_relaxed)) delay_write_frame_ = (delay_write_frame_ + 1) % delay_capacity_frames_;
+            reverb_write_frame_ = (reverb_write_frame_ + 1) % delay_capacity_frames_;
         }
     }
     void process_limiter(float* samples, int frames, int channels) noexcept {
@@ -901,7 +1115,10 @@ private:
     std::atomic<float> master_volume_target_{1.0f};
     // Audio-thread-owned state. Never access from a control thread.
     float preamp_live_ = 1.0f;
+    float eq_headroom_live_ = 1.0f;
     float master_volume_live_ = 1.0f;
+    std::atomic<uint64_t> clip_guard_limited_frames_{0};
+    std::atomic<float> clip_guard_reduction_db_{0.0f};
     float replay_gain_live_ = 1.0f;
     std::array<EqBand, kEqBandCount> eq_bands_{};
     EqConfig eq_default_config_{};
@@ -917,15 +1134,21 @@ private:
     std::vector<float> resample_buffer_;
     ResamplerQuality resampler_quality_ = ResamplerQuality::Best;
     std::vector<DspNodeConfig> dsp_nodes_ = {
-        {"compressor", false}, {"delay", false}, {"reverb", false}, {"chorus", false}, {"noise_gate", false}, {"phaser", false}
+        {"channel_matrix", false}, {"replay_gain", false}, {"preamp", false}, {"eq", false},
+        {"compressor", false}, {"delay", false}, {"reverb", false}, {"chorus", false},
+        {"noise_gate", false}, {"phaser", false}, {"stereo_field", false}, {"crossfeed", false},
+        {"impulse_response", false}, {"limiter", false}
     };
+    OrderedNodes default_order_{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13}};
+    std::atomic<const OrderedNodes*> ordered_nodes_{nullptr};
+    // Snapshots stay alive while an audio callback might be reading one.
+    std::vector<std::unique_ptr<OrderedNodes>> retired_orders_;
     std::atomic<bool> compressor_enabled_{false};
     std::atomic<bool> delay_enabled_{false};
     std::atomic<bool> reverb_enabled_{false};
     std::atomic<bool> chorus_enabled_{false};
     std::atomic<bool> noise_gate_enabled_{false};
     std::atomic<bool> phaser_enabled_{false};
-    std::array<std::atomic<int>, 6> node_order_{{0, 1, 2, 3, 4, 5}};
     CompressorRuntimeConfig compressor_default_config_{};
     std::atomic<const CompressorRuntimeConfig*> compressor_config_{nullptr};
     const CompressorRuntimeConfig* compressor_live_config_ = nullptr;
@@ -936,6 +1159,8 @@ private:
     std::vector<std::unique_ptr<DelayConfig>> delay_retired_configs_;
     std::vector<float> delay_buffer_;
     int delay_capacity_frames_ = 0, delay_channels_ = 0, delay_write_frame_ = 0;
+    std::vector<float> reverb_buffer_;
+    int reverb_write_frame_ = 0;
     ReverbConfig reverb_default_config_{};
     std::atomic<const ReverbConfig*> reverb_config_{nullptr};
     std::vector<std::unique_ptr<ReverbConfig>> reverb_retired_configs_;
@@ -960,6 +1185,24 @@ private:
     ChannelMatrixConfig channel_matrix_default_config_{};
     std::atomic<const ChannelMatrixConfig*> channel_matrix_config_{nullptr};
     std::vector<std::unique_ptr<ChannelMatrixConfig>> channel_matrix_retired_configs_;
+    StereoFieldConfig stereo_field_default_config_{};
+    std::atomic<const StereoFieldConfig*> stereo_field_config_{nullptr};
+    std::vector<std::unique_ptr<StereoFieldConfig>> stereo_field_retired_configs_;
+    CrossfeedConfig crossfeed_default_config_{};
+    std::atomic<const CrossfeedConfig*> crossfeed_config_{nullptr};
+    std::vector<std::unique_ptr<CrossfeedConfig>> crossfeed_retired_configs_;
+    CrossfeedProcessor crossfeed_processor_;
+    std::vector<float> ir_source_;
+    int ir_source_rate_ = 0;
+    int ir_source_channels_ = 0;
+    std::atomic<bool> ir_enabled_{false};
+    std::atomic<PartitionedConvolver*> ir_runtime_{nullptr};
+    std::atomic<int> ir_readers_{0};
+    std::atomic<float> ir_auto_preamp_db_{0.0f};
+    std::vector<std::unique_ptr<PartitionedConvolver>> ir_retired_runtimes_;
+    std::atomic<bool> ir_auto_gain_{true};
+    std::atomic<float> ir_manual_gain_{1.0f};
+    float ir_gain_live_ = 1.0f;
     ReplayGainConfig replay_gain_default_config_{};
     std::atomic<const ReplayGainConfig*> replay_gain_config_{nullptr};
     std::vector<std::unique_ptr<ReplayGainConfig>> replay_gain_retired_configs_;

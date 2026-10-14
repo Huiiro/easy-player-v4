@@ -1,10 +1,10 @@
 # Quick build & run script for easy-player development
-# Usage: .\docs\dev-build.ps1 [-NoRun]
+# Usage: .\docs\scripts\dev-build.ps1 [-NoRun]
 
 param([switch]$NoRun)
 
 $ErrorActionPreference = "Stop"
-$ProjectDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
+$ProjectDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 Set-Location $ProjectDir
 
 Write-Host "=== Killing existing Electron processes ===" -ForegroundColor Cyan

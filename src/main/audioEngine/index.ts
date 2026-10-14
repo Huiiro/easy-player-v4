@@ -6,6 +6,8 @@ import { AudioChainStatus, DeviceInfo } from './types'
 import {
   DspSettings,
   PersistedOutputBackend,
+  defaultDspSettings,
+  defaultEqBands,
   loadDspSettings,
   saveDspSettings
 } from './dspSettings'
@@ -266,6 +268,8 @@ export class AudioEngineManager {
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    pauseFadeEnabled: boolean
+    pauseFadeMs: number
   }): boolean {
     const ok = this.engine?.setTransitionConfig(config) ?? false
     if (ok) {
@@ -279,6 +283,8 @@ export class AudioEngineManager {
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    pauseFadeEnabled: boolean
+    pauseFadeMs: number
   } | null {
     return this.engine?.getTransitionConfig() ?? null
   }
@@ -294,7 +300,21 @@ export class AudioEngineManager {
   }
 
   getDspNodes(): {
-    id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+    id:
+      | 'channel_matrix'
+      | 'replay_gain'
+      | 'preamp'
+      | 'eq'
+      | 'compressor'
+      | 'delay'
+      | 'reverb'
+      | 'chorus'
+      | 'noise_gate'
+      | 'phaser'
+      | 'stereo_field'
+      | 'crossfeed'
+      | 'impulse_response'
+      | 'limiter'
     enabled: boolean
   }[] {
     return this.engine?.getDspNodes() ?? []
@@ -392,6 +412,47 @@ export class AudioEngineManager {
   getChannelMatrixConfig() {
     return this.engine?.getChannelMatrixConfig() ?? null
   }
+  setStereoFieldConfig(config: DspSettings['stereoField']): boolean {
+    const ok = this.engine?.setStereoFieldConfig?.(config) ?? false
+    if (ok) {
+      this.dspSettings.stereoField = config
+      this.persistDspSettings()
+    }
+    return ok
+  }
+  getStereoFieldConfig(): DspSettings['stereoField'] | null {
+    return this.engine?.getStereoFieldConfig?.() ?? null
+  }
+  setCrossfeedConfig(config: DspSettings['crossfeed']): boolean {
+    const ok = this.engine?.setCrossfeedConfig?.(config) ?? false
+    if (ok) {
+      this.dspSettings.crossfeed = config
+      this.persistDspSettings()
+    }
+    return ok
+  }
+  getCrossfeedConfig(): DspSettings['crossfeed'] | null {
+    return this.engine?.getCrossfeedConfig?.() ?? null
+  }
+  setImpulseResponseConfig(config: DspSettings['impulseResponse']): boolean {
+    const ok = this.engine?.setImpulseResponseConfig?.(config) ?? false
+    if (ok) {
+      this.dspSettings.impulseResponse = {
+        enabled: config.enabled,
+        path: config.path,
+        autoGain: config.autoGain,
+        gainDb: config.gainDb
+      }
+      this.persistDspSettings()
+    }
+    return ok
+  }
+  getImpulseResponseError(): string {
+    return this.engine?.getImpulseResponseError?.() ?? 'native_unavailable'
+  }
+  getImpulseResponseConfig(): DspSettings['impulseResponse'] | null {
+    return this.engine?.getImpulseResponseConfig?.() ?? null
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setLimiter(config: any): boolean {
     const ok = this.engine?.setLimiter(config) ?? false
@@ -404,6 +465,70 @@ export class AudioEngineManager {
   // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
   getLimiter() {
     return this.engine?.getLimiter() ?? null
+  }
+
+  resetAudioProcessingSettings(): { success: boolean; error?: string } {
+    if (!this.engine) return { success: false, error: 'Audio engine unavailable' }
+
+    const previous = this.dspSettings
+    const previousEqBands = this.engine.getEqBands()
+    const defaults = defaultDspSettings()
+    defaults.eqBands = defaultEqBands()
+
+    const apply = (settings: DspSettings, eqBands: DspSettings['eqBands']): void => {
+      const steps: [string, () => boolean][] = [
+        ['DSP nodes', () => this.engine.setDspNodes(settings.dspNodes)],
+        ['ReplayGain', () => this.engine.setReplayGain(settings.replayGain)],
+        ['playback speed', () => this.engine.setPlaybackSpeed(settings.playbackSpeed)],
+        ['EQ', () => this.engine.setEqBands(eqBands)],
+        ['compressor', () => this.engine.setCompressorConfig(settings.compressor)],
+        ['delay', () => this.engine.setDelayConfig(settings.delay)],
+        ['reverb', () => this.engine.setReverbConfig(settings.reverb)],
+        ['chorus', () => this.engine.setChorusConfig(settings.chorus)],
+        ['noise gate', () => this.engine.setNoiseGateConfig(settings.noiseGate)],
+        ['phaser', () => this.engine.setPhaserConfig(settings.phaser)],
+        ['channel matrix', () => this.engine.setChannelMatrixConfig(settings.channelMatrix)],
+        ['stereo field', () => this.engine.setStereoFieldConfig?.(settings.stereoField) ?? false],
+        ['crossfeed', () => this.engine.setCrossfeedConfig?.(settings.crossfeed) ?? false],
+        [
+          'impulse response',
+          () => this.engine.setImpulseResponseConfig?.(settings.impulseResponse) ?? false
+        ],
+        ['limiter', () => this.engine.setLimiter(settings.limiter)],
+        ['resampler', () => this.engine.setResamplerConfig(settings.resampler)],
+        ['DoP', () => this.engine.setDopEnabled(settings.dopEnabled)],
+        ['transition', () => this.engine.setTransitionConfig(settings.transition)]
+      ]
+      this.engine.setPreamp(settings.preamp.db, settings.preamp.enabled)
+      for (const [name, run] of steps) {
+        if (!run()) throw new Error(`Failed to apply ${name} defaults`)
+      }
+    }
+
+    try {
+      apply(defaults, defaults.eqBands)
+      this.dspSettings = {
+        ...defaults,
+        volume: previous.volume,
+        outputDevice: previous.outputDevice
+      }
+      saveDspSettings(this.dspSettings)
+      if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
+      this.dspSettingsSaveTimer = undefined
+      return { success: true }
+    } catch (error) {
+      this.dspSettings = previous
+      Logger.error('[AudioEngineManager] Failed to reset audio processing settings:', error)
+      try {
+        apply(previous, previousEqBands)
+      } catch (rollbackError) {
+        Logger.error(
+          '[AudioEngineManager] Failed to restore audio processing settings:',
+          rollbackError
+        )
+      }
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   // ── Device / Backend ──
@@ -529,6 +654,18 @@ export class AudioEngineManager {
         this.engine.setNoiseGateConfig(this.dspSettings.noiseGate)
         this.engine.setPhaserConfig(this.dspSettings.phaser)
         this.engine.setChannelMatrixConfig(this.dspSettings.channelMatrix)
+        this.engine.setStereoFieldConfig?.(this.dspSettings.stereoField)
+        this.engine.setCrossfeedConfig?.(this.dspSettings.crossfeed)
+        if (
+          this.engine.setImpulseResponseConfig &&
+          !this.engine.setImpulseResponseConfig(this.dspSettings.impulseResponse)
+        ) {
+          Logger.warn(
+            `[AudioEngineManager] Failed to restore impulse response (${this.getImpulseResponseError()}); disabling IR`
+          )
+          this.dspSettings.impulseResponse.enabled = false
+          this.persistDspSettings()
+        }
         this.engine.setLimiter(this.dspSettings.limiter)
         this.engine.setResamplerConfig(this.dspSettings.resampler)
         this.engine.setDopEnabled(this.dspSettings.dopEnabled)

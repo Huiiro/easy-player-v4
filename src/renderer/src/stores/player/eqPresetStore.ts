@@ -21,55 +21,71 @@ function bandsFromGains(gains: number[]): EqBand[] {
   })
 }
 
+function soften(gains: number[], scale: number): number[] {
+  return gains.map((gain) => Math.round(gain * scale * 10) / 10)
+}
+
 export const BUILT_IN_EQ_PRESETS: EqPreset[] = [
   { id: 'flat', name: 'flat', bands: bandsFromGains(Array(20).fill(0)) },
   {
     id: 'bass-boost',
     name: 'bassBoost',
-    bands: bandsFromGains([6, 6, 5.5, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+    bands: bandsFromGains([2, 2, 2, 2, 1.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
   },
   {
     id: 'treble-boost',
     name: 'trebleBoost',
-    bands: bandsFromGains([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 1, 2, 3, 4, 4.5, 5, 5, 5, 5])
+    bands: bandsFromGains(
+      soften([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 1, 2, 3, 4, 4.5, 5, 5, 5, 5], 0.3)
+    )
   },
   {
     id: 'vocal',
     name: 'vocal',
-    bands: bandsFromGains([
-      -2, -2, -1.5, -1, -0.5, 0, 1, 2, 3, 3.5, 4, 3.5, 2.5, 1, 0, -0.5, -1, -1, -1, -1
-    ])
+    bands: bandsFromGains(
+      soften(
+        [-2, -2, -1.5, -1, -0.5, 0, 1, 2, 3, 3.5, 4, 3.5, 2.5, 1, 0, -0.5, -1, -1, -1, -1],
+        0.55
+      )
+    )
   },
   {
     id: 'classical',
     name: 'classical',
-    bands: bandsFromGains([
-      3, 3, 2.5, 2, 1.5, 1, 0, -1, -1.5, -1, 0, 1, 2, 2.5, 3, 3, 3, 2.5, 2.5, 2
-    ])
+    bands: bandsFromGains(
+      soften([3, 3, 2.5, 2, 1.5, 1, 0, -1, -1.5, -1, 0, 1, 2, 2.5, 3, 3, 3, 2.5, 2.5, 2], 0.5)
+    )
   },
   {
     id: 'electronic',
     name: 'electronic',
-    bands: bandsFromGains([4.5, 4.5, 4, 3, 1, 0, -1, -2, -1.5, 0, 1, 2, 3, 3.5, 3, 2.5, 2, 2, 2, 2])
+    bands: bandsFromGains(
+      soften([4.5, 4.5, 4, 3, 1, 0, -1, -2, -1.5, 0, 1, 2, 3, 3.5, 3, 2.5, 2, 2, 2, 2], 0.5)
+    )
   },
   {
     id: 'jazz',
     name: 'jazz',
-    bands: bandsFromGains([
-      3, 3, 2.5, 1.5, 0.5, 0, 1, 2, 2.5, 2, 1, 1.5, 2.5, 3, 3, 2.5, 2, 2, 2, 1.5
-    ])
+    bands: bandsFromGains(
+      soften([3, 3, 2.5, 1.5, 0.5, 0, 1, 2, 2.5, 2, 1, 1.5, 2.5, 3, 3, 2.5, 2, 2, 2, 1.5], 0.5)
+    )
   },
   {
     id: 'pop',
     name: 'pop',
-    bands: bandsFromGains([
-      -1, -1, -0.5, 0, 1.5, 2.5, 3, 3, 2, 0.5, -0.5, -1, -0.5, 1, 2, 2.5, 2.5, 2, 2, 2
-    ])
+    bands: bandsFromGains(
+      soften(
+        [-1, -1, -0.5, 0, 1.5, 2.5, 3, 3, 2, 0.5, -0.5, -1, -0.5, 1, 2, 2.5, 2.5, 2, 2, 2],
+        0.65
+      )
+    )
   },
   {
     id: 'rock',
     name: 'rock',
-    bands: bandsFromGains([4, 4, 3.5, 3, 2, 0, -1.5, -2, -1, 1, 2.5, 3.5, 4, 4, 3.5, 3, 3, 3, 3, 3])
+    bands: bandsFromGains(
+      soften([4, 4, 3.5, 3, 2, 0, -1.5, -2, -1, 1, 2.5, 3.5, 4, 4, 3.5, 3, 3, 3, 3, 3], 0.4)
+    )
   }
 ]
 

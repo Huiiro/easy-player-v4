@@ -55,7 +55,7 @@ public:
 
     // Switch the demuxer to raw DSD packet reading for a future DoP path.
     // Each output frame is 24-bit PCM-shaped DoP data (3 * channels bytes).
-    bool begin_dop();
+    bool begin_dop(int64_t carrier_frame = 0);
     int read_dop(uint8_t* output, int max_frames);
 
     // Seek to a sample position.

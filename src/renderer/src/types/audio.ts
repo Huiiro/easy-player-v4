@@ -50,6 +50,8 @@ export interface AudioChainStatus {
   activeNodes: string[]
   bypassedNodes: string[]
   bitPerfectBlockers: string[]
+  eqPeakDb: number
+  eqAutoPreampDb: number
   isBitPerfectEligible: boolean
   bitPerfectVerificationState: 'blocked' | 'eligible_unverified' | 'verified'
   isBitPerfect: boolean
@@ -72,10 +74,26 @@ export interface TransitionConfig {
   crossfadeEnabled: boolean
   crossfadeMs: number
   crossfadeAuto: boolean
+  pauseFadeEnabled: boolean
+  pauseFadeMs: number
 }
 
 export interface DspNodeConfig {
-  id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+  id:
+    | 'channel_matrix'
+    | 'replay_gain'
+    | 'preamp'
+    | 'eq'
+    | 'compressor'
+    | 'delay'
+    | 'reverb'
+    | 'chorus'
+    | 'noise_gate'
+    | 'phaser'
+    | 'stereo_field'
+    | 'crossfeed'
+    | 'impulse_response'
+    | 'limiter'
   enabled: boolean
 }
 export interface CompressorConfig {
@@ -115,6 +133,25 @@ export interface ChannelMatrixConfig {
   swapStereo: boolean
   monoDownmix: boolean
   outputGains: number[]
+}
+export interface StereoFieldConfig {
+  enabled: boolean
+  midDb: number
+  sideDb: number
+  width: number
+}
+export interface CrossfeedConfig {
+  enabled: boolean
+  strength: number
+  cutoffHz: number
+  delayMs: number
+}
+export interface ImpulseResponseConfig {
+  enabled: boolean
+  path: string
+  autoGain: boolean
+  gainDb: number
+  autoPreampDb?: number
 }
 
 export interface LogEntry {

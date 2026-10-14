@@ -26,8 +26,10 @@ inline void pack_frame(const uint8_t* payload, int channels,
             first = reverse_bits(first);
             second = reverse_bits(second);
         }
-        destination[channel * 3] = first;
-        destination[channel * 3 + 1] = second;
+        // DoP places the oldest DSD bit at bit 15 of the 16-bit payload.
+        // Little-endian PCM therefore stores the newer byte first in memory.
+        destination[channel * 3] = second;
+        destination[channel * 3 + 1] = first;
         destination[channel * 3 + 2] = marker;
     }
 }
@@ -36,8 +38,8 @@ inline bool self_test() {
     const uint8_t payload[] = {0x01, 0x80, 0x12, 0x34};
     uint8_t packed[6] = {};
     pack_frame(payload, 2, true, 0x05, packed);
-    return packed[0] == 0x80 && packed[1] == 0x01 && packed[2] == 0x05 &&
-           packed[3] == 0x48 && packed[4] == 0x2C && packed[5] == 0x05;
+    return packed[0] == 0x01 && packed[1] == 0x80 && packed[2] == 0x05 &&
+           packed[3] == 0x2C && packed[4] == 0x48 && packed[5] == 0x05;
 }
 
 } // namespace dop

@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
-import AudioControlPanel from '@/components/player/AudioControlPanel.vue'
+import AudioControlPanelV2 from '@/components/player/AudioControlPanelV2.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -865,7 +865,7 @@ onBeforeUnmount(() => {
       :title="t('footer.audioControls')"
       width="max-w-6xl"
     >
-      <AudioControlPanel class="h-[72vh]" />
+      <AudioControlPanelV2 />
     </BaseDialog>
     <SongDetailsDialog v-model="detailsVisible" :song-id="currentSong?.id ?? null" />
     <SongTagDialog v-model="tagVisible" :song-id="currentSong?.id ?? null" />

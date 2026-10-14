@@ -12,6 +12,15 @@ interface PlaybackCheckpoint {
   wasPlaying?: boolean
 }
 
+const playbackStateNames: Record<EngineState, string> = {
+  [EngineState.Idle]: 'idle',
+  [EngineState.Loading]: 'loading',
+  [EngineState.Ready]: 'ready',
+  [EngineState.Playing]: 'playing',
+  [EngineState.Paused]: 'paused',
+  [EngineState.Stopped]: 'stopped'
+}
+
 export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: BrowserWindow): void {
   // Keep the frequently updated resume point separate from the queue snapshot.
   // The latter can be large, while this value is written from position events.
@@ -112,6 +121,11 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
             engine.setPreamp(params.db, params.enabled)
             sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
             return { success: true }
+          }
+          case 'resetAudioProcessingSettings': {
+            const result = engine.resetAudioProcessingSettings()
+            sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return result
           }
           case 'setReplayGain':
             return { success: engine.setReplayGain(params.config) }
@@ -231,6 +245,27 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
           }
           case 'getChannelMatrixConfig':
             return { success: true, data: engine.getChannelMatrixConfig() }
+          case 'setStereoFieldConfig': {
+            const ok = engine.setStereoFieldConfig(params.config)
+            if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return { success: ok }
+          }
+          case 'getStereoFieldConfig':
+            return { success: true, data: engine.getStereoFieldConfig() }
+          case 'setCrossfeedConfig': {
+            const ok = engine.setCrossfeedConfig(params.config)
+            if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return { success: ok }
+          }
+          case 'getCrossfeedConfig':
+            return { success: true, data: engine.getCrossfeedConfig() }
+          case 'setImpulseResponseConfig': {
+            const ok = engine.setImpulseResponseConfig(params.config)
+            if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return { success: ok, error: ok ? undefined : engine.getImpulseResponseError() }
+          }
+          case 'getImpulseResponseConfig':
+            return { success: true, data: engine.getImpulseResponseConfig() }
           case 'setLimiter': {
             const ok = engine.setLimiter(params.config)
             if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
@@ -290,7 +325,12 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
 
           case 'getStatus': {
             const status = engine.getStatus()
-            return { success: true, data: status }
+            return {
+              success: true,
+              data: status
+                ? { ...status, state: playbackStateNames[status.state as EngineState] ?? 'idle' }
+                : null
+            }
           }
 
           case 'getAudioChain': {
@@ -320,20 +360,16 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
 
   // ── State change events ──
   engine.onStateChanged((state: number) => {
-    const stateMap: Record<number, string> = {
-      [EngineState.Idle]: 'idle',
-      [EngineState.Loading]: 'loading',
-      [EngineState.Ready]: 'ready',
-      [EngineState.Playing]: 'playing',
-      [EngineState.Paused]: 'paused',
-      [EngineState.Stopped]: 'stopped'
-    }
-
     // `open` and `stop` now run on a N-API worker. Do not synchronously read
     // engine-owned data from this state callback: a Loading/Ready event can
     // otherwise race the worker that is updating the decoder and output path.
-    Logger.debug('[Audio IPC] state changed', { state: stateMap[state] ?? 'idle' })
-    sendEvent(mainWindow, 'stateChanged', { state: stateMap[state] ?? 'idle', trackInfo: null })
+    Logger.debug('[Audio IPC] state changed', {
+      state: playbackStateNames[state as EngineState] ?? 'idle'
+    })
+    sendEvent(mainWindow, 'stateChanged', {
+      state: playbackStateNames[state as EngineState] ?? 'idle',
+      trackInfo: null
+    })
   })
 
   // ── Position events ──

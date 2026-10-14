@@ -1,7 +1,7 @@
 @echo off
 REM Quick build & run script for easy-player development
-REM Usage: docs\dev-build.cmd [--no-run]
-cd /d "%~dp0\.."
+REM Usage: docs\scripts\dev-build.cmd [--no-run]
+cd /d "%~dp0\..\.."
 
 echo === Killing existing Electron processes ===
 taskkill /F /IM electron.exe 2>nul

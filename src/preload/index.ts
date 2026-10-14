@@ -26,6 +26,8 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setVolume', params: { volume } }),
   setPreamp: (db: number, enabled: boolean) =>
     ipcRenderer.invoke('audio:command', { action: 'setPreamp', params: { db, enabled } }),
+  resetAudioProcessingSettings: () =>
+    ipcRenderer.invoke('audio:command', { action: 'resetAudioProcessingSettings', params: {} }),
   setReplayGain: (config: unknown) =>
     ipcRenderer.invoke('audio:command', { action: 'setReplayGain', params: { config } }),
   getReplayGain: () => ipcRenderer.invoke('audio:command', { action: 'getReplayGain', params: {} }),
@@ -80,6 +82,18 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setChannelMatrixConfig', params: { config } }),
   getChannelMatrixConfig: () =>
     ipcRenderer.invoke('audio:command', { action: 'getChannelMatrixConfig', params: {} }),
+  setStereoFieldConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setStereoFieldConfig', params: { config } }),
+  getStereoFieldConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getStereoFieldConfig', params: {} }),
+  setCrossfeedConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setCrossfeedConfig', params: { config } }),
+  getCrossfeedConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getCrossfeedConfig', params: {} }),
+  setImpulseResponseConfig: (config: unknown) =>
+    ipcRenderer.invoke('audio:command', { action: 'setImpulseResponseConfig', params: { config } }),
+  getImpulseResponseConfig: () =>
+    ipcRenderer.invoke('audio:command', { action: 'getImpulseResponseConfig', params: {} }),
   setLimiter: (config: unknown) =>
     ipcRenderer.invoke('audio:command', { action: 'setLimiter', params: { config } }),
   getLimiter: () => ipcRenderer.invoke('audio:command', { action: 'getLimiter', params: {} }),

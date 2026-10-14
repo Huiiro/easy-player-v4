@@ -3,14 +3,17 @@ import type {
   ChannelMatrixConfig,
   ChorusConfig,
   CompressorConfig,
+  CrossfeedConfig,
   DelayConfig,
   DeviceInfo,
   DspNodeConfig,
   EqBand,
+  ImpulseResponseConfig,
   NoiseGateConfig,
   PhaserConfig,
   PlaybackStatus,
   ResamplerConfig,
+  StereoFieldConfig,
   TransitionConfig
 } from '@/types/audio'
 
@@ -56,6 +59,9 @@ export const audioBridge = {
 
   async setPreamp(db: number, enabled: boolean): Promise<void> {
     await window.api.audio.setPreamp(db, enabled)
+  },
+  async resetAudioProcessingSettings(): Promise<{ success: boolean; error?: string }> {
+    return window.api.audio.resetAudioProcessingSettings()
   },
   async setReplayGain(config: {
     mode: 'off' | 'track' | 'album'
@@ -163,6 +169,26 @@ export const audioBridge = {
   async getChannelMatrixConfig(): Promise<ChannelMatrixConfig | null> {
     return cmd<ChannelMatrixConfig>(await window.api.audio.getChannelMatrixConfig())
   },
+  async setStereoFieldConfig(config: StereoFieldConfig): Promise<boolean> {
+    return (await window.api.audio.setStereoFieldConfig(config)).success
+  },
+  async getStereoFieldConfig(): Promise<StereoFieldConfig | null> {
+    return cmd<StereoFieldConfig>(await window.api.audio.getStereoFieldConfig())
+  },
+  async setCrossfeedConfig(config: CrossfeedConfig): Promise<boolean> {
+    return (await window.api.audio.setCrossfeedConfig(config)).success
+  },
+  async getCrossfeedConfig(): Promise<CrossfeedConfig | null> {
+    return cmd<CrossfeedConfig>(await window.api.audio.getCrossfeedConfig())
+  },
+  async setImpulseResponseConfig(
+    config: ImpulseResponseConfig
+  ): Promise<{ success: boolean; error?: string }> {
+    return window.api.audio.setImpulseResponseConfig(config)
+  },
+  async getImpulseResponseConfig(): Promise<ImpulseResponseConfig | null> {
+    return cmd<ImpulseResponseConfig>(await window.api.audio.getImpulseResponseConfig())
+  },
   async setLimiter(config: {
     enabled: boolean
     ceilingDb: number
@@ -221,6 +247,8 @@ export const audioBridge = {
     lowEnergy: number
     onsetStrength: number
     droppedFrames: number
+    clipGuardLimitedFrames: number
+    clipGuardReductionDb: number
     beatSequence: number
     bpm: number
     momentaryLufs: number

@@ -77,7 +77,7 @@ const footerClass = computed(() => {
       </TransitionChild>
 
       <!-- container -->
-      <div class="fixed inset-0 flex items-center justify-center p-4">
+      <div class="fixed inset-0 flex items-start justify-center overflow-y-auto p-4">
         <TransitionChild
           as="template"
           enter="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
@@ -87,7 +87,7 @@ const footerClass = computed(() => {
           leave-from="opacity-100 scale-100"
           leave-to="opacity-0 scale-95"
         >
-          <DialogPanel :class="['w-full rounded-2xl bg-bg shadow-xl', width]">
+          <DialogPanel :class="['my-auto w-full rounded-2xl bg-bg shadow-xl', width]">
             <!-- header -->
             <div
               v-if="$slots.header || title || showClose"

@@ -1,11 +1,11 @@
 #!/bin/bash
 # Quick build & run script for easy-player development
-# Usage: bash docs/dev-build.sh [--no-run]
+# Usage: bash docs/scripts/dev-build.sh [--no-run]
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")"
 cd "$PROJECT_DIR"
 
 echo "=== Killing existing Electron processes ==="

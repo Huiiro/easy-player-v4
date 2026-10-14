@@ -27,6 +27,15 @@ struct TransitionConfig {
     bool crossfade_enabled = false;
     int crossfade_ms = 5000;
     bool crossfade_auto = false;
+    bool pause_fade_enabled = true;
+    int pause_fade_ms = 180;
+};
+
+struct ImpulseResponseConfig {
+    bool enabled = false;
+    std::string path;
+    bool auto_gain = true;
+    float gain_db = 0.0f;
 };
 
 struct AudioAnalysisSnapshot {
@@ -37,6 +46,8 @@ struct AudioAnalysisSnapshot {
     float low_energy = 0.0f;
     float onset_strength = 0.0f;
     uint64_t dropped_frames = 0;
+    uint64_t clip_guard_limited_frames = 0;
+    float clip_guard_reduction_db = 0.0f;
     // Monotonically increasing event counter; not a sticky beat flag.
     uint64_t beat_sequence = 0;
     float bpm = 0.0f;
@@ -96,6 +107,14 @@ public:
     PhaserConfig phaser_config() const { return dsp_pipeline_.phaser_config(); }
     bool set_channel_matrix_config(const ChannelMatrixConfig& config) { return dsp_pipeline_.set_channel_matrix_config(config); }
     ChannelMatrixConfig channel_matrix_config() const { return dsp_pipeline_.channel_matrix_config(); }
+    bool set_stereo_field_config(const StereoFieldConfig& config) { return dsp_pipeline_.set_stereo_field_config(config); }
+    StereoFieldConfig stereo_field_config() const { return dsp_pipeline_.stereo_field_config(); }
+    bool set_crossfeed_config(const CrossfeedConfig& config) { return dsp_pipeline_.set_crossfeed_config(config); }
+    CrossfeedConfig crossfeed_config() const { return dsp_pipeline_.crossfeed_config(); }
+    bool set_impulse_response_config(const ImpulseResponseConfig& config);
+    ImpulseResponseConfig impulse_response_config() const { return impulse_response_config_; }
+    std::string impulse_response_error() const { return impulse_response_error_; }
+    float impulse_response_auto_preamp_db() const { return dsp_pipeline_.ir_auto_preamp_db(); }
     void set_limiter_enabled(bool enabled) { dsp_pipeline_.set_limiter_enabled(enabled); }
     bool limiter_enabled() const { return dsp_pipeline_.limiter_enabled(); }
     bool set_limiter_config(const LimiterConfig& config) { return dsp_pipeline_.set_limiter_config(config); }
@@ -106,7 +125,9 @@ public:
         return {gapless_enabled_.load(std::memory_order_acquire),
                 crossfade_enabled_.load(std::memory_order_acquire),
                 crossfade_ms_.load(std::memory_order_acquire),
-                crossfade_auto_.load(std::memory_order_acquire)};
+                crossfade_auto_.load(std::memory_order_acquire),
+                pause_fade_enabled_.load(std::memory_order_acquire),
+                pause_fade_ms_.load(std::memory_order_acquire)};
     }
 
     // ── Device / Backend ──
@@ -174,6 +195,7 @@ private:
     bool force_output_rate_ = false;
     int target_sample_rate_ = 48000;
     int resampler_quality_ = 0; // 0 Best, 1 Medium, 2 Fast
+    double reopen_position_ms_ = -1.0;
     // DoP must be explicitly enabled because a PCM device cannot report
     // whether the downstream DAC will interpret its PCM24 carrier as DoP.
     bool dop_enabled_ = false;
@@ -195,6 +217,12 @@ private:
     std::atomic<bool> crossfade_enabled_{false};
     std::atomic<int> crossfade_ms_{5000};
     std::atomic<bool> crossfade_auto_{false};
+    std::atomic<bool> pause_fade_enabled_{true};
+    std::atomic<int> pause_fade_ms_{180};
+    std::atomic<bool> pause_fade_pending_{false};
+    // Only the PCM callback changes the live envelope while the backend runs.
+    float pause_fade_live_ = 1.0f;
+    std::atomic<int> pcm_output_sample_rate_{0};
     int64_t auto_fade_end_frame_ = 0;
     int64_t auto_fade_frames_ = 0;
     std::atomic<bool> transition_active_{false};
@@ -252,6 +280,8 @@ private:
     // ── Control params (atomic for lock-free audio thread access) ──
     std::atomic<int> glitch_count_{0};
     DspPipeline dsp_pipeline_;
+    ImpulseResponseConfig impulse_response_config_{};
+    std::string impulse_response_error_;
     // Source frames actually removed from Ring Buffer #1 and handed to the
     // output backend.  Decoder position includes pre-read data and must not
     // be exposed as the playback position.

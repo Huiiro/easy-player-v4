@@ -80,6 +80,8 @@ struct ComGuard {
 // ──────────────────────────────────────────────────────────
 
 struct WasapiBackend::Impl {
+    // Keep the calling thread's COM apartment alive while WASAPI interfaces exist.
+    std::unique_ptr<ComGuard> com_guard;
     // COM objects
     IMMDeviceEnumerator* enumerator = nullptr;
     IMMDevice*           device      = nullptr;
@@ -111,6 +113,9 @@ struct WasapiBackend::Impl {
 
     // f32→s16 scratch buffer (only used in exclusive s16 fallback)
     std::vector<float> scratch;
+    // DoP callback produces packed PCM24; some devices require 24 valid bits
+    // in a 32-bit container. Allocate this before starting the render thread.
+    std::vector<uint8_t> dop_scratch;
 };
 
 // ──────────────────────────────────────────────────────────
@@ -185,12 +190,30 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         }
 
         if (impl->raw_transport) {
-            const int rendered = std::clamp(
-                impl->raw_callback ? impl->raw_callback(data, static_cast<int>(available), channels) : 0,
-                0, static_cast<int>(available));
-            if (rendered < static_cast<int>(available)) {
-                std::memset(data + rendered * frame_size, 0,
-                            (static_cast<int>(available) - rendered) * frame_size);
+            const bool dop_in_32 = impl->pcm_valid_bits == 24 && impl->pcm_bits == 32;
+            const size_t packed_bytes = static_cast<size_t>(available) * channels * 3;
+            if (dop_in_32 && impl->dop_scratch.size() < packed_bytes) {
+                std::memset(data, 0, static_cast<size_t>(available) * frame_size);
+                impl->thread_error.store(E_FAIL, std::memory_order_release);
+                impl->running.store(false, std::memory_order_release);
+            } else {
+                uint8_t* raw_data = dop_in_32 ? impl->dop_scratch.data() : data;
+                const int rendered = std::clamp(
+                    impl->raw_callback ? impl->raw_callback(raw_data, static_cast<int>(available), channels) : 0,
+                    0, static_cast<int>(available));
+                if (dop_in_32) {
+                    const size_t samples = static_cast<size_t>(rendered) * channels;
+                    for (size_t i = 0; i < samples; ++i) {
+                        data[i * 4] = 0;
+                        data[i * 4 + 1] = raw_data[i * 3];
+                        data[i * 4 + 2] = raw_data[i * 3 + 1];
+                        data[i * 4 + 3] = raw_data[i * 3 + 2];
+                    }
+                }
+                if (rendered < static_cast<int>(available)) {
+                    std::memset(data + rendered * frame_size, 0,
+                                (static_cast<int>(available) - rendered) * frame_size);
+                }
             }
         } else if (impl->is_f32) {
             // Direct f32 write — WASAPI Shared mix format, or Exclusive f32
@@ -352,7 +375,9 @@ AudioFormat WasapiBackend::open(
     const AudioFormat& requested_format,
     AudioCallback callback)
 {
+    ComGuard com;
     close();
+    impl_->com_guard = std::make_unique<ComGuard>();
     LOG_DEBUG("WASAPI open: mode=" + std::string(exclusive_ ? "exclusive" : "shared") +
               ", device=" + log_wide(device_id) +
               ", rate=" + std::to_string(requested_format.sample_rate) +
@@ -362,7 +387,6 @@ AudioFormat WasapiBackend::open(
         impl_->raw_transport = false;
     }
     impl_->callback = std::move(callback);
-    ComGuard com;
 
     IMMDeviceEnumerator* en = get_enumerator();
     if (!en) return {};
@@ -552,6 +576,11 @@ AudioFormat WasapiBackend::open(
     impl_->bytes_per_frame = fmt->nBlockAlign;
     // Integer PCM callbacks must never allocate on the MMCSS render thread.
     impl_->scratch.assign(static_cast<size_t>(impl_->buffer_frames) * fmt->nChannels, 0.0f);
+    if (impl_->raw_transport && impl_->pcm_valid_bits == 24 && impl_->pcm_bits == 32) {
+        impl_->dop_scratch.resize(static_cast<size_t>(impl_->buffer_frames) * fmt->nChannels * 3);
+    } else {
+        impl_->dop_scratch.clear();
+    }
 
     // Calculate latency
     REFERENCE_TIME period = 0;
@@ -619,8 +648,13 @@ AudioFormat WasapiBackend::open_dop(
     impl_->raw_callback = std::move(callback);
     impl_->raw_transport = true;
     preparing_dop_open_ = true;
-    const AudioFormat actual = open(device_id, requested_format,
+    AudioFormat actual = open(device_id, requested_format,
         [](float*, int, int) { return 0; });
+    if (actual.sample_rate == 0) {
+        AudioFormat in_32 = requested_format;
+        in_32.bit_depth = 25; // 24 valid bits, 32-bit PCM container
+        actual = open(device_id, in_32, [](float*, int, int) { return 0; });
+    }
     preparing_dop_open_ = false;
     if (actual.sample_rate == 0) {
         impl_->raw_callback = {};
@@ -629,7 +663,8 @@ AudioFormat WasapiBackend::open_dop(
     }
     LOG_DEBUG("WASAPI Exclusive DoP transport opened: " +
              std::to_string(actual.sample_rate) + "Hz, " +
-             std::to_string(actual.channels) + "ch, PCM24 carrier");
+             std::to_string(actual.channels) + "ch, PCM24 carrier (" +
+             std::to_string(impl_->pcm_bits) + "-bit container)");
     return actual;
 }
 
@@ -705,27 +740,34 @@ void WasapiBackend::flush() {
 // ── close ─────────────────────────────────────────────────
 
 void WasapiBackend::close() {
+    ComGuard com;
     if (active_) stop();
 
     if (impl_->render_client) {
+        LOG_DEBUG("WASAPI close: releasing render client");
         impl_->render_client->Release();
         impl_->render_client = nullptr;
     }
     if (impl_->audio_client) {
+        LOG_DEBUG("WASAPI close: releasing audio client");
         impl_->audio_client->Release();
         impl_->audio_client = nullptr;
     }
     if (impl_->device) {
+        LOG_DEBUG("WASAPI close: releasing device");
         impl_->device->Release();
         impl_->device = nullptr;
     }
     if (impl_->event_handle) {
+        LOG_DEBUG("WASAPI close: closing event");
         CloseHandle(impl_->event_handle);
         impl_->event_handle = nullptr;
     }
     if (impl_->wave_format) {
+        LOG_DEBUG("WASAPI close: releasing wave format");
         CoTaskMemFree(impl_->wave_format);
         impl_->wave_format = nullptr;
     }
+    impl_->com_guard.reset();
     LOG_DEBUG("WasapiBackend closed");
 }

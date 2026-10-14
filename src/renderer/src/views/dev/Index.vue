@@ -1146,17 +1146,20 @@ async function copyLog(entry: {
         {{ player.audioChain.backendFormat.channels || '—' }} ch
       </div>
       <div class="chain-nodes">
-        <span
-          v-for="node in player.audioChain.activeNodes"
-          :key="`active-${node}`"
-          class="chain-node active"
-          >{{ node }}</span
-        >
+        <small>Signal path</small>
+        <template v-for="(node, index) in player.audioChain.activeNodes" :key="`active-${node}`">
+          <span v-if="index > 0" class="chain-arrow">→</span>
+          <span class="chain-node active">{{ node }}</span>
+        </template>
+        <span v-if="!player.audioChain.activeNodes.length" class="chain-node">No active nodes</span>
+      </div>
+      <div v-if="player.audioChain.bypassedNodes.length" class="chain-nodes">
+        <small>Bypassed</small>
         <span
           v-for="node in player.audioChain.bypassedNodes"
           :key="`bypassed-${node}`"
           class="chain-node"
-          >{{ node }} (bypass)</span
+          >{{ node }}</span
         >
       </div>
       <small v-if="player.audioChain.bitPerfectBlockers.length" class="chain-blockers">
@@ -1730,7 +1733,15 @@ async function copyLog(entry: {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+  align-items: center;
   margin-top: 6px;
+}
+.chain-nodes small {
+  margin-right: 4px;
+  color: #858595;
+}
+.chain-arrow {
+  color: #858595;
 }
 .chain-node {
   padding: 2px 5px;

@@ -9,7 +9,21 @@ export interface PersistedEqBand {
   q: number
 }
 export interface PersistedDspNode {
-  id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+  id:
+    | 'channel_matrix'
+    | 'replay_gain'
+    | 'preamp'
+    | 'eq'
+    | 'compressor'
+    | 'delay'
+    | 'reverb'
+    | 'chorus'
+    | 'noise_gate'
+    | 'phaser'
+    | 'stereo_field'
+    | 'crossfeed'
+    | 'impulse_response'
+    | 'limiter'
   enabled: boolean
 }
 export interface PersistedCompressor {
@@ -60,6 +74,24 @@ export interface PersistedChannelMatrix {
   monoDownmix: boolean
   outputGains: number[]
 }
+export interface PersistedStereoField {
+  enabled: boolean
+  midDb: number
+  sideDb: number
+  width: number
+}
+export interface PersistedCrossfeed {
+  enabled: boolean
+  strength: number
+  cutoffHz: number
+  delayMs: number
+}
+export interface PersistedImpulseResponse {
+  enabled: boolean
+  path: string
+  autoGain: boolean
+  gainDb: number
+}
 export type PersistedOutputBackend = 'directsound' | 'wasapi_shared' | 'wasapi_exclusive' | 'asio'
 export interface PersistedOutputDevice {
   backend: PersistedOutputBackend
@@ -82,6 +114,9 @@ export interface DspSettings {
   noiseGate: PersistedNoiseGate
   phaser: PersistedPhaser
   channelMatrix: PersistedChannelMatrix
+  stereoField: PersistedStereoField
+  crossfeed: PersistedCrossfeed
+  impulseResponse: PersistedImpulseResponse
   resampler: {
     forceOutputRate: boolean
     targetSampleRate: number
@@ -93,6 +128,8 @@ export interface DspSettings {
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    pauseFadeEnabled: boolean
+    pauseFadeMs: number
   }
   outputDevice: PersistedOutputDevice
 }
@@ -105,12 +142,20 @@ export const defaultDspSettings = (): DspSettings => ({
   playbackSpeed: { enabled: false, speed: 1 },
   eqBands: [],
   dspNodes: [
+    { id: 'channel_matrix', enabled: false },
+    { id: 'replay_gain', enabled: false },
+    { id: 'preamp', enabled: false },
+    { id: 'eq', enabled: false },
     { id: 'compressor', enabled: false },
     { id: 'delay', enabled: false },
     { id: 'reverb', enabled: false },
     { id: 'chorus', enabled: false },
     { id: 'noise_gate', enabled: false },
-    { id: 'phaser', enabled: false }
+    { id: 'phaser', enabled: false },
+    { id: 'stereo_field', enabled: false },
+    { id: 'crossfeed', enabled: false },
+    { id: 'impulse_response', enabled: false },
+    { id: 'limiter', enabled: false }
   ],
   compressor: { thresholdDb: -18, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0 },
   delay: { delayMs: 250, feedback: 0.25, mix: 0.2 },
@@ -126,18 +171,85 @@ export const defaultDspSettings = (): DspSettings => ({
     monoDownmix: false,
     outputGains: [1, 1, 1, 1, 1, 1, 1, 1]
   },
+  stereoField: { enabled: false, midDb: 0, sideDb: 0, width: 1 },
+  crossfeed: { enabled: false, strength: 0.5, cutoffHz: 700, delayMs: 0.25 },
+  impulseResponse: { enabled: false, path: '', autoGain: true, gainDb: 0 },
   resampler: { forceOutputRate: false, targetSampleRate: 48000, quality: 'best' },
   dopEnabled: false,
   transition: {
     gaplessEnabled: true,
     crossfadeEnabled: false,
     crossfadeMs: 5000,
-    crossfadeAuto: false
+    crossfadeAuto: false,
+    pauseFadeEnabled: true,
+    pauseFadeMs: 180
   },
   outputDevice: { backend: 'directsound', deviceId: 'default' }
 })
 
+export function defaultEqBands(): PersistedEqBand[] {
+  const frequencies = [
+    20, 31.5, 50, 80, 125, 200, 315, 500, 800, 1250, 2000, 3150, 5000, 8000, 10000, 12000, 14000,
+    16000, 18000, 20000
+  ]
+  return frequencies.map((frequencyHz) => ({ enabled: false, frequencyHz, gainDb: 0, q: 1 }))
+}
+
 const DSP_SETTINGS_KEY = 'audio.dsp-settings'
+
+function migrateLegacyEqPreset(bands: PersistedEqBand[]): PersistedEqBand[] {
+  const frequencies = [
+    20, 31.5, 50, 80, 125, 200, 315, 500, 800, 1250, 2000, 3150, 5000, 8000, 10000, 12000, 14000,
+    16000, 18000, 20000
+  ]
+  const legacyCurves: { gains: number[]; scale?: number; replacement?: number[] }[] = [
+    {
+      gains: [6, 6, 5.5, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      replacement: [2, 2, 2, 2, 1.5, 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    { gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 1, 2, 3, 4, 4.5, 5, 5, 5, 5], scale: 0.3 },
+    {
+      gains: [-2, -2, -1.5, -1, -0.5, 0, 1, 2, 3, 3.5, 4, 3.5, 2.5, 1, 0, -0.5, -1, -1, -1, -1],
+      scale: 0.55
+    },
+    {
+      gains: [3, 3, 2.5, 2, 1.5, 1, 0, -1, -1.5, -1, 0, 1, 2, 2.5, 3, 3, 3, 2.5, 2.5, 2],
+      scale: 0.5
+    },
+    {
+      gains: [4.5, 4.5, 4, 3, 1, 0, -1, -2, -1.5, 0, 1, 2, 3, 3.5, 3, 2.5, 2, 2, 2, 2],
+      scale: 0.5
+    },
+    {
+      gains: [3, 3, 2.5, 1.5, 0.5, 0, 1, 2, 2.5, 2, 1, 1.5, 2.5, 3, 3, 2.5, 2, 2, 2, 1.5],
+      scale: 0.5
+    },
+    {
+      gains: [-1, -1, -0.5, 0, 1.5, 2.5, 3, 3, 2, 0.5, -0.5, -1, -0.5, 1, 2, 2.5, 2.5, 2, 2, 2],
+      scale: 0.65
+    },
+    { gains: [4, 4, 3.5, 3, 2, 0, -1.5, -2, -1, 1, 2.5, 3.5, 4, 4, 3.5, 3, 3, 3, 3, 3], scale: 0.4 }
+  ]
+  if (bands.length !== frequencies.length) return bands
+  for (const curve of legacyCurves) {
+    const matches = bands.every(
+      (band, index) =>
+        band.frequencyHz === frequencies[index] &&
+        band.gainDb === curve.gains[index] &&
+        band.q === 1 &&
+        band.enabled === (curve.gains[index] !== 0)
+    )
+    if (matches) {
+      return bands.map((band, index) => {
+        const gainDb =
+          curve.replacement?.[index] ??
+          Math.round(curve.gains[index] * (curve.scale ?? 1) * 10) / 10
+        return { ...band, gainDb, enabled: gainDb !== 0 }
+      })
+    }
+  }
+  return bands
+}
 
 export function loadDspSettings(): DspSettings {
   try {
@@ -147,40 +259,39 @@ export function loadDspSettings(): DspSettings {
     }
     const settings = parsed as Partial<DspSettings>
     const defaults = defaultDspSettings()
+    const legacyIrPreset = (
+      settings.impulseResponse as (PersistedImpulseResponse & { preset?: string }) | undefined
+    )?.preset
+    const allowedNodeIds = new Set(defaults.dspNodes.map((node) => node.id))
     const persistedNodes = Array.isArray(settings.dspNodes)
       ? settings.dspNodes.filter(
           (node): node is PersistedDspNode =>
             !!node &&
             typeof node === 'object' &&
-            ((node as PersistedDspNode).id === 'compressor' ||
-              (node as PersistedDspNode).id === 'delay' ||
-              (node as PersistedDspNode).id === 'reverb' ||
-              (node as PersistedDspNode).id === 'chorus' ||
-              (node as PersistedDspNode).id === 'noise_gate' ||
-              (node as PersistedDspNode).id === 'phaser')
+            allowedNodeIds.has((node as PersistedDspNode).id) &&
+            typeof (node as PersistedDspNode).enabled === 'boolean'
         )
       : []
     const hasUniqueNodeIds =
       new Set(persistedNodes.map((node) => node.id)).size === persistedNodes.length
-    const dspNodes =
-      hasUniqueNodeIds && persistedNodes.length === 3
-        ? [
-            ...persistedNodes,
-            { id: 'chorus' as const, enabled: false },
-            { id: 'noise_gate' as const, enabled: false },
-            { id: 'phaser' as const, enabled: false }
-          ]
-        : hasUniqueNodeIds && persistedNodes.length === 4
+    const legacyIds = new Set(['compressor', 'delay', 'reverb', 'chorus', 'noise_gate', 'phaser'])
+    const isLegacyOrder =
+      persistedNodes.length >= 3 &&
+      persistedNodes.length <= 6 &&
+      persistedNodes.every((node) => legacyIds.has(node.id))
+    const dspNodes: PersistedDspNode[] =
+      hasUniqueNodeIds && persistedNodes.length === defaults.dspNodes.length
+        ? persistedNodes
+        : hasUniqueNodeIds && isLegacyOrder
           ? [
+              ...defaults.dspNodes.slice(0, 4),
               ...persistedNodes,
-              { id: 'noise_gate' as const, enabled: false },
-              { id: 'phaser' as const, enabled: false }
+              ...defaults.dspNodes
+                .slice(4, 10)
+                .filter((node) => !persistedNodes.some((old) => old.id === node.id)),
+              ...defaults.dspNodes.slice(10)
             ]
-          : hasUniqueNodeIds && persistedNodes.length === 5
-            ? [...persistedNodes, { id: 'phaser' as const, enabled: false }]
-            : hasUniqueNodeIds && persistedNodes.length === 6
-              ? persistedNodes
-              : defaults.dspNodes
+          : defaults.dspNodes
     return {
       version: 1,
       volume:
@@ -208,7 +319,9 @@ export function loadDspSettings(): DspSettings {
             ? Math.max(0.5, Math.min(2, settings.playbackSpeed.speed))
             : 1
       },
-      eqBands: Array.isArray(settings.eqBands) ? settings.eqBands.slice(0, 20) : [],
+      eqBands: Array.isArray(settings.eqBands)
+        ? migrateLegacyEqPreset(settings.eqBands.slice(0, 20))
+        : [],
       dspNodes,
       compressor: {
         thresholdDb:
@@ -333,6 +446,56 @@ export function loadDspSettings(): DspSettings {
               )
             : defaults.channelMatrix.outputGains
       },
+      stereoField: {
+        enabled: settings.stereoField?.enabled === true,
+        midDb:
+          typeof settings.stereoField?.midDb === 'number' &&
+          Number.isFinite(settings.stereoField.midDb)
+            ? Math.max(-12, Math.min(6, settings.stereoField.midDb))
+            : 0,
+        sideDb:
+          typeof settings.stereoField?.sideDb === 'number' &&
+          Number.isFinite(settings.stereoField.sideDb)
+            ? Math.max(-12, Math.min(6, settings.stereoField.sideDb))
+            : 0,
+        width:
+          typeof settings.stereoField?.width === 'number' &&
+          Number.isFinite(settings.stereoField.width)
+            ? Math.max(0, Math.min(2, settings.stereoField.width))
+            : 1
+      },
+      crossfeed: {
+        enabled: settings.crossfeed?.enabled === true,
+        strength:
+          typeof settings.crossfeed?.strength === 'number' &&
+          Number.isFinite(settings.crossfeed.strength)
+            ? Math.max(0, Math.min(1, settings.crossfeed.strength))
+            : defaults.crossfeed.strength,
+        cutoffHz:
+          typeof settings.crossfeed?.cutoffHz === 'number' &&
+          Number.isFinite(settings.crossfeed.cutoffHz)
+            ? Math.max(300, Math.min(1500, settings.crossfeed.cutoffHz))
+            : defaults.crossfeed.cutoffHz,
+        delayMs:
+          typeof settings.crossfeed?.delayMs === 'number' &&
+          Number.isFinite(settings.crossfeed.delayMs)
+            ? Math.max(0, Math.min(0.6, settings.crossfeed.delayMs))
+            : defaults.crossfeed.delayMs
+      },
+      impulseResponse: {
+        enabled:
+          settings.impulseResponse?.enabled === true &&
+          (legacyIrPreset === undefined || legacyIrPreset === 'custom') &&
+          !!settings.impulseResponse.path,
+        path:
+          typeof settings.impulseResponse?.path === 'string' ? settings.impulseResponse.path : '',
+        autoGain: settings.impulseResponse?.autoGain !== false,
+        gainDb:
+          typeof settings.impulseResponse?.gainDb === 'number' &&
+          Number.isFinite(settings.impulseResponse.gainDb)
+            ? Math.max(-24, Math.min(12, settings.impulseResponse.gainDb))
+            : 0
+      },
       resampler: {
         forceOutputRate: settings.resampler?.forceOutputRate === true,
         targetSampleRate:
@@ -349,6 +512,12 @@ export function loadDspSettings(): DspSettings {
         gaplessEnabled: settings.transition?.gaplessEnabled !== false,
         crossfadeEnabled: settings.transition?.crossfadeEnabled === true,
         crossfadeAuto: settings.transition?.crossfadeAuto === true,
+        pauseFadeEnabled: settings.transition?.pauseFadeEnabled !== false,
+        pauseFadeMs:
+          typeof settings.transition?.pauseFadeMs === 'number' &&
+          Number.isFinite(settings.transition.pauseFadeMs)
+            ? Math.max(0, Math.min(1000, settings.transition.pauseFadeMs))
+            : defaults.transition.pauseFadeMs,
         crossfadeMs:
           typeof settings.transition?.crossfadeMs === 'number'
             ? Math.max(0, Math.min(30000, settings.transition.crossfadeMs))

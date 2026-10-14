@@ -3,12 +3,15 @@ import type { LogEntry } from '../main/service/loggerService'
 import type {
   AudioChainStatus,
   CompressorConfig,
+  CrossfeedConfig,
   DelayConfig,
   DeviceInfo,
   DspNodeConfig,
   EqBand,
+  ImpulseResponseConfig,
   PlaybackStatus,
   ResamplerConfig,
+  StereoFieldConfig,
   TransitionConfig
 } from '../renderer/src/types/audio'
 import type { DatabaseAction, DatabaseResponse } from '../main/database/ipc-handlers'
@@ -38,6 +41,7 @@ declare global {
         seek(positionMs: number): Promise<{ success: boolean }>
         setVolume(volume: number): Promise<{ success: boolean }>
         setPreamp(db: number, enabled: boolean): Promise<{ success: boolean }>
+        resetAudioProcessingSettings(): Promise<{ success: boolean; error?: string }>
         setReplayGain(config: {
           mode: 'off' | 'track' | 'album'
           preventClipping: boolean
@@ -149,6 +153,14 @@ declare global {
           }
           error?: string
         }>
+        setStereoFieldConfig(config: StereoFieldConfig): Promise<{ success: boolean }>
+        getStereoFieldConfig(): Promise<{ success: boolean; data?: StereoFieldConfig }>
+        setCrossfeedConfig(config: CrossfeedConfig): Promise<{ success: boolean }>
+        getCrossfeedConfig(): Promise<{ success: boolean; data?: CrossfeedConfig }>
+        setImpulseResponseConfig(
+          config: ImpulseResponseConfig
+        ): Promise<{ success: boolean; error?: string }>
+        getImpulseResponseConfig(): Promise<{ success: boolean; data?: ImpulseResponseConfig }>
         setLimiter(config: {
           enabled: boolean
           ceilingDb: number
@@ -185,6 +197,8 @@ declare global {
             lowEnergy: number
             onsetStrength: number
             droppedFrames: number
+            clipGuardLimitedFrames: number
+            clipGuardReductionDb: number
             beatSequence: number
             bpm: number
             momentaryLufs: number

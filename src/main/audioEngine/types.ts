@@ -48,6 +48,8 @@ export interface AudioChainStatus {
   activeNodes: string[]
   bypassedNodes: string[]
   bitPerfectBlockers: string[]
+  eqPeakDb: number
+  eqAutoPreampDb: number
   isBitPerfectEligible: boolean
   bitPerfectVerificationState: 'blocked' | 'eligible_unverified' | 'verified'
   isBitPerfect: boolean
@@ -67,7 +69,21 @@ export interface ResamplerConfig {
 }
 
 export interface DspNodeConfig {
-  id: 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
+  id:
+    | 'channel_matrix'
+    | 'replay_gain'
+    | 'preamp'
+    | 'eq'
+    | 'compressor'
+    | 'delay'
+    | 'reverb'
+    | 'chorus'
+    | 'noise_gate'
+    | 'phaser'
+    | 'stereo_field'
+    | 'crossfeed'
+    | 'impulse_response'
+    | 'limiter'
   enabled: boolean
 }
 export interface CompressorConfig {
@@ -107,6 +123,7 @@ export type AudioCommandAction =
   | 'seek'
   | 'setVolume'
   | 'setPreamp'
+  | 'resetAudioProcessingSettings'
   | 'setReplayGain'
   | 'getReplayGain'
   | 'setPlaybackSpeed'
@@ -136,6 +153,12 @@ export type AudioCommandAction =
   | 'getPhaserConfig'
   | 'setChannelMatrixConfig'
   | 'getChannelMatrixConfig'
+  | 'setStereoFieldConfig'
+  | 'getStereoFieldConfig'
+  | 'setCrossfeedConfig'
+  | 'getCrossfeedConfig'
+  | 'setImpulseResponseConfig'
+  | 'getImpulseResponseConfig'
   | 'setLimiter'
   | 'getLimiter'
   | 'enumerateDevices'

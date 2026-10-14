@@ -187,6 +187,13 @@ public:
             InstanceMethod("getPhaserConfig", &AudioEngineWrapper::GetPhaserConfig),
             InstanceMethod("setChannelMatrixConfig", &AudioEngineWrapper::SetChannelMatrixConfig),
             InstanceMethod("getChannelMatrixConfig", &AudioEngineWrapper::GetChannelMatrixConfig),
+            InstanceMethod("setStereoFieldConfig", &AudioEngineWrapper::SetStereoFieldConfig),
+            InstanceMethod("getStereoFieldConfig", &AudioEngineWrapper::GetStereoFieldConfig),
+            InstanceMethod("setCrossfeedConfig", &AudioEngineWrapper::SetCrossfeedConfig),
+            InstanceMethod("getCrossfeedConfig", &AudioEngineWrapper::GetCrossfeedConfig),
+            InstanceMethod("setImpulseResponseConfig", &AudioEngineWrapper::SetImpulseResponseConfig),
+            InstanceMethod("getImpulseResponseConfig", &AudioEngineWrapper::GetImpulseResponseConfig),
+            InstanceMethod("getImpulseResponseError", &AudioEngineWrapper::GetImpulseResponseError),
             InstanceMethod("setLimiter", &AudioEngineWrapper::SetLimiter),
             InstanceMethod("getLimiter", &AudioEngineWrapper::GetLimiter),
             InstanceMethod("setTransitionConfig", &AudioEngineWrapper::SetTransitionConfig),
@@ -722,6 +729,79 @@ private:
         v.Set("swapStereo", Napi::Boolean::New(info.Env(), c.swap_stereo)); v.Set("monoDownmix", Napi::Boolean::New(info.Env(), c.mono_downmix));
         auto gains = Napi::Array::New(info.Env(), kMaxAudioChannels); for (uint32_t i = 0; i < kMaxAudioChannels; ++i) gains.Set(i, Napi::Number::New(info.Env(), c.output_gains[i])); v.Set("outputGains", gains); return v;
     }
+    Napi::Value SetStereoFieldConfig(const Napi::CallbackInfo& info) {
+        if (!info[0].IsObject()) return RejectCommand(info, "setStereoFieldConfig", "object");
+        return RunBoolCommand(info, "setStereoFieldConfig", [&](std::string& parameters) {
+            const auto value = info[0].As<Napi::Object>();
+            const StereoFieldConfig config{
+                read_property(value, "enabled", parameters).ToBoolean().Value(),
+                read_property(value, "midDb", parameters).ToNumber().FloatValue(),
+                read_property(value, "sideDb", parameters).ToNumber().FloatValue(),
+                value.Has("width") ? value.Get("width").ToNumber().FloatValue() : 1.0f};
+            parameters = format_params({{"enabled", config.enabled}, {"midDb", config.mid_db}, {"sideDb", config.side_db}, {"width", config.width}});
+            return engine_->set_stereo_field_config(config);
+        }, true);
+    }
+    Napi::Value GetStereoFieldConfig(const Napi::CallbackInfo& info) {
+        const auto config = engine_->stereo_field_config();
+        auto value = Napi::Object::New(info.Env());
+        value.Set("enabled", Napi::Boolean::New(info.Env(), config.enabled));
+        value.Set("midDb", Napi::Number::New(info.Env(), config.mid_db));
+        value.Set("sideDb", Napi::Number::New(info.Env(), config.side_db));
+        value.Set("width", Napi::Number::New(info.Env(), config.width));
+        return value;
+    }
+    Napi::Value SetCrossfeedConfig(const Napi::CallbackInfo& info) {
+        if (!info[0].IsObject()) return RejectCommand(info, "setCrossfeedConfig", "object");
+        return RunBoolCommand(info, "setCrossfeedConfig", [&](std::string& parameters) {
+            const auto value = info[0].As<Napi::Object>();
+            const CrossfeedConfig config{
+                read_property(value, "enabled", parameters).ToBoolean().Value(),
+                read_property(value, "strength", parameters).ToNumber().FloatValue(),
+                read_property(value, "cutoffHz", parameters).ToNumber().FloatValue(),
+                read_property(value, "delayMs", parameters).ToNumber().FloatValue()};
+            parameters = format_params({{"enabled", config.enabled}, {"strength", config.strength},
+                                        {"cutoffHz", config.cutoff_hz}, {"delayMs", config.delay_ms}});
+            return engine_->set_crossfeed_config(config);
+        }, true);
+    }
+    Napi::Value GetCrossfeedConfig(const Napi::CallbackInfo& info) {
+        const auto config = engine_->crossfeed_config();
+        auto value = Napi::Object::New(info.Env());
+        value.Set("enabled", Napi::Boolean::New(info.Env(), config.enabled));
+        value.Set("strength", Napi::Number::New(info.Env(), config.strength));
+        value.Set("cutoffHz", Napi::Number::New(info.Env(), config.cutoff_hz));
+        value.Set("delayMs", Napi::Number::New(info.Env(), config.delay_ms));
+        return value;
+    }
+    Napi::Value SetImpulseResponseConfig(const Napi::CallbackInfo& info) {
+        if (!info[0].IsObject()) return RejectCommand(info, "setImpulseResponseConfig", "object");
+        return RunBoolCommand(info, "setImpulseResponseConfig", [&](std::string& parameters) {
+            const auto value = info[0].As<Napi::Object>();
+            ImpulseResponseConfig config;
+            config.enabled = read_property(value, "enabled", parameters).ToBoolean().Value();
+            config.path = read_property(value, "path", parameters).ToString().Utf8Value();
+            config.auto_gain = value.Has("autoGain") ? value.Get("autoGain").ToBoolean().Value() : true;
+            config.gain_db = value.Has("gainDb") ? value.Get("gainDb").ToNumber().FloatValue() : 0.0f;
+            parameters = "enabled=" + std::to_string(config.enabled) +
+                         ", path=" + config.path + ", autoGain=" + std::to_string(config.auto_gain) +
+                         ", gainDb=" + std::to_string(config.gain_db);
+            return engine_->set_impulse_response_config(config);
+        }, true);
+    }
+    Napi::Value GetImpulseResponseConfig(const Napi::CallbackInfo& info) {
+        const auto config = engine_->impulse_response_config();
+        auto value = Napi::Object::New(info.Env());
+        value.Set("enabled", Napi::Boolean::New(info.Env(), config.enabled));
+        value.Set("path", Napi::String::New(info.Env(), config.path));
+        value.Set("autoGain", Napi::Boolean::New(info.Env(), config.auto_gain));
+        value.Set("gainDb", Napi::Number::New(info.Env(), config.gain_db));
+        value.Set("autoPreampDb", Napi::Number::New(info.Env(), engine_->impulse_response_auto_preamp_db()));
+        return value;
+    }
+    Napi::Value GetImpulseResponseError(const Napi::CallbackInfo& info) {
+        return Napi::String::New(info.Env(), engine_->impulse_response_error());
+    }
     Napi::Value SetLimiter(const Napi::CallbackInfo& info) {
         if (!info[0].IsObject()) return RejectCommand(info, "setLimiter", "object");
         return RunBoolCommand(info, "setLimiter", [&](std::string& parameters) {
@@ -741,11 +821,16 @@ private:
         return RunBoolCommand(info, "setTransitionConfig", [&](std::string& parameters) {
             const auto v = info[0].As<Napi::Object>();
             const auto auto_value = read_property(v, "crossfadeAuto", parameters);
+            const auto pause_fade_value = read_property(v, "pauseFadeEnabled", parameters);
+            const auto pause_fade_ms_value = read_property(v, "pauseFadeMs", parameters);
             const TransitionConfig config{read_property(v, "gaplessEnabled", parameters).ToBoolean().Value(),
                 read_property(v, "crossfadeEnabled", parameters).ToBoolean().Value(), read_property(v, "crossfadeMs", parameters).ToNumber().Int32Value(),
-                auto_value.IsBoolean() && auto_value.As<Napi::Boolean>().Value()};
+                auto_value.IsBoolean() && auto_value.As<Napi::Boolean>().Value(),
+                !pause_fade_value.IsBoolean() || pause_fade_value.As<Napi::Boolean>().Value(),
+                pause_fade_ms_value.IsNumber() ? pause_fade_ms_value.As<Napi::Number>().Int32Value() : 180};
             parameters = format_params({{"gaplessEnabled", config.gapless_enabled}, {"crossfadeEnabled", config.crossfade_enabled},
-                {"crossfadeMs", config.crossfade_ms}, {"crossfadeAuto", config.crossfade_auto}});
+                {"crossfadeMs", config.crossfade_ms}, {"crossfadeAuto", config.crossfade_auto},
+                {"pauseFadeEnabled", config.pause_fade_enabled}, {"pauseFadeMs", config.pause_fade_ms}});
             return engine_->set_transition_config(config);
         }, true);
     }
@@ -754,7 +839,9 @@ private:
         v.Set("gaplessEnabled", Napi::Boolean::New(info.Env(), c.gapless_enabled));
         v.Set("crossfadeEnabled", Napi::Boolean::New(info.Env(), c.crossfade_enabled));
         v.Set("crossfadeMs", Napi::Number::New(info.Env(), c.crossfade_ms));
-        v.Set("crossfadeAuto", Napi::Boolean::New(info.Env(), c.crossfade_auto)); return v;
+        v.Set("crossfadeAuto", Napi::Boolean::New(info.Env(), c.crossfade_auto));
+        v.Set("pauseFadeEnabled", Napi::Boolean::New(info.Env(), c.pause_fade_enabled));
+        v.Set("pauseFadeMs", Napi::Number::New(info.Env(), c.pause_fade_ms)); return v;
     }
 
     Napi::Value EnumerateDevices(const Napi::CallbackInfo& info) {
@@ -928,6 +1015,8 @@ private:
         obj.Set("activeNodes", make_strings(chain.active_nodes));
         obj.Set("bypassedNodes", make_strings(chain.bypassed_nodes));
         obj.Set("bitPerfectBlockers", make_strings(chain.bit_perfect_blockers));
+        obj.Set("eqPeakDb", Napi::Number::New(info.Env(), chain.eq_peak_db));
+        obj.Set("eqAutoPreampDb", Napi::Number::New(info.Env(), chain.eq_auto_preamp_db));
         obj.Set("isBitPerfectEligible", Napi::Boolean::New(info.Env(), chain.is_bit_perfect_eligible));
         obj.Set("bitPerfectVerificationState", Napi::String::New(info.Env(), chain.bit_perfect_verification_state));
         obj.Set("isBitPerfect", Napi::Boolean::New(info.Env(), chain.is_bit_perfect));
@@ -938,6 +1027,8 @@ private:
         obj.Set("outputTimeMs", Napi::Number::New(info.Env(), value.output_time_ms)); obj.Set("analysisTimeMs", Napi::Number::New(info.Env(), value.analysis_time_ms)); obj.Set("analysisLatencyMs", Napi::Number::New(info.Env(), value.analysis_latency_ms)); obj.Set("rms", Napi::Number::New(info.Env(), value.rms));
         obj.Set("lowEnergy", Napi::Number::New(info.Env(), value.low_energy)); obj.Set("onsetStrength", Napi::Number::New(info.Env(), value.onset_strength));
         obj.Set("droppedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.dropped_frames)));
+        obj.Set("clipGuardLimitedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.clip_guard_limited_frames)));
+        obj.Set("clipGuardReductionDb", Napi::Number::New(info.Env(), value.clip_guard_reduction_db));
         obj.Set("beatSequence", Napi::Number::New(info.Env(), static_cast<double>(value.beat_sequence)));
         obj.Set("bpm", Napi::Number::New(info.Env(), value.bpm));
         obj.Set("momentaryLufs", Napi::Number::New(info.Env(), value.momentary_lufs));
