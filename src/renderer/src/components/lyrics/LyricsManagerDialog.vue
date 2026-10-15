@@ -17,6 +17,11 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: '
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
+const providerLabelKeys: Record<NetworkLyricCandidate['provider'], string> = {
+  netease: 'playerPanel.lyricProviderNetease',
+  kugou: 'playerPanel.lyricProviderKugou',
+  qqmusic: 'playerPanel.lyricProviderQQMusic'
+}
 const loading = ref(false)
 const error = ref('')
 const candidates = ref<NetworkLyricCandidate[]>([])
@@ -267,13 +272,7 @@ async function save(): Promise<void> {
               "
               @click="selectCandidate(index)"
             >
-              {{
-                t(
-                  candidate.provider === 'netease'
-                    ? 'playerPanel.lyricProviderNetease'
-                    : 'playerPanel.lyricProviderKugou'
-                )
-              }}
+              {{ t(providerLabelKeys[candidate.provider]) }}
               · {{ candidate.title }} — {{ candidate.artist }}
               <span
                 class="ml-2 inline-flex items-center gap-1 rounded bg-text/10 px-1.5 py-0.5 text-[10px]"

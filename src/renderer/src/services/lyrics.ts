@@ -80,7 +80,7 @@ export interface LyricRubySegment {
 
 export interface NetworkLyricCandidate {
   id: string
-  provider: 'netease' | 'kugou'
+  provider: 'netease' | 'kugou' | 'qqmusic'
   title: string
   artist: string
   album?: string

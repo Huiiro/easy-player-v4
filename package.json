@@ -39,6 +39,7 @@
     "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
     "music-metadata": "^11.14.0",
     "node-id3": "^0.2.9",
+    "qrc-decoder": "1.0.2",
     "sharp": "^0.35.3"
   },
   "devDependencies": {

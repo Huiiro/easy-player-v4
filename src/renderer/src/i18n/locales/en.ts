@@ -854,6 +854,7 @@ export default {
       'Edit romanized lyrics here (optional; ELRC/YRC word timing supported)…',
     lyricProviderNetease: 'NetEase Cloud Music',
     lyricProviderKugou: 'KuGou',
+    lyricProviderQQMusic: 'QQ Music',
     lyricWordTimed: 'Word synced',
     lyricLineTimed: 'Line synced',
     lyricSourceNone: 'No lyrics found'
