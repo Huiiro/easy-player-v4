@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { isPlaybackOnly } from '../service/playbackMode'
 import { ipcMain, BrowserWindow } from 'electron'
 import { AudioEngineManager } from '../audioEngine'
 import { EngineState, IPC } from '../audioEngine/types'
@@ -21,7 +22,13 @@ const playbackStateNames: Record<EngineState, string> = {
   [EngineState.Stopped]: 'stopped'
 }
 
-export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: BrowserWindow): void {
+export function registerIpcHandlers(
+  engine: AudioEngineManager,
+  mainWindow: () => BrowserWindow | null
+): void {
+  let readyRendererId = 0
+  const pendingEnds: Array<{ reason: string; filePath: string }> = []
+  let reclaimTimer: ReturnType<typeof setTimeout> | undefined
   // Keep the frequently updated resume point separate from the queue snapshot.
   // The latter can be large, while this value is written from position events.
   const storedCheckpoint = getAppSetting('player.playback-checkpoint')
@@ -69,7 +76,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
 
   // ── Commands ──
 
-  ipcMain.handle(IPC.COMMAND, async (_event, request) => {
+  ipcMain.handle(IPC.COMMAND, async (event, request) => {
     if (!request || typeof request.action !== 'string') {
       Logger.warn('[Audio IPC] invalid command request')
       return { success: false, error: t('invalidAudioCommand') }
@@ -80,6 +87,14 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       logParams(params),
       async () => {
         switch (action) {
+          case 'attachRenderer': {
+            if (event.sender !== mainWindow()?.webContents) return { success: false }
+            readyRendererId = event.sender.id
+            const data = pendingEnds.splice(0)
+            if (reclaimTimer) clearTimeout(reclaimTimer)
+            if (isPlaybackOnly()) reclaimTimer = setTimeout(() => engine.reclaimIdleMemory(), 2500)
+            return { success: true, data }
+          }
           case 'open': {
             const ok = await engine.openAsync(params.filePath)
             if (ok)
@@ -336,6 +351,18 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
           case 'getAudioChain': {
             return { success: true, data: engine.getAudioChain() }
           }
+          case 'setAnalysisEnabled':
+            return { success: engine.setAnalysisEnabled(params?.enabled === true) }
+          case 'setExtremePlayback': {
+            readyRendererId = 0
+            const success = engine.setExtremePlayback(params?.enabled === true)
+            return success
+              ? { success }
+              : {
+                  success,
+                  error: 'Please rebuild the native audio engine if mode switching fails.'
+                }
+          }
           case 'getAudioAnalysis':
             return {
               success: true,
@@ -373,7 +400,14 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
   })
 
   // ── Position events ──
+  let lastPositionSentAt = 0
+  let lastPositionMs = -1
   engine.onPositionChanged((posMs: number, durMs: number) => {
+    const now = Date.now()
+    const discontinuity = Math.abs(posMs - lastPositionMs) > 1500 || posMs < lastPositionMs
+    if (isPlaybackOnly() && !discontinuity && now - lastPositionSentAt < 1000) return
+    lastPositionSentAt = now
+    lastPositionMs = posMs
     saveCheckpoint({ positionMs: posMs }, true)
     sendEvent(mainWindow, 'positionChanged', {
       positionMs: posMs,
@@ -386,7 +420,9 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
       const nextFile = status?.trackInfo?.filePath
       if (nextFile) saveCheckpoint({ currentFile: nextFile, positionMs: status.positionMs })
     }
-    sendEvent(mainWindow, 'trackEnded', { reason, filePath })
+    if (readyRendererId !== mainWindow()?.webContents.id) {
+      pendingEnds.push({ reason, filePath })
+    } else sendEvent(mainWindow, 'trackEnded', { reason, filePath })
     Logger.write('debug', 'native', `Track ended: reason=${reason}, path=${filePath}`)
   })
 
@@ -398,8 +434,7 @@ export function registerIpcHandlers(engine: AudioEngineManager, mainWindow: Brow
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sendEvent(win: BrowserWindow, type: string, data: any): void {
-  if (!win.isDestroyed()) {
-    win.webContents.send(IPC.EVENT, { type, data })
-  }
+function sendEvent(getWindow: () => BrowserWindow | null, type: string, data: any): void {
+  const win = getWindow()
+  if (win && !win.isDestroyed()) win.webContents.send(IPC.EVENT, { type, data })
 }

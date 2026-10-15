@@ -1,6 +1,7 @@
 #include "audio_engine.h"
 #include "logger.h"
 #include "ffmpeg_logging.h"
+#include "spectrum_analysis.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -711,7 +712,7 @@ bool AudioEngine::play() {
             backend_->buffer_size_frames());
         // Two seconds of final output PCM. The future analysis thread is the
         // sole consumer; callback writes use timeout 0 and may drop frames.
-        analysis_ring_buffer_ = std::make_unique<RingBuffer>(actual.channels, actual.sample_rate * 2);
+        analysis_ring_buffer_ = std::make_unique<RingBuffer>(actual.channels, actual.sample_rate / 4);
         analysis_dropped_frames_.store(0, std::memory_order_release);
         analysis_output_frames_.store(0, std::memory_order_release);
         analysis_processed_frames_.store(0, std::memory_order_release);
@@ -1497,7 +1498,8 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
         mark_track_ended_pending();
     }
 
-    if (analysis_ring_buffer_) {
+    if (analysis_ring_buffer_ && analysis_enabled_.load(std::memory_order_acquire) &&
+        !playback_only_.load(std::memory_order_acquire)) {
         const int written = analysis_ring_buffer_->write(output, frames, 0);
         if (written < frames) analysis_dropped_frames_.fetch_add(frames - written, std::memory_order_relaxed);
     }
@@ -1507,6 +1509,7 @@ int AudioEngine::audio_callback(float* output, int frames, int channels) {
 }
 
 void AudioEngine::analysis_thread_func() {
+    SpectrumAnalysis spectrum;
     struct Biquad {
         float b0 = 1.0f, b1 = 0.0f, b2 = 0.0f, a1 = 0.0f, a2 = 0.0f, z1 = 0.0f, z2 = 0.0f;
         float process(float input) { const float output = b0 * input + z1; z1 = b1 * input - a1 * output + z2; z2 = b2 * input - a2 * output; return output; }
@@ -1563,6 +1566,16 @@ void AudioEngine::analysis_thread_func() {
     };
     auto lufs_from_energy = [](double energy) { return static_cast<float>(std::max(-70.0, -0.691 + 10.0 * std::log10(std::max(energy, 1.0e-12)))); };
     while (analysis_running_.load(std::memory_order_acquire)) {
+        // Only the consumer drains this SPSC ring. Never reset it from the UI
+        // thread while an audio callback may still be writing its last block.
+        if (!analysis_enabled_.load(std::memory_order_acquire) ||
+            playback_only_.load(std::memory_order_acquire)) {
+            if (analysis_ring_buffer_ && !analysis_work_buffer_.empty()) {
+                while (analysis_ring_buffer_->read(analysis_work_buffer_.data(), 1024) > 0) {}
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            continue;
+        }
         if (!analysis_ring_buffer_ || analysis_work_buffer_.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
         const int frames = analysis_ring_buffer_->read(analysis_work_buffer_.data(), 1024);
         if (frames == 0) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }
@@ -1690,16 +1703,9 @@ void AudioEngine::analysis_thread_func() {
         }
         onset_average = onset_average * 0.94f + onset * 0.06f;
         if (spectrum_analysis_enabled_.load(std::memory_order_acquire)) {
+            const auto magnitudes = spectrum.process(analysis_work_buffer_.data(), frames, channels, sample_rate);
             for (int band = 0; band < 64; ++band) {
-                const float frequency = std::min(sample_rate * 0.45f, 45.0f * std::pow(2.0f, band / 10.0f));
-                float real = 0.0f, imaginary = 0.0f;
-                for (int frame = 0; frame < frames; ++frame) {
-                    float mono = 0.0f; for (int channel = 0; channel < channels; ++channel) mono += analysis_work_buffer_[frame * channels + channel];
-                    const float window = 0.5f - 0.5f * std::cos(6.28318530718f * frame / std::max(1, frames - 1));
-                    const float phase = 6.28318530718f * frequency * frame / sample_rate;
-                    real += mono * window * std::cos(phase); imaginary -= mono * window * std::sin(phase);
-                }
-                analysis_spectrum_[band].store(std::min(1.0f, 4.0f * std::sqrt(real * real + imaginary * imaginary) / frames), std::memory_order_release);
+                analysis_spectrum_[band].store(magnitudes[band], std::memory_order_release);
             }
         }
         previous_rms = 0.85f * previous_rms + 0.15f * rms;

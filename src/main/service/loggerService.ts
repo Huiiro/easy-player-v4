@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { isPlaybackOnly } from './playbackMode'
 import fs from 'node:fs'
 import path from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -38,6 +39,7 @@ function format(value: unknown): string {
 
 export class Logger {
   static write(level: LogLevel, source: LogSource, message: string, ...params: unknown[]): void {
+    if (isPlaybackOnly() && level !== 'error') return
     if (LEVELS.indexOf(level) < LEVELS.indexOf(minimumLevel)) return
     const entry: LogEntry = {
       id: nextId++,

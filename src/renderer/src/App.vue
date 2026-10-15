@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { useUIStore } from '@/stores/ui/uiStore'
 import { useI18n } from 'vue-i18n'
 import BaseMessage from '@/components/ui/BaseMessage.vue'
 import { useMessage } from '@/components/ui/useMessage'
@@ -7,6 +8,7 @@ import router from '@/router'
 import { flushPlayerDataStorage } from '@/stores/persistence'
 
 const { t } = useI18n()
+const ui = useUIStore()
 const { success } = useMessage()
 const removeDownloadProgress = window.api.downloads.onProgress((progress) => {
   if (progress.status !== 'done' || router.currentRoute.value.path === '/download') return
@@ -17,8 +19,15 @@ const clearPerformanceEntries = (): void => {
   performance.clearMeasures()
 }
 let performanceCleanupTimer: ReturnType<typeof setInterval> | undefined
+watch(
+  () => ui.extremePlayback,
+  (enabled) => {
+    if (performanceCleanupTimer) clearInterval(performanceCleanupTimer)
+    performanceCleanupTimer = enabled ? undefined : setInterval(clearPerformanceEntries, 10_000)
+  }
+)
 onMounted(() => {
-  performanceCleanupTimer = setInterval(clearPerformanceEntries, 10_000)
+  if (!ui.extremePlayback) performanceCleanupTimer = setInterval(clearPerformanceEntries, 10_000)
   window.addEventListener('beforeunload', flushPlayerDataStorage)
 })
 onBeforeUnmount(() => {

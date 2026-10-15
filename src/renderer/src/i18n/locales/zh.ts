@@ -511,6 +511,11 @@ export default {
     restore: '恢复主窗口'
   },
   settings: {
+    extremePlaybackActive: '处于轻量模式',
+    returnFullPlayer: '返回完整播放器',
+    extremePlayback: '轻量模式',
+    extremePlaybackDescription: '仅保留基础播放功能，暂停其他活动。',
+    exitExtremePlayback: '退出轻量模式',
     homeWelcomeText: '主页欢迎语',
     homeWelcomeTextDescription: '自定义主页的大标题，留空则按时段显示默认问候。修改自动保存。',
     homeWelcomeTextPlaceholder: '你好，Easy Player',

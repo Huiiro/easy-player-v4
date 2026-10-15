@@ -1,6 +1,7 @@
 import { logOperation } from '../service/operationLogger'
 import { join } from 'path'
 import { app } from 'electron'
+import { isPlaybackOnly, setPlaybackOnly } from '../service/playbackMode'
 import { Logger } from '../service/loggerService'
 import { AudioChainStatus, DeviceInfo } from './types'
 import {
@@ -609,13 +610,32 @@ export class AudioEngineManager {
   getAudioAnalysis(includeSpectrum = false): unknown {
     return this.engine?.getAudioAnalysis(includeSpectrum) ?? null
   }
+  setAnalysisEnabled(enabled: boolean): boolean {
+    return this.engine?.setAnalysisEnabled?.(enabled && !isPlaybackOnly()) === true
+  }
+  reclaimIdleMemory(): void {
+    if (!isPlaybackOnly() || process.platform !== 'win32') return
+    for (const metric of app.getAppMetrics()) {
+      // The browser process hosts the real-time decoder/output threads. Keep
+      // its audio buffers and code resident; reclaim only UI/GPU/utility pages.
+      if (metric.type !== 'Browser') nativeAddon?.reclaimProcessMemory?.(metric.pid)
+    }
+  }
+  setExtremePlayback(enabled: boolean): boolean {
+    // An older addon must be rebuilt; do not claim that analysis was stopped.
+    if (!this.engine?.setPlaybackOnly || !this.engine?.setAnalysisEnabled) return false
+    this.engine.setPlaybackOnly(enabled)
+    if (enabled) this.engine.setAnalysisEnabled(false)
+    setPlaybackOnly(enabled)
+    return true
+  }
   setLoudnessAnalysisEnabled(enabled: boolean): boolean {
     if (!this.engine) return false
-    return this.engine.setLoudnessAnalysisEnabled(enabled)
+    return this.engine.setLoudnessAnalysisEnabled(enabled && !isPlaybackOnly())
   }
   setSpectrumAnalysisEnabled(enabled: boolean): boolean {
     if (!this.engine) return false
-    return this.engine.setSpectrumAnalysisEnabled(enabled)
+    return this.engine.setSpectrumAnalysisEnabled(enabled && !isPlaybackOnly())
   }
 
   // ── Callbacks ──

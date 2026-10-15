@@ -1,6 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import { types } from 'node:util'
 import { Logger } from './loggerService'
+import { isPlaybackOnly } from './playbackMode'
 
 type LogContext = Record<string, unknown>
 interface OperationOptions {
@@ -127,6 +128,7 @@ export function logOperation<T>(
   operation: () => T,
   options: OperationOptions = {}
 ): T {
+  if (isPlaybackOnly()) return operation()
   const operationId = nextOperationId++
   const started = performance.now()
   const details = (): LogContext => ({

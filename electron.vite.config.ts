@@ -20,6 +20,14 @@ export default defineConfig({
   },
   preload: {},
   renderer: {
+    build: {
+      rollupOptions: {
+        input: {
+          main: resolve('src/renderer/index.html'),
+          extreme: resolve('src/renderer/extreme.html')
+        }
+      }
+    },
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version)
     },

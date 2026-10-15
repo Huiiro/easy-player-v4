@@ -29,6 +29,18 @@ function setSmartShuffle(value: boolean | string | number): void {
         {{ t('settings.openAudioControlPanel') }}
       </button>
     </div>
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.extremePlayback') }}</h3>
+        <p>{{ t('settings.extremePlaybackDescription') }}</p>
+      </div>
+      <BaseSwitch
+        :model-value="ui.extremePlayback"
+        :disabled="player.playbackModeChanging"
+        size="md"
+        @update:model-value="player.setExtremePlayback($event === true)"
+      />
+    </div>
     <SleepTimerSettings />
     <div class="setting-row">
       <div>

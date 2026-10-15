@@ -1,4 +1,7 @@
 import { t } from '../i18n'
+import { requireBackgroundWork } from './playbackMode'
+import { CancellationToken } from 'electron-updater'
+import { onPlaybackModeChanged } from './playbackMode'
 import { app, BrowserWindow } from 'electron'
 import { autoUpdater, type ProgressInfo, type UpdateInfo } from 'electron-updater'
 import { Logger } from './loggerService'
@@ -82,6 +85,7 @@ export function getUpdateStatus(): UpdateStatus {
 }
 
 export async function checkForUpdates(): Promise<UpdateStatus> {
+  requireBackgroundWork()
   if (!app.isPackaged) {
     Logger.debug('[Updater] check skipped in development', { version: app.getVersion() })
     return {
@@ -103,9 +107,18 @@ export async function checkForUpdates(): Promise<UpdateStatus> {
 }
 
 export async function downloadUpdate(): Promise<UpdateStatus> {
+  requireBackgroundWork()
   return logOperation('[Updater] downloadUpdate', { version: status.version }, async () => {
     if (!app.isPackaged) throw new Error(t('updateDownloadPackaged'))
-    await autoUpdater.downloadUpdate()
+    const token = new CancellationToken()
+    const cleanup = onPlaybackModeChanged((enabled) => {
+      if (enabled) token.cancel()
+    })
+    try {
+      await autoUpdater.downloadUpdate(token)
+    } finally {
+      cleanup()
+    }
     return status
   })
 }

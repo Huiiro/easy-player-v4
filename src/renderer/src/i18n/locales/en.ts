@@ -516,6 +516,11 @@ export default {
     restore: 'Restore main window'
   },
   settings: {
+    extremePlaybackActive: 'Lightweight mode is active',
+    returnFullPlayer: 'Return to full player',
+    extremePlayback: 'Lightweight mode',
+    extremePlaybackDescription: 'Only basic playback is kept, and other activities are paused.',
+    exitExtremePlayback: 'Exit lightweight mode',
     homeWelcomeText: 'Home welcome message',
     homeWelcomeTextDescription:
       'Customize the home heading. Leave empty for the default time-based greeting. Changes are saved automatically.',

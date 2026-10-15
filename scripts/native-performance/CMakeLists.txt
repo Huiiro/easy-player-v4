@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(playback_performance_tests LANGUAGES CXX)
+enable_testing()
+add_executable(spectrum_analysis_test spectrum_analysis_test.cpp)
+target_compile_features(spectrum_analysis_test PRIVATE cxx_std_17)
+target_include_directories(spectrum_analysis_test PRIVATE ../../engine-core/include/easy_player)
+add_test(NAME spectrum_analysis COMMAND spectrum_analysis_test)

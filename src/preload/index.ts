@@ -118,6 +118,13 @@ const audioAPI = {
       action: 'getAudioAnalysis',
       params: { includeSpectrum }
     }),
+  setAnalysisEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', { action: 'setAnalysisEnabled', params: { enabled } }),
+  attachRenderer: () =>
+    ipcRenderer.invoke('audio:command', { action: 'attachRenderer', params: {} }),
+  switchPlaybackView: (enabled: boolean) => ipcRenderer.invoke('audio:switch-view', enabled),
+  setExtremePlayback: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', { action: 'setExtremePlayback', params: { enabled } }),
   setLoudnessAnalysisEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('audio:command', {
       action: 'setLoudnessAnalysisEnabled',

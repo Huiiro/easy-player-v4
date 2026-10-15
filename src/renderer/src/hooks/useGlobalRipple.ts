@@ -1,6 +1,6 @@
 export function initGlobalRipple(): void {
   document.addEventListener('click', (e: MouseEvent) => {
-    if (e.button !== 0) return
+    if (e.button !== 0 || document.documentElement.classList.contains('extreme-playback')) return
 
     for (let i = 0; i < 2; i++) {
       const ripple = document.createElement('span')

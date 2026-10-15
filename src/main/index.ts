@@ -1,6 +1,7 @@
 import { setMainLocale, t } from './i18n'
 import { logError, logOperation, logParams, logUrl } from './service/operationLogger'
 import { performance } from 'node:perf_hooks'
+import { isPlaybackOnly, onPlaybackModeChanged } from './service/playbackMode'
 import {
   app,
   shell,
@@ -90,9 +91,15 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let normalRouteHash = ''
 let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let desktopLyricsBoundsTimer: ReturnType<typeof setTimeout> | undefined
+onPlaybackModeChanged((enabled) => {
+  if (!enabled) return
+  miniWindow?.destroy()
+  desktopLyricsWindow?.destroy()
+})
 let audioEngine: AudioEngineManager | null = null
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
@@ -109,9 +116,9 @@ function supportsWindowsMica(): boolean {
   return Number.isFinite(build) && build >= 22621
 }
 
-function setWindowsMica(enabled: boolean): boolean {
+function setWindowsMica(enabled: boolean, backgroundColor = '#111614'): boolean {
   if (!mainWindow || mainWindow.isDestroyed() || !supportsWindowsMica()) return false
-  mainWindow.setBackgroundColor('#111614')
+  mainWindow.setBackgroundColor(backgroundColor)
   mainWindow.setBackgroundMaterial(enabled ? 'mica' : 'none')
   return enabled
 }
@@ -501,8 +508,20 @@ function observeWindow(window: BrowserWindow, kind: string): void {
   window.on('closed', () => Logger.debug('[Window] closed', { kind, windowId }))
 }
 
-function createWindow(): void {
-  const restoredState = loadWindowState()
+function savedExtremeView(): boolean {
+  try {
+    const saved = getAppSetting('pinia.ui.preferences.v1')
+    return typeof saved === 'string' && JSON.parse(saved).extremePlayback === true
+  } catch {
+    return false
+  }
+}
+
+function createWindow(
+  extremeView = savedExtremeView(),
+  restoredState = loadWindowState(),
+  onShown?: () => void
+): void {
   const supportsMica = supportsWindowsMica()
   const micaEnabled = supportsMica && getAppSetting('window.mica-enabled') === true
   // Create the browser window.
@@ -516,7 +535,7 @@ function createWindow(): void {
     show: false,
     // Use renderer-owned caption buttons. Window Controls Overlay retains
     // native hit targets even when hidden, which conflicts with player UI.
-    frame: false,
+    frame: extremeView,
     // Extend the renderer into the native title bar while retaining macOS
     // traffic-light controls. The renderer reserves this area in Header.
     ...(process.platform === 'darwin'
@@ -525,26 +544,34 @@ function createWindow(): void {
           trafficLightPosition: TRAFFIC_LIGHT_POSITION
         }
       : {}),
-    backgroundColor: '#111614',
-    ...(micaEnabled ? { backgroundMaterial: 'mica' as const } : {}),
+    backgroundColor: extremeView ? '#151515' : '#111614',
+    ...(!extremeView && micaEnabled ? { backgroundMaterial: 'mica' as const } : {}),
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      spellcheck: false,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
     }
   })
+  const createdWindow = mainWindow
   observeWindow(mainWindow, 'main')
   mainWindow.webContents.on('did-start-navigation', (details) => {
     resetAudioFileDelivery(details.isSameDocument, details.isMainFrame)
   })
-  setWindowsMica(getAppSetting('window.mica-enabled') === true)
+  setWindowsMica(
+    !extremeView && getAppSetting('window.mica-enabled') === true,
+    extremeView ? '#151515' : '#111614'
+  )
 
   mainWindow.on('ready-to-show', () => {
-    if (restoredState.maximized) mainWindow?.maximize()
-    mainWindow?.show()
+    if (restoredState.maximized) createdWindow.maximize()
+    createdWindow.show()
+    // Loading can finish before the first paint. Keep the previous window
+    // visible until its replacement has actually been shown.
+    onShown?.()
   })
 
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
@@ -552,11 +579,14 @@ function createWindow(): void {
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
     saveWindowStateTimer = setTimeout(() => {
       saveWindowStateTimer = undefined
-      if (mainWindow && !mainWindow.isDestroyed()) saveWindowState(mainWindow)
+      if (!createdWindow.isDestroyed()) saveWindowState(createdWindow)
     }, 300)
   }
   mainWindow.on('resize', scheduleWindowStateSave)
   mainWindow.on('move', scheduleWindowStateSave)
+  mainWindow.on('closed', () => {
+    if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
+  })
   mainWindow.on('close', (event) => {
     if (!isQuitting && getAppSetting('system.close-to-tray') === true) {
       event.preventDefault()
@@ -565,7 +595,7 @@ function createWindow(): void {
       return
     }
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
-    saveWindowState(mainWindow!)
+    saveWindowState(createdWindow)
     // The desktop lyric window is independent, so it would otherwise keep
     // the app alive (and leave audio playing) after its owner is closed.
     if (desktopLyricsWindow && !desktopLyricsWindow.isDestroyed()) {
@@ -605,9 +635,14 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    mainWindow.loadURL(
+      `${process.env['ELECTRON_RENDERER_URL']}${extremeView ? '/extreme.html' : normalRouteHash}`
+    )
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(
+      join(__dirname, extremeView ? '../renderer/extreme.html' : '../renderer/index.html'),
+      !extremeView && normalRouteHash ? { hash: normalRouteHash.slice(1) } : undefined
+    )
   }
 }
 
@@ -693,7 +728,7 @@ function createDesktopLyricsWindow(): BrowserWindow {
   })
   desktopLyricsWindow.on('closed', () => {
     desktopLyricsWindow = null
-    mainWindow?.webContents.send('desktop-lyrics:closed')
+    if (!isPlaybackOnly()) mainWindow?.webContents.send('desktop-lyrics:closed')
   })
   desktopLyricsWindow.on('resize', () => {
     const bounds = desktopLyricsWindow?.getBounds()
@@ -989,6 +1024,7 @@ app.whenReady().then(() =>
       })
       registerRemoteSourceIpcHandlers()
       ipcMain.handle('mini-player:enter', () => {
+        if (isPlaybackOnly()) return { success: false }
         return logOperation('[IPC] mini-player:enter', {}, () => {
           const mini = createMiniPlayerWindow()
           mainWindow?.hide()
@@ -1019,6 +1055,7 @@ app.whenReady().then(() =>
         mainWindow?.webContents.send('mini-player:action', action)
       })
       ipcMain.handle('desktop-lyrics:open', () => {
+        if (isPlaybackOnly()) return { success: false }
         return logOperation('[IPC] desktop-lyrics:open', {}, () => {
           const window = createDesktopLyricsWindow()
           window.showInactive()
@@ -1077,12 +1114,49 @@ app.whenReady().then(() =>
         }
       )
 
+      let switchingView = false
+      ipcMain.handle('audio:switch-view', (event, enabled: unknown) => {
+        if (
+          event.sender !== mainWindow?.webContents ||
+          typeof enabled !== 'boolean' ||
+          switchingView
+        )
+          return { success: false, error: 'Playback view switch unavailable' }
+        switchingView = true
+        setTimeout(() => {
+          const previous = mainWindow
+          let windowState: WindowState | undefined
+          if (previous && !previous.isDestroyed()) {
+            windowState = {
+              ...previous.getNormalBounds(),
+              maximized: previous.isMaximized()
+            }
+            saveWindowState(previous)
+            if (enabled) normalRouteHash = new URL(previous.webContents.getURL()).hash
+          }
+          createWindow(enabled, windowState, () => {
+            if (previous && !previous.isDestroyed()) previous.destroy()
+            switchingView = false
+          })
+          const replacement = mainWindow!
+          replacement.webContents.once('did-fail-load', (_event, code) => {
+            if (code === -3) return
+            if (previous && !previous.isDestroyed()) {
+              mainWindow = previous
+              previous.show()
+            }
+            replacement.destroy()
+            switchingView = false
+          })
+        }, 0)
+        return { success: true }
+      })
       createWindow()
 
       // Initialize audio engine after window is created
       audioEngine = new AudioEngineManager()
       if (mainWindow && audioEngine.loaded) {
-        registerIpcHandlers(audioEngine, mainWindow)
+        registerIpcHandlers(audioEngine, () => mainWindow)
         Logger.debug('[Main] audio IPC handlers registered')
       } else if (mainWindow) {
         Logger.warn('[Main] Audio engine failed to load — running without audio')
@@ -1097,9 +1171,7 @@ app.whenReady().then(() =>
         // activated; only create a replacement when no window exists at all.
         if (BrowserWindow.getAllWindows().length === 0) {
           createWindow()
-          if (audioEngine?.loaded && mainWindow) {
-            registerIpcHandlers(audioEngine, mainWindow)
-          }
+          // Audio IPC uses a window getter and survives renderer replacement.
         } else {
           showMainWindow()
         }

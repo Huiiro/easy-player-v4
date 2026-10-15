@@ -20,6 +20,7 @@
 // ──────────────────────────────────────────────────────────
 
 struct DSoundBackend::Impl {
+    HWND cooperative_window = nullptr;
     IDirectSound8* ds8 = nullptr;
     IDirectSoundBuffer* primary = nullptr;    // primary buffer: sets output format only
     IDirectSoundBuffer* secondary = nullptr;  // secondary buffer: actual playback
@@ -195,7 +196,16 @@ AudioFormat DSoundBackend::open(
     impl_->ds8 = ds8;
 
     // Set cooperative level
-    HWND hwnd = GetForegroundWindow();
+    // The visible Electron window is replaced when changing playback views.
+    // DirectSound must not retain a handle that disappears during playback.
+    impl_->cooperative_window = CreateWindowExW(0, L"STATIC", L"Easy Player Audio",
+        WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    if (!impl_->cooperative_window) {
+        LOG_ERROR("DirectSound could not create a stable cooperative window");
+        close();
+        return {};
+    }
+    HWND hwnd = impl_->cooperative_window;
     hr = ds8->SetCooperativeLevel(hwnd, DSSCL_PRIORITY);
     if (FAILED(hr)) {
         LOG_WARN("DirectSound SetCooperativeLevel failed: hr=" + log_hex(hr) + "; trying NORMAL");
@@ -455,6 +465,10 @@ void DSoundBackend::close() {
     if (impl_->ds8) {
         impl_->ds8->Release();
         impl_->ds8 = nullptr;
+    }
+    if (impl_->cooperative_window) {
+        DestroyWindow(impl_->cooperative_window);
+        impl_->cooperative_window = nullptr;
     }
     LOG_DEBUG("DSoundBackend closed");
 }

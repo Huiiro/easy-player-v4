@@ -1,13 +1,13 @@
-import type { Component } from 'vue'
-import AuroraBackground from './themes/AuroraBackground.vue'
-import BlackHoleBackground from './themes/BlackHoleBackground.vue'
-import ForestBackground from './themes/ForestBackground.vue'
-import MatrixBackground from './themes/MatrixBackground.vue'
-import OceanBackground from './themes/OceanBackground.vue'
-import RainyBackground from './themes/RainyBackground.vue'
-import StarfieldBackground from './themes/StarfieldBackground.vue'
-import SunsetBackground from './themes/SunsetBackground.vue'
-import SolidBackground from './SolidBackground.vue'
+import { defineAsyncComponent, type Component } from 'vue'
+const AuroraBackground = defineAsyncComponent(() => import('./themes/AuroraBackground.vue'))
+const BlackHoleBackground = defineAsyncComponent(() => import('./themes/BlackHoleBackground.vue'))
+const ForestBackground = defineAsyncComponent(() => import('./themes/ForestBackground.vue'))
+const MatrixBackground = defineAsyncComponent(() => import('./themes/MatrixBackground.vue'))
+const OceanBackground = defineAsyncComponent(() => import('./themes/OceanBackground.vue'))
+const RainyBackground = defineAsyncComponent(() => import('./themes/RainyBackground.vue'))
+const StarfieldBackground = defineAsyncComponent(() => import('./themes/StarfieldBackground.vue'))
+const SunsetBackground = defineAsyncComponent(() => import('./themes/SunsetBackground.vue'))
+const SolidBackground = defineAsyncComponent(() => import('./SolidBackground.vue'))
 
 export type SystemBackground =
   | 'none'

@@ -25,7 +25,10 @@
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build:native && npm run build:nocheck && electron-builder --win",
     "build:mac": "npm run build:native && node scripts/bundle-macos-native-deps.js && npm run build:nocheck && electron-builder --mac",
-    "build:linux": "npm run build:nocheck && electron-builder --linux"
+    "build:linux": "npm run build:nocheck && electron-builder --linux",
+    "test:playback-mode": "node scripts/test-playback-mode.mjs",
+    "perf:playback": "node scripts/check-playback-performance.cjs",
+    "perf:app": "electron scripts/check-player-app.cjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

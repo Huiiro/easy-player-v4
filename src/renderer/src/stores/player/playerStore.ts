@@ -1,4 +1,5 @@
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { flushPlayerDataStorage } from '@/stores/persistence'
 import { defineStore } from 'pinia'
 import { shallowRef } from 'vue'
 import type {
@@ -34,6 +35,7 @@ export const usePlayerStore = defineStore('player', () => {
   const { warning } = useMessage()
   const ui = useUIStore()
   // ── State ──
+  const playbackModeChanging = ref(false)
   const state = ref<PlaybackState>('idle')
   const positionMs = ref(0)
   const durationMs = ref(0)
@@ -191,6 +193,7 @@ export const usePlayerStore = defineStore('player', () => {
     song: LibrarySong,
     startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation' = 'automatic'
   ): void {
+    if (ui.extremePlayback) return
     if (historySession?.songId === song.id) {
       resumeHistory()
       return
@@ -211,6 +214,7 @@ export const usePlayerStore = defineStore('player', () => {
     })
   }
   function resumeHistory(): void {
+    if (ui.extremePlayback) return
     if (historySession && historySession.playingSince === null)
       historySession.playingSince = Date.now()
   }
@@ -243,7 +247,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function loadRecommendationScores(): Promise<void> {
+    if (ui.extremePlayback) return
     const response = await window.api.database.command('getRecommendationScores')
+    if (ui.extremePlayback) return
     if (!response.success) return
     recommendationScores.clear()
     for (const score of response.data as Array<{
@@ -259,7 +265,7 @@ export const usePlayerStore = defineStore('player', () => {
         preference: score.preference
       })
     shuffleNavigationRevision.value++
-    if (playMode.value === PlayMode.Random && smartShuffleEnabled.value) {
+    if (playMode.value === PlayMode.Random && smartShuffleEnabled.value && !ui.extremePlayback) {
       pendingSmartIndex = -1
       void syncNextTrack()
     }
@@ -587,7 +593,7 @@ export const usePlayerStore = defineStore('player', () => {
     const length = queue.value.length
     if (!length || currentQueueIndex.value < 0) return -1
     if (playMode.value === PlayMode.Single) return currentQueueIndex.value
-    if (playMode.value === PlayMode.Random && smartShuffleEnabled.value) {
+    if (playMode.value === PlayMode.Random && smartShuffleEnabled.value && !ui.extremePlayback) {
       if (
         pendingSmartIndex >= 0 &&
         pendingSmartIndex < length &&
@@ -649,7 +655,9 @@ export const usePlayerStore = defineStore('player', () => {
   async function syncNextTrack(): Promise<void> {
     const revision = ++nextTrackRevision
     const index =
-      !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled ? previewNextIndex() : -1
+      !ui.extremePlayback && !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled
+        ? previewNextIndex()
+        : -1
     const song = queue.value[index]
     let path = song && song.songStatus !== 0 ? song.audio : ''
     if (path && song.sourceId) {
@@ -732,6 +740,7 @@ export const usePlayerStore = defineStore('player', () => {
     shuffleHistory?: number[]
     shuffleHistoryIndex?: number
     shufflePlayedSongIds?: number[]
+    stopAfterCurrent?: boolean
   }
 
   interface PlaybackCheckpoint {
@@ -805,6 +814,7 @@ export const usePlayerStore = defineStore('player', () => {
       playMode: playMode.value,
       shuffleHistory: shuffleHistory,
       shuffleHistoryIndex,
+      stopAfterCurrent: stopAfterCurrent.value,
       shufflePlayedSongIds: [...shufflePlayedSongIds]
     }
     try {
@@ -830,6 +840,7 @@ export const usePlayerStore = defineStore('player', () => {
           ? (checkpointResponse.data as Partial<PlaybackCheckpoint>)
           : session
       if (Array.isArray(session.queue)) queue.value = session.queue as LibrarySong[]
+      stopAfterCurrent.value = session.stopAfterCurrent === true
       queuePlaylistId.value =
         typeof session.queuePlaylistId === 'number' && Number.isInteger(session.queuePlaylistId)
           ? session.queuePlaylistId
@@ -886,6 +897,21 @@ export const usePlayerStore = defineStore('player', () => {
         typeof checkpoint.positionMs === 'number' && checkpoint.positionMs > 0
           ? checkpoint.positionMs
           : 0
+      // A replacement renderer attaches to the live decoder without reopening
+      // or seeking it. Queue/UI ownership changes; audio ownership stays native.
+      const live = await audioBridge.getStatus()
+      if (live?.trackInfo?.filePath === checkpoint.currentFile && live.state !== 'idle') {
+        const liveIndex = queue.value.findIndex((song) => song.audio === live.trackInfo?.filePath)
+        if (liveIndex >= 0) currentQueueIndex.value = liveIndex
+        state.value = live.state
+        trackInfo.value = live.trackInfo
+        positionMs.value = live.positionMs
+        durationMs.value = live.durationMs
+        deferredRestore = null
+        if (!ui.extremePlayback && live.state === 'playing' && currentQueueSong.value)
+          beginHistory(currentQueueSong.value)
+        return
+      }
       // Do not probe a restored path during startup. On macOS that can trigger
       // a TCC prompt for Downloads/Documents without an explicit user action.
       deferredRestore = { filePath: checkpoint.currentFile, positionMs: restoredPosition }
@@ -1238,8 +1264,9 @@ export const usePlayerStore = defineStore('player', () => {
     audioChain.value = await audioBridge.getAudioChain()
   }
   async function refreshAudioAnalysis(includeSpectrum = false): Promise<void> {
+    if (ui.extremePlayback) return
     const snapshot = await audioBridge.getAudioAnalysis(includeSpectrum)
-    if (!snapshot) return
+    if (!snapshot || ui.extremePlayback) return
     audioAnalysis.value = {
       ...snapshot,
       clipGuardLimitedFrames: snapshot.clipGuardLimitedFrames ?? 0,
@@ -1248,7 +1275,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
   function setLoudnessAnalysisEnabled(enabled: boolean): void {
-    void audioBridge.setLoudnessAnalysisEnabled(enabled)
+    void audioBridge.setLoudnessAnalysisEnabled(enabled && !ui.extremePlayback)
   }
 
   /**
@@ -1268,6 +1295,7 @@ export const usePlayerStore = defineStore('player', () => {
       startAudioAnalysisPolling()
     }
 
+    if (ui.extremePlayback) return
     await Promise.allSettled([
       loadOutputDeviceSettings(),
       loadPlaybackSpeed(),
@@ -1365,6 +1393,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function startAudioAnalysisPolling(): void {
     if (
+      ui.extremePlayback ||
       analysisTimer ||
       analysisRefreshInFlight ||
       state.value !== 'playing' ||
@@ -1375,7 +1404,13 @@ export const usePlayerStore = defineStore('player', () => {
     analysisRefreshInFlight = true
     void refreshAudioAnalysis(audioAnalysisIncludesSpectrum).finally(() => {
       analysisRefreshInFlight = false
-      if (state.value !== 'playing' || !documentVisible || audioAnalysisPollingRate <= 0) return
+      if (
+        ui.extremePlayback ||
+        state.value !== 'playing' ||
+        !documentVisible ||
+        audioAnalysisPollingRate <= 0
+      )
+        return
       analysisTimer = setTimeout(
         () => {
           analysisTimer = undefined
@@ -1405,25 +1440,29 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function updateAudioAnalysisPolling(): void {
-    const normalized = Math.max(
-      playerPanelAnalysisPollingRate,
-      audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0
-    )
+    const normalized =
+      ui.extremePlayback || !documentVisible
+        ? 0
+        : Math.max(
+            playerPanelAnalysisPollingRate,
+            audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0
+          )
+    const includeSpectrum = normalized > 0 && playerPanelAnalysisIncludesSpectrum
+    void window.api.audio.setAnalysisEnabled(normalized > 0)
     if (
       audioAnalysisPollingRate === normalized &&
-      audioAnalysisIncludesSpectrum === playerPanelAnalysisIncludesSpectrum
+      audioAnalysisIncludesSpectrum === includeSpectrum
     )
       return
     audioAnalysisPollingRate = normalized
-    audioAnalysisIncludesSpectrum = playerPanelAnalysisIncludesSpectrum
+    audioAnalysisIncludesSpectrum = includeSpectrum
     void audioBridge.setSpectrumAnalysisEnabled(audioAnalysisIncludesSpectrum)
     stopAudioAnalysisPolling()
     startAudioAnalysisPolling()
   }
   function handleDocumentVisibility(): void {
     documentVisible = !document.hidden
-    if (!documentVisible) stopAudioAnalysisPolling()
-    else startAudioAnalysisPolling()
+    updateAudioAnalysisPolling()
   }
 
   async function handleTrackEnded(reason: string, filePath?: string): Promise<void> {
@@ -1480,6 +1519,49 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  async function setExtremePlayback(enabled: boolean, switchView = true): Promise<void> {
+    if (playbackModeChanging.value) return
+    const previousMode = ui.extremePlayback
+    playbackModeChanging.value = true
+    try {
+      const result = await window.api.audio.setExtremePlayback(enabled)
+      if (!result.success) throw new Error(result.error || 'Playback mode unavailable')
+      if (enabled) {
+        pauseHistory()
+        historySession = undefined
+        recommendationScores.clear()
+        pendingSmartIndex = -1
+        // A window switch must not collapse the outgoing immersive player.
+        // The new renderer starts with this transient state cleared already.
+        if (!switchView) ui.showPlayer = false
+      }
+      ui.extremePlayback = enabled
+      document.documentElement.classList.toggle('extreme-playback', enabled)
+      updateAudioAnalysisPolling()
+      if (!enabled) {
+        void loadRecommendationScores()
+        if (isPlaying.value && currentQueueSong.value) beginHistory(currentQueueSong.value)
+      }
+      void syncNextTrack()
+      if (switchView && enabled !== (document.documentElement.dataset.playbackView === 'extreme')) {
+        savePlaybackSessionSync()
+        await nextTick()
+        flushPlayerDataStorage()
+        const switched = await window.api.audio.switchPlaybackView(enabled)
+        if (!switched.success) throw new Error(switched.error || 'Unable to switch playback window')
+      }
+    } catch (error) {
+      ui.extremePlayback = previousMode
+      document.documentElement.classList.toggle('extreme-playback', previousMode)
+      await window.api.audio.setExtremePlayback(previousMode)
+      updateAudioAnalysisPolling()
+      await attachRenderer().catch(() => undefined)
+      warning(String(error))
+    } finally {
+      playbackModeChanging.value = false
+    }
+  }
+
   function subscribeToEvents(): void {
     if (unsubs.length) return
     void loadRecommendationScores()
@@ -1519,6 +1601,12 @@ export const usePlayerStore = defineStore('player', () => {
     unsubs.push(
       audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason, data.filePath))
     )
+  }
+
+  async function attachRenderer(): Promise<void> {
+    const result = await window.api.audio.attachRenderer()
+    if (result.success)
+      for (const ended of result.data ?? []) await handleTrackEnded(ended.reason, ended.filePath)
   }
 
   function unsubscribe(): void {
@@ -1590,6 +1678,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   return {
     // State
+    playbackModeChanging,
+    setExtremePlayback,
     state,
     positionMs,
     durationMs,
@@ -1720,6 +1810,7 @@ export const usePlayerStore = defineStore('player', () => {
     restorePlaybackSession,
     // Events
     subscribeToEvents,
+    attachRenderer,
     unsubscribe
   }
 })

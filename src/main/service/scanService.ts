@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { waitForBackgroundWork } from './playbackMode'
 import { logError, logOperation } from './operationLogger'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -66,6 +67,7 @@ function getOrInsertFolder(importPath: string, rootPath: string): FolderRow {
 }
 
 async function collectMusicFiles(directory: string, files: string[]): Promise<void> {
+  await waitForBackgroundWork()
   const entries = await fs.promises.readdir(directory, { withFileTypes: true })
   for (const entry of entries) {
     const fullPath = path.join(directory, entry.name)
@@ -138,6 +140,8 @@ export async function scanMusicDirectory(
       let duplicates = 0
       let failed = 0
       for (const [index, fullPath] of files.entries()) {
+        // Explicit file opens are part of playback; only library scans wait.
+        if (!selectedFiles) await waitForBackgroundWork()
         try {
           if (existsSong.get(fullPath)) {
             duplicates++

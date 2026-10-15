@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { onPlaybackModeChanged, requireBackgroundWork } from '../service/playbackMode'
 import { logError, logOperation, logParams, logUrl } from '../service/operationLogger'
 import { Logger } from '../service/loggerService'
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, shell } from 'electron'
@@ -8,6 +9,30 @@ import { join } from 'node:path'
 import { listDownloadTasks, saveDownloadTask } from '../database/repository'
 
 type DownloadPlatform = 'youtube' | 'bili'
+function trackProcess(child: ChildProcessWithoutNullStreams): ChildProcessWithoutNullStreams {
+  const cleanup = onPlaybackModeChanged((enabled) => {
+    if (!enabled || !child.pid) return
+    if (process.platform === 'win32') {
+      // yt-dlp may own ffmpeg; terminate only this task's process tree.
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true
+      })
+      killer.on('error', () => child.kill())
+    } else child.kill()
+  })
+  child.once('close', cleanup)
+  return child
+}
+
+function backgroundRequest(url: string): Electron.ClientRequest {
+  requireBackgroundWork()
+  const request = net.request({ method: 'GET', url })
+  const cleanup = onPlaybackModeChanged((enabled) => {
+    if (enabled) request.abort()
+  })
+  request.once('close', cleanup)
+  return request
+}
 type DownloadType = 'audio' | 'video'
 type DownloadQuality = 'best' | 'high' | 'standard' | 'compact'
 interface DownloadSearchItem {
@@ -59,12 +84,13 @@ function ytdlpCommand(): string {
 }
 
 function runYtDlp(args: string[]): Promise<string> {
+  requireBackgroundWork()
   return logOperation(
     '[Download] runYtDlp',
     { executable: ytdlpCommand(), argumentCount: args.length },
     () => {
       return new Promise((resolve, reject) => {
-        const process = spawn(ytdlpCommand(), args, { windowsHide: true })
+        const process = trackProcess(spawn(ytdlpCommand(), args, { windowsHide: true }))
         let stdout = ''
         let stderr = ''
         process.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString()))
@@ -137,7 +163,8 @@ const BILI_HEADERS = {
 
 function biliApi<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
-    const request = net.request({ method: 'GET', url })
+    const request = backgroundRequest(url)
+    request.once('abort', () => reject(new Error('Lightweight mode')))
     Object.entries(BILI_HEADERS).forEach(([name, value]) => request.setHeader(name, value))
     request.on('response', (response) => {
       const chunks: Buffer[] = []
@@ -181,7 +208,8 @@ function normalizeBiliUrl(value: string): string {
 
 function biliImageDataUrl(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const request = net.request({ method: 'GET', url })
+    const request = backgroundRequest(url)
+    request.once('abort', () => reject(new Error('Lightweight mode')))
     Object.entries(BILI_HEADERS).forEach(([name, value]) => request.setHeader(name, value))
     request.on('response', (response) => {
       const chunks: Buffer[] = []
@@ -496,7 +524,10 @@ async function startBiliDownload(
         `${request.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180)} [${bvid}-${cid}].${extension}`
       )
       await new Promise<void>((resolve, reject) => {
-        const mediaRequest = net.request({ method: 'GET', url: source })
+        const mediaRequest = backgroundRequest(source)
+        mediaRequest.once('abort', () =>
+          reject(new Error('Download interrupted by lightweight mode'))
+        )
         Object.entries(BILI_HEADERS).forEach(([name, value]) => mediaRequest.setHeader(name, value))
         mediaRequest.setHeader('Range', 'bytes=0-')
         mediaRequest.on('response', (response) => {
@@ -507,6 +538,7 @@ async function startBiliDownload(
           const total = Number(response.headers['content-length'] || 0)
           let received = 0
           const output = createWriteStream(filePath)
+          mediaRequest.once('abort', () => output.destroy())
           response.on('data', (chunk: Buffer) => {
             received += chunk.length
             output.write(chunk)
@@ -612,6 +644,7 @@ export function registerDownloadIpcHandlers(): void {
       '[IPC] media-download:start',
       { ...logParams(request), url: logUrl(request?.url) },
       () => {
+        requireBackgroundWork()
         if (!request.directory || !request.url || !request.resourceId)
           throw new Error(t('downloadParamsIncomplete'))
         const taskId = `${request.platform}-${request.resourceId}-${Date.now()}`
@@ -622,9 +655,11 @@ export function registerDownloadIpcHandlers(): void {
           return { taskId }
         }
         const output = join(request.directory, '%(title).180B [%(id)s].%(ext)s')
-        const process = spawn(ytdlpCommand(), [...downloadArgs(request, output), request.url], {
-          windowsHide: true
-        })
+        const process = trackProcess(
+          spawn(ytdlpCommand(), [...downloadArgs(request, output), request.url], {
+            windowsHide: true
+          })
+        )
         registerProgress(process, event.sender, taskId, request)
         return { taskId }
       }

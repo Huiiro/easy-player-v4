@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { waitForBackgroundWork } from './playbackMode'
 import { logError, logOperation, logUrl } from './operationLogger'
 import { Logger } from './loggerService'
 import { createHash, randomBytes } from 'node:crypto'
@@ -129,6 +130,7 @@ async function forEachWithConcurrency<T>(
   let cursor = 0
   const worker = async (): Promise<void> => {
     while (cursor < items.length) {
+      await waitForBackgroundWork()
       const index = cursor++
       await task(items[index])
     }
@@ -231,12 +233,14 @@ const navidromeProvider: RemoteProvider = {
     }>(source, 'getArtists')
     const tracks: RemoteTrack[] = []
     for (const artist of artists.artists?.index?.flatMap((index) => index.artist || []) || []) {
+      await waitForBackgroundWork()
       const artistResult = await subsonicRequest<{ artist?: { album?: Array<{ id: string }> } }>(
         source,
         'getArtist',
         { id: artist.id }
       )
       for (const album of artistResult.artist?.album || []) {
+        await waitForBackgroundWork()
         const albumResult = await subsonicRequest<{ album?: { song?: SubsonicSong[] } }>(
           source,
           'getAlbum',
@@ -346,6 +350,7 @@ const jellyfinProvider: RemoteProvider = {
   async listTracks(source) {
     const tracks: RemoteTrack[] = []
     for (let startIndex = 0; ; startIndex += 200) {
+      await waitForBackgroundWork()
       const query = new URLSearchParams({
         IncludeItemTypes: 'Audio',
         Recursive: 'true',
@@ -428,6 +433,7 @@ function remoteFolderId(source: MusicSource): number {
 }
 
 async function cacheCover(source: ConfiguredSource, coverId?: string): Promise<string | null> {
+  await waitForBackgroundWork()
   if (!coverId) return null
   const directory = join(getDataPath(), 'covers', 'remote')
   mkdirSync(directory, { recursive: true })
@@ -487,6 +493,7 @@ export async function syncRemoteSource(
     '[Remote] syncSource',
     { sourceId },
     async () => {
+      await waitForBackgroundWork()
       const source = getSource(sourceId)
       validateSource(source)
       const tracks = await providerFor(source.type).listTracks(source)

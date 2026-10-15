@@ -74,6 +74,7 @@ struct PlaybackSpeedConfig { bool enabled = false; float speed = 1.0f; };
 // in AudioEngine's real-time callback.
 class DspPipeline {
 public:
+    void set_playback_only(bool enabled) { playback_only_.store(enabled, std::memory_order_release); }
     enum class ResamplerQuality { Best, Medium, Fast };
     struct ProcessResult {
         int input_frames_used = 0;
@@ -438,7 +439,8 @@ public:
         } else if (matrix_frames > 0) {
             apply_channel_matrix(matrix_input, input_channels, output, output_channels, matrix_frames);
         }
-        process_ordered_nodes(output, frames, output_channels);
+        if (!playback_only_.load(std::memory_order_acquire))
+            process_ordered_nodes(output, frames, output_channels);
         apply_smoothed_gain(
             output,
             samples,
@@ -1112,6 +1114,7 @@ private:
     bool configured_ = false;
     std::atomic<bool> preamp_enabled_{false};
     std::atomic<float> preamp_target_{1.0f};
+    std::atomic<bool> playback_only_{false};
     std::atomic<float> master_volume_target_{1.0f};
     // Audio-thread-owned state. Never access from a control thread.
     float preamp_live_ = 1.0f;

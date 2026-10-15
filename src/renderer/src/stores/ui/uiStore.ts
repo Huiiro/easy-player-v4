@@ -70,6 +70,7 @@ export const useUIStore = defineStore(
     const reduceMotion = ref(false)
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
+    const extremePlayback = ref(false)
     const autoPlayOnRestore = ref(false)
     const closeToTray = ref(false)
     const autoStart = ref(false)
@@ -675,6 +676,7 @@ export const useUIStore = defineStore(
       compactSongList,
       useCustomBg,
       reduceMotion,
+      extremePlayback,
       autoPlayOnRestore,
       closeToTray,
       autoStart,
@@ -786,6 +788,7 @@ export const useUIStore = defineStore(
         'useDynamicBg',
         'useLocalFileName',
         'useFullProgress',
+        'extremePlayback',
         'autoPlayOnRestore',
         'closeToTray',
         'autoStart',

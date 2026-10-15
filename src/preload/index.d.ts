@@ -208,6 +208,13 @@ declare global {
           }
           error?: string
         }>
+        setAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
+        attachRenderer(): Promise<{
+          success: boolean
+          data?: Array<{ reason: string; filePath: string }>
+        }>
+        switchPlaybackView(enabled: boolean): Promise<{ success: boolean; error?: string }>
+        setExtremePlayback(enabled: boolean): Promise<{ success: boolean; error?: string }>
         setLoudnessAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
         setSpectrumAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
 

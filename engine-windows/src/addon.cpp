@@ -209,6 +209,8 @@ public:
             InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
             InstanceMethod("setLoudnessAnalysisEnabled", &AudioEngineWrapper::SetLoudnessAnalysisEnabled),
             InstanceMethod("setSpectrumAnalysisEnabled", &AudioEngineWrapper::SetSpectrumAnalysisEnabled),
+            InstanceMethod("setAnalysisEnabled", &AudioEngineWrapper::SetAnalysisEnabled),
+            InstanceMethod("setPlaybackOnly", &AudioEngineWrapper::SetPlaybackOnly),
             InstanceMethod("getGlitchCount", &AudioEngineWrapper::GetGlitchCount),
             InstanceMethod("onStateChanged", &AudioEngineWrapper::OnStateChanged),
             InstanceMethod("onPositionChanged", &AudioEngineWrapper::OnPositionChanged),
@@ -1042,6 +1044,16 @@ private:
         }
         return obj;
     }
+    Napi::Value SetAnalysisEnabled(const Napi::CallbackInfo& info) {
+        const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        engine_->set_analysis_enabled(enabled);
+        return Napi::Boolean::New(info.Env(), true);
+    }
+    Napi::Value SetPlaybackOnly(const Napi::CallbackInfo& info) {
+        const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        engine_->set_playback_only(enabled);
+        return Napi::Boolean::New(info.Env(), true);
+    }
     Napi::Value SetLoudnessAnalysisEnabled(const Napi::CallbackInfo& info) {
         const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
         return RunBoolCommand(info, "setLoudnessAnalysisEnabled", [&](std::string& parameters) {
@@ -1167,6 +1179,19 @@ private:
 
 // ── Module registration ──
 Napi::Object InitModule(Napi::Env env, Napi::Object exports) {
+#ifndef EASY_PLAYER_MACOS
+    exports.Set("reclaimProcessMemory", Napi::Function::New(env, [](const Napi::CallbackInfo& info) {
+        if (info.Length() < 1 || !info[0].IsNumber()) return Napi::Boolean::New(info.Env(), false);
+        const DWORD pid = info[0].As<Napi::Number>().Uint32Value();
+        HANDLE process = OpenProcess(PROCESS_SET_QUOTA | PROCESS_QUERY_INFORMATION, FALSE, pid);
+        if (!process) return Napi::Boolean::New(info.Env(), false);
+        // A one-shot request after releasing a renderer, never an audio-thread
+        // operation or periodic trim. Windows can page active data back normally.
+        const BOOL ok = SetProcessWorkingSetSize(process, static_cast<SIZE_T>(-1), static_cast<SIZE_T>(-1));
+        CloseHandle(process);
+        return Napi::Boolean::New(info.Env(), ok != FALSE);
+    }));
+#endif
     return AudioEngineWrapper::Init(env, exports);
 }
 

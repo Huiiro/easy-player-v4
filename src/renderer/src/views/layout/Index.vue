@@ -1,91 +1,34 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { defineAsyncComponent } from 'vue'
+import { usePlaybackLifecycle } from '@/hooks/usePlaybackLifecycle'
 import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
-import FootBar from '@/views/layout/footbar/Index.vue'
-import PlayerPanel from '@/views/layout/playerPanel/Index.vue'
-import DesktopLyricsSync from '@/components/lyrics/DesktopLyricsSync.vue'
-import CardView from '@/views/layout/card/Index.vue'
-import AppBackground from '@/components/background/AppBackground.vue'
 
-import { useUIStore } from '@/stores/ui/uiStore'
-import { usePlayerStore } from '@/stores/player/playerStore'
-import i18n from '@/i18n'
-import { useShortcuts } from '@/hooks/useShortcuts'
-import { useMessage } from '@/components/ui/useMessage'
+const FootBar = defineAsyncComponent(() => import('@/views/layout/footbar/Index.vue'))
 
-const ui = useUIStore()
-const player = usePlayerStore()
-const { error: showError } = useMessage()
-let stopFileListener: (() => void) | undefined
-let stopFileErrorListener: (() => void) | undefined
-let filePlayback = Promise.resolve()
-useShortcuts()
+const PlayerPanel = defineAsyncComponent(() => import('@/views/layout/playerPanel/Index.vue'))
 
-watch(
-  () => ui.locale,
-  (locale) => {
-    i18n.global.locale = locale
-    window.api.system.setLocale(locale)
-  },
-  { immediate: true }
+const DesktopLyricsSync = defineAsyncComponent(
+  () => import('@/components/lyrics/DesktopLyricsSync.vue')
 )
 
-// Hide the native caption area while the immersive player is open. On Windows
-// the main process collapses the Window Controls Overlay itself.
-watch(
-  () => ui.showPlayer,
-  (showPlayer) => window.api.window.setTrafficLightVisible(!showPlayer),
-  { immediate: true }
+const CardView = defineAsyncComponent(() => import('@/views/layout/card/Index.vue'))
+
+const AppBackground = defineAsyncComponent(
+  () => import('@/components/background/AppBackground.vue')
 )
 
-onMounted(async () => {
-  await ui.initializeTheme()
-  player.subscribeToEvents()
-  await player.loadSmartShuffleConfig()
-  await player.loadRhythmVisualConfig()
-  await player.initializePersistentState()
-  const hasPendingFiles = await window.api.system.hasPendingAudioFiles()
-  await player.restorePlaybackSession(ui.autoPlayOnRestore && !hasPendingFiles)
-  stopFileListener = window.api.system.onOpenAudioFiles((songs) => {
-    filePlayback = filePlayback
-      .then(async () => {
-        if (!songs.length) return
-        player.addToQueue(songs, true)
-        const index = player.queue.findIndex((song) => song.id === songs[0].id)
-        if (index < 0 || !(await player.playQueueItem(index))) {
-          showError(i18n.global.t('settings.openAudioFailed'))
-        }
-      })
-      .catch(() => {
-        showError(i18n.global.t('settings.openAudioFailed'))
-      })
-  })
-  stopFileErrorListener = window.api.system.onOpenFilesError(() =>
-    showError(i18n.global.t('settings.openAudioFailed'))
-  )
-  window.api.system.audioFilesReady(true)
-  window.addEventListener('beforeunload', player.finishHistoryOnUnload)
-  window.addEventListener('beforeunload', player.savePlaybackSessionSync)
-})
-onBeforeUnmount(() => {
-  window.api.system.audioFilesReady(false)
-  stopFileListener?.()
-  stopFileErrorListener?.()
-  window.removeEventListener('beforeunload', player.savePlaybackSessionSync)
-  window.removeEventListener('beforeunload', player.finishHistoryOnUnload)
-  player.savePlaybackSessionSync()
-  player.unsubscribe()
-})
+const { ui } = usePlaybackLifecycle()
 </script>
 
 <template>
-  <DesktopLyricsSync />
+  <DesktopLyricsSync v-if="!ui.extremePlayback && ui.useDesktopLyrics" />
   <div
     class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
     :class="ui.useMica ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
+    <!-- Keep the outgoing page intact; extreme.html owns the replacement UI. -->
     <AppBackground />
     <!-- 主容器 -->
     <div class="relative z-[2] flex flex-col w-full h-full">
@@ -107,7 +50,7 @@ onBeforeUnmount(() => {
 
           <main class="flex-1 min-w-0 min-h-0 overflow-auto z-10">
             <router-view v-slot="{ Component, route }">
-              <keep-alive v-if="route.meta.keepAlive !== false">
+              <keep-alive v-if="route.meta.keepAlive !== false" :max="3">
                 <component :is="Component" />
               </keep-alive>
 

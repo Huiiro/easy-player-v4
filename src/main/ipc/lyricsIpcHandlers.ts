@@ -1,16 +1,11 @@
 import { t } from '../i18n'
+import { isPlaybackOnly } from '../service/playbackMode'
 import { logError, logOperation, logParams } from '../service/operationLogger'
 import { Logger } from '../service/loggerService'
 import { ipcMain } from 'electron'
 import { existsSync, readFileSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 import { parseFile } from 'music-metadata'
-import {
-  lyric as getNeteaseLyric,
-  lyric_new as getNeteaseLyricNew,
-  search as searchNetease
-} from '@neteasecloudmusicapienhanced/api'
-import kugouApi from 'kugoumusicapi'
 import { cleanNetworkLyric, normalizeKrc } from '../service/networkLyricNormalizer'
 
 export type LyricsSource = 'embedded' | 'local' | 'network'
@@ -90,6 +85,12 @@ async function searchNeteaseLyrics(
   request: LyricSearchRequest,
   wordTimed: boolean
 ): Promise<NetworkLyricCandidate[]> {
+  const {
+    search: searchNetease,
+    lyric: getNeteaseLyric,
+    lyric_new: getNeteaseLyricNew
+  } = await import('@neteasecloudmusicapienhanced/api')
+  if (isPlaybackOnly()) return []
   const response = (await searchNetease({
     keywords: searchKeyword(request),
     limit: 8
@@ -162,6 +163,8 @@ async function searchKugouLyrics(
   request: LyricSearchRequest,
   wordTimed: boolean
 ): Promise<NetworkLyricCandidate[]> {
+  const { default: kugouApi } = await import('kugoumusicapi')
+  if (isPlaybackOnly()) return []
   const response = (await kugouApi.search({
     keywords: searchKeyword(request),
     cookie: KUGOU_COOKIE
@@ -216,6 +219,7 @@ async function searchKugouLyrics(
 }
 
 async function searchNetworkLyrics(request: LyricSearchRequest): Promise<NetworkLyricCandidate[]> {
+  if (isPlaybackOnly()) return []
   if (!request?.title?.trim()) return []
   const searchFormat = async (wordTimed: boolean): Promise<NetworkLyricCandidate[]> => {
     const results = await Promise.allSettled([

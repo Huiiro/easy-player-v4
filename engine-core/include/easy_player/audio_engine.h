@@ -151,6 +151,13 @@ public:
     int glitch_count() const { return glitch_count_.load(); }
     AudioChainStatus audio_chain_status() const;
     AudioAnalysisSnapshot audio_analysis_snapshot() const;
+    void set_analysis_enabled(bool enabled) {
+        analysis_enabled_.store(enabled, std::memory_order_release);
+    }
+    void set_playback_only(bool enabled) {
+        playback_only_.store(enabled, std::memory_order_release);
+        dsp_pipeline_.set_playback_only(enabled);
+    }
     void set_loudness_analysis_enabled(bool enabled) {
         loudness_analysis_enabled_.store(enabled, std::memory_order_release);
     }
@@ -253,6 +260,8 @@ private:
     std::atomic<float> analysis_momentary_lufs_{-70.0f};
     std::atomic<float> analysis_short_term_lufs_{-70.0f};
     std::atomic<float> analysis_integrated_lufs_{-70.0f};
+    std::atomic<bool> playback_only_{false};
+    std::atomic<bool> analysis_enabled_{false};
     std::atomic<bool> loudness_analysis_enabled_{false};
     std::atomic<bool> spectrum_analysis_enabled_{false};
     std::atomic<uint64_t> analysis_reset_generation_{0};
