@@ -59,7 +59,7 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.3";
+    static constexpr const char* kVersion = "1.0.4";
     explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }

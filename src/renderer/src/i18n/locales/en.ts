@@ -232,6 +232,9 @@ export default {
     nameCopied: 'Song name copied',
     copyNameFailed: 'Unable to copy song name',
     addToQueue: 'Add to queue',
+    removeFromQueue: 'Remove from queue',
+    removedFromQueue: 'Removed from the play queue',
+    removeFromQueueFailed: 'Unable to remove song from the play queue',
     addedToQueue: 'Added to the play queue',
     alreadyInQueue: 'This song is already in the play queue',
     addToPlaylist: 'Add to playlist',
@@ -391,6 +394,7 @@ export default {
     tags: 'Tags'
   },
   metadataEdit: {
+    basicInfo: 'Basic info',
     dialogTitle: 'Edit metadata',
     loading: 'Loading metadata…',
     loadFailed: 'Unable to load metadata',

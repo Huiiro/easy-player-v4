@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -47,6 +48,7 @@ const { success: showSuccess, error: showError } = useMessage()
 
 const loading = ref(false)
 const saving = ref(false)
+const activeTab = ref(0)
 const metadata = ref<SongMetadata>({})
 const originalMetadata = ref<SongMetadata>({})
 const coverPreview = ref<string | null>(null)
@@ -76,6 +78,7 @@ function cloneMetadata(src: SongMetadata): SongMetadata {
 async function load(): Promise<void> {
   if (!props.modelValue || !props.songId) return
   loading.value = true
+  activeTab.value = 0
   metadata.value = {}
   originalMetadata.value = {}
   coverPreview.value = null
@@ -229,118 +232,144 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
     <p v-if="loading" class="py-8 text-center text-sm text-text-l">
       {{ t('metadataEdit.loading') }}
     </p>
-    <div v-else class="flex gap-6 p-2">
-      <!-- Left: cover + lyrics -->
-      <div class="shrink-0 w-40">
-        <div class="relative w-40 h-40">
-          <img
-            v-if="coverPreview"
-            :src="coverPreview"
-            class="w-40 h-40 object-cover rounded-xl shadow-lg"
-            alt=""
-          />
-          <div v-else class="w-40 h-40 rounded-xl bg-bg-l flex items-center justify-center">
-            <span class="text-4xl text-text-l">♪</span>
+    <TabGroup
+      v-else
+      as="div"
+      class="flex h-[min(32rem,65vh)] min-h-0 flex-col"
+      :selected-index="activeTab"
+      @change="activeTab = $event"
+    >
+      <TabList class="flex shrink-0 gap-5 border-b border-border">
+        <Tab v-for="tab in ['basicInfo', 'lyrics']" :key="tab" v-slot="{ selected }" as="template">
+          <button
+            type="button"
+            class="border-b-2 px-1 pb-3 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary"
+            :class="
+              selected
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-l hover:text-text'
+            "
+          >
+            {{ t(`metadataEdit.${tab}`) }}
+          </button>
+        </Tab>
+      </TabList>
+      <TabPanels class="min-h-0 flex-1 overflow-y-auto pt-4">
+        <TabPanel :unmount="false" class="flex flex-col gap-6 p-2 outline-none sm:flex-row">
+          <!-- Cover -->
+          <div class="shrink-0 w-40">
+            <div class="relative w-40 h-40">
+              <img
+                v-if="coverPreview"
+                :src="coverPreview"
+                class="w-40 h-40 object-cover rounded-xl shadow-lg"
+                alt=""
+              />
+              <div v-else class="w-40 h-40 rounded-xl bg-bg-l flex items-center justify-center">
+                <span class="text-4xl text-text-l">♪</span>
+              </div>
+              <button
+                v-if="coverChanged || newCoverPath"
+                class="absolute top-1 right-1 bg-black/40 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs hover:bg-black/60"
+                @click="removeCover"
+              >
+                ✕
+              </button>
+            </div>
+            <div class="mt-2 flex gap-1">
+              <BaseButton class="min-w-0 flex-1" @click="chooseCover">{{
+                t('metadataEdit.chooseCover')
+              }}</BaseButton>
+              <button
+                class="grid h-9 px-1 shrink-0 place-items-center rounded text-white hover:opacity-85 disabled:opacity-50"
+                :aria-label="t('metadataEdit.searchCover')"
+                :title="t('metadataEdit.searchCover')"
+                :disabled="searchingCovers"
+                @click="openCoverSearch"
+              >
+                <svg-icon name="common-search" class-name="size-4" />
+              </button>
+            </div>
           </div>
-          <button
-            v-if="coverChanged || newCoverPath"
-            class="absolute top-1 right-1 bg-black/40 rounded-full w-6 h-6 flex items-center justify-center text-white text-xs hover:bg-black/60"
-            @click="removeCover"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="mt-2 flex gap-1">
-          <BaseButton class="min-w-0 flex-1" @click="chooseCover">{{
-            t('metadataEdit.chooseCover')
-          }}</BaseButton>
-          <button
-            class="grid h-9 px-1 shrink-0 place-items-center rounded text-white hover:opacity-85 disabled:opacity-50"
-            :aria-label="t('metadataEdit.searchCover')"
-            :title="t('metadataEdit.searchCover')"
-            :disabled="searchingCovers"
-            @click="openCoverSearch"
-          >
-            <svg-icon name="common-search" class-name="size-4" />
-          </button>
-        </div>
-        <div class="mt-4 w-40">
-          <div :class="inputLabelClass">{{ t('metadataEdit.lyrics') }}</div>
+
+          <!-- Middle column -->
+          <div class="min-w-0 flex-1 flex flex-col gap-3">
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.title') }}</div>
+              <BaseInput v-model="metadata.title" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.artist') }}</div>
+              <BaseInput v-model="metadata.artist" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.album') }}</div>
+              <BaseInput v-model="metadata.album" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.year') }}</div>
+              <BaseInput
+                :model-value="metadata.year ?? ''"
+                :clearable="false"
+                type="number"
+                @update:model-value="metadata.year = $event === '' ? undefined : Number($event)"
+              />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.trackNumber') }}</div>
+              <BaseInput
+                :model-value="metadata.trackNumber ?? ''"
+                :clearable="false"
+                type="number"
+                @update:model-value="metadata.trackNumber = $event === '' ? null : Number($event)"
+              />
+            </div>
+          </div>
+
+          <!-- Right column -->
+          <div class="min-w-0 flex-1 flex flex-col gap-3">
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.albumArtist') }}</div>
+              <BaseInput v-model="metadata.albumArtist" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.composer') }}</div>
+              <BaseInput v-model="metadata.composer" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.lyricist') }}</div>
+              <BaseInput v-model="metadata.lyricist" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.genre') }}</div>
+              <BaseInput v-model="metadata.genre" :clearable="false" />
+            </div>
+            <div>
+              <div :class="inputLabelClass">{{ t('metadataEdit.discNumber') }}</div>
+              <BaseInput
+                :model-value="metadata.discNumber ?? ''"
+                :clearable="false"
+                type="number"
+                @update:model-value="metadata.discNumber = $event === '' ? null : Number($event)"
+              />
+            </div>
+          </div>
+        </TabPanel>
+        <TabPanel :unmount="false" class="flex h-full min-h-0 flex-col p-2 outline-none">
           <textarea
             v-model="metadata.lyrics"
-            class="w-full h-24 py-1 px-2 rounded border border-border text-sm bg-transparent outline-none focus:border-primary resize-none"
+            :aria-label="t('metadataEdit.lyrics')"
+            :spellcheck="false"
+            class="min-h-0 w-full flex-1 resize-none rounded-lg border border-border bg-transparent p-3 font-mono text-sm leading-6 text-text outline-none focus:border-primary"
           />
-        </div>
-      </div>
-
-      <!-- Middle column -->
-      <div class="flex-1 flex flex-col gap-3">
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.title') }}</div>
-          <BaseInput v-model="metadata.title" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.artist') }}</div>
-          <BaseInput v-model="metadata.artist" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.album') }}</div>
-          <BaseInput v-model="metadata.album" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.year') }}</div>
-          <BaseInput
-            :model-value="metadata.year ?? ''"
-            :clearable="false"
-            type="number"
-            @update:model-value="metadata.year = $event === '' ? undefined : Number($event)"
-          />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.trackNumber') }}</div>
-          <BaseInput
-            :model-value="metadata.trackNumber ?? ''"
-            :clearable="false"
-            type="number"
-            @update:model-value="metadata.trackNumber = $event === '' ? null : Number($event)"
-          />
-        </div>
-      </div>
-
-      <!-- Right column -->
-      <div class="flex-1 flex flex-col gap-3">
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.albumArtist') }}</div>
-          <BaseInput v-model="metadata.albumArtist" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.composer') }}</div>
-          <BaseInput v-model="metadata.composer" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.lyricist') }}</div>
-          <BaseInput v-model="metadata.lyricist" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.genre') }}</div>
-          <BaseInput v-model="metadata.genre" :clearable="false" />
-        </div>
-        <div>
-          <div :class="inputLabelClass">{{ t('metadataEdit.discNumber') }}</div>
-          <BaseInput
-            :model-value="metadata.discNumber ?? ''"
-            :clearable="false"
-            type="number"
-            @update:model-value="metadata.discNumber = $event === '' ? null : Number($event)"
-          />
-        </div>
-      </div>
-    </div>
+        </TabPanel>
+      </TabPanels>
+    </TabGroup>
     <template #footer>
       <BaseButton variant="secondary" @click="emit('update:modelValue', false)">
         {{ t('metadataEdit.cancel') }}
       </BaseButton>
-      <BaseButton :disabled="saving" @click="handleSave">
+      <BaseButton :disabled="saving || loading" @click="handleSave">
         {{ saving ? t('metadataEdit.saving') : t('metadataEdit.save') }}
       </BaseButton>
     </template>

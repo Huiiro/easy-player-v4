@@ -1071,20 +1071,24 @@ onBeforeUnmount(() => {
         <!-- channel_matrix -->
         <div v-else-if="selected === 'channel_matrix'" class="space-y-4 text-xs">
           <div class="flex flex-wrap items-center gap-5">
-            <label class="flex items-center gap-2">
+            <div class="flex items-center gap-2">
               <BaseSwitch
                 v-model="player.channelMatrixConfig.swapStereo"
+                class="w-fit text-left"
                 @change="player.setChannelMatrixConfig()"
-              />
-              {{ t('ap.changeChannels') }}
-            </label>
-            <label class="flex items-center gap-2">
+              >
+                {{ t('ap.changeChannels') }}
+              </BaseSwitch>
+            </div>
+            <div class="flex items-center gap-2">
               <BaseSwitch
                 v-model="player.channelMatrixConfig.monoDownmix"
+                class="w-fit text-left"
                 @change="player.setChannelMatrixConfig()"
-              />
-              {{ t('ap.stereoToMono') }}
-            </label>
+              >
+                {{ t('ap.stereoToMono') }}
+              </BaseSwitch>
+            </div>
           </div>
           <DspKnobField
             v-model="player.channelMatrixConfig.balance"
@@ -1126,13 +1130,13 @@ onBeforeUnmount(() => {
               @change="player.setReplayGain()"
             />
           </label>
-          <label class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.replayGainConfig.preventClipping"
-              @change="player.setReplayGain()"
-            />
+          <BaseSwitch
+            v-model="player.replayGainConfig.preventClipping"
+            class="w-fit text-left"
+            @change="player.setReplayGain()"
+          >
             {{ t('ap.preventClipping') }}
-          </label>
+          </BaseSwitch>
           <p class="text-text-l">
             {{
               player.replayGainConfig.active
@@ -1244,8 +1248,9 @@ onBeforeUnmount(() => {
                 >
                   {{ t(eqComparison ? 'ap.eqBandCompareBack' : 'ap.eqBandCompare') }}
                 </button>
-                <label class="flex items-center gap-2">
+                <div class="flex items-center gap-2">
                   <BaseSwitch
+                    class="w-fit text-left"
                     :model-value="selectedEqBand.enabled"
                     :disabled="!!eqComparison"
                     @change="
@@ -1254,9 +1259,10 @@ onBeforeUnmount(() => {
                         commitEq()
                       }
                     "
-                  />
-                  {{ t('ap.eqActive') }}
-                </label>
+                  >
+                    {{ t('ap.eqActive') }}
+                  </BaseSwitch>
+                </div>
               </div>
             </div>
             <fieldset class="flex min-w-0 flex-wrap gap-3" :disabled="!!eqComparison">
@@ -1394,11 +1400,14 @@ onBeforeUnmount(() => {
               {{ player.impulseResponseConfig.path }}
             </p>
           </div>
-          <label class="flex items-center gap-3">
-            <BaseSwitch v-model="player.impulseResponseConfig.autoGain" @change="applyIr" />
+          <BaseSwitch
+            v-model="player.impulseResponseConfig.autoGain"
+            class="w-fit text-left"
+            @change="applyIr"
+          >
             {{ t('ap.irAutoGain') }}
             {{ player.impulseResponseConfig.autoPreampDb?.toFixed(1) ?? '0.0' }} dB
-          </label>
+          </BaseSwitch>
           <DspKnobField
             v-model="player.impulseResponseConfig.gainDb"
             :label="t('ap.irManualGain')"
@@ -1442,13 +1451,15 @@ onBeforeUnmount(() => {
         </div>
         <!-- playback -->
         <div v-else-if="selected === 'playback'" class="space-y-4 text-xs">
-          <label class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.playbackSpeedConfig.enabled"
+              class="w-fit text-left"
               @change="player.setPlaybackSpeed()"
-            />
-            {{ t('ap.playSpeed') }}
-          </label>
+            >
+              {{ t('ap.playSpeed') }}
+            </BaseSwitch>
+          </div>
           <DspKnobField
             v-model="player.playbackSpeedConfig.speed"
             :label="t('ap.playSpeed')"
@@ -1463,13 +1474,15 @@ onBeforeUnmount(() => {
         </div>
         <!-- resampler -->
         <div v-else-if="selected === 'resampler'" class="space-y-4 text-xs">
-          <label class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.resamplerConfig.forceOutputRate"
+              class="w-fit text-left"
               @change="player.setResamplerConfig(player.resamplerConfig)"
-            />
-            {{ t('ap.resampler') }}
-          </label>
+            >
+              {{ t('ap.resampler') }}
+            </BaseSwitch>
+          </div>
           <div class="flex flex-wrap gap-3">
             <BaseSelect
               v-model="player.resamplerConfig.targetSampleRate"
@@ -1483,25 +1496,29 @@ onBeforeUnmount(() => {
               @change="player.setResamplerConfig(player.resamplerConfig)"
             />
           </div>
-          <label class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <BaseSwitch
+              class="w-fit text-left"
               :model-value="player.dopEnabled"
               @change="(value) => player.setDopEnabled(value === true)"
-            />
-            {{ t('ap.enableDoP') }}
-          </label>
+            >
+              {{ t('ap.enableDoP') }}
+            </BaseSwitch>
+          </div>
           <p class="text-text-l">{{ t('ap.dopDesc') }} {{ t('ap.dopNextPlayback') }}</p>
         </div>
         <!-- transition -->
         <div v-else-if="selected === 'transition'" class="space-y-4 text-xs">
           <p class="text-text-l">{{ t('ap.pauseFadeDesc') }}</p>
-          <label class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.transitionConfig.pauseFadeEnabled"
+              class="w-fit text-left"
               @change="player.setTransitionConfig()"
-            />
-            {{ t('ap.pauseFade') }}
-          </label>
+            >
+              {{ t('ap.pauseFade') }}
+            </BaseSwitch>
+          </div>
           <DspKnobField
             v-if="player.transitionConfig.pauseFadeEnabled"
             v-model="player.transitionConfig.pauseFadeMs"
@@ -1513,28 +1530,34 @@ onBeforeUnmount(() => {
             unit="ms"
             @change="player.setTransitionConfig()"
           />
-          <label class="flex items-center gap-3">
+          <div class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.transitionConfig.gaplessEnabled"
+              class="w-fit text-left"
               @change="player.setTransitionConfig()"
-            />
-            {{ t('ap.gapless') }}
-          </label>
-          <label class="flex items-center gap-3">
+            >
+              {{ t('ap.gapless') }}
+            </BaseSwitch>
+          </div>
+          <div class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.transitionConfig.crossfadeEnabled"
+              class="w-fit text-left"
               :disabled="!player.transitionConfig.gaplessEnabled"
               @change="player.setTransitionConfig()"
-            />
-            {{ t('ap.crossfade') }}
-          </label>
-          <label v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3">
+            >
+              {{ t('ap.crossfade') }}
+            </BaseSwitch>
+          </div>
+          <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3">
             <BaseSwitch
               v-model="player.transitionConfig.crossfadeAuto"
+              class="w-fit text-left"
               @change="player.setTransitionConfig()"
-            />
-            {{ t('ap.crossfadeAuto') }}
-          </label>
+            >
+              {{ t('ap.crossfadeAuto') }}
+            </BaseSwitch>
+          </div>
           <DspKnobField
             v-if="player.transitionConfig.crossfadeEnabled"
             v-model="player.transitionConfig.crossfadeMs"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import SongListView from '@/components/songlist/SongListView.vue'
@@ -8,11 +8,14 @@ import { useMessage } from '@/components/ui/useMessage'
 import type { PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
+import CropperDialog from '@/components/cropper/CropperDialog.vue'
 
 const { t } = useI18n()
 const player = usePlayerStore()
 const { success, warning, error: showError } = useMessage()
 const coverInput = ref<HTMLInputElement | null>(null)
+const cropDialogVisible = ref(false)
+const cropImageUrl = ref<string | null>(null)
 const cover = ref<string | null>(null)
 const customCover = ref<string | null>(null)
 const coverUrl = computed(() =>
@@ -27,13 +30,26 @@ async function loadCover(): Promise<void> {
   customCover.value = data.customCover
 }
 
-async function selectCustomCover(event: Event): Promise<void> {
+function clearCropImage(): void {
+  if (cropImageUrl.value) URL.revokeObjectURL(cropImageUrl.value)
+  cropImageUrl.value = null
+}
+
+function selectCustomCover(event: Event): void {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
+  input.value = ''
   if (!file) return
+  clearCropImage()
+  cropImageUrl.value = URL.createObjectURL(file)
+  cropDialogVisible.value = true
+}
+
+async function applyCoverCrop(dataUrl: string): Promise<void> {
   try {
     const response = await window.api.database.command('setLikedPlaylistCustomCover', {
-      path: window.api.audio.getFilePath(file)
+      path: null,
+      dataUrl
     })
     if (!response.success) {
       showError(response.error || t('playlist.coverSetFailed'))
@@ -42,8 +58,8 @@ async function selectCustomCover(event: Event): Promise<void> {
     await loadCover()
     eventBus.emit('playlistsChanged')
     success(t('playlist.coverSet'))
-  } finally {
-    input.value = ''
+  } catch {
+    showError(t('playlist.coverSetFailed'))
   }
 }
 
@@ -64,8 +80,12 @@ onMounted(() => {
   eventBus.on('scanFinished', loadCover)
 })
 onBeforeUnmount(() => {
+  clearCropImage()
   eventBus.off('songPreferenceChanged', loadCover)
   eventBus.off('scanFinished', loadCover)
+})
+watch(cropDialogVisible, (visible) => {
+  if (!visible) clearCropImage()
 })
 
 async function playLikedSongs(): Promise<void> {
@@ -129,4 +149,5 @@ async function playLikedSongs(): Promise<void> {
     </header>
     <SongListView class="min-h-0 flex-1" :source="{ type: 'liked' }" />
   </section>
+  <CropperDialog v-model="cropDialogVisible" :image-url="cropImageUrl" @confirm="applyCoverCrop" />
 </template>

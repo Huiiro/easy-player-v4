@@ -9,6 +9,7 @@ import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
+import CropperDialog from '@/components/cropper/CropperDialog.vue'
 
 interface Playlist {
   id: number
@@ -24,6 +25,8 @@ const router = useRouter()
 const playlist = ref<Playlist | null>(null)
 const loading = ref(true)
 const coverInput = ref<HTMLInputElement | null>(null)
+const cropDialogVisible = ref(false)
+const cropImageUrl = ref<string | null>(null)
 const deleteDialogOpen = ref(false)
 const editName = ref('')
 const editDescription = ref('')
@@ -50,22 +53,36 @@ async function load(): Promise<void> {
     loading.value = false
   }
 }
-async function selectCustomCover(event: Event): Promise<void> {
-  const file = (event.target as HTMLInputElement).files?.[0]
+function clearCropImage(): void {
+  if (cropImageUrl.value) URL.revokeObjectURL(cropImageUrl.value)
+  cropImageUrl.value = null
+}
+function selectCustomCover(event: Event): void {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
   if (!file) return
-  const path = window.api.audio.getFilePath(file)
-  const response = await window.api.database.command('setPlaylistCustomCover', {
-    id: playlistId.value,
-    path
-  })
-  if (response.success) {
-    await load()
-    eventBus.emit('playlistsChanged')
-    success(t('playlist.coverSet'))
-  } else {
-    showError(response.error || t('playlist.coverSetFailed'))
+  clearCropImage()
+  cropImageUrl.value = URL.createObjectURL(file)
+  cropDialogVisible.value = true
+}
+async function applyCoverCrop(dataUrl: string): Promise<void> {
+  try {
+    const response = await window.api.database.command('setPlaylistCustomCover', {
+      id: playlistId.value,
+      path: null,
+      dataUrl
+    })
+    if (response.success) {
+      await load()
+      eventBus.emit('playlistsChanged')
+      success(t('playlist.coverSet'))
+    } else {
+      showError(response.error || t('playlist.coverSetFailed'))
+    }
+  } catch {
+    showError(t('playlist.coverSetFailed'))
   }
-  ;(event.target as HTMLInputElement).value = ''
 }
 async function resetCover(): Promise<void> {
   const response = await window.api.database.command('setPlaylistCustomCover', {
@@ -160,8 +177,18 @@ onMounted(() => {
   void load()
   eventBus.on('playlistRenamed', handlePlaylistRenamed)
 })
-onBeforeUnmount(() => eventBus.off('playlistRenamed', handlePlaylistRenamed))
-watch(playlistId, () => void load())
+onBeforeUnmount(() => {
+  eventBus.off('playlistRenamed', handlePlaylistRenamed)
+  clearCropImage()
+})
+watch(cropDialogVisible, (visible) => {
+  if (!visible) clearCropImage()
+})
+watch(playlistId, () => {
+  cropDialogVisible.value = false
+  clearCropImage()
+  void load()
+})
 </script>
 
 <template>
@@ -306,6 +333,7 @@ watch(playlistId, () => void load())
     </header>
     <SongListView class="min-h-0 flex-1" :source="{ type: 'playlist', id: playlist.id }" />
   </section>
+  <CropperDialog v-model="cropDialogVisible" :image-url="cropImageUrl" @confirm="applyCoverCrop" />
   <BaseDialog v-model="deleteDialogOpen" :title="t('playlist.delete')" width="max-w-sm">
     <p class="text-sm text-text-l">
       {{ t('playlist.confirmDelete', { name: playlist?.name ?? '' }) }}

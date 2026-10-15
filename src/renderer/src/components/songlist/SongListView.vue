@@ -50,6 +50,9 @@ const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
 const activeMenuSong = ref<LibrarySong | null>(null)
+const activeMenuQueueIndex = computed(() =>
+  player.queue.findIndex((song) => song.id === activeMenuSong.value?.id)
+)
 const menuElement = ref<HTMLElement | null>(null)
 const menuPosition = ref({ left: '0px', top: '0px' })
 const playlistDialogOpen = ref(false)
@@ -346,6 +349,17 @@ const addActiveMenuSongToQueue = (): void => {
 const playActiveMenuSong = (): void => {
   if (activeMenuSong.value) void playSong(activeMenuSong.value)
   closeMenu()
+}
+async function removeActiveMenuSongFromQueue(): Promise<void> {
+  const index = activeMenuQueueIndex.value
+  closeMenu()
+  if (index < 0) return
+  try {
+    await player.removeQueueItem(index)
+    success(t('songList.removedFromQueue'))
+  } catch {
+    showError(t('songList.removeFromQueueFailed'))
+  }
 }
 async function setActiveMenuSongPreference(preference: -1 | 1): Promise<void> {
   const song = activeMenuSong.value
@@ -660,6 +674,14 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
         >
           <svgIcon name="common-plus" class-name="size-4" />
           {{ t('songList.addToQueue') }}
+        </button>
+        <button
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+          :disabled="activeMenuQueueIndex < 0"
+          @click="removeActiveMenuSongFromQueue"
+        >
+          <svgIcon name="common-minimize" class-name="size-4" />
+          {{ t('songList.removeFromQueue') }}
         </button>
         <button
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"

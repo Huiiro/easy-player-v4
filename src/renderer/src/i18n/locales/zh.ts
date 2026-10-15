@@ -231,6 +231,9 @@ export default {
     nameCopied: '已复制歌曲名称',
     copyNameFailed: '无法复制歌曲名称',
     addToQueue: '加入播放队列',
+    removeFromQueue: '从播放队列移除',
+    removedFromQueue: '已从播放队列移除',
+    removeFromQueueFailed: '无法从播放队列移除歌曲',
     addedToQueue: '已加入播放队列',
     alreadyInQueue: '歌曲已在播放队列中',
     addToPlaylist: '添加到歌单',
@@ -387,6 +390,7 @@ export default {
     tags: '标签'
   },
   metadataEdit: {
+    basicInfo: '基本信息',
     dialogTitle: '编辑元数据',
     loading: '正在加载元数据…',
     loadFailed: '无法加载元数据',

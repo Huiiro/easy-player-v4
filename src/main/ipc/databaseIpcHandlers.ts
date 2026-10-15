@@ -102,11 +102,18 @@ const handlers = {
     id: number
     input: Parameters<typeof library.updatePlaylist>[1]
   }) => library.updatePlaylist(id, input),
-  setPlaylistCustomCover: ({ id, path }: { id: number; path: string | null }) =>
-    library.setPlaylistCustomCover(id, path),
+  setPlaylistCustomCover: ({
+    id,
+    path,
+    dataUrl
+  }: {
+    id: number
+    path: string | null
+    dataUrl?: string
+  }) => library.setPlaylistCustomCover(id, path, dataUrl),
   getLikedPlaylistCover: () => library.getLikedPlaylistCover(),
-  setLikedPlaylistCustomCover: ({ path }: { path: string | null }) =>
-    library.setLikedPlaylistCustomCover(path),
+  setLikedPlaylistCustomCover: ({ path, dataUrl }: { path: string | null; dataUrl?: string }) =>
+    library.setLikedPlaylistCustomCover(path, dataUrl),
   deletePlaylists: ({ ids }: { ids: number[] }) => library.deletePlaylists(ids),
   reorderPlaylists: ({ items }: { items: Array<{ id: number; position: number }> }) =>
     library.reorderPlaylists(items),

@@ -1,5 +1,5 @@
 import { t } from '../i18n'
-import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -803,14 +803,14 @@ export function updatePlaylist(id: number, input: PlaylistInput): boolean {
     .run(name, input.cover ?? null, input.description ?? null, id)
   return result.changes > 0
 }
-export function setPlaylistCustomCover(id: number, path: string | null): boolean {
+export function setPlaylistCustomCover(id: number, path: string | null, dataUrl?: string): boolean {
   const db = getDatabase()
   return db.transaction(() => {
-    const customCover = path ? copyPlaylistCover(path) : null
+    const customCover = savePlaylistCover(path, dataUrl)
     const changed =
       db.prepare('UPDATE song_list SET custom_cover = ? WHERE id = ?').run(customCover, id)
         .changes > 0
-    if (changed && !path) refreshPlaylistCover(id)
+    if (changed && !customCover) refreshPlaylistCover(id)
     return changed
   })()
 }
@@ -826,8 +826,19 @@ export function getLikedPlaylistCover(): { cover: string | null; customCover: st
   return { cover: customCover || song?.cover || null, customCover }
 }
 
-export function setLikedPlaylistCustomCover(path: string | null): void {
-  setAppSetting(likedPlaylistCoverSetting, path ? copyPlaylistCover(path) : null)
+export function setLikedPlaylistCustomCover(path: string | null, dataUrl?: string): void {
+  setAppSetting(likedPlaylistCoverSetting, savePlaylistCover(path, dataUrl))
+}
+
+function savePlaylistCover(sourcePath: string | null, dataUrl?: string): string | null {
+  if (dataUrl === undefined) return sourcePath ? copyPlaylistCover(sourcePath) : null
+  const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl)
+  if (!match) throw new Error(t('coverFormatUnsupported'))
+  const coverDirectory = join(getDataPath(), 'covers')
+  mkdirSync(coverDirectory, { recursive: true })
+  const destination = join(coverDirectory, `playlist-${randomUUID()}.jpg`)
+  writeFileSync(destination, Buffer.from(match[1], 'base64'))
+  return destination
 }
 
 function copyPlaylistCover(sourcePath: string): string {
