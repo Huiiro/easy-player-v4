@@ -75,7 +75,10 @@ function render(): void {
     const barHeight = Math.max(2 * pixelScale, levels[index] * height)
     if (ui.playerSpectrumStyle === 'dots') {
       const x = index * bw + (bw - dotSize) / 2
-      const dotCount = Math.min(Math.ceil(height / dotStep), Math.max(1, Math.ceil(barHeight / dotStep)))
+      const dotCount = Math.min(
+        Math.ceil(height / dotStep),
+        Math.max(1, Math.ceil(barHeight / dotStep))
+      )
       for (let row = 0; row < dotCount; row += 1)
         c.fillRect(x, height - dotSize - row * dotStep, dotSize, dotSize)
     } else {

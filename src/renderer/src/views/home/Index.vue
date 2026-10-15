@@ -29,6 +29,7 @@ import {
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
+import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 import type { OverviewStats, HistoryDay, RankedSong, Playlist, RecommendationCard } from './types'
 import './home.css'
 
@@ -158,7 +159,17 @@ const stats = ref<OverviewStats>({
 const historyDays = ref<HistoryDay[]>([])
 const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
-const playlists = ref<Playlist[]>([])
+const userPlaylists = ref<Playlist[]>([])
+const likedCover = ref<string | null>(null)
+const playlists = computed<Playlist[]>(() => [
+  {
+    id: LIKED_PLAYLIST_ID,
+    name: t('playlist.likedSongs'),
+    cover: likedCover.value,
+    description: ''
+  },
+  ...userPlaylists.value
+])
 const playingPlaylistId = ref<number | null>(null)
 const recommendationCards = ref<RecommendationCard[]>([])
 const recommendationGeneratedFor = computed(
@@ -225,8 +236,13 @@ async function loadRecommendations(): Promise<void> {
   recommendationCards.value = response.data as RecommendationCard[]
 }
 async function loadPlaylists(): Promise<void> {
-  const response = await window.api.database.command('listPlaylists')
-  if (response.success) playlists.value = response.data as Playlist[]
+  const [playlistsResponse, coverResponse] = await Promise.all([
+    window.api.database.command('listPlaylists'),
+    window.api.database.command('getLikedPlaylistCover')
+  ])
+  if (playlistsResponse.success) userPlaylists.value = playlistsResponse.data as Playlist[]
+  if (coverResponse.success)
+    likedCover.value = (coverResponse.data as { cover: string | null }).cover
 }
 async function playPlaylist(playlist: Playlist): Promise<void> {
   if (playingPlaylistId.value !== null || pendingRecommendationCard.value !== null) return
@@ -237,10 +253,13 @@ async function playPlaylist(playlist: Playlist): Promise<void> {
       if (!changed) showError(t('playlist.playFailed'))
       return
     }
-    const response = await window.api.database.command('queryPlaylistSongs', {
-      playlistId: playlist.id,
-      query: {}
-    })
+    const response =
+      playlist.id === LIKED_PLAYLIST_ID
+        ? await window.api.database.command('querySongs', { preference: 1 })
+        : await window.api.database.command('queryPlaylistSongs', {
+            playlistId: playlist.id,
+            query: {}
+          })
     if (!response.success) {
       showError(response.error || t('playlist.playFailed'))
       return
@@ -299,20 +318,18 @@ async function playRanked(songs: RankedSong[], song: RankedSong): Promise<void> 
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [statsResult, daysResult, playedResult, durationResult, playlistsResult] =
-      await Promise.all([
-        window.api.database.command('getOverviewStats'),
-        window.api.database.command('getPlayHistoryDays', { days: 365 }),
-        window.api.database.command('getTopPlayedSongs', { limit: 10 }),
-        window.api.database.command('getTopDurationSongs', { limit: 10 }),
-        window.api.database.command('listPlaylists'),
-        loadRecommendations()
-      ])
+    const [statsResult, daysResult, playedResult, durationResult] = await Promise.all([
+      window.api.database.command('getOverviewStats'),
+      window.api.database.command('getPlayHistoryDays', { days: 365 }),
+      window.api.database.command('getTopPlayedSongs', { limit: 10 }),
+      window.api.database.command('getTopDurationSongs', { limit: 10 }),
+      loadPlaylists(),
+      loadRecommendations()
+    ])
     if (statsResult.success) stats.value = statsResult.data as OverviewStats
     if (daysResult.success) historyDays.value = daysResult.data as HistoryDay[]
     if (playedResult.success) topPlayed.value = playedResult.data as RankedSong[]
     if (durationResult.success) topDuration.value = durationResult.data as RankedSong[]
-    if (playlistsResult.success) playlists.value = playlistsResult.data as Playlist[]
   } finally {
     loading.value = false
   }
@@ -330,6 +347,8 @@ async function refresh(): Promise<void> {
 onMounted(() => {
   void load()
   eventBus.on('playlistsChanged', loadPlaylists)
+  eventBus.on('songPreferenceChanged', loadPlaylists)
+  eventBus.on('scanFinished', loadPlaylists)
   recommendationDateTimer = setInterval(() => {
     if (recommendationGeneratedFor.value && recommendationGeneratedFor.value !== todayKey())
       void loadRecommendations()
@@ -344,6 +363,8 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   uiStore.homeLayoutOpen = false
   eventBus.off('playlistsChanged', loadPlaylists)
+  eventBus.off('songPreferenceChanged', loadPlaylists)
+  eventBus.off('scanFinished', loadPlaylists)
   if (recommendationDateTimer) clearInterval(recommendationDateTimer)
 })
 </script>

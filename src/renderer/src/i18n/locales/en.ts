@@ -55,7 +55,7 @@ export default {
     viewRecommendations: 'View recommendations',
     playRecommendation: 'Play “{name}”',
     recommendationCount: '{count} songs',
-    noRecommendationSongs: 'No playable songs in this recommendation group',
+    noRecommendationSongs: 'No playable songs in the recommendation section',
     playRecommendationFailed: 'Could not play recommended songs',
     playPlaylist: 'Play playlist “{name}”',
     nowPlaying: 'Now playing',
@@ -73,17 +73,16 @@ export default {
     backToTop: 'Back to top',
     refreshSuccess: 'Data updated',
     completionCounts: '{completed} completed / {eligible} eligible plays',
-    completionRule: 'Plays under 5 seconds are excluded; 90% of track duration counts as complete',
+    completionRule: 'Percentage of songs listened to in full',
     listeningPeriods: 'Preferred Time Period',
     listeningPeriodsHint: 'Listening time grouped by when playback started',
     listeningPeriodTooltip: '{count} plays · {duration}',
     qualityStats: 'Audio quality mix',
-    qualityHint:
-      'Estimated from bitrate, with file size as fallback; true lossless encoding is unconfirmed',
+    qualityHint: 'Estimated based on file bitrate or size',
     qualitySongCount: '{count} songs',
-    qualityMethodCounts: '{bitrate} by bitrate · {fallback} by file-size fallback',
+    qualityMethodCounts: '{bitrate} by bitrate · {fallback} by file-size',
     qualitySizeFallbackRule:
-      'Size fallback: under {high} / {high}–under {ultra} / {ultra}–under {lossless} / at least {lossless} MiB',
+      'Under {high} / {high}–under {ultra} / {ultra}–under {lossless} / at least {lossless} MiB',
     qualityUnknown:
       '{count} songs have no valid bitrate or file size and are excluded from percentages',
     qualityLevels: {
@@ -93,10 +92,10 @@ export default {
       lossless: 'Lossless'
     },
     qualityRanges: {
-      standard: 'Under {high} kbps',
-      high: '{high} to under {ultra} kbps',
-      ultra: '{ultra} to under {lossless} kbps',
-      lossless: 'At least {lossless} kbps'
+      standard: 'less than {high} kbps',
+      high: '{high} to {ultra} kbps',
+      ultra: '{ultra} to {lossless} kbps',
+      lossless: 'greater than {lossless} kbps'
     },
     showDetails: 'Show {item} details',
     hideDetails: 'Hide {item} details',
@@ -261,6 +260,8 @@ export default {
     deleteLocalFileFailed: 'Song record deleted, but some local files could not be removed'
   },
   playlist: {
+    likedSongs: 'Liked songs',
+    likedDescription: 'Songs you mark as liked',
     label: 'Playlist',
     loading: 'Loading playlist…',
     notFound: 'This playlist does not exist or has been deleted.',
@@ -518,7 +519,7 @@ export default {
     homeWelcomeText: 'Home welcome message',
     homeWelcomeTextDescription:
       'Customize the home heading. Leave empty for the default time-based greeting. Changes are saved automatically.',
-    homeWelcomeTextPlaceholder: 'Example: A good day for good music',
+    homeWelcomeTextPlaceholder: 'Hello, Easy Player',
     title: 'Settings',
     navigation: 'Navigation',
     description: 'Configure player behavior and preferences.',

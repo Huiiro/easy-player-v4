@@ -20,7 +20,10 @@ export function chooseSpectrumColor(
     (color): color is Rgb => color !== null
   )
   const difference = (color: Rgb): number => Math.abs(luminance(color) - background)
-  const best = colors.reduce((selected, color) => (difference(color) > difference(selected) ? color : selected), primary)
+  const best = colors.reduce(
+    (selected, color) => (difference(color) > difference(selected) ? color : selected),
+    primary
+  )
   if (difference(primary) >= 0.38) return primary.map(Math.round).join(' ')
   if (difference(best) >= 0.38) return best.map(Math.round).join(' ')
 

@@ -11,13 +11,14 @@ import SongTagDialog from '@/components/tag/SongTagDialog.vue'
 import BatchTagDialog from '@/components/tag/BatchTagDialog.vue'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
+import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 import SongDetailsDialog from './SongDetailsDialog.vue'
 import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
 import MetadataEditDialog from './MetadataEditDialog.vue'
 
 type SongListSource =
-  | { type: 'songs' | 'local' | 'remote' | 'history' }
+  | { type: 'songs' | 'local' | 'remote' | 'history' | 'liked' }
   | { type: 'playlist'; id: number }
   | { type: 'folder'; id: number }
   | { type: 'album'; album: string; artist?: string }
@@ -194,6 +195,11 @@ const getSongs = async (): Promise<LibrarySong[]> => {
           name: 'queryRecentPlayedSongs',
           params: {}
         }
+      case 'liked':
+        return {
+          name: 'querySongs',
+          params: { preference: 1, tags: [...selectedTagIds.value] }
+        }
       default: {
         const sourceParam =
           type === 'local'
@@ -305,7 +311,11 @@ const playSong = async (song: LibrarySong): Promise<void> => {
   await player.playCollection(
     filteredSongs.value,
     song.id,
-    props.source.type === 'playlist' ? props.source.id : null
+    props.source.type === 'playlist'
+      ? props.source.id
+      : props.source.type === 'liked'
+        ? LIKED_PLAYLIST_ID
+        : null
   )
 }
 const playSelected = (): void => {
@@ -314,7 +324,11 @@ const playSelected = (): void => {
     void player.playCollection(
       selectedSongs,
       selectedSongs[0].id,
-      props.source.type === 'playlist' ? props.source.id : null
+      props.source.type === 'playlist'
+        ? props.source.id
+        : props.source.type === 'liked'
+          ? LIKED_PLAYLIST_ID
+          : null
     )
 }
 const addActiveMenuSongToQueue = (): void => {
@@ -498,6 +512,10 @@ const onSongPreferenceChanged = ({
   songId: number
   preference: -1 | 0 | 1
 }): void => {
+  if (props.source.type === 'liked') {
+    void load()
+    return
+  }
   for (const song of songs.value) {
     if (song.id === songId) song.preference = preference
   }

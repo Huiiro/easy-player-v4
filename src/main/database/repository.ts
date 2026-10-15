@@ -94,6 +94,10 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
   const where: string[] = []
   const params: Record<string, string | number> = {}
+  if (query.preference === -1 || query.preference === 0 || query.preference === 1) {
+    where.push('preference = @preference')
+    params.preference = query.preference
+  }
   if (query.search?.trim()) {
     where.push(
       '(title LIKE @search OR artist LIKE @search OR album LIKE @search OR file_name LIKE @search)'
@@ -809,6 +813,21 @@ export function setPlaylistCustomCover(id: number, path: string | null): boolean
     if (changed && !path) refreshPlaylistCover(id)
     return changed
   })()
+}
+
+const likedPlaylistCoverSetting = 'playlist.liked.customCover'
+
+export function getLikedPlaylistCover(): { cover: string | null; customCover: string | null } {
+  const saved = getAppSetting(likedPlaylistCoverSetting)
+  const customCover = typeof saved === 'string' ? saved : null
+  const song = getDatabase()
+    .prepare('SELECT cover FROM song WHERE preference = 1 ORDER BY id DESC LIMIT 1')
+    .get() as { cover: string | null } | undefined
+  return { cover: customCover || song?.cover || null, customCover }
+}
+
+export function setLikedPlaylistCustomCover(path: string | null): void {
+  setAppSetting(likedPlaylistCoverSetting, path ? copyPlaylistCover(path) : null)
 }
 
 function copyPlaylistCover(sourcePath: string): string {

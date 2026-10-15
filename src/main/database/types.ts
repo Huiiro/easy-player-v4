@@ -46,6 +46,7 @@ export interface Song {
 }
 
 export interface SongQuery {
+  preference?: -1 | 0 | 1
   page?: number
   size?: number
   search?: string

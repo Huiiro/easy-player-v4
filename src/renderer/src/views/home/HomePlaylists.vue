@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import type { Playlist } from './types'
+import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
 const props = defineProps<{
   playlists: Playlist[]
@@ -47,7 +48,11 @@ function playlistCoverUrl(playlist: Playlist): string | null {
             class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
             :alt="playlist.name"
           />
-          <SvgIcon v-else name="common-music" class-name="size-12 text-text-l" />
+          <SvgIcon
+            v-else
+            :name="playlist.id === LIKED_PLAYLIST_ID ? 'play-like-fill' : 'common-music'"
+            class-name="size-12 text-text-l"
+          />
           <span
             class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
             aria-hidden="true"
@@ -74,7 +79,9 @@ function playlistCoverUrl(playlist: Playlist): string | null {
               : playlist.name
           "
           :title="playlist.name"
-          @click="router.push(`/playlist/${playlist.id}`)"
+          @click="
+            router.push(playlist.id === LIKED_PLAYLIST_ID ? '/liked' : `/playlist/${playlist.id}`)
+          "
         >
           {{ playlist.name }}
         </button>

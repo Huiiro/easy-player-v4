@@ -12,6 +12,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import type { PagedLibrarySongs } from '@/types/library'
+import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
 interface NavigationItem {
   labelKey: string
@@ -289,7 +290,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <template v-else>
+        <template v-if="!expanded">
           <button
             :class="[navItemClass, 'justify-center px-0']"
             :title="t('sidebar.createPlaylist')"
@@ -375,12 +376,6 @@ onBeforeUnmount(() => {
             </span>
           </button>
         </div>
-        <p
-          v-else-if="expanded && playlistsExpanded"
-          class="px-2 pt-1 text-xs leading-5 text-text-l"
-        >
-          {{ t('sidebar.playlistEmpty') }}
-        </p>
       </section>
 
       <section class="border-t border-border pt-3">
@@ -390,6 +385,26 @@ onBeforeUnmount(() => {
         >
           {{ t('sidebar.more') }}
         </p>
+        <button
+          :class="[
+            navItemClass,
+            isActive('/liked')
+              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
+              : '',
+            !expanded ? 'justify-center px-0' : ''
+          ]"
+          :title="expanded ? undefined : t('playlist.likedSongs')"
+          @click="router.push('/liked')"
+        >
+          <SvgIcon name="play-like-fill" class-name="size-5 shrink-0" />
+          <span v-if="expanded" class="truncate">{{ t('playlist.likedSongs') }}</span>
+          <span
+            v-if="expanded && isPlayingPlaylist(LIKED_PLAYLIST_ID)"
+            class="ml-auto text-[10px] font-medium text-primary"
+          >
+            {{ t('sidebar.playing') }}
+          </span>
+        </button>
         <button
           v-for="item in utilityItems"
           :key="item.path"

@@ -103,6 +103,12 @@ export const constRoutes = [
         component: () => import('@/views/download/Index.vue')
       },
       {
+        path: '/liked',
+        name: 'LikedSongs',
+        meta: { title: '喜欢的歌曲' },
+        component: () => import('@/views/liked/Index.vue')
+      },
+      {
         path: '/playlist/:id',
         name: 'Playlist',
         meta: { title: '歌单详情', keepAlive: false },

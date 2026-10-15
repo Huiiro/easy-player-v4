@@ -55,7 +55,7 @@ export default {
     viewRecommendations: '查看推荐列表',
     playRecommendation: '播放“{name}”',
     recommendationCount: '{count} 首歌曲',
-    noRecommendationSongs: '这个推荐分区暂无可播放的歌曲',
+    noRecommendationSongs: '推荐分区中暂无可播放的歌曲',
     playRecommendationFailed: '播放推荐歌曲失败',
     playPlaylist: '播放歌单“{name}”',
     nowPlaying: '正在播放',
@@ -72,16 +72,16 @@ export default {
     refresh: '刷新数据',
     refreshSuccess: '数据已更新',
     completionCounts: '完播 {completed} / 有效播放 {eligible} 次',
-    completionRule: '播放至少 5 秒纳入统计；达到歌曲时长的 90% 视为完播',
+    completionRule: '完整收听的歌曲占比',
     listeningPeriods: '偏好时段',
     listeningPeriodsHint: '按播放开始时段归类的累计收听时长',
     listeningPeriodTooltip: '{count} 次播放 · {duration}',
     qualityStats: '音质分布',
-    qualityHint: '优先按码率估算，缺失时按文件大小替补；不能据此确认真实无损编码',
+    qualityHint: '根据文件码率或大小评估',
     qualitySongCount: '{count} 首',
-    qualityMethodCounts: '按码率 {bitrate} 首 · 文件大小替补 {fallback} 首',
+    qualityMethodCounts: '按码率 {bitrate} 首 · 文件大小 {fallback} 首',
     qualitySizeFallbackRule:
-      '大小替补分档：小于 {high} / {high}–不足 {ultra} / {ultra}–不足 {lossless} / 至少 {lossless} MiB',
+      '小于 {high} / {high}–不足 {ultra} / {ultra}–不足 {lossless} / 至少 {lossless} MiB',
     qualityUnknown: '{count} 首歌曲缺少有效码率和文件大小，未参与比例计算',
     qualityLevels: {
       standard: '标清',
@@ -91,9 +91,9 @@ export default {
     },
     qualityRanges: {
       standard: '小于 {high} kbps',
-      high: '{high} 至不足 {ultra} kbps',
-      ultra: '{ultra} 至不足 {lossless} kbps',
-      lossless: '至少 {lossless} kbps'
+      high: '{high} 至 {ultra} kbps',
+      ultra: '{ultra} 至 {lossless} kbps',
+      lossless: '大于 {lossless} kbps'
     },
     showDetails: '查看{item}详情',
     hideDetails: '收起{item}详情',
@@ -258,6 +258,8 @@ export default {
     deleteLocalFileFailed: '歌曲记录已删除，但部分本地文件删除失败'
   },
   playlist: {
+    likedSongs: '喜欢的歌曲',
+    likedDescription: '已标记为喜欢的歌曲',
     label: '歌单',
     loading: '加载歌单中…',
     notFound: '歌单不存在或已被删除。',
@@ -511,7 +513,7 @@ export default {
   settings: {
     homeWelcomeText: '主页欢迎语',
     homeWelcomeTextDescription: '自定义主页的大标题，留空则按时段显示默认问候。修改自动保存。',
-    homeWelcomeTextPlaceholder: '例如：今天也要听点好音乐',
+    homeWelcomeTextPlaceholder: '你好，Easy Player',
     title: '设置',
     navigation: '设置导航',
     description: '设置播放器行为和偏好。',
