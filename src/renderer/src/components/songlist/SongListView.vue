@@ -25,7 +25,7 @@ type SongListSource =
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
 type SortField =
-  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo'
+  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface MusicSourceOption {
   id: number
   name: string
@@ -44,8 +44,19 @@ const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
 const showBackTop = ref(false)
 const loading = ref(false)
 const keyword = ref('')
+const composing = ref(false)
+let appliedSearch = ''
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+let loadRevision = 0
+let disposed = false
+let offSearchIndex: (() => void) | undefined
 const sortBy = ref<SortField>(props.source.type === 'history' ? 'playTime' : 'id')
 const sortOrder = ref<'asc' | 'desc'>('desc')
+const hasSearch = ref(false)
+let browsingSort: { field: SortField; order: 'asc' | 'desc' } = {
+  field: sortBy.value,
+  order: sortOrder.value
+}
 const showFileName = ref(false)
 const selectionMode = ref(false)
 const selectedIds = ref<Set<number>>(new Set())
@@ -108,6 +119,11 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
   const field = sortBy.value
   let result = 0
 
+  if (field === 'relevance') {
+    result = (left.searchScore ?? 0) - (right.searchScore ?? 0)
+    return result ? result * (sortOrder.value === 'asc' ? 1 : -1) : right.id - left.id
+  }
+
   if (field === 'diskNo' || field === 'trackNo') {
     const otherField = field === 'diskNo' ? 'trackNo' : 'diskNo'
     for (const numberField of [field, otherField] as const) {
@@ -135,18 +151,7 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
   return right.id - left.id
 }
 
-const filteredSongs = computed(() => {
-  const search = keyword.value.trim().toLocaleLowerCase()
-  return songs.value
-    .filter(
-      (song) =>
-        !search ||
-        [song.title, song.artist, song.album, song.fileName].some((value) =>
-          value?.toLocaleLowerCase().includes(search)
-        )
-    )
-    .sort(compareSongs)
-})
+const filteredSongs = computed(() => songs.value.slice().sort(compareSongs))
 const allSelected = computed(
   () =>
     filteredSongs.value.length > 0 &&
@@ -164,20 +169,21 @@ const getSongs = async (): Promise<LibrarySong[]> => {
           name: 'queryPlaylistSongs',
           params: {
             playlistId: source.id,
-            query: { tags: [...selectedTagIds.value] }
+            query: { tags: [...selectedTagIds.value], search: appliedSearch }
           }
         }
       case 'folder':
         return {
           name: 'getLocalFolderSongs',
-          params: { folderId: source.id }
+          params: { folderId: source.id, search: appliedSearch }
         }
       case 'album':
         return {
           name: 'getSongsByAlbum',
           params: {
             album: source.album,
-            artist: source.artist
+            artist: source.artist,
+            search: appliedSearch
           }
         }
       case 'artist':
@@ -185,23 +191,24 @@ const getSongs = async (): Promise<LibrarySong[]> => {
           name: 'getSongsByArtist',
           params: {
             artist: source.artist,
-            separator: uiStore.artistSeparator
+            separator: uiStore.artistSeparator,
+            search: appliedSearch
           }
         }
       case 'genre':
         return {
           name: 'getSongsByGenre',
-          params: { genre: source.genre }
+          params: { genre: source.genre, search: appliedSearch }
         }
       case 'history':
         return {
           name: 'queryRecentPlayedSongs',
-          params: {}
+          params: { search: appliedSearch }
         }
       case 'liked':
         return {
           name: 'querySongs',
-          params: { preference: 1, tags: [...selectedTagIds.value] }
+          params: { preference: 1, tags: [...selectedTagIds.value], search: appliedSearch }
         }
       default: {
         const sourceParam =
@@ -218,6 +225,7 @@ const getSongs = async (): Promise<LibrarySong[]> => {
         return {
           name: 'querySongs',
           params: {
+            search: appliedSearch,
             tags: [...selectedTagIds.value],
             source: sourceParam,
             sourceId: sourceFilter.value.startsWith('remote:')
@@ -232,17 +240,21 @@ const getSongs = async (): Promise<LibrarySong[]> => {
   const { name, params } = getCommand()
   const response = await window.api.database.command(name, params)
 
-  if (!response.success) return []
+  if (!response.success) throw new Error(response.error)
   const data = response.data as LibrarySong[] | PagedLibrarySongs
   return Array.isArray(data) ? data : data.data
 }
 
 const load = async (): Promise<void> => {
+  const revision = ++loadRevision
   loading.value = true
   try {
-    songs.value = await getSongs()
+    const result = await getSongs()
+    if (!disposed && revision === loadRevision) songs.value = result
+  } catch (error) {
+    if (!disposed && revision === loadRevision) showError(String(error))
   } finally {
-    loading.value = false
+    if (!disposed && revision === loadRevision) loading.value = false
   }
 }
 async function refreshSongs(): Promise<void> {
@@ -253,8 +265,9 @@ const toggleSort = (field: SortField): void => {
   if (sortBy.value === field) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   else {
     sortBy.value = field
-    sortOrder.value = 'asc'
+    sortOrder.value = field === 'relevance' ? 'desc' : 'asc'
   }
+  if (field !== 'relevance') browsingSort = { field, order: sortOrder.value }
 }
 const toggleSelection = (): void => {
   selectionMode.value = !selectionMode.value
@@ -548,6 +561,9 @@ async function loadRemoteSources(): Promise<void> {
   if (response.success) remoteSources.value = response.data as MusicSourceOption[]
 }
 onMounted(() => {
+  offSearchIndex = window.api.database.onSearchIndexChanged(() => {
+    if (appliedSearch && !composing.value && !searchTimer) void load()
+  })
   void load()
   void loadRemoteSources()
   eventBus.on('scanFinished', onScanFinished)
@@ -559,6 +575,10 @@ onMounted(() => {
   window.addEventListener('contextmenu', closeMenu)
 })
 onBeforeUnmount(() => {
+  disposed = true
+  ++loadRevision
+  if (searchTimer) clearTimeout(searchTimer)
+  offSearchIndex?.()
   eventBus.off('scanFinished', onScanFinished)
   eventBus.off('tagsChanged', onTagsChanged)
   eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
@@ -574,6 +594,27 @@ watch(
 )
 watch(selectedTagIds, () => canFilterByTags.value && void load())
 watch(sourceFilter, () => canFilterBySource.value && void load())
+watch([keyword, composing], () => {
+  ++loadRevision
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = undefined
+  if (composing.value) return
+  searchTimer = setTimeout(() => {
+    searchTimer = undefined
+    const nextSearch = keyword.value.trim()
+    if (nextSearch && nextSearch !== appliedSearch) {
+      if (!appliedSearch) browsingSort = { field: sortBy.value, order: sortOrder.value }
+      sortBy.value = 'relevance'
+      sortOrder.value = 'desc'
+    } else if (!nextSearch && appliedSearch) {
+      sortBy.value = browsingSort.field
+      sortOrder.value = browsingSort.order
+    }
+    appliedSearch = nextSearch
+    hasSearch.value = Boolean(appliedSearch)
+    void load()
+  }, 200)
+})
 </script>
 
 <template>
@@ -585,6 +626,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       :sort-order="sortOrder"
       :show-album-sorts="source.type === 'album'"
       :show-play-time-sort="source.type === 'history'"
+      :show-relevance-sort="hasSearch"
       :selection-mode="selectionMode"
       :selected-count="selectedIds.size"
       :all-selected="allSelected"
@@ -594,6 +636,7 @@ watch(sourceFilter, () => canFilterBySource.value && void load())
       :active-tag-filter-count="canFilterByTags ? selectedTagIds.length : 0"
       :source-filter="canFilterBySource ? sourceFilter : undefined"
       :source-options="canFilterBySource ? sourceOptions : []"
+      @composition-change="composing = $event"
       @refresh="refreshSongs"
       @sort="toggleSort"
       @toggle-selection="toggleSelection"

@@ -24,6 +24,7 @@ import { pathToFileURL } from 'node:url'
 import { AudioEngineManager } from './audioEngine'
 import { registerIpcHandlers } from './ipc/audioIpcHandlers'
 import { closeDatabase, initDatabase } from './database'
+import { startSearchIndexService } from './search/searchIndexService'
 import { registerDatabaseIpcHandlers } from './ipc/databaseIpcHandlers'
 import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
@@ -91,6 +92,7 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 let mainWindow: BrowserWindow | null = null
+let searchIndexService: ReturnType<typeof startSearchIndexService> | undefined
 let normalRouteHash = ''
 let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
@@ -777,7 +779,19 @@ app.whenReady().then(() =>
         else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
       }
       createDir()
-      initDatabase()
+      const libraryDatabase = initDatabase()
+      searchIndexService = startSearchIndexService(
+        libraryDatabase,
+        () => {
+          for (const window of BrowserWindow.getAllWindows())
+            window.webContents.send('database:search-index-changed')
+        },
+        (status) => {
+          for (const window of BrowserWindow.getAllWindows())
+            window.webContents.send('database:search-index-status-changed', status)
+        }
+      )
+      ipcMain.handle('database:search-index-status', () => searchIndexService?.getStatus() ?? null)
       setMainLocale(getAppSetting('system.locale'))
       ipcMain.on('system:set-locale', (_event, locale: unknown) => {
         if (locale !== 'zh' && locale !== 'en') return
@@ -1195,5 +1209,6 @@ app.on('will-quit', () => {
   isQuitting = true
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()
+  searchIndexService?.stop()
   closeDatabase()
 })

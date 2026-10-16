@@ -1,0 +1,201 @@
+{
+  "environment": {
+    "cpu": "Intel(R) Core(TM) i7-14700KF",
+    "electron": "39.8.10",
+    "node": "22.22.1",
+    "timestamp": "2026-10-15T23:31:13.706Z"
+  },
+  "datasets": [
+    {
+      "songs": 20000,
+      "composition": "40% Chinese, 40% Japanese, 20% English; unique numbered titles, shared artists/albums",
+      "newSongs": 20000,
+      "indexStageMs": 232846,
+      "cumulativeIndexMs": 232846,
+      "mainLoopDuringIndex": {
+        "p99Ms": 49.6,
+        "maxMs": 138.4
+      },
+      "processRssMiB": 1027.7,
+      "databaseMiB": 165.5,
+      "queries": [
+        {
+          "keyword": "qili",
+          "page50": {
+            "matches": 800,
+            "medianMs": 2.4,
+            "maxMs": 4.7,
+            "payloadKiB": 36.3
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 58.4,
+              "maxMs": 75.3
+            },
+            "currentUI": {
+              "medianMs": 60.7,
+              "maxMs": 73.2
+            }
+          },
+          "currentUI": {
+            "matches": 800,
+            "medianMs": 6,
+            "maxMs": 6.5,
+            "payloadKiB": 578.3
+          }
+        },
+        {
+          "keyword": "qlx zjl",
+          "page50": {
+            "matches": 800,
+            "medianMs": 8.3,
+            "maxMs": 8.6,
+            "payloadKiB": 36.3
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 67.4,
+              "maxMs": 69.1
+            },
+            "currentUI": {
+              "medianMs": 71.3,
+              "maxMs": 77.8
+            }
+          },
+          "currentUI": {
+            "matches": 800,
+            "medianMs": 12.1,
+            "maxMs": 12.3,
+            "payloadKiB": 578.3
+          }
+        },
+        {
+          "keyword": "kirei",
+          "page50": {
+            "matches": 800,
+            "medianMs": 2.8,
+            "maxMs": 3.5,
+            "payloadKiB": 39.8
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 57,
+              "maxMs": 58.2
+            },
+            "currentUI": {
+              "medianMs": 61,
+              "maxMs": 67.5
+            }
+          },
+          "currentUI": {
+            "matches": 800,
+            "medianMs": 6.3,
+            "maxMs": 7.4,
+            "payloadKiB": 634.6
+          }
+        },
+        {
+          "keyword": "夜",
+          "page50": {
+            "matches": 8800,
+            "medianMs": 16.7,
+            "maxMs": 19.7,
+            "payloadKiB": 36.8
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 74.8,
+              "maxMs": 77.8
+            },
+            "currentUI": {
+              "medianMs": 126,
+              "maxMs": 133.4
+            }
+          },
+          "currentUI": {
+            "matches": 8800,
+            "medianMs": 70,
+            "maxMs": 71.7,
+            "payloadKiB": 6586.3
+          }
+        },
+        {
+          "keyword": "周杰伦",
+          "page50": {
+            "matches": 8000,
+            "medianMs": 18.1,
+            "maxMs": 18.6,
+            "payloadKiB": 36.3
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 108.4,
+              "maxMs": 138.4
+            },
+            "currentUI": {
+              "medianMs": 149.4,
+              "maxMs": 151.7
+            }
+          },
+          "currentUI": {
+            "matches": 8000,
+            "medianMs": 59.9,
+            "maxMs": 61.7,
+            "payloadKiB": 5778.3
+          }
+        },
+        {
+          "keyword": "unmatched",
+          "page50": {
+            "matches": 0,
+            "medianMs": 0.8,
+            "maxMs": 1,
+            "payloadKiB": 0
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 50.9,
+              "maxMs": 58.7
+            },
+            "currentUI": {
+              "medianMs": 50.3,
+              "maxMs": 51
+            }
+          },
+          "currentUI": {
+            "matches": 0,
+            "medianMs": 0.8,
+            "maxMs": 0.9,
+            "payloadKiB": 0
+          }
+        },
+        {
+          "keyword": "",
+          "page50": {
+            "matches": 20000,
+            "medianMs": 0.3,
+            "maxMs": 0.6,
+            "payloadKiB": 36.9
+          },
+          "baseline": {
+            "page50": {
+              "medianMs": 0.3,
+              "maxMs": 0.4
+            },
+            "currentUI": {
+              "medianMs": 115.8,
+              "maxMs": 158.8
+            }
+          },
+          "currentUI": {
+            "matches": 20000,
+            "medianMs": 114.3,
+            "maxMs": 118.9,
+            "payloadKiB": 14732.5
+          }
+        }
+      ]
+    }
+  ],
+  "method": "Seven samples per query; invalidate match cache before each timed sample using a no-op play-count update; query and JSON serialization included."
+}

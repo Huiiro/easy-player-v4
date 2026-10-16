@@ -231,6 +231,11 @@ declare global {
         ): () => void
       }
       database: {
+        getSearchIndexStatus(): Promise<import('../shared/searchIndex').SearchIndexStatus | null>
+        onSearchIndexStatusChanged(
+          callback: (status: import('../shared/searchIndex').SearchIndexStatus) => void
+        ): () => void
+        onSearchIndexChanged(callback: () => void): () => void
         command(action: DatabaseAction, params?: unknown): Promise<DatabaseResponse>
         saveSync(key: string, value: unknown): { success: boolean; error?: string }
         getSync(key: string): { success: boolean; data?: unknown; error?: string }

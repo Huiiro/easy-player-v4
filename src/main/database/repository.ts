@@ -14,6 +14,7 @@ import { Logger } from '../service/loggerService'
 import { refreshNewestSongs } from './newestSongs'
 import { getListeningInsights } from './listeningStats'
 import { getLibraryQualityStats } from './libraryQuality'
+import { buildSongSearchFilter } from '../search/searchQuery'
 
 export function getAppSetting(key: string): unknown | null {
   const row = getDatabase().prepare('SELECT value_json FROM app_setting WHERE key = ?').get(key) as
@@ -90,6 +91,11 @@ function attachTags(songs: Song[]): Song[] {
   return songs.map((song) => ({ ...song, tags: tagsBySong.get(song.id) ?? [] }))
 }
 
+function relevanceOrder(search: string, query: SongQuery = {}): string {
+  if (!search || (query.sortBy && query.sortBy !== 'relevance')) return ''
+  return `searchScore ${query.sortBy === 'relevance' && query.sortOrder === 'asc' ? 'ASC' : 'DESC'}, `
+}
+
 export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
   const where: string[] = []
@@ -98,12 +104,9 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
     where.push('preference = @preference')
     params.preference = query.preference
   }
-  if (query.search?.trim()) {
-    where.push(
-      '(title LIKE @search OR artist LIKE @search OR album LIKE @search OR file_name LIKE @search)'
-    )
-    params.search = `%${query.search.trim()}%`
-  }
+  const searchFilter = buildSongSearchFilter(db, query.search)
+  if (searchFilter.sql) where.push(searchFilter.sql)
+  Object.assign(params, searchFilter.params)
   if (query.source === 'local') where.push('source_id IS NULL')
   if (query.source === 'remote') {
     where.push(query.sourceId ? 'source_id = @sourceId' : 'source_id IS NOT NULL')
@@ -133,7 +136,9 @@ export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const data = attachTags(
     db
-      .prepare(`SELECT ${songColumns} FROM song ${clause} ORDER BY ${sort} ${order} ${pagination}`)
+      .prepare(
+        `SELECT ${songColumns}, ${searchFilter.score} AS searchScore FROM song ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${sort} ${order} ${pagination}`
+      )
       .all(params)
       .map((row) => mapSong(row as SongRow))
   )
@@ -285,64 +290,41 @@ export function queryAllSongs(): Song[] {
       .map((row) => mapSong(row as SongRow))
   )
 }
-export function getSongsByAlbum(album: string, artist?: string): Song[] {
-  const db = getDatabase()
-  const unknownAlbum = album === '__easy_player_unknown_album__'
-  const unknownArtist = artist === '__easy_player_unknown_artist__'
-  if (unknownAlbum) {
-    const rows = unknownArtist
-      ? db
-          .prepare(
-            `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND (artist IS NULL OR TRIM(artist) = '') ORDER BY id DESC`
-          )
-          .all()
-      : artist
-        ? db
-            .prepare(
-              `SELECT ${songColumns} FROM song WHERE (album IS NULL OR TRIM(album) = '') AND artist = ? ORDER BY id DESC`
-            )
-            .all(artist)
-        : db
-            .prepare(
-              `SELECT ${songColumns} FROM song WHERE album IS NULL OR TRIM(album) = '' ORDER BY id DESC`
-            )
-            .all()
-    return attachTags(rows.map((row) => mapSong(row as SongRow)))
-  }
-  if (unknownArtist) {
-    return attachTags(
-      db
-        .prepare(
-          `SELECT ${songColumns} FROM song WHERE album = ? AND (artist IS NULL OR TRIM(artist) = '') ORDER BY id DESC`
-        )
-        .all(album)
-        .map((row) => mapSong(row as SongRow))
+function queryScopedSongs(
+  scope: string,
+  params: Record<string, string | number>,
+  search = '',
+  predicate: (song: Song) => boolean = () => true
+): Song[] {
+  const filter = buildSongSearchFilter(getDatabase(), search)
+  const rows = getDatabase()
+    .prepare(
+      `SELECT ${songColumns}, ${filter.score} AS searchScore FROM song WHERE (${scope}) ${filter.sql ? `AND ${filter.sql}` : ''} ORDER BY ${relevanceOrder(filter.sql)}id DESC`
     )
-  }
-  const rows = artist
-    ? db
-        .prepare(`SELECT ${songColumns} FROM song WHERE album = ? AND artist = ? ORDER BY id DESC`)
-        .all(album, artist)
-    : db.prepare(`SELECT ${songColumns} FROM song WHERE album = ? ORDER BY id DESC`).all(album)
-  return attachTags(rows.map((row) => mapSong(row as SongRow)))
+    .all({ ...params, ...filter.params })
+  return attachTags(rows.map((row) => mapSong(row as SongRow)).filter(predicate))
 }
-export function getSongsByGenre(genre: string): Song[] {
-  if (genre === '__easy_player_unknown_genre__') {
-    return attachTags(
-      getDatabase()
-        .prepare(
-          `SELECT ${songColumns} FROM song WHERE genre IS NULL OR TRIM(genre) = '' ORDER BY id DESC`
-        )
-        .all()
-        .map((row) => mapSong(row as SongRow))
-    )
+
+export function getSongsByAlbum(album: string, artist?: string, search = ''): Song[] {
+  const where = [
+    album === '__easy_player_unknown_album__'
+      ? "(album IS NULL OR TRIM(album) = '')"
+      : 'album = @album'
+  ]
+  const params: Record<string, string> = {}
+  if (album !== '__easy_player_unknown_album__') params.album = album
+  if (artist === '__easy_player_unknown_artist__')
+    where.push("(artist IS NULL OR TRIM(artist) = '')")
+  else if (artist) {
+    where.push('artist = @artist')
+    params.artist = artist
   }
-  return attachTags(
-    getDatabase()
-      .prepare(`SELECT ${songColumns} FROM song WHERE genre = ? ORDER BY id DESC`)
-      .all(genre)
-      .map((row) => mapSong(row as SongRow))
-  )
+  return queryScopedSongs(where.join(' AND '), params, search)
+}
+export function getSongsByGenre(genre: string, search = ''): Song[] {
+  return genre === '__easy_player_unknown_genre__'
+    ? queryScopedSongs("genre IS NULL OR TRIM(genre) = ''", {}, search)
+    : queryScopedSongs('genre = @genre', { genre }, search)
 }
 function splitArtistNames(value: string | null, separators = ''): string[] {
   const artist = value?.trim()
@@ -355,30 +337,16 @@ function splitArtistNames(value: string | null, separators = ''): string[] {
   return [...new Set(parts.map((part) => part.trim()).filter(Boolean))]
 }
 
-export function getSongsByArtist(artist: string, separator = ''): Song[] {
+export function getSongsByArtist(artist: string, separator = '', search = ''): Song[] {
   if (artist === '__easy_player_unknown_artist__') {
-    return attachTags(
-      getDatabase()
-        .prepare(
-          `SELECT ${songColumns} FROM song WHERE artist IS NULL OR TRIM(artist) = '' ORDER BY id DESC`
-        )
-        .all()
-        .map((row) => mapSong(row as SongRow))
-    )
+    return queryScopedSongs("artist IS NULL OR TRIM(artist) = ''", {}, search)
   }
   if (separator) {
-    const rows = getDatabase()
-      .prepare(`SELECT ${songColumns} FROM song ORDER BY id DESC`)
-      .all()
-      .filter((row) => splitArtistNames((row as SongRow).artist, separator).includes(artist))
-    return attachTags(rows.map((row) => mapSong(row as SongRow)))
+    return queryScopedSongs('1=1', {}, search, (song) =>
+      splitArtistNames(song.artist, separator).includes(artist)
+    )
   }
-  return attachTags(
-    getDatabase()
-      .prepare(`SELECT ${songColumns} FROM song WHERE artist = ? ORDER BY id DESC`)
-      .all(artist)
-      .map((row) => mapSong(row as SongRow))
-  )
+  return queryScopedSongs('artist = @artist', { artist }, search)
 }
 export function listLocalFolders(): LibraryFolder[] {
   return getDatabase()
@@ -439,19 +407,21 @@ export function rebuildLocalFolders(): number {
   })()
   return songs.length
 }
-export function getLocalFolderSongs(folderId: number): Song[] {
+export function getLocalFolderSongs(folderId: number, search = ''): Song[] {
+  const filter = buildSongSearchFilter(getDatabase(), search)
   const rows = getDatabase()
     .prepare(
       `WITH RECURSIVE descendants(id) AS (
-        SELECT id FROM folder WHERE id = ?
+        SELECT id FROM folder WHERE id = @folderId
         UNION ALL
         SELECT f.id FROM folder f JOIN descendants d ON f.pid = d.id
       )
-      SELECT ${songColumns} FROM song
+      SELECT ${songColumns}, ${filter.score} AS searchScore FROM song
       WHERE source_id IS NULL AND folder_id IN (SELECT id FROM descendants)
-      ORDER BY id DESC`
+      ${filter.sql ? `AND ${filter.sql}` : ''}
+      ORDER BY ${relevanceOrder(filter.sql)}id DESC`
     )
-    .all(folderId)
+    .all({ folderId, ...filter.params })
   return attachTags(rows.map((row) => mapSong(row as SongRow)))
 }
 export function deleteLocalFolderSongs(folderId: number): {
@@ -683,19 +653,15 @@ export function queryRecentPlayedSongs(
   const size =
     query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
   const offset = size ? Math.max(0, (query.page ?? 1) - 1) * size : 0
-  const search = query.search?.trim()
   const where = ['1 = 1']
   const params: Record<string, string | number> = {}
   if (size) {
     params.size = size
     params.offset = offset
   }
-  if (search) {
-    where.push(
-      '(s.title LIKE @search OR s.artist LIKE @search OR s.album LIKE @search OR s.file_name LIKE @search)'
-    )
-    params.search = `%${search}%`
-  }
+  const searchFilter = buildSongSearchFilter(db, query.search, 's.')
+  if (searchFilter.sql) where.push(searchFilter.sql)
+  Object.assign(params, searchFilter.params)
   if (query.source === 'local') where.push('s.source_id IS NULL')
   if (query.source === 'remote') {
     where.push(query.sourceId ? 's.source_id = @sourceId' : 's.source_id IS NOT NULL')
@@ -709,7 +675,7 @@ export function queryRecentPlayedSongs(
   const pagination = size ? 'LIMIT @size OFFSET @offset' : ''
   const rows = db
     .prepare(
-      `SELECT ${songColumnsFor('s.')}, strftime('%Y-%m-%dT%H:%M:%fZ', h.play_time) AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
+      `SELECT ${songColumnsFor('s.')}, ${searchFilter.score} AS searchScore, strftime('%Y-%m-%dT%H:%M:%fZ', h.play_time) AS playTime FROM history h JOIN song s ON s.id = h.song_id ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${column} ${order} ${pagination}`
     )
     .all(params)
   const data = attachTags(
@@ -1010,12 +976,9 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const db = getDatabase()
   const where = ['sli.song_list_id = @playlistId']
   const params: Record<string, string | number> = { playlistId }
-  if (query.search?.trim()) {
-    where.push(
-      '(s.title LIKE @search OR s.artist LIKE @search OR s.album LIKE @search OR s.file_name LIKE @search)'
-    )
-    params.search = `%${query.search.trim()}%`
-  }
+  const searchFilter = buildSongSearchFilter(db, query.search, 's.')
+  if (searchFilter.sql) where.push(searchFilter.sql)
+  Object.assign(params, searchFilter.params)
   if (query.source === 'local') where.push('s.source_id IS NULL')
   if (query.source === 'remote') {
     where.push(query.sourceId ? 's.source_id = @sourceId' : 's.source_id IS NOT NULL')
@@ -1047,7 +1010,7 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const data = attachTags(
     db
       .prepare(
-        `SELECT ${songColumnsFor('s.')} FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${column} ${order} ${pagination}`
+        `SELECT ${songColumnsFor('s.')}, ${searchFilter.score} AS searchScore FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${column} ${order} ${pagination}`
       )
       .all(params)
       .map((row) => mapSong(row as SongRow))

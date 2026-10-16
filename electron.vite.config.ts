@@ -10,7 +10,14 @@ export default defineConfig({
   main: {
     build: {
       rollupOptions: {
+        input: {
+          index: resolve('src/main/index.ts'),
+          searchWorker: resolve('src/main/search/searchWorker.ts')
+        },
         external: [
+          'kuroshiro',
+          'kuroshiro-analyzer-kuromoji',
+          'kuromoji',
           /\.node$/, // Native addons
           'koffi', // FFI alternative
           'better-sqlite3'

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 import ScanProgress from '@/components/scan/ScanProgress.vue'
+import SearchIndexStatus from '@/components/search/SearchIndexStatus.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useRoute } from 'vue-router'
@@ -125,6 +126,7 @@ eventBus.on('importLocalMusic', uploadLocalFiles)
       <svgIcon name="common-back" class-name="size-4" />
     </button>
     <div class="h-full min-w-4 flex-1" />
+    <SearchIndexStatus />
     <div class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
         v-if="route.path === '/home' && !ui.useCardView"

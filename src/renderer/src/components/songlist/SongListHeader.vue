@@ -6,7 +6,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
 
 type SortField =
-  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo'
+  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface SourceOption {
   label: string
   value: string
@@ -19,6 +19,7 @@ const props = defineProps<{
   sortOrder: 'asc' | 'desc'
   showAlbumSorts?: boolean
   showPlayTimeSort?: boolean
+  showRelevanceSort?: boolean
   selectionMode: boolean
   selectedCount: number
   allSelected: boolean
@@ -32,6 +33,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:keyword': [value: string]
+  compositionChange: [composing: boolean]
   sort: [field: SortField]
   refresh: []
   toggleSelection: []
@@ -50,8 +52,15 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+function finishSearchComposition(event: CompositionEvent): void {
+  emit('update:keyword', (event.target as HTMLInputElement).value)
+  emit('compositionChange', false)
+}
 const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
 const sortFields = computed(() => [
+  ...(props.showRelevanceSort
+    ? [{ field: 'relevance' as const, label: t('songList.relevance') }]
+    : []),
   { field: 'id' as const, label: t('songList.number') },
   {
     field: 'title' as const,
@@ -119,6 +128,8 @@ const moreMenuItems = computed(() => [
             class="input-base h-8 w-52 search-input"
             :placeholder="t('songList.search')"
             @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
+            @compositionstart="emit('compositionChange', true)"
+            @compositionend="finishSearchComposition"
           />
           <button
             v-if="keyword"

@@ -5,6 +5,7 @@ export type SongSource = 'local' | 'remote' | 'all'
 
 /** Database row shape. `bpm` is intentionally absent from the v1 schema. */
 export interface Song {
+  searchScore?: number
   id: number
   title: string
   artist: string | null
@@ -52,7 +53,8 @@ export interface SongQuery {
   search?: string
   source?: SongSource
   sourceId?: number
-  sortBy?: 'id' | 'title' | 'artist' | 'album' | 'duration' | 'created_at' | 'play_time'
+  sortBy?:
+    'id' | 'title' | 'artist' | 'album' | 'duration' | 'created_at' | 'play_time' | 'relevance'
   sortOrder?: SortOrder
   tags?: number[]
 }

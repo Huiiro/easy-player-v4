@@ -1,4 +1,23 @@
 export default {
+  searchIndex: {
+    title: 'Song search preparation',
+    queued: 'Preparing search {completed}/{total}',
+    indexing: 'Preparing search {completed}/{total}',
+    paused: 'Search preparation paused',
+    retrying: 'Search: {count} songs awaiting retry',
+    ready: 'Search ready',
+    error: 'Search preparation will retry shortly',
+    unavailable: 'Search status unavailable',
+    progress: 'Reading preparation progress',
+    counts: '{completed}/{total} songs complete, {pending} remaining',
+    current: 'Processing: {title}',
+    retryCount: 'Readings for {count} songs are incomplete and will retry automatically.',
+    retryAt: 'Next retry: {time}',
+    pendingHint:
+      'Pinyin and romaji are being prepared. Original text search remains available. Processing pauses in playback-only mode.',
+    readyHint:
+      'Pinyin and romaji are ready and will update automatically when song information changes.'
+  },
   common: {
     cancel: 'Cancel',
     close: 'Close',
@@ -205,6 +224,7 @@ export default {
     compactMode: 'Hide Cover',
     normalMode: 'Show Cover',
     sort: 'Sort',
+    relevance: 'Relevance',
     more: 'More',
     number: 'Number',
     playTime: 'Play time',

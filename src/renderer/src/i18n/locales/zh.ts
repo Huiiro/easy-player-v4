@@ -1,4 +1,21 @@
 export default {
+  searchIndex: {
+    title: '歌曲搜索准备状态',
+    queued: '搜索准备中 {completed}/{total}',
+    indexing: '搜索准备中 {completed}/{total}',
+    paused: '搜索准备已暂停',
+    retrying: '搜索准备：{count} 首待重试',
+    ready: '搜索已就绪',
+    error: '搜索准备暂遇问题，稍后重试',
+    unavailable: '搜索状态暂不可用',
+    progress: '读音补全进度',
+    counts: '已完成 {completed}/{total} 首，剩余 {pending} 首',
+    current: '正在处理：{title}',
+    retryCount: '{count} 首歌曲的读音尚未完整补全，将自动重试。',
+    retryAt: '下次重试：{time}',
+    pendingHint: '拼音和罗马音正在补全，原文搜索仍可使用。纯播放模式下会暂停处理。',
+    readyHint: '歌曲的拼音和罗马音已补全，修改歌曲信息后会自动更新。'
+  },
   common: {
     cancel: '取消',
     close: '关闭',
@@ -204,6 +221,7 @@ export default {
     compactMode: '隐藏封面',
     normalMode: '显示封面',
     sort: '排序',
+    relevance: '相关度',
     more: '更多',
     number: '编号',
     playTime: '播放时间',

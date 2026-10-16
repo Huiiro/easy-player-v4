@@ -1,4 +1,5 @@
 export interface LibrarySong {
+  searchScore?: number
   id: number
   title: string
   artist: string | null

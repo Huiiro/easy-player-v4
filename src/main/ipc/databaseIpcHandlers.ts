@@ -26,11 +26,26 @@ const handlers = {
     id: number
     analysis: Parameters<typeof library.updateSongCoverAnalysis>[1]
   }) => library.updateSongCoverAnalysis(id, analysis),
-  getSongsByAlbum: ({ album, artist }: { album: string; artist?: string }) =>
-    library.getSongsByAlbum(album, artist),
-  getSongsByGenre: ({ genre }: { genre: string }) => library.getSongsByGenre(genre),
-  getSongsByArtist: ({ artist, separator }: { artist: string; separator?: string }) =>
-    library.getSongsByArtist(artist, separator),
+  getSongsByAlbum: ({
+    album,
+    artist,
+    search
+  }: {
+    album: string
+    artist?: string
+    search?: string
+  }) => library.getSongsByAlbum(album, artist, search),
+  getSongsByGenre: ({ genre, search }: { genre: string; search?: string }) =>
+    library.getSongsByGenre(genre, search),
+  getSongsByArtist: ({
+    artist,
+    separator,
+    search
+  }: {
+    artist: string
+    separator?: string
+    search?: string
+  }) => library.getSongsByArtist(artist, separator, search),
   queryAlbums: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
     library.queryAlbums(sort, search),
   queryArtists: ({
@@ -154,8 +169,8 @@ const handlers = {
   listSources: () => library.listSources(),
   listLocalFolders: () => library.listLocalFolders(),
   rebuildLocalFolders: () => library.rebuildLocalFolders(),
-  getLocalFolderSongs: ({ folderId }: { folderId: number }) =>
-    library.getLocalFolderSongs(folderId),
+  getLocalFolderSongs: ({ folderId, search }: { folderId: number; search?: string }) =>
+    library.getLocalFolderSongs(folderId, search),
   deleteLocalFolderSongs: ({ folderId }: { folderId: number }) =>
     library.deleteLocalFolderSongs(folderId),
   getSource: ({ id }: { id: number }) => library.getSource(id),

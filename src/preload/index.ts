@@ -182,6 +182,22 @@ const audioAPI = {
 }
 
 const databaseAPI = {
+  getSearchIndexStatus: () => ipcRenderer.invoke('database:search-index-status'),
+  onSearchIndexStatusChanged: (
+    callback: (status: import('../shared/searchIndex').SearchIndexStatus) => void
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      status: import('../shared/searchIndex').SearchIndexStatus
+    ): void => callback(status)
+    ipcRenderer.on('database:search-index-status-changed', listener)
+    return () => ipcRenderer.removeListener('database:search-index-status-changed', listener)
+  },
+  onSearchIndexChanged: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('database:search-index-changed', listener)
+    return () => ipcRenderer.removeListener('database:search-index-changed', listener)
+  },
   command: (action: string, params?: unknown) =>
     ipcRenderer.invoke('database:command', { action, params }),
   saveSync: (key: string, value: unknown) =>

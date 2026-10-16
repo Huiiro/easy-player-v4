@@ -27,6 +27,8 @@
     "build:mac": "npm run build:native && node scripts/bundle-macos-native-deps.js && npm run build:nocheck && electron-builder --mac",
     "build:linux": "npm run build:nocheck && electron-builder --linux",
     "test:playback-mode": "node scripts/test-playback-mode.mjs",
+    "test:song-search": "node scripts/test-song-search-ui.mjs && node scripts/test-song-search.mjs",
+    "perf:song-search": "node scripts/benchmark-song-search.mjs",
     "perf:playback": "node scripts/check-playback-performance.cjs",
     "perf:app": "electron scripts/check-player-app.cjs"
   },
@@ -37,8 +39,12 @@
     "better-sqlite3": "^12.4.1",
     "electron-updater": "^6.6.2",
     "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
+    "kuroshiro": "^1.2.1",
+    "kuroshiro-analyzer-kuromoji": "^1.1.0",
     "music-metadata": "^11.14.0",
     "node-id3": "^0.2.9",
+    "opencc-js": "^1.4.2",
+    "pinyin-pro": "^3.29.5",
     "qrc-decoder": "1.0.2",
     "sharp": "^0.35.3"
   },
