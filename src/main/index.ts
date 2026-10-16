@@ -485,6 +485,13 @@ function registerMediaProtocol(): void {
 function observeWindow(window: BrowserWindow, kind: string): void {
   const windowId = window.id
   Logger.debug('[Window] created', { kind, windowId, bounds: window.getBounds() })
+  window.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.alt) return
+    // Block browser reload accelerators before Chromium or the application menu handles them.
+    if (input.key === 'F5' || ((input.control || input.meta) && input.key.toLowerCase() === 'r')) {
+      event.preventDefault()
+    }
+  })
   window.webContents.on('did-finish-load', () =>
     Logger.debug('[Window] renderer loaded', { kind, windowId })
   )

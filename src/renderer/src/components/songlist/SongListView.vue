@@ -676,31 +676,35 @@ watch([keyword, composing], () => {
     <RecycleScroller
       v-else
       ref="scroller"
-      v-slot="{ item, index }"
       class="custom-scrollbar min-h-0 flex-1 overflow-y-auto"
       :items="filteredSongs"
       :item-size="uiStore.compactSongList ? 56 : 64"
       key-field="id"
       @scroll.passive="onListScroll"
     >
-      <SongListItem
-        :song="item"
-        :index="index"
-        :selection-mode="selectionMode"
-        :selected="selectedIds.has(item.id)"
-        :current="player.currentQueueSong?.id === item.id"
-        :keyword="keyword"
-        :show-file-name="showFileName"
-        :compact="uiStore.compactSongList"
-        @play="playSong"
-        @toggle-select="toggleSelect"
-        @request-menu="openMenu"
-      />
+      <template #default="{ item, index }">
+        <SongListItem
+          :song="item"
+          :index="index"
+          :selection-mode="selectionMode"
+          :selected="selectedIds.has(item.id)"
+          :current="player.currentQueueSong?.id === item.id"
+          :keyword="keyword"
+          :show-file-name="showFileName"
+          :compact="uiStore.compactSongList"
+          @play="playSong"
+          @toggle-select="toggleSelect"
+          @request-menu="openMenu"
+        />
+      </template>
+      <template #after>
+        <div class="h-28" aria-hidden="true" />
+      </template>
     </RecycleScroller>
     <button
       v-if="showBackTop && !loading && filteredSongs.length"
       type="button"
-      class="absolute right-5 bottom-4 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
+      class="absolute right-5 bottom-28 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
       :aria-label="t('songList.backToTop')"
       :title="t('songList.backToTop')"
       @click="backToTop"

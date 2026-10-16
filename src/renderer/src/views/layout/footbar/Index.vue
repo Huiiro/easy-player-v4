@@ -590,7 +590,7 @@ onBeforeUnmount(() => {
             :aria-hidden="card.slot !== 'current'"
           >
             <button
-              class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+              class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
               :title="card.song ? t('footer.openPlayer') : undefined"
               :disabled="!card.song"
               :tabindex="card.slot === 'current' ? 0 : -1"
@@ -621,7 +621,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-else class="flex min-w-0 items-center gap-3">
         <button
-          class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_5px_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
+          class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
           :title="t('footer.openPlayer')"
           @click.stop="openPlayerPanelFromCover"
         >
@@ -654,7 +654,7 @@ onBeforeUnmount(() => {
             <SvgIcon name="play-prev" class-name="size-4" />
           </button>
           <button
-            class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_4px_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+            class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
             :disabled="!player.currentFile"
             :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
             @click.stop="togglePlayback"

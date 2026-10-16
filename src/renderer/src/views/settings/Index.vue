@@ -484,12 +484,12 @@ onBeforeUnmount(() => {
 .settings-nav-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   border-radius: 7px;
-  padding: 0.55rem 0.65rem;
+  padding: 0.35rem 0.65rem;
   color: var(--color-text-l);
-  font-size: 0.9375rem;
-  line-height: 1.4;
+  font-size: 0.8575rem;
+  line-height: 1.2;
   text-align: left;
 }
 .settings-nav-icon {

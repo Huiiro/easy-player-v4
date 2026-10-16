@@ -20,6 +20,19 @@
   padding: 1.1rem 1.25rem;
 }
 
+.settings-page :is(.setting-row, .slider-row, .custom-background-chrome) {
+  border-radius: 12px;
+}
+
+.settings-page
+  :is(.setting-row, .slider-row, .custom-background-chrome):not(.pointer-events-none):is(
+    :hover,
+    :focus-within
+  ) {
+  background-color: color-mix(in srgb, var(--color-primary) 6%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
+}
+
 .settings-page .setting-row h3 {
   color: var(--color-text);
   font-size: 0.9rem;

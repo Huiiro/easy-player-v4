@@ -214,7 +214,6 @@
 :root[data-system-theme='solid'] .app-sidebar {
   /* Share the uniform material; an extra gradient produces visible dark bands. */
   background: transparent;
-  border-right-color: transparent;
 }
 
 :root[data-system-theme='solid'] .bg-primary,
