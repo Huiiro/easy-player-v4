@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import FooterLayoutSettings from './FooterLayoutSettings.vue'
 import { PlayerBgType, PlayerCoverStyle } from '@/consts'
 import { useUIStore } from '@/stores/ui/uiStore'
 
@@ -150,6 +151,7 @@ const openFooterAnywhere = computed({
       </div>
       <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
     </div>
+    <hr class="mx-5 my-4 border-0 border-t border-border" />
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.footerOpenAnywhere') }}</h3>
@@ -164,6 +166,7 @@ const openFooterAnywhere = computed({
       </div>
       <BaseSwitch v-model="ui.autoHideFooter" size="md" />
     </div>
+    <FooterLayoutSettings />
   </div>
 </template>
 

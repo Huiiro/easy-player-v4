@@ -165,7 +165,7 @@ const thumbStyle = computed(() => {
 // geometry
 // =======================
 
-function pointToValue(x: number, y: number) {
+function pointToValue(x: number, y: number): number {
   const el = sliderRef.value
 
   if (!el) return props.min
@@ -191,7 +191,7 @@ function pointToValue(x: number, y: number) {
   return props.min + ratio * range.value
 }
 
-function snap(v: number) {
+function snap(v: number): number {
   v = Math.max(props.min, Math.min(props.max, v))
 
   return Math.round((v - props.min) / props.step) * props.step + props.min
@@ -201,7 +201,7 @@ function snap(v: number) {
 // events
 // =======================
 
-function onTrackClick(e: MouseEvent) {
+function onTrackClick(e: MouseEvent): void {
   const v = snap(pointToValue(e.clientX, e.clientY))
 
   value.value = v
@@ -209,19 +209,19 @@ function onTrackClick(e: MouseEvent) {
   emit('change', v)
 }
 
-function onPointerDown(e: PointerEvent) {
+function onPointerDown(e: PointerEvent): void {
   dragging.value = true
 
   sliderRef.value?.setPointerCapture(e.pointerId)
 }
 
-function onPointerMove(e: PointerEvent) {
+function onPointerMove(e: PointerEvent): void {
   if (!dragging.value) return
 
   value.value = snap(pointToValue(e.clientX, e.clientY))
 }
 
-function onPointerUp() {
+function onPointerUp(): void {
   if (!dragging.value) return
 
   dragging.value = false
@@ -229,7 +229,7 @@ function onPointerUp() {
   emit('change', value.value)
 }
 
-function onKeyDown(e: KeyboardEvent) {
+function onKeyDown(e: KeyboardEvent): void {
   let v = value.value
 
   switch (e.key) {
@@ -286,7 +286,7 @@ const markEntries = computed(() => {
   })
 })
 
-function onMarkClick(v: number) {
+function onMarkClick(v: number): void {
   value.value = snap(v)
 
   emit('change', value.value)
@@ -294,7 +294,7 @@ function onMarkClick(v: number) {
 </script>
 
 <template>
-  <div class="select-none" :class="vertical ? 'inline-flex h-full' : ''">
+  <div class="ep-slider select-none" :class="vertical ? 'inline-flex h-full' : ''">
     <div
       ref="sliderRef"
       role="slider"
@@ -314,9 +314,9 @@ function onMarkClick(v: number) {
     >
       <!-- track -->
 
-      <div class="absolute rounded-full bg-border overflow-hidden" :style="trackStyle">
+      <div class="ep-progress-track absolute rounded-full overflow-hidden" :style="trackStyle">
         <div
-          class="absolute rounded-full bg-primary"
+          class="ep-progress-fill absolute rounded-full"
           :class="vertical ? 'bottom-0 left-0' : 'left-0 top-0'"
           :style="fillStyle"
         />
@@ -325,7 +325,7 @@ function onMarkClick(v: number) {
       <!-- thumb -->
 
       <div
-        class="absolute rounded-full border-2 border-primary bg-bg cursor-grab transform-gpu transition-shadow duration-[var(--motion-duration-fast)]"
+        class="ep-progress-thumb absolute rounded-full border-2 cursor-grab transform-gpu transition-shadow duration-[var(--motion-duration-fast)]"
         :class="
           dragging
             ? 'cursor-grabbing shadow-[0_0_0_4px_var(--color-hover-t-20)]'

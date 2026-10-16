@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'theme.css';
 @import 'motion.css';
+@import 'components.css';
 
 :root.reduce-motion *,
 :root.reduce-motion *::before,
@@ -150,17 +151,11 @@ textarea,
 .input-base {
   @apply px-2 py-1
   rounded
-  border border-border
-  text-text text-sm
+  border
+  text-sm
   w-full
-  bg-transparent
   outline-none
   transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)];
-}
-
-.input-base:focus {
-  @apply border-primary;
-  box-shadow: 0 0 0 2px rgba(var(--color-primary), 0.25);
 }
 
 .input-label {
@@ -172,8 +167,7 @@ textarea,
   rounded
   border border-border
   text-sm text-text
-  hover:bg-gray-200
-  dark:hover:bg-gray-700;
+  hover:bg-hover-bg;
 }
 
 .btn-small {
@@ -181,8 +175,7 @@ textarea,
   rounded
   border border-border
   text-sm text-text
-  hover:bg-gray-200
-  dark:hover:bg-gray-700;
+  hover:bg-hover-bg;
 }
 
 .btn-base {
@@ -264,41 +257,6 @@ textarea,
   }
 }
 
-.sidebar-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  border-radius: 10px;
-  cursor: pointer;
-  transform: translateZ(0);
-  transition:
-    background-color var(--motion-duration-standard) var(--motion-ease-emphasized),
-    transform var(--motion-duration-standard) var(--motion-ease-emphasized),
-    box-shadow var(--motion-duration-standard) var(--motion-ease-emphasized),
-    border-color var(--motion-duration-standard) var(--motion-ease-emphasized);
-  border: 1px solid transparent;
-}
-
-/* hover */
-.sidebar-item-hover:hover {
-  transform: translateY(-1px);
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015));
-  border-color: rgba(255, 255, 255, 0.04);
-  box-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-
-/* active */
-.sidebar-item-active {
-  background: var(--color-primary);
-  box-shadow:
-    0 2px 10px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
-}
-
 .btn-hover {
   @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:scale-102 active:scale-100 hover:text-primary;
 }
@@ -308,11 +266,11 @@ textarea,
 }
 
 .dsp-input {
-  @apply mt-1 w-full rounded border border-neutral-700 px-2 py-1 text-xs outline-none focus:border-blue-500;
+  @apply mt-1 w-full rounded border border-border px-2 py-1 text-xs outline-none focus:border-primary;
 }
 
 .dsp-label {
-  @apply text-xs text-neutral-400;
+  @apply text-xs text-text-l;
 }
 
 .menu-item {

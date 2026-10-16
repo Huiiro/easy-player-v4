@@ -17,6 +17,7 @@ const props = withDefaults(
     modelValue: string | number | (string | number)[]
     options: SelectOption[]
     placeholder?: string
+    ariaLabel?: string
     disabled?: boolean
     clearable?: boolean
     multiple?: boolean
@@ -88,9 +89,9 @@ const panelPosition = ref<Record<string, string>>({})
 
 function updatePanelPosition(event: MouseEvent): void {
   if (!props.teleport) return
+  const target = event.currentTarget
+  if (!(target instanceof HTMLElement)) return
   void nextTick(() => {
-    const target = event.currentTarget
-    if (!(target instanceof HTMLElement)) return
     const rect = target.getBoundingClientRect()
     panelPosition.value = {
       top: `${rect.bottom + 4}px`,
@@ -111,8 +112,9 @@ function updatePanelPosition(event: MouseEvent): void {
   >
     <ListboxButton
       as="div"
+      :aria-label="ariaLabel"
       :class="[
-        'flex items-center gap-2 rounded-md border border-border bg-transparent transition-colors duration-[var(--motion-duration-standard)]',
+        'ep-select flex items-center gap-2 rounded-md border border-border bg-transparent transition-colors duration-[var(--motion-duration-standard)]',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         'hover:border-primary',
         disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
@@ -161,7 +163,7 @@ function updatePanelPosition(event: MouseEvent): void {
       >
         <ListboxOptions
           :class="[
-            'z-50 mt-1 min-w-(--anchor-width) max-h-60 overflow-y-auto no-scrollbar rounded-xl border border-border bg-bg p-1 shadow-lg focus:outline-none',
+            'ep-select-options z-50 mt-1 min-w-(--anchor-width) max-h-60 overflow-y-auto no-scrollbar rounded-xl border border-border bg-bg p-1 shadow-lg focus:outline-none',
             teleport ? 'fixed' : 'absolute w-full'
           ]"
           :style="teleport ? panelPosition : undefined"

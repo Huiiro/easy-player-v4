@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
+import type { DatabaseAction } from '../../../../main/ipc/databaseIpcHandlers'
 import eventBus from '@/utils/eventBus'
 import { createSongTextComparator, songSortText } from '@/utils/songTextSort'
 import SongListHeader from './SongListHeader.vue'
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
 
 const player = usePlayerStore()
 const uiStore = useUIStore()
+const statistics = useStatisticsStore()
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
@@ -175,8 +178,10 @@ const allSelected = computed(
 const getSongs = async (): Promise<LibrarySong[]> => {
   const { source } = props
   const { type } = source
+  if (type === 'history' && !statistics.enabled) return []
+  const statisticsGeneration = statistics.generation
 
-  const getCommand = (): { name: string; params: unknown } => {
+  const getCommand = (): { name: DatabaseAction; params: unknown } => {
     switch (type) {
       case 'playlist':
         return {
@@ -253,6 +258,8 @@ const getSongs = async (): Promise<LibrarySong[]> => {
 
   const { name, params } = getCommand()
   const response = await window.api.database.command(name, params)
+  if (type === 'history' && (!statistics.enabled || statisticsGeneration !== statistics.generation))
+    return []
 
   if (!response.success) throw new Error(response.error)
   const data = response.data as LibrarySong[] | PagedLibrarySongs
@@ -271,6 +278,12 @@ const load = async (): Promise<void> => {
     if (!disposed && revision === loadRevision) loading.value = false
   }
 }
+watch(
+  () => statistics.generation,
+  () => {
+    if (props.source.type === 'history') void load()
+  }
+)
 async function refreshSongs(): Promise<void> {
   await load()
   success(t('songList.refreshed'))

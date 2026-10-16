@@ -1,4 +1,34 @@
 export default {
+  footerLayout: {
+    title: 'Custom footer layout',
+    description: 'Adjust the bottom bar layout style.',
+    mode: 'Layout',
+    centered: 'Centered progress',
+    stacked: 'Top progress line',
+    width: 'Maximum footer width',
+    progress: 'Progress area weight',
+    reset: 'Restore defaults'
+  },
+  customTheme: {
+    title: 'Custom themes',
+    description:
+      'Import JSON colors or a ZIP theme package with resources. Matching names replace existing themes.',
+    slots: 'Available resource slots and assignments',
+    imageSlots:
+      'Images: app background, home, sidebar, header, footer, buttons, dialogs, drawers, menus and playback thumbs.',
+    fontSlots: 'Fonts: global text and all regions above except the app background.',
+    textSlots: 'Text: appTitle and homeWelcome. Assign resources in manifest.json.',
+    import: 'Import theme',
+    export: 'Export theme',
+    example: 'Download example',
+    active: 'Active theme',
+    default: 'Default (no overrides)',
+    remove: 'Delete',
+    deleteTitle: 'Delete custom theme',
+    confirmDelete:
+      'Delete “{name}” and its bundled resources? You will need to import the theme again to use it.',
+    importFailed: 'Theme import failed'
+  },
   searchIndex: {
     title: 'Song search preparation',
     queued: 'Preparing search {completed}/{total}',
@@ -587,6 +617,8 @@ export default {
     micaEffectDescription:
       'Uses native Windows 11 Mica, follows the system automatically, and disables other theme effects.',
     restoreDefault: 'Restore defaults',
+    confirmResetTheme:
+      'Restore the default theme? Theme colors, backgrounds and player appearance will be reset, and the active custom theme will be disabled. Imported themes will be kept.',
     appearanceMode: 'Appearance Mode',
     appearanceDescription: 'Custom backgrounds default to dark scheme to ensure clear readability.',
     appearanceModeLight: 'Light',
@@ -706,7 +738,8 @@ export default {
     desktopLyricsLightweight: 'Exit lightweight mode to enable desktop lyrics.',
     autoPlayOnRestore: 'Autoplay on startup',
     smartShuffle: 'Smart shuffle',
-    smartShuffleDescription: 'Use listening, replays and skips to weight picks in random mode.',
+    smartShuffleDescription:
+      'When enabled, shuffle playback adjusts selection weights based on listening behavior.',
     autoPlayOnRestoreDescription:
       'When enabled, playback will resume from where it left off after startup.',
     autoAdjustLyricsDisplay: 'Automatically size lyrics and spacing',
@@ -824,6 +857,20 @@ export default {
     fileOperationFailed: 'Operation failed',
     filesRecovered: 'Recovered {recovered} / {total} tracks',
     buildNumber: 'Build number',
+    repository: 'Repository',
+    statistics: 'Data statistics',
+    statisticsDescription:
+      'Track local play history, play counts and listening time. Turning this off stops recording and reading statistics and pauses statistics-based recommendations. Existing data is kept.',
+    statisticsDisabled: 'Data statistics are off. Enable them in Settings → Other.',
+    clearStatistics: 'Clear statistics',
+    clearStatisticsDescription:
+      'Clear play history, play counts, listening time and recommendation caches.',
+    confirmClearStatistics:
+      'Clear all statistics? Play history, play counts, listening time and recommendation caches will be permanently deleted. Songs, playlists, tags and like/dislike preferences will be kept.',
+    statisticsCleared: 'Statistics cleared',
+    statisticsSaveFailed: 'Unable to update statistics settings',
+    statisticsClearFailed: 'Unable to clear statistics',
+    themeDocumentation: 'Theme plugin documentation',
     version: 'Version'
   },
   playerPanel: {

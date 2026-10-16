@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/consts'
@@ -15,10 +16,14 @@ import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
 import CacheSettings from '@/components/settings/CacheSettings.vue'
 import LibrarySettings from '@/components/settings/LibrarySettings.vue'
+import StatisticsSettings from '@/components/settings/StatisticsSettings.vue'
 
 const ui = useUIStore()
+const repositoryUrl = 'https://github.com/Huiiro/easy-player-v4'
+const themeDocumentationUrl = `${repositoryUrl}/blob/master/docs/custom-themes.md`
 const { locale, t } = useI18n()
 const activeSection = ref('playback')
+const resetThemeVisible = ref(false)
 const settingsScroller = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | undefined
 let navigatingBySidebar = false
@@ -288,7 +293,7 @@ onBeforeUnmount(() => {
               </h2>
               <p>{{ t('settings.themeDescription') }}</p>
             </div>
-            <button class="reset-button" type="button" @click="ui.resetTheme">
+            <button class="reset-button" type="button" @click="resetThemeVisible = true">
               {{ t('settings.restoreDefault') }}
             </button>
           </div>
@@ -449,11 +454,42 @@ onBeforeUnmount(() => {
               </div>
               <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
             </div>
+            <StatisticsSettings />
+            <div class="setting-row">
+              <h3 class="flex items-center gap-2">GitHub</h3>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <a
+                  :href="repositoryUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                  {{ t('settings.repository') }}
+                </a>
+                <a
+                  :href="themeDocumentationUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                  {{ t('settings.themeDocumentation') }}
+                </a>
+              </div>
+            </div>
           </div>
         </section>
       </div>
     </div>
   </main>
+  <BaseConfirmDialog
+    v-model="resetThemeVisible"
+    :title="t('settings.restoreDefault')"
+    :message="t('settings.confirmResetTheme')"
+    :confirm-text="t('settings.restoreDefault')"
+    @confirm="ui.resetTheme"
+  />
 </template>
 
 <style src="@/styles/settings.css"></style>

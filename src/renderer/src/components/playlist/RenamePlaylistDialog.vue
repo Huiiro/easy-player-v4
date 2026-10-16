@@ -58,7 +58,7 @@ async function submit(): Promise<void> {
       input: { name: trimmed, description: playlist.description }
     })
     if (!response.success || response.data === false) {
-      error.value = response.error || t('playlist.updateFailed')
+      error.value = (!response.success && response.error) || t('playlist.updateFailed')
       showError(error.value)
       return
     }

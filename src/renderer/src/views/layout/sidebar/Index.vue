@@ -68,7 +68,7 @@ const utilityItems: NavigationItem[] = [
 
 const activePath = computed(() => route.path)
 const navItemClass =
-  'flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm text-text-l transition-colors hover:bg-hover hover:text-text'
+  'ep-sidebar-item flex h-9 w-full items-center gap-2.5 px-2 text-left text-sm transition-colors'
 
 function isActive(path: string): boolean {
   return activePath.value === path || activePath.value.startsWith(`${path}/`)
@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
 
 <template>
   <aside
-    class="app-sidebar flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-[var(--motion-duration-standard)]"
+    class="ep-sidebar app-sidebar flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-[var(--motion-duration-standard)]"
     :class="expanded ? 'w-54' : 'w-14'"
   >
     <nav
@@ -250,9 +250,7 @@ onBeforeUnmount(() => {
           :key="item.path"
           :class="[
             navItemClass,
-            isActive(item.path)
-              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
-              : '',
+            isActive(item.path) ? 'ep-sidebar-item--active font-semibold' : '',
             !expanded ? 'justify-center px-0' : ''
           ]"
           :title="expanded ? undefined : t(item.labelKey)"
@@ -303,11 +301,9 @@ onBeforeUnmount(() => {
               v-for="playlist in playlists"
               :key="playlist.id"
               draggable="true"
-              class="relative grid h-9 w-full place-items-center rounded-lg transition-colors hover:bg-hover"
+              class="ep-sidebar-item relative grid h-9 w-full place-items-center transition-colors"
               :class="
-                isActive(`/playlist/${playlist.id}`)
-                  ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] text-primary'
-                  : 'text-text-l'
+                isActive(`/playlist/${playlist.id}`) ? 'ep-sidebar-item--active' : 'text-text-l'
               "
               :title="
                 isPlayingPlaylist(playlist.id)
@@ -346,11 +342,9 @@ onBeforeUnmount(() => {
             v-for="playlist in playlists"
             :key="playlist.id"
             draggable="true"
-            class="flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-text-l transition-colors hover:bg-hover hover:text-text"
+            class="ep-sidebar-item flex h-9 w-full items-center gap-2 px-2 text-left text-sm transition-colors"
             :class="
-              isActive(`/playlist/${playlist.id}`)
-                ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
-                : ''
+              isActive(`/playlist/${playlist.id}`) ? 'ep-sidebar-item--active font-semibold' : ''
             "
             @click="openPlaylist(playlist.id)"
             @dragstart="draggedPlaylistId = playlist.id"
@@ -388,9 +382,7 @@ onBeforeUnmount(() => {
         <button
           :class="[
             navItemClass,
-            isActive('/liked')
-              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
-              : '',
+            isActive('/liked') ? 'ep-sidebar-item--active font-semibold' : '',
             !expanded ? 'justify-center px-0' : ''
           ]"
           :title="expanded ? undefined : t('playlist.likedSongs')"
@@ -410,9 +402,7 @@ onBeforeUnmount(() => {
           :key="item.path"
           :class="[
             navItemClass,
-            isActive(item.path)
-              ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_15%,transparent)] font-semibold text-primary'
-              : '',
+            isActive(item.path) ? 'ep-sidebar-item--active font-semibold' : '',
             !expanded ? 'justify-center px-0' : ''
           ]"
           :title="expanded ? undefined : t(item.labelKey)"

@@ -95,6 +95,9 @@ const playerModule = load(
     './smartShuffle': { selectSmartNext: () => -1 },
     '@/stores/log/logStore': { useLogStore: () => ({ addEntry() {} }) },
     '@/stores/ui/uiStore': { useUIStore: () => ui },
+    '@/stores/statistics/statisticsStore': {
+      useStatisticsStore: () => ({ enabled: true, generation: 'initial', ready: true })
+    },
     '@/components/ui/useMessage': {
       useMessage: () => ({
         warning() {},

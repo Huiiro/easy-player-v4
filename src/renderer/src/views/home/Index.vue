@@ -6,6 +6,7 @@ import {
   onDeactivated,
   onMounted,
   ref,
+  watch,
   shallowRef
 } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +22,7 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 import {
   DEFAULT_HIDDEN_HOME_SECTIONS,
   DEFAULT_HOME_SECTION_ORDER,
@@ -38,6 +40,14 @@ const { success, warning, error: showError } = useMessage()
 const router = useRouter()
 const player = usePlayerStore()
 const uiStore = useUIStore()
+const statistics = useStatisticsStore()
+const statisticsSections = new Set([
+  'overview',
+  'heatmap',
+  'topPlayed',
+  'topDuration',
+  'recommendations'
+])
 const loading = ref(true)
 const defaultSectionOrder = DEFAULT_HOME_SECTION_ORDER
 const legacyDefaultSectionOrders = [
@@ -86,6 +96,7 @@ function sectionKey(id: HomeSection): string {
   return id
 }
 function isSectionVisible(id: HomeSection): boolean {
+  if (!statistics.enabled && statisticsSections.has(id)) return false
   if (id === 'welcome') return uiStore.showWelcomeText
   if (id === 'clock') return uiStore.homeClockEnabled
   return !Array.isArray(uiStore.hiddenHomeSections) || !uiStore.hiddenHomeSections.includes(id)
@@ -127,7 +138,7 @@ function migrateLegacyDefaultLayout(): void {
 }
 migrateLegacyDefaultLayout()
 
-const stats = ref<OverviewStats>({
+const emptyStats: OverviewStats = {
   songCount: 0,
   albumCount: 0,
   artistCount: 0,
@@ -154,7 +165,8 @@ const stats = ref<OverviewStats>({
     }
   },
   timePeriods: []
-})
+}
+const stats = ref<OverviewStats>(structuredClone(emptyStats))
 
 const historyDays = ref<HistoryDay[]>([])
 const topPlayed = ref<RankedSong[]>([])
@@ -192,7 +204,7 @@ const activeRecommendationCard = computed(() =>
 )
 
 const greeting = computed(() => {
-  const customText = uiStore.homeWelcomeText.trim()
+  const customText = (uiStore.customThemeText.homeWelcome ?? uiStore.homeWelcomeText).trim()
   if (customText) return customText
   const hour = new Date().getHours()
   const key = (() => {
@@ -231,8 +243,10 @@ function todayKey(): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 async function loadRecommendations(): Promise<void> {
+  if (!statistics.enabled) return
+  const generation = statistics.generation
   const response = await window.api.database.command('getHomeRecommendations')
-  if (!response.success) return
+  if (!response.success || !statistics.enabled || generation !== statistics.generation) return
   recommendationCards.value = response.data as RecommendationCard[]
 }
 async function loadPlaylists(): Promise<void> {
@@ -276,6 +290,8 @@ async function playPlaylist(playlist: Playlist): Promise<void> {
   }
 }
 async function playRecommendation(card: RecommendationCard): Promise<void> {
+  if (!statistics.enabled) return
+  const generation = statistics.generation
   if (pendingRecommendationCard.value !== null || playingPlaylistId.value !== null) return
   const cardKey = recommendationCardKey(card)
   pendingRecommendationCard.value = cardKey
@@ -289,6 +305,7 @@ async function playRecommendation(card: RecommendationCard): Promise<void> {
       group: card.group,
       generatedFor: card.generatedFor
     })
+    if (!statistics.enabled || generation !== statistics.generation) return
     if (!response.success) {
       showError(response.error || t('home.playRecommendationFailed'))
       return
@@ -310,30 +327,48 @@ async function playRecommendation(card: RecommendationCard): Promise<void> {
   }
 }
 async function playRanked(songs: RankedSong[], song: RankedSong): Promise<void> {
+  if (!statistics.enabled) return
   const index = songs.findIndex((item) => item.id === song.id)
   if (index < 0) return
   player.setQueue(songs)
   await player.playQueueItem(index)
 }
+async function loadStatistics(): Promise<void> {
+  if (!statistics.enabled) return
+  const generation = statistics.generation
+  const [statsResult, daysResult, playedResult, durationResult] = await Promise.all([
+    window.api.database.command('getOverviewStats'),
+    window.api.database.command('getPlayHistoryDays', { days: 365 }),
+    window.api.database.command('getTopPlayedSongs', { limit: 10 }),
+    window.api.database.command('getTopDurationSongs', { limit: 10 })
+  ])
+  if (!statistics.enabled || generation !== statistics.generation) return
+  if (statsResult.success) stats.value = statsResult.data as OverviewStats
+  if (daysResult.success) historyDays.value = daysResult.data as HistoryDay[]
+  if (playedResult.success) topPlayed.value = playedResult.data as RankedSong[]
+  if (durationResult.success) topDuration.value = durationResult.data as RankedSong[]
+}
 async function load(): Promise<void> {
   loading.value = true
   try {
-    const [statsResult, daysResult, playedResult, durationResult] = await Promise.all([
-      window.api.database.command('getOverviewStats'),
-      window.api.database.command('getPlayHistoryDays', { days: 365 }),
-      window.api.database.command('getTopPlayedSongs', { limit: 10 }),
-      window.api.database.command('getTopDurationSongs', { limit: 10 }),
-      loadPlaylists(),
-      loadRecommendations()
-    ])
-    if (statsResult.success) stats.value = statsResult.data as OverviewStats
-    if (daysResult.success) historyDays.value = daysResult.data as HistoryDay[]
-    if (playedResult.success) topPlayed.value = playedResult.data as RankedSong[]
-    if (durationResult.success) topDuration.value = durationResult.data as RankedSong[]
+    await Promise.all([loadStatistics(), loadPlaylists(), loadRecommendations()])
   } finally {
     loading.value = false
   }
 }
+watch(
+  () => statistics.generation,
+  () => {
+    stats.value = structuredClone(emptyStats)
+    historyDays.value = []
+    topPlayed.value = []
+    topDuration.value = []
+    recommendationCards.value = []
+    playingRecommendationCard.value = null
+    recommendationQueue.value = null
+    if (statistics.enabled) void load()
+  }
+)
 async function refresh(): Promise<void> {
   refreshing.value = true
   try {
@@ -370,7 +405,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="home-page custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text">
+  <main
+    class="ep-home home-page custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text"
+  >
     <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
       <template v-for="section in visibleSections" :key="section">
         <section v-if="section === 'welcome'" class="xl:col-span-2">
@@ -456,6 +493,7 @@ onBeforeUnmount(() => {
             </span>
             <BaseSwitch
               :model-value="isSectionVisible(id)"
+              :disabled="!statistics.enabled && statisticsSections.has(id)"
               :aria-labelledby="`home-section-${id}`"
               @update:model-value="setSectionVisible(id, $event)"
             />

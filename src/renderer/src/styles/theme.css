@@ -211,11 +211,6 @@
   --scrollbar-thumb-hover: color-mix(in srgb, var(--color-primary) 58%, transparent);
 }
 
-:root[data-system-theme='solid'] .app-sidebar {
-  /* Share the uniform material; an extra gradient produces visible dark bands. */
-  background: transparent;
-}
-
 :root[data-system-theme='solid'] .bg-primary,
 :root[data-system-theme='solid'] .btn-base:hover,
 :root[data-system-theme='solid'] .more-item:hover,

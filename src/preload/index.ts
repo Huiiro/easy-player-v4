@@ -212,6 +212,7 @@ const databaseAPI = {
       error?: string
     },
   recordPlayEventSync: (input: {
+    statisticsGeneration: string
     songId: number
     startedAt: number
     playedMs: number
@@ -614,6 +615,11 @@ const api = {
   files: filesAPI,
   lyrics: lyricsAPI,
   fonts: fontsAPI,
+  themes: {
+    importPackage: (data: Uint8Array) => ipcRenderer.invoke('themes:import', data),
+    exportPackage: (id: string) => ipcRenderer.invoke('themes:export', id),
+    removePackage: (id: string) => ipcRenderer.invoke('themes:remove', id)
+  },
   metadata: metadataAPI,
   shortcuts: shortcutsAPI,
   system: systemAPI,

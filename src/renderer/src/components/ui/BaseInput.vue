@@ -49,8 +49,9 @@ const inputPaddingClass = computed(() => {
 })
 
 const inputAttrs = computed(() => {
-  const { class: _c, style: _s, ...rest } = attrs
-  return rest
+  return Object.fromEntries(
+    Object.entries(attrs).filter(([key]) => key !== 'class' && key !== 'style')
+  )
 })
 </script>
 
@@ -71,7 +72,7 @@ const inputAttrs = computed(() => {
       :placeholder="placeholder"
       :disabled="disabled"
       v-bind="inputAttrs"
-      class="py-1 rounded border border-border text-text text-sm w-full bg-transparent outline-none transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] focus:border-primary focus:shadow-[0_0_0_1px] focus:shadow-primary/25"
+      class="ep-input py-1 rounded border text-sm w-full outline-none transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
       :class="inputPaddingClass"
     />
 
@@ -85,7 +86,7 @@ const inputAttrs = computed(() => {
       <button
         v-if="clearable && value"
         type="button"
-        class="text-gray-400 hover:text-gray-900 dark:hover:text-white"
+        class="text-text-l hover:text-text"
         @click="clear"
       >
         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">

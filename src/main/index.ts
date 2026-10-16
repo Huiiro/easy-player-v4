@@ -33,6 +33,8 @@ import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './d
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
+import { registerThemeIpcHandlers } from './ipc/themeIpcHandlers'
+import { resolveThemeResource } from './service/themePackageService'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
 import { registerDownloadIpcHandlers } from './ipc/downloadIpcHandlers'
@@ -389,6 +391,18 @@ function scheduleDesktopLyricsWindowStateSave(): void {
 function registerMediaProtocol(): void {
   protocol.handle('easy-player-media', async (request) => {
     const url = new URL(request.url)
+    if (url.hostname === 'theme') {
+      try {
+        const [, id, ...parts] = url.pathname.split('/')
+        const file = await resolveThemeResource(id, parts.join('/'))
+        const response = await net.fetch(pathToFileURL(file).toString())
+        const headers = new Headers(response.headers)
+        headers.set('Access-Control-Allow-Origin', '*')
+        return new Response(response.body, { status: response.status, headers })
+      } catch {
+        return new Response('Not Found', { status: 404 })
+      }
+    }
     const requestedPath = ['cover', 'cover-thumb', 'font', 'background'].includes(url.hostname)
       ? url.searchParams.get('path')
       : null
@@ -819,6 +833,7 @@ app.whenReady().then(() =>
       registerScanIpcHandlers()
       registerLyricsIpcHandlers()
       registerFontIpcHandlers()
+      registerThemeIpcHandlers()
       registerMetadataIpcHandlers()
       registerFileIpcHandlers()
       registerFileAssociationHandlers(() => mainWindow)

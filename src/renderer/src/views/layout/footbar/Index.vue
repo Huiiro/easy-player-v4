@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseRange from '@/components/ui/BaseRange.vue'
+import { footerLayoutStyle, updateFooterSideWidths } from '@/utils/footerLayout'
 import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -18,6 +20,7 @@ import { formatArtists, splitArtists } from '@/utils/artists'
 import { isLyricFormat, parseLyrics, type LyricFormat, type LyricSource } from '@/services/lyrics'
 
 const ui = useUIStore()
+const layoutStyle = computed(() => footerLayoutStyle(ui.footerLayout))
 const player = usePlayerStore()
 const { t } = useI18n()
 const router = useRouter()
@@ -33,6 +36,24 @@ async function markCurrent(preference: -1 | 1): Promise<void> {
 }
 const collapsed = ref(false)
 const footerRoot = ref<HTMLElement | null>(null)
+const footerSection = ref<HTMLElement | null>(null)
+const footerTime = ref<HTMLElement | null>(null)
+const footerTransport = ref<HTMLElement | null>(null)
+let footerLayoutObserver: ResizeObserver | null = null
+watch(
+  [footerSection, footerTime, footerTransport, layoutStyle],
+  () => {
+    footerLayoutObserver?.disconnect()
+    const section = footerSection.value
+    if (!section) return
+    footerLayoutObserver ??= new ResizeObserver(() => updateFooterSideWidths(section))
+    for (const element of [section, footerTime.value, footerTransport.value]) {
+      if (element) footerLayoutObserver.observe(element)
+    }
+    updateFooterSideWidths(section)
+  },
+  { flush: 'post' }
+)
 const footerHidden = ref(false)
 const footerPeekVisible = ref(false)
 const pointerNearFooter = ref(false)
@@ -532,6 +553,14 @@ function toggleMoreMenu(): void {
 const closeMoreMenu = (): void => {
   moreVisible.value = false
 }
+function openQueueFromMenu(): void {
+  queueVisible.value = true
+  closeMoreMenu()
+}
+function openDesktopLyricsFromMenu(): void {
+  void openDesktopLyrics()
+  closeMoreMenu()
+}
 const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
   if (source !== 'footer') closeMoreMenu()
 }
@@ -544,6 +573,7 @@ onMounted(() => {
   scheduleFooterHide()
 })
 onBeforeUnmount(() => {
+  footerLayoutObserver?.disconnect()
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   window.removeEventListener('click', closeMoreMenu)
   window.removeEventListener('pointermove', onWindowPointerMove)
@@ -562,11 +592,13 @@ onBeforeUnmount(() => {
     :style="{ transform: autoHideActive && footerHidden ? 'translateY(100%)' : '' }"
   >
     <section
-      class="app-footer pointer-events-auto mx-auto grid min-h-[72px] max-w-6xl items-center gap-6 rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-[var(--motion-duration-slow)] max-[700px]:grid-cols-[auto_minmax(0,1fr)_auto] max-[700px]:gap-2.5 max-[700px]:px-3 max-[700px]:py-2"
+      ref="footerSection"
+      class="ep-footer app-footer pointer-events-auto mx-auto grid min-h-[72px] items-center rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:py-2"
+      :style="layoutStyle"
       :class="
         collapsed
           ? 'app-footer--collapsed grid-cols-[minmax(0,1fr)_auto_auto] max-w-md gap-3'
-          : 'app-footer--expanded grid-cols-[minmax(0,1fr)_minmax(270px,1.2fr)_minmax(0,1fr)_auto]'
+          : 'app-footer--expanded'
       "
       :aria-label="t('footer.playerControls')"
       :aria-description="collapsed ? t('footer.swipeToChangeTrack') : undefined"
@@ -619,7 +651,7 @@ onBeforeUnmount(() => {
           </article>
         </div>
       </div>
-      <div v-else class="flex min-w-0 items-center gap-3">
+      <div v-else class="ep-footer-info flex min-w-0 items-center gap-3">
         <button
           class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-primary to-violet-500 text-white shadow-[0_0_14px_color-mix(in_srgb,var(--color-primary)_35%,transparent)]"
           :title="t('footer.openPlayer')"
@@ -643,39 +675,53 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div v-if="!collapsed" class="grid gap-1 max-[700px]:hidden">
-        <div class="flex items-center justify-center gap-1.5">
-          <button
-            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
-            :title="t('footer.previous')"
-            :disabled="!player.queue.length"
-            @click.stop="playPrevious"
-          >
-            <SvgIcon name="play-prev" class-name="size-4" />
-          </button>
-          <button
-            class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
-            :disabled="!player.currentFile"
-            :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
-            @click.stop="togglePlayback"
-          >
-            <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
-          </button>
-          <button
-            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
-            :title="t('footer.next')"
-            :disabled="!player.queue.length"
-            @click.stop="playNext"
-          >
-            <SvgIcon name="play-next" class-name="size-4" />
-          </button>
+      <div v-if="!collapsed" class="ep-footer-playback min-w-0 gap-1">
+        <div
+          ref="footerTransport"
+          class="ep-footer-transport flex items-center justify-center gap-1.5"
+        >
+          <div class="ep-footer-transport-buttons flex items-center justify-center gap-1.5">
+            <button
+              class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
+              :title="t('footer.previous')"
+              :disabled="!player.queue.length"
+              @click.stop="playPrevious"
+            >
+              <SvgIcon name="play-prev" class-name="size-4" />
+            </button>
+            <button
+              class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+              :disabled="!player.currentFile"
+              :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
+              @click.stop="togglePlayback"
+            >
+              <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
+            </button>
+            <button
+              class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
+              :title="t('footer.next')"
+              :disabled="!player.queue.length"
+              @click.stop="playNext"
+            >
+              <SvgIcon name="play-next" class-name="size-4" />
+            </button>
+            <div
+              ref="footerTime"
+              class="ep-footer-top-time text-[11px] tabular-nums text-text-l"
+              :title="player.positionFormatted + ' / ' + player.durationFormatted"
+            >
+              <span>{{ player.positionFormatted }}</span
+              ><span class="ep-footer-total-time"> / {{ player.durationFormatted }}</span>
+            </div>
+          </div>
         </div>
-        <div class="flex items-center gap-2 text-[11px] tabular-nums text-text-l">
-          <span>{{ player.positionFormatted }}</span>
-          <input
-            class="h-2 w-full cursor-pointer appearance-auto accent-primary disabled:cursor-default disabled:opacity-45"
-            type="range"
-            min="0"
+        <div
+          class="ep-footer-progress flex min-w-0 items-center gap-2 text-[11px] tabular-nums text-text-l"
+        >
+          <span class="shrink-0">{{ player.positionFormatted }}</span>
+          <BaseRange
+            class="ep-range ep-playback-progress h-2 w-full min-w-0 flex-1 cursor-pointer disabled:cursor-default disabled:opacity-45"
+            :min="0"
             :max="player.durationMs || 0"
             :value="player.positionMs"
             :disabled="!player.durationMs"
@@ -683,12 +729,12 @@ onBeforeUnmount(() => {
             @click.stop
             @input="seek"
           />
-          <span>{{ player.durationFormatted }}</span>
+          <span class="shrink-0">{{ player.durationFormatted }}</span>
         </div>
       </div>
-      <div v-if="!collapsed" class="flex min-w-0 items-center justify-end gap-2 max-[700px]:hidden">
+      <div v-if="!collapsed" class="ep-footer-actions flex min-w-0 items-center justify-end gap-2">
         <div
-          class="group relative"
+          class="ep-footer-action-volume group relative"
           :title="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
           @click.stop
           @wheel="changeVolume"
@@ -708,7 +754,7 @@ onBeforeUnmount(() => {
           >
             <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
             <input
-              class="absolute left-1/2 top-[5.5rem] h-1.5 w-28 -translate-x-1/2 -rotate-90 cursor-pointer accent-primary"
+              class="absolute left-1/2 top-[5.5rem] h-1.5 w-32 -translate-x-1/2 -rotate-90 cursor-pointer accent-[var(--ep-progress-fill)]"
               type="range"
               min="0"
               max="100"
@@ -720,14 +766,14 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <button
-          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          class="ep-footer-action-mode grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="playModeLabel"
           @click.stop="cyclePlayMode"
         >
           <SvgIcon :name="playModeIcon" class-name="size-5" />
         </button>
         <button
-          class="grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
           :class="currentPreference === 1 ? 'text-primary' : 'text-text'"
           :disabled="!player.currentQueueSong"
           :title="t('recommendation.like')"
@@ -739,7 +785,7 @@ onBeforeUnmount(() => {
           />
         </button>
         <button
-          class="grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
           :class="currentPreference === -1 ? 'text-red-400' : 'text-text'"
           :disabled="!player.currentQueueSong"
           :title="t('recommendation.dislike')"
@@ -748,14 +794,14 @@ onBeforeUnmount(() => {
           <SvgIcon name="play-dislike" class-name="size-6" />
         </button>
         <button
-          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          class="ep-footer-action-queue grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('queue.title')"
           @click.stop="queueVisible = true"
         >
           <SvgIcon name="control-playlist" class-name="size-5" />
         </button>
         <button
-          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('footer.desktopLyrics')"
           @click.stop="openDesktopLyrics"
         >
@@ -770,46 +816,101 @@ onBeforeUnmount(() => {
             <SvgIcon name="menu-more-vertical" class-name="size-5" />
           </button>
           <div
-            v-if="moreVisible && currentSong"
-            class="absolute bottom-full right-0 z-[9999] mb-4 w-48 rounded-xl border border-border bg-bg p-1 shadow-xl"
+            v-if="moreVisible"
+            class="ep-menu custom-scrollbar absolute bottom-full right-0 z-[9999] mb-4 max-h-[min(70vh,480px)] w-56 overflow-y-auto rounded-xl border border-border bg-bg p-1 shadow-xl"
           >
-            <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
-              <SvgIcon name="common-plus" class-name="size-4 shrink-0" />
-              {{ t('songList.addToPlaylist') }}
+            <div class="ep-footer-menu-volume items-center gap-2 px-3 py-2 text-sm">
+              <SvgIcon
+                :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
+                class-name="size-4 shrink-0"
+              />
+              <label for="footer-menu-volume">{{ t('footer.volume') }}</label>
+              <input
+                id="footer-menu-volume"
+                class="min-w-0 flex-1 accent-primary"
+                type="range"
+                min="0"
+                max="100"
+                :value="Math.round(player.volume * 100)"
+                :aria-label="t('footer.volume')"
+                @input="setVolume"
+              />
+            </div>
+            <button class="ep-footer-menu-mode menu-item" @click="cyclePlayMode">
+              <SvgIcon :name="playModeIcon" class-name="size-4 shrink-0" />
+              {{ playModeLabel }}
             </button>
-            <button class="menu-item flex items-center gap-2" @click="openTags">
-              <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
+            <button class="ep-footer-menu-queue menu-item" @click="openQueueFromMenu">
+              <SvgIcon name="control-playlist" class-name="size-4 shrink-0" />
+              {{ t('queue.title') }}
             </button>
             <button
-              v-for="artist in currentArtists"
-              :key="artist"
-              class="menu-item flex items-center gap-2"
-              @click="openArtist(artist)"
+              class="ep-footer-menu-secondary menu-item"
+              :class="currentPreference === 1 && 'text-primary'"
+              :disabled="!player.currentQueueSong"
+              @click="markCurrent(1)"
             >
-              <SvgIcon name="common-user" class-name="size-4 shrink-0" />
-              <span class="min-w-0 truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
+              <SvgIcon
+                :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
+                class-name="size-4 shrink-0"
+              />
+              {{ t('recommendation.like') }}
             </button>
             <button
-              class="menu-item flex items-center gap-2"
-              :disabled="!currentSong.album"
-              @click="openAlbum"
+              class="ep-footer-menu-secondary menu-item"
+              :class="currentPreference === -1 && 'text-danger'"
+              :disabled="!player.currentQueueSong"
+              @click="markCurrent(-1)"
             >
-              <SvgIcon name="common-album" class-name="size-4" />
-              {{ t('footer.goAlbum') }}
+              <SvgIcon name="play-dislike" class-name="size-4 shrink-0" />
+              {{ t('recommendation.dislike') }}
             </button>
-            <button class="menu-item flex items-center gap-2" @click="openDetails">
-              <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
+            <button class="ep-footer-menu-secondary menu-item" @click="openDesktopLyricsFromMenu">
+              <SvgIcon name="common-lyrics2" class-name="size-4 shrink-0" />
+              {{ t('footer.desktopLyrics') }}
             </button>
-            <button class="menu-item flex items-center gap-2" @click="openFolder">
-              <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
-            </button>
-            <button class="menu-item flex items-center gap-2" @click="locateSong">
-              <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
-            </button>
-            <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
-              <SvgIcon name="common-edit-lrc" class-name="size-4" />
-              {{ t('footer.openInLyricEditor') }}
-            </button>
+            <p v-if="!currentSong" class="px-3 py-2 text-xs text-text-l">
+              {{ t('footer.noTrack') }}
+            </p>
+            <template v-if="currentSong">
+              <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
+                <SvgIcon name="common-plus" class-name="size-4 shrink-0" />
+                {{ t('songList.addToPlaylist') }}
+              </button>
+              <button class="menu-item flex items-center gap-2" @click="openTags">
+                <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
+              </button>
+              <button
+                v-for="artist in currentArtists"
+                :key="artist"
+                class="menu-item flex items-center gap-2"
+                @click="openArtist(artist)"
+              >
+                <SvgIcon name="common-user" class-name="size-4 shrink-0" />
+                <span class="min-w-0 truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
+              </button>
+              <button
+                class="menu-item flex items-center gap-2"
+                :disabled="!currentSong.album"
+                @click="openAlbum"
+              >
+                <SvgIcon name="common-album" class-name="size-4" />
+                {{ t('footer.goAlbum') }}
+              </button>
+              <button class="menu-item flex items-center gap-2" @click="openDetails">
+                <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
+              </button>
+              <button class="menu-item flex items-center gap-2" @click="openFolder">
+                <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
+              </button>
+              <button class="menu-item flex items-center gap-2" @click="locateSong">
+                <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
+              </button>
+              <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
+                <SvgIcon name="common-edit-lrc" class-name="size-4" />
+                {{ t('footer.openInLyricEditor') }}
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -830,7 +931,7 @@ onBeforeUnmount(() => {
       </div>
 
       <button
-        class="grid size-8 place-items-center rounded-full bg-text/[0.07] text-text-l transition hover:scale-105 hover:bg-text/[0.13] hover:text-text"
+        class="ep-footer-toggle grid size-8 place-items-center rounded-full bg-text/[0.07] text-text-l transition hover:scale-105 hover:bg-text/[0.13] hover:text-text"
         :class="collapsed && 'relative z-10'"
         :title="collapsed ? t('footer.expand') : t('footer.collapse')"
         :aria-label="collapsed ? t('footer.expand') : t('footer.collapse')"
@@ -945,8 +1046,6 @@ onBeforeUnmount(() => {
   }
 }
 .app-footer {
-  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-text) 10%, transparent));
-  background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));
   will-change: max-width, grid-template-columns;
   transition:
     max-width var(--motion-duration-emphasized) var(--motion-ease-spring),

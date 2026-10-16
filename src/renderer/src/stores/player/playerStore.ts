@@ -25,6 +25,7 @@ import { audioBridge } from '@/services/audioBridge'
 import { selectSmartNext } from './smartShuffle'
 import { useLogStore } from '@/stores/log/logStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 import { useMessage } from '@/components/ui/useMessage'
 import { t } from '@/i18n'
 import { PlayMode } from '@/consts'
@@ -34,6 +35,7 @@ import eventBus from '@/utils/eventBus'
 export const usePlayerStore = defineStore('player', () => {
   const { warning, success, info } = useMessage()
   const ui = useUIStore()
+  const statistics = useStatisticsStore()
   // ── State ──
   const playbackModeChanging = ref(false)
   const state = ref<PlaybackState>('idle')
@@ -186,6 +188,7 @@ export const usePlayerStore = defineStore('player', () => {
         totalMs: number
         playingSince: number | null
         startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation'
+        statisticsGeneration: string
       }
     | undefined
 
@@ -193,7 +196,7 @@ export const usePlayerStore = defineStore('player', () => {
     song: LibrarySong,
     startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation' = 'automatic'
   ): void {
-    if (ui.extremePlayback) return
+    if (ui.extremePlayback || !statistics.enabled) return
     if (historySession?.songId === song.id) {
       resumeHistory()
       return
@@ -205,16 +208,18 @@ export const usePlayerStore = defineStore('player', () => {
       eventStartedAt: now,
       totalMs: 0,
       playingSince: now,
-      startOrigin
+      startOrigin,
+      statisticsGeneration: statistics.generation
     }
     void window.api.database.command('savePlayHistory', {
       songId: song.id,
       startedAt: now,
-      startOrigin
+      startOrigin,
+      statisticsGeneration: statistics.generation
     })
   }
   function resumeHistory(): void {
-    if (ui.extremePlayback) return
+    if (ui.extremePlayback || !statistics.enabled) return
     if (historySession && historySession.playingSince === null)
       historySession.playingSince = Date.now()
   }
@@ -229,6 +234,10 @@ export const usePlayerStore = defineStore('player', () => {
     reason: 'ended' | 'next' | 'previous' | 'selected' | 'stopped' | 'closed' = 'stopped'
   ): void {
     if (!historySession) return
+    if (!statistics.enabled || historySession.statisticsGeneration !== statistics.generation) {
+      historySession = undefined
+      return
+    }
     pauseHistory()
     if (finalize) {
       const session = historySession
@@ -239,7 +248,8 @@ export const usePlayerStore = defineStore('player', () => {
           playedMs: session.totalMs,
           durationMs: durationMs.value,
           endReason: reason,
-          startOrigin: session.startOrigin
+          startOrigin: session.startOrigin,
+          statisticsGeneration: session.statisticsGeneration
         })
         .then(() => loadRecommendationScores())
       historySession = undefined
@@ -247,9 +257,10 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function loadRecommendationScores(): Promise<void> {
-    if (ui.extremePlayback) return
+    if (ui.extremePlayback || !statistics.enabled) return
+    const generation = statistics.generation
     const response = await window.api.database.command('getRecommendationScores')
-    if (ui.extremePlayback) return
+    if (ui.extremePlayback || !statistics.enabled || generation !== statistics.generation) return
     if (!response.success) return
     recommendationScores.clear()
     for (const score of response.data as Array<{
@@ -274,6 +285,8 @@ export const usePlayerStore = defineStore('player', () => {
   async function setPreference(songId: number, preference: -1 | 0 | 1): Promise<boolean> {
     const result = await window.api.database.command('setSongPreference', { songId, preference })
     if (result.success) {
+      for (const song of queue.value) if (song.id === songId) song.preference = preference
+      shuffleNavigationRevision.value++
       if (preference === 0) info(t('recommendation.feedbackCleared'))
       else
         success(
@@ -288,7 +301,11 @@ export const usePlayerStore = defineStore('player', () => {
   function getSongPreference(songId: number): number {
     // The revision also refreshes the current-song feedback controls.
     void shuffleNavigationRevision.value
-    return recommendationScores.get(songId)?.preference ?? 0
+    return (
+      recommendationScores.get(songId)?.preference ??
+      queue.value.find((song) => song.id === songId)?.preference ??
+      0
+    )
   }
 
   async function loadSmartShuffleConfig(): Promise<void> {
@@ -316,6 +333,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   function finishHistoryOnUnload(): void {
     if (!historySession) return
+    if (!statistics.enabled || historySession.statisticsGeneration !== statistics.generation) {
+      historySession = undefined
+      return
+    }
     pauseHistory()
     const session = historySession
     window.api.database.recordPlayEventSync({
@@ -324,7 +345,8 @@ export const usePlayerStore = defineStore('player', () => {
       playedMs: session.totalMs,
       durationMs: durationMs.value,
       endReason: 'closed',
-      startOrigin: session.startOrigin
+      startOrigin: session.startOrigin,
+      statisticsGeneration: session.statisticsGeneration
     })
     historySession = undefined
   }
@@ -336,6 +358,21 @@ export const usePlayerStore = defineStore('player', () => {
   const positionFormatted = computed(() => formatTime(positionMs.value))
   const durationFormatted = computed(() => formatTime(durationMs.value))
   const currentQueueSong = computed(() => queue.value[currentQueueIndex.value] ?? null)
+  watch(
+    () => statistics.generation,
+    () => {
+      historySession = undefined
+      recommendationScores.clear()
+      pendingSmartIndex = -1
+      shuffleNavigationRevision.value++
+      if (statistics.enabled && !ui.extremePlayback) {
+        if (isPlaying.value && currentQueueSong.value) beginHistory(currentQueueSong.value)
+        void loadRecommendationScores()
+      }
+      void syncNextTrack()
+    },
+    { flush: 'sync' }
+  )
   const queueTransitionEntries = computed(() =>
     queue.value.map((song) => [song.id, song.audio, song.songStatus, song.sourceId])
   )
@@ -598,7 +635,12 @@ export const usePlayerStore = defineStore('player', () => {
     const length = queue.value.length
     if (!length || currentQueueIndex.value < 0) return -1
     if (playMode.value === PlayMode.Single) return currentQueueIndex.value
-    if (playMode.value === PlayMode.Random && smartShuffleEnabled.value && !ui.extremePlayback) {
+    if (
+      playMode.value === PlayMode.Random &&
+      smartShuffleEnabled.value &&
+      statistics.enabled &&
+      !ui.extremePlayback
+    ) {
       if (
         pendingSmartIndex >= 0 &&
         pendingSmartIndex < length &&
@@ -1569,6 +1611,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function subscribeToEvents(): void {
     if (unsubs.length) return
+    if (!statistics.ready) void statistics.refresh().catch(() => undefined)
     void loadRecommendationScores()
     document.addEventListener('visibilitychange', handleDocumentVisibility)
     startAudioAnalysisPolling()

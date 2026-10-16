@@ -56,8 +56,8 @@ const trackClass = computed(() => {
 
 const trackStyle = computed(() => {
   const bg = isChecked.value
-    ? props.activeColor || 'var(--color-primary)'
-    : props.inactiveColor || 'var(--color-border)'
+    ? props.activeColor || 'var(--ep-switch-active, var(--color-primary))'
+    : props.inactiveColor || 'var(--ep-switch-inactive, var(--color-border))'
   return {
     width: `${currentSize.value.trackWidth}px`,
     height: `${currentSize.value.trackHeight}px`,
@@ -99,7 +99,7 @@ function toggle(): void {
     :aria-checked="isChecked"
     :disabled="disabled"
     :class="[
-      'inline-flex items-center gap-2',
+      'ep-switch inline-flex items-center gap-2',
       disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
     ]"
     @click="toggle"
@@ -107,7 +107,7 @@ function toggle(): void {
     <!-- 轨道 + 滑块 -->
     <span :class="trackClass" :style="trackStyle">
       <span
-        class="absolute rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
+        class="ep-switch-thumb absolute rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
         :style="knobStyle"
       />
     </span>

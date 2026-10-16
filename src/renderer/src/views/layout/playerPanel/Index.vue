@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseRange from '@/components/ui/BaseRange.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { CoverAnalyzer } from '@/hooks/useImageColors'
@@ -845,11 +846,10 @@ function changeLyricsOffset(event: WheelEvent): void {
           </div>
           <!-- progress -->
           <div class="w-[min(440px,100%)]">
-            <input
-              class="w-full cursor-pointer appearance-auto accent-primary disabled:cursor-default disabled:opacity-45"
+            <BaseRange
+              class="ep-range ep-playback-progress w-full cursor-pointer disabled:cursor-default disabled:opacity-45"
               :class="progressStyle === 'thin' ? 'h-1' : 'h-2.5'"
-              type="range"
-              min="0"
+              :min="0"
               :max="player.durationMs || 0"
               :value="player.positionMs"
               :disabled="!player.durationMs"

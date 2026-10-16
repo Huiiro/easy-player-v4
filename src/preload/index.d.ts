@@ -14,7 +14,7 @@ import type {
   StereoFieldConfig,
   TransitionConfig
 } from '../renderer/src/types/audio'
-import type { DatabaseAction, DatabaseResponse } from '../main/database/ipc-handlers'
+import type { DatabaseAction, DatabaseResponse } from '../main/ipc/databaseIpcHandlers'
 import type { ScanLocalMusicResult, ScanProgress } from '../main/ipc/scanIpcHandlers'
 
 declare global {
@@ -240,6 +240,7 @@ declare global {
         saveSync(key: string, value: unknown): { success: boolean; error?: string }
         getSync(key: string): { success: boolean; data?: unknown; error?: string }
         recordPlayEventSync(input: {
+          statisticsGeneration: string
           songId: number
           startedAt: number
           playedMs: number
@@ -402,6 +403,15 @@ declare global {
           data?: Array<{ family: string; file: string; url: string }>
         }>
         openDirectory(): Promise<{ success: boolean; error?: string }>
+      }
+      themes: {
+        importPackage(data: Uint8Array): Promise<{
+          success: boolean
+          data?: { source: string; package: import('../shared/themePackage').InstalledThemePackage }
+          error?: string
+        }>
+        exportPackage(id: string): Promise<{ success: boolean; data?: Uint8Array; error?: string }>
+        removePackage(id: string): Promise<{ success: boolean; error?: string }>
       }
       metadata: {
         read(songId: number): Promise<{ success: boolean; data?: unknown; error?: string }>

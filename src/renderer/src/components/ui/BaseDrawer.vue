@@ -41,13 +41,13 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-function close() {
+function close(): void {
   emit('update:modelValue', false)
 
   emit('close')
 }
 
-function handleClose() {
+function handleClose(): void {
   if (props.closeOnOverlay) {
     close()
   }
@@ -68,8 +68,7 @@ const hasHeader = computed(() => {
 const panelClasses = computed(() => {
   const base = `
     fixed
-    bg-bg
-    shadow-xl
+    ep-drawer-panel
     flex
     flex-col
     overflow-hidden
@@ -153,7 +152,11 @@ const leaveTo = computed(() => {
 
 <template>
   <TransitionRoot :show="modelValue" as="template">
-    <Dialog as="div" class="pointer-events-auto fixed inset-0 z-50 text-text" @close="handleClose">
+    <Dialog
+      as="div"
+      class="ep-drawer pointer-events-auto fixed inset-0 z-50 text-text"
+      @close="handleClose"
+    >
       <!-- overlay -->
 
       <TransitionChild
@@ -165,7 +168,7 @@ const leaveTo = computed(() => {
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="fixed inset-0 bg-black/40" />
+        <div class="ep-overlay fixed inset-0" />
       </TransitionChild>
 
       <!-- drawer -->
@@ -216,7 +219,7 @@ const leaveTo = computed(() => {
 
           <div
             v-if="hasHeader || $slots.header"
-            class="px-5 py-4 flex items-center justify-between border-b border-border shrink-0"
+            class="ep-drawer-header px-5 py-4 flex items-center justify-between border-b border-border shrink-0"
           >
             <slot name="header">
               <div class="flex items-center min-w-0">
@@ -253,7 +256,7 @@ const leaveTo = computed(() => {
           <!-- content -->
 
           <div
-            class="flex-1 overflow-y-auto custom-scrollbar p-5"
+            class="ep-drawer-body flex-1 overflow-y-auto custom-scrollbar p-5"
             :class="{
               'pt-12': showClose && !hasHeader && !$slots.header
             }"
@@ -263,7 +266,10 @@ const leaveTo = computed(() => {
 
           <!-- footer -->
 
-          <div v-if="$slots.footer" class="px-5 py-4 border-t border-border shrink-0">
+          <div
+            v-if="$slots.footer"
+            class="ep-drawer-footer px-5 py-4 border-t border-border shrink-0"
+          >
             <slot name="footer" />
           </div>
         </DialogPanel>

@@ -55,6 +55,7 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
 })
 const stored = JSON.stringify({
   extremePlayback: true,
+  footerLayout: { enabled: true, mode: 'stacked', maxWidth: 1500, progressWeight: 3, gap: 12 },
   shortcutKeys: { enableLightweight: 'ctrl+shift+m' }
 })
 exports.playerDataStorage.setItem('ui.preferences.v1', stored)
@@ -69,6 +70,11 @@ assert.equal(
   exports.playerDataStorage.getItem('ui.preferences.v1'),
   stored,
   'Fresh renderers must read the saved preferences'
+)
+assert.equal(
+  JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1')).footerLayout.mode,
+  'stacked',
+  'Footer layout must survive a renderer restart'
 )
 
 const startup = {}

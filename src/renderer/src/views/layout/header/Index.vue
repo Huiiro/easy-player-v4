@@ -106,7 +106,7 @@ eventBus.on('openAudioControls', openAudioControls)
 
 <template>
   <header
-    class="app-header flex h-[42px] items-center transition-opacity [-webkit-app-region:drag]"
+    class="ep-header app-header flex h-[42px] items-center transition-opacity [-webkit-app-region:drag]"
     :class="[visible ? '' : 'pointer-events-none opacity-0', isMac ? 'app-header--mac' : '']"
     :style="headerStyle"
   >
@@ -130,7 +130,9 @@ eventBus.on('openAudioControls', openAudioControls)
         class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
         >EY
       </span>
-      <span class="text-[16px] font-semibold tracking-tight">{{ ui.logoText }}</span>
+      <span class="text-[16px] font-semibold tracking-tight">{{
+        ui.customThemeText.appTitle ?? ui.logoText
+      }}</span>
       <span class="text-[9px] mt-2">V {{ VERSION }}</span>
     </div>
     <button
@@ -245,8 +247,6 @@ eventBus.on('openAudioControls', openAudioControls)
 
 <style scoped>
 .app-header {
-  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-border) 82%, transparent));
-  background: var(--app-header-bg, color-mix(in srgb, var(--color-bg) 82%, transparent));
   backdrop-filter: blur(18px);
   transition: opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }

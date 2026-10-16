@@ -130,6 +130,7 @@ onBeforeUnmount(() => offProgress?.())
     </div>
     <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
   </div>
+  <hr class="mx-5 my-4 border-0 border-t border-border" />
   <div class="setting-row text-nowrap">
     <div>
       <h3>{{ t('settings.artistSeparator') }}</h3>
@@ -151,6 +152,7 @@ onBeforeUnmount(() => offProgress?.())
     </div>
     <BaseSwitch v-model="ui.normalizeArtistSeparator" size="md" />
   </div>
+  <hr class="mx-5 my-4 border-0 border-t border-border" />
   <div class="setting-row">
     <div>
       <h3>{{ t('settings.libraryBackup') }}</h3>

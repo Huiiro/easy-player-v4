@@ -37,44 +37,11 @@ const sizeClass = computed(() => {
   }[props.size]
 })
 
-/* variant */
-const variantClass = computed(() => {
-  const map = {
-    primary: `
-      border-transparent
-      bg-[var(--btn-primary-bg)]
-      text-[var(--btn-primary-text)]
-      hover:bg-[var(--btn-primary-bg-hover)]
-      focus-visible:ring-[var(--btn-primary-ring)]
-    `,
-    secondary: `
-      border border-[var(--color-border)]
-      bg-[var(--color-bg-l2)]
-      text-[var(--color-text)]
-      hover:bg-[var(--color-hover-bg)]
-    `,
-    ghost: `
-      border-transparent
-      bg-transparent
-      text-[var(--color-text)]
-      hover:bg-[var(--color-hover-bg)]
-      hover:text-[var(--color-primary)]
-    `,
-    danger: `
-      border-transparent
-      bg-[var(--btn-danger-bg)]
-      text-[var(--btn-danger-text)]
-      hover:bg-[var(--btn-danger-bg-hover)]
-      focus-visible:ring-[var(--btn-danger-ring)]
-    `
-  }
-
-  return map[props.variant]
-})
+const variantClass = computed(() => `ep-button--${props.variant}`)
 
 /* base classes */
 const baseClass =
-  'inline-flex items-center justify-center rounded-md border font-medium transition ' +
+  'ep-button inline-flex items-center justify-center border font-medium transition ' +
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2'
 
 const classes = computed(() => [

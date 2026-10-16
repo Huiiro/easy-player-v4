@@ -180,7 +180,7 @@ function handleClick(item: MenuItemType) {
       leave-to-class="opacity-0 scale-95"
     >
       <MenuItems
-        class="absolute z-50 rounded-xl border border-border bg-bg-l shadow-lg p-1 no-scrollbar"
+        class="ep-menu absolute z-50 rounded-xl border shadow-lg p-1 no-scrollbar"
         :class="[width, positionClass]"
         :style="maxHeightStyle"
       >

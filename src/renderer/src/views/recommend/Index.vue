@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -32,6 +33,7 @@ type Group = 'recommended' | 'discovery' | 'lessRecommended'
 const { t } = useI18n()
 const { error } = useMessage()
 const player = usePlayerStore()
+const statistics = useStatisticsStore()
 const loading = ref(false)
 const groups = ref<Record<Group, RecommendedSong[]>>({
   recommended: [],
@@ -62,6 +64,7 @@ function todayKey(): string {
 }
 
 async function load(): Promise<void> {
+  if (!statistics.enabled) return
   const revision = ++loadRevision
   loading.value = true
   try {
@@ -88,6 +91,7 @@ async function load(): Promise<void> {
 }
 
 async function showMore(group: Group): Promise<void> {
+  if (!statistics.enabled) return
   const revision = loadRevision
   const offset = groups.value[group].length
   moreLoading.value[group] = true
@@ -125,6 +129,8 @@ async function setPreference(song: RecommendedSong, preference: -1 | 0 | 1): Pro
 }
 
 async function playGroup(group: Group, song: RecommendedSong): Promise<void> {
+  if (!statistics.enabled) return
+  const revision = loadRevision
   const response = await window.api.database.command('getRecommendationPage', {
     group,
     limit: 100
@@ -134,6 +140,7 @@ async function playGroup(group: Group, song: RecommendedSong): Promise<void> {
     return
   }
   const page = response.data as { items: RecommendedSong[]; generatedFor: string }
+  if (!statistics.enabled || revision !== loadRevision) return
   if (page.generatedFor !== generatedFor.value) {
     await load()
     return
@@ -165,6 +172,18 @@ function coverUrl(song: RecommendedSong): string | null {
 }
 
 onActivated(() => void load())
+watch(
+  () => statistics.generation,
+  () => {
+    ++loadRevision
+    groups.value = { recommended: [], discovery: [], lessRecommended: [] }
+    totals.value = { recommended: 0, discovery: 0, lessRecommended: 0 }
+    generatedFor.value = ''
+    dataThrough.value = ''
+    loading.value = false
+    if (statistics.enabled) void load()
+  }
+)
 onMounted(() => {
   dateTimer = setInterval(() => {
     if (generatedFor.value && generatedFor.value !== todayKey()) void load()
@@ -180,16 +199,22 @@ onBeforeUnmount(() => {
     <header class="mb-6 flex items-start justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">{{ t('recommendation.title') }}</h1>
-        <p class="mt-2 max-w-2xl text-sm text-text-l">{{ t('recommendation.description') }}</p>
+        <p class="mt-2 max-w-2xl text-sm text-text-l">
+          {{ t(statistics.enabled ? 'recommendation.description' : 'settings.statisticsDisabled') }}
+        </p>
         <p v-if="dataThrough" class="mt-1 max-w-2xl text-xs text-text-l">
           {{ t('recommendation.dailySnapshot', { date: dataThrough }) }}
         </p>
       </div>
-      <button class="btn-hover rounded-lg px-3 py-2 text-sm" :disabled="loading" @click="load">
+      <button
+        class="btn-hover rounded-lg px-3 py-2 text-sm"
+        :disabled="loading || !statistics.enabled"
+        @click="load"
+      >
         {{ t('recommendation.refresh') }}
       </button>
     </header>
-    <section v-for="group in groupOrder" :key="group" class="mb-8">
+    <section v-for="group in statistics.enabled ? groupOrder : []" :key="group" class="mb-8">
       <h2 class="mb-3">
         <button
           type="button"

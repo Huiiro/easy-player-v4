@@ -8,11 +8,20 @@ import {
 } from '../database/recommendations'
 import { Logger } from '../service/loggerService'
 import { logOperation, logParams } from '../service/operationLogger'
+import {
+  canRecordStatistics,
+  clearStatisticsData,
+  getStatisticsState,
+  setStatisticsEnabled
+} from '../database/statisticsControl'
 
 export const DATABASE_IPC_CHANNEL = 'database:command'
 
 type Handler = (params?: never) => unknown
 const handlers = {
+  getStatisticsState,
+  setStatisticsEnabled: ({ enabled }: { enabled: boolean }) => setStatisticsEnabled(enabled),
+  clearStatisticsData,
   getSetting: ({ key }: { key: string }) => library.getAppSetting(key),
   setSetting: ({ key, value }: { key: string; value: unknown }) =>
     library.setAppSetting(key, value),
@@ -71,28 +80,48 @@ const handlers = {
   savePlayHistory: ({
     songId,
     startedAt,
-    startOrigin
+    startOrigin,
+    statisticsGeneration
   }: {
     songId: number
     startedAt: number
     startOrigin: Parameters<typeof library.savePlayHistory>[2]
-  }) => library.savePlayHistory(songId, startedAt, startOrigin),
+    statisticsGeneration: string
+  }) => {
+    if (canRecordStatistics(statisticsGeneration))
+      library.savePlayHistory(songId, startedAt, startOrigin)
+  },
   queryRecentPlayedSongs: (params: Parameters<typeof library.queryRecentPlayedSongs>[0]) =>
-    library.queryRecentPlayedSongs(params),
+    getStatisticsState().enabled ? library.queryRecentPlayedSongs(params) : { data: [], total: 0 },
   clearRecentPlayedSongs: () => library.clearRecentPlayedSongs(),
-  getPlayHistoryDays: ({ days }: { days?: number } = {}) => library.getPlayHistoryDays(days),
-  getTopPlayedSongs: ({ limit }: { limit?: number } = {}) => library.getTopPlayedSongs(limit),
-  getTopDurationSongs: ({ limit }: { limit?: number } = {}) => library.getTopDurationSongs(limit),
-  getRecommendationScores: () => getRecommendationScores(),
-  getRecommendations: ({ limit }: { limit?: number } = {}) => library.getRecommendations(limit),
-  getHomeRecommendations: () => library.getHomeRecommendations(),
+  getPlayHistoryDays: ({ days }: { days?: number } = {}) =>
+    getStatisticsState().enabled ? library.getPlayHistoryDays(days) : [],
+  getTopPlayedSongs: ({ limit }: { limit?: number } = {}) =>
+    getStatisticsState().enabled ? library.getTopPlayedSongs(limit) : [],
+  getTopDurationSongs: ({ limit }: { limit?: number } = {}) =>
+    getStatisticsState().enabled ? library.getTopDurationSongs(limit) : [],
+  getRecommendationScores: () => (getStatisticsState().enabled ? getRecommendationScores() : []),
+  getRecommendations: ({ limit }: { limit?: number } = {}) =>
+    getStatisticsState().enabled
+      ? library.getRecommendations(limit)
+      : {
+          recommended: [],
+          discovery: [],
+          lessRecommended: [],
+          totals: { recommended: 0, discovery: 0, lessRecommended: 0 },
+          generatedFor: '',
+          dataThrough: ''
+        },
+  getHomeRecommendations: () =>
+    getStatisticsState().enabled ? library.getHomeRecommendations() : [],
   getHomeRecommendationSongs: ({
     group,
     generatedFor
   }: {
     group: Parameters<typeof library.getHomeRecommendationSongs>[0]
     generatedFor: string
-  }) => library.getHomeRecommendationSongs(group, generatedFor),
+  }) =>
+    getStatisticsState().enabled ? library.getHomeRecommendationSongs(group, generatedFor) : [],
   getRecommendationPage: ({
     group,
     excludeSongIds,
@@ -101,8 +130,15 @@ const handlers = {
     group: Parameters<typeof library.getRecommendationPage>[0]
     excludeSongIds?: number[]
     limit?: number
-  }) => library.getRecommendationPage(group, excludeSongIds, limit),
-  recordPlayEvent: (params: Parameters<typeof recordPlayEvent>[0]) => recordPlayEvent(params),
+  }) =>
+    getStatisticsState().enabled
+      ? library.getRecommendationPage(group, excludeSongIds, limit)
+      : { items: [], total: 0, generatedFor: '' },
+  recordPlayEvent: (
+    params: Parameters<typeof recordPlayEvent>[0] & { statisticsGeneration: string }
+  ) => {
+    if (canRecordStatistics(params.statisticsGeneration)) recordPlayEvent(params)
+  },
   setSongPreference: ({ songId, preference }: { songId: number; preference: -1 | 0 | 1 }) =>
     setSongPreference(songId, preference),
 
@@ -205,7 +241,7 @@ const handlers = {
     resourceId: string
     subId?: string
   }) => library.hasCompletedDownload(platform, resourceId, subId),
-  getOverviewStats: () => library.getOverviewStats()
+  getOverviewStats: () => (getStatisticsState().enabled ? library.getOverviewStats() : null)
 }
 
 export type DatabaseAction = keyof typeof handlers
@@ -219,9 +255,9 @@ export type DatabaseResponse<T = unknown> =
 export function registerDatabaseIpcHandlers(): void {
   ipcMain.on(
     'database:record-play-event-sync',
-    (event, input: Parameters<typeof recordPlayEvent>[0]) => {
+    (event, input: Parameters<typeof handlers.recordPlayEvent>[0]) => {
       try {
-        recordPlayEvent(input)
+        handlers.recordPlayEvent(input)
         event.returnValue = { success: true }
       } catch (error) {
         event.returnValue = {

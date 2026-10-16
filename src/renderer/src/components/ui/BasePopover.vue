@@ -81,7 +81,7 @@ const arrowClasses = computed(() => {
       leave-to-class="opacity-0 scale-95"
     >
       <PopoverPanel :class="panelClasses">
-        <div class="rounded-xl border border-border bg-bg shadow-xl p-4">
+        <div class="ep-popover rounded-xl border shadow-xl p-4">
           <!-- 标题 -->
           <div v-if="title" class="text-sm font-semibold mb-2">
             {{ title }}

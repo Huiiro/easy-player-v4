@@ -1,4 +1,32 @@
 export default {
+  footerLayout: {
+    title: '自定义底栏布局',
+    description: '调整底栏布局样式。',
+    mode: '布局',
+    centered: '居中进度',
+    stacked: '顶部进度线',
+    width: '底栏最大宽度',
+    progress: '进度区域占比',
+    reset: '恢复默认'
+  },
+  customTheme: {
+    title: '自定义主题',
+    description: '导入 JSON 配色或 ZIP 资源主题包。同名主题会被替换。',
+    slots: '可用资源位置与当前分配',
+    imageSlots:
+      '图片：主背景、主页、侧边栏、标题栏、底栏、按钮、对话框、抽屉、菜单、播放进度滑块。',
+    fontSlots: '字体：全局文字及以上各区域（主背景除外）。',
+    textSlots: '文字内容：应用标题 appTitle、主页欢迎语 homeWelcome。分配由 manifest.json 指定。',
+    import: '导入主题',
+    export: '导出主题',
+    example: '下载示例',
+    active: '当前主题',
+    default: '默认（不覆写）',
+    remove: '删除',
+    deleteTitle: '删除自定义主题',
+    confirmDelete: '确定删除主题“{name}”及其随附资源吗？删除后需要重新导入才能使用。',
+    importFailed: '主题导入失败'
+  },
   searchIndex: {
     title: '歌曲搜索准备状态',
     queued: '搜索准备中 {completed}/{total}',
@@ -577,6 +605,8 @@ export default {
     micaEffect: 'Windows 云母效果',
     micaEffectDescription: '使用 Windows 11 原生云母材质；会自动跟随系统并停用其他主题效果。',
     restoreDefault: '恢复默认',
+    confirmResetTheme:
+      '确定恢复默认主题吗？主题颜色、背景和播放器外观将恢复默认，当前自定义主题会停用，已导入的主题仍会保留。',
     appearanceMode: '外观模式',
     appearanceDescription: '自定义背景默认遵循深色方案，以保证内容清晰易读。',
     appearanceModeLight: '浅色',
@@ -687,12 +717,12 @@ export default {
     desktopLyricsLightweight: '请退出轻量模式后开启桌面歌词。',
     autoPlayOnRestore: '启动后自动播放',
     smartShuffle: '智能随机',
-    smartShuffleDescription: '开启后，随机播放会根据收听、重听和跳过行为调整抽取权重。',
+    smartShuffleDescription: '开启后，随机播放会根据收听行为调整抽取权重。',
     autoPlayOnRestoreDescription: '开启后，将在启动后继续从上次中断的地方开始播放。',
     autoAdjustLyricsDisplay: '自动调整歌词大小与间距',
     autoAdjustLyricsDisplayDescription: '开启后，将自动调整播放页的歌词字号大小与歌词间隙。',
     footerOpenMode: '播放器打开方式',
-    footerOpenAnywhere: '只通过专辑封面打开播放器',
+    footerOpenAnywhere: '通过底栏专辑封面打开播放器',
     footerOpenModeDescription: '关闭后，可通过任意位置打开播放器。',
     autoHideFooter: '底栏自动收起',
     autoHideFooterDescription: '鼠标离开后延时收起，移到窗口底部附近时自动展开。',
@@ -793,6 +823,19 @@ export default {
     fileOperationFailed: '操作失败',
     filesRecovered: '已恢复 {recovered} / {total} 首歌曲',
     buildNumber: '构建号',
+    repository: '项目仓库',
+    statistics: '数据统计',
+    statisticsDescription:
+      '统计本地播放历史、播放次数和收听时长。关闭后停止记录和读取统计数据，暂停基于统计的推荐；已有数据会保留。',
+    statisticsDisabled: '数据统计已关闭，可在设置 → 其他中开启。',
+    clearStatistics: '清空统计数据',
+    clearStatisticsDescription: '清空播放历史、播放次数、收听时长和推荐缓存。',
+    confirmClearStatistics:
+      '确定清空全部统计数据吗？播放历史、播放次数、收听时长和推荐缓存将被删除，无法撤销。歌曲、歌单、标签及喜欢/不喜欢设置会保留。',
+    statisticsCleared: '统计数据已清空',
+    statisticsSaveFailed: '无法更新数据统计设置',
+    statisticsClearFailed: '清空统计数据失败',
+    themeDocumentation: '主题插件文档',
     version: '版本'
   },
   playerPanel: {

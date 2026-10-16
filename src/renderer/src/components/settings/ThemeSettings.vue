@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import CustomThemeSettings from './CustomThemeSettings.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
@@ -51,73 +52,77 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
 </script>
 
 <template>
-  <div class="settings-card" :class="{ muted: ui.followSystemTheme || ui.useMica }">
-    <div v-if="ui.micaAvailable" class="setting-row">
-      <div>
-        <h3>{{ t('settings.micaEffect') }}</h3>
-        <p>{{ t('settings.micaEffectDescription') }}</p>
+  <div class="settings-card">
+    <div :class="{ 'opacity-[0.58]': ui.followSystemTheme || ui.useMica }">
+      <div v-if="ui.micaAvailable" class="setting-row">
+        <div>
+          <h3>{{ t('settings.micaEffect') }}</h3>
+          <p>{{ t('settings.micaEffectDescription') }}</p>
+        </div>
+        <BaseSwitch
+          :model-value="ui.useMica"
+          @update:model-value="ui.setMicaEnabled(Boolean($event))"
+        />
       </div>
-      <BaseSwitch
-        :model-value="ui.useMica"
-        @update:model-value="ui.setMicaEnabled(Boolean($event))"
-      />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.followSystemTheme') }}</h3>
-        <p>{{ t('settings.followSystemThemeDescription') }}</p>
+      <div class="setting-row">
+        <div>
+          <h3>{{ t('settings.followSystemTheme') }}</h3>
+          <p>{{ t('settings.followSystemThemeDescription') }}</p>
+        </div>
+        <BaseSwitch
+          :model-value="ui.followSystemTheme"
+          :disabled="ui.useMica"
+          @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
+        />
       </div>
-      <BaseSwitch
-        :model-value="ui.followSystemTheme"
-        :disabled="ui.useMica"
-        @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
-      />
-    </div>
-    <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
-      <div>
-        <h3>{{ t('settings.themeColor') }}</h3>
-        <p>{{ t('settings.themeColorDescription') }}</p>
-      </div>
-      <div>
-        <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
-      </div>
-    </div>
-    <div
-      class="setting-row theme-background-row"
-      :class="{ 'pointer-events-none': ui.followSystemTheme || ui.useMica }"
-    >
-      <div>
-        <h3>{{ t('settings.themeBackground') }}</h3>
-        <p>{{ t('settings.themeBackgroundDescription') }}</p>
+      <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
+        <div>
+          <h3>{{ t('settings.themeColor') }}</h3>
+          <p>{{ t('settings.themeColorDescription') }}</p>
+        </div>
+        <div>
+          <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
+        </div>
       </div>
       <div
-        class="theme-options system-background-options"
-        role="radiogroup"
-        :aria-label="t('settings.themeBackground')"
+        class="setting-row theme-background-row"
+        :class="{ 'pointer-events-none': ui.followSystemTheme || ui.useMica }"
       >
-        <button
-          v-for="background in themeBackgroundOptions"
-          :key="background.id"
-          type="button"
-          class="theme-option system-background-preview"
-          :class="[
-            background.id === 'light'
-              ? 'light-preview'
-              : background.id === 'dark'
-                ? 'dark-preview'
-                : background.id === 'custom'
-                  ? 'custom-preview'
-                  : `system-background-preview--${background.id}`,
-            { selected: isThemeBackgroundSelected(background.id) }
-          ]"
-          :aria-checked="isThemeBackgroundSelected(background.id)"
-          role="radio"
-          @click="selectThemeBackground(background.id)"
+        <div>
+          <h3>{{ t('settings.themeBackground') }}</h3>
+          <p>{{ t('settings.themeBackgroundDescription') }}</p>
+        </div>
+        <div
+          class="theme-options system-background-options"
+          role="radiogroup"
+          :aria-label="t('settings.themeBackground')"
         >
-          <span class="preview-window"><i /><b /></span>
-          <span>{{ background.label }}</span>
-        </button>
+          <button
+            v-for="background in themeBackgroundOptions"
+            :key="background.id"
+            type="button"
+            class="theme-option system-background-preview"
+            :class="[
+              background.id === 'light'
+                ? 'light-preview'
+                : background.id === 'dark'
+                  ? 'dark-preview'
+                  : background.id === 'custom'
+                    ? 'custom-preview'
+                    : `system-background-preview--${background.id}`,
+              { selected: isThemeBackgroundSelected(background.id) }
+            ]"
+            :aria-checked="isThemeBackgroundSelected(background.id)"
+            role="radio"
+            @click="selectThemeBackground(background.id)"
+          >
+            <span class="preview-window"><i /><b /></span>
+            <span>{{ background.label }}</span>
+          </button>
+        </div>
       </div>
     </div>
+    <hr class="mx-5 my-4 border-0 border-t border-border" />
+    <CustomThemeSettings />
   </div>
 </template>

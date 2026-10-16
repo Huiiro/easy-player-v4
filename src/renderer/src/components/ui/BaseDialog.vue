@@ -60,7 +60,7 @@ const footerClass = computed(() => {
     <Dialog
       static
       as="div"
-      class="pointer-events-auto fixed inset-0 z-50 text-text"
+      class="ep-dialog pointer-events-auto fixed inset-0 z-50 text-text"
       @close="handleClose"
     >
       <!-- overlay -->
@@ -73,7 +73,7 @@ const footerClass = computed(() => {
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="fixed inset-0 bg-black/50" :class="blur ? 'backdrop-blur-sm' : ''" />
+        <div class="ep-overlay fixed inset-0" :class="blur ? 'backdrop-blur-sm' : ''" />
       </TransitionChild>
 
       <!-- container -->
@@ -87,16 +87,16 @@ const footerClass = computed(() => {
           leave-from="opacity-100 scale-100"
           leave-to="opacity-0 scale-95"
         >
-          <DialogPanel :class="['my-auto w-full rounded-2xl bg-bg shadow-xl', width]">
+          <DialogPanel :class="['ep-dialog-panel my-auto w-full', width]">
             <!-- header -->
             <div
               v-if="$slots.header || title || showClose"
-              class="px-4 py-3 flex items-center justify-between"
+              class="ep-dialog-header px-4 py-3 flex items-center justify-between"
             >
               <!-- 左侧：标题 -->
               <div class="flex items-center">
                 <slot name="header">
-                  <DialogTitle class="text-lg font-semibold">
+                  <DialogTitle class="ep-dialog-title text-lg font-semibold">
                     {{ title }}
                   </DialogTitle>
                 </slot>
@@ -117,12 +117,12 @@ const footerClass = computed(() => {
             </div>
 
             <!-- content -->
-            <div class="p-4">
+            <div class="ep-dialog-body p-4">
               <slot />
             </div>
 
             <!-- footer -->
-            <div v-if="$slots.footer" class="px-4 py-3">
+            <div v-if="$slots.footer" class="ep-dialog-footer px-4 py-3">
               <div :class="footerClass">
                 <slot name="footer" />
               </div>

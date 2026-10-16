@@ -29,6 +29,7 @@ function setSmartShuffle(value: boolean | string | number): void {
         {{ t('settings.openAudioControlPanel') }}
       </button>
     </div>
+    <hr class="mx-5 my-4 border-0 border-t border-border" />
     <SleepTimerSettings />
     <div class="setting-row">
       <div>
@@ -48,6 +49,7 @@ function setSmartShuffle(value: boolean | string | number): void {
         @update:model-value="setSmartShuffle"
       />
     </div>
+    <hr class="mx-5 my-4 border-0 border-t border-border" />
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.reduceMotion') }}</h3>

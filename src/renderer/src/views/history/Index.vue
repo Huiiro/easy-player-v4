@@ -5,8 +5,10 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import SongListView from '@/components/songlist/SongListView.vue'
 import { useMessage } from '@/components/ui/useMessage'
+import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 
 const { t } = useI18n()
+const statistics = useStatisticsStore()
 const { success, error } = useMessage()
 const clearDialogOpen = ref(false)
 const listKey = ref(0)
@@ -28,7 +30,9 @@ async function clearHistory(): Promise<void> {
     <header class="flex items-center justify-between px-7 py-5">
       <div>
         <h1 class="text-xl font-bold">{{ t('history.title') }}</h1>
-        <p class="mt-1 text-sm text-text-l">{{ t('history.description') }}</p>
+        <p class="mt-1 text-sm text-text-l">
+          {{ t(statistics.enabled ? 'history.description' : 'settings.statisticsDisabled') }}
+        </p>
       </div>
       <button
         class="btn-hover flex items-center gap-1.5 px-2 py-1.5 text-sm text-red-400"

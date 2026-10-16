@@ -1,4 +1,7 @@
 import { defineStore } from 'pinia'
+import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
+import type { InstalledThemePackage } from '../../../../shared/themePackage'
+import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 import { accessibleSongAccent, primarySurfaceColors } from '@/components/background/songThemeColors'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
@@ -38,6 +41,49 @@ export const DEFAULT_HIDDEN_HOME_SECTIONS = ['navigation'] as const
 export const useUIStore = defineStore(
   'ui',
   () => {
+    const customThemes = ref<CustomTheme[]>([])
+    const activeCustomThemeName = ref('')
+    const customThemeText = computed(
+      () =>
+        customThemes.value.find((theme) => theme.name === activeCustomThemeName.value)?.package
+          ?.manifest.text ?? {}
+    )
+    const customThemeOverridesBackground = computed(() => {
+      const theme = customThemes.value.find((item) => item.name === activeCustomThemeName.value)
+      return !!theme && theme.background !== 'inherit'
+    })
+    function refreshCustomTheme(): void {
+      const theme = customThemes.value.find((item) => item.name === activeCustomThemeName.value)
+      try {
+        applyCustomTheme(theme ? parseCustomTheme(JSON.stringify(theme)) : null)
+      } catch {
+        applyCustomTheme(null)
+        activeCustomThemeName.value = ''
+      }
+    }
+    function importCustomTheme(source: string, installed?: InstalledThemePackage): void {
+      const theme = parseCustomTheme(source)
+      // Package metadata comes from the main-process importer, never a loose JSON file.
+      delete theme.package
+      if (installed) theme.package = installed
+      const validated = parseCustomTheme(JSON.stringify(theme))
+      const index = customThemes.value.findIndex((item) => item.name === theme.name)
+      const previous = customThemes.value[index]?.package?.id
+      if (index >= 0) customThemes.value.splice(index, 1, validated)
+      else {
+        if (customThemes.value.length >= 20) throw new Error('At most 20 themes')
+        customThemes.value.push(validated)
+      }
+      activeCustomThemeName.value = theme.name
+      if (previous && previous !== installed?.id) void window.api.themes.removePackage(previous)
+    }
+    function removeCustomTheme(name: string): void {
+      const previous = customThemes.value.find((theme) => theme.name === name)?.package?.id
+      customThemes.value = customThemes.value.filter((theme) => theme.name !== name)
+      if (activeCustomThemeName.value === name) activeCustomThemeName.value = ''
+      if (previous) void window.api.themes.removePackage(previous)
+    }
+    watch([customThemes, activeCustomThemeName], refreshCustomTheme, { deep: true })
     const themeSettingsKey = 'ui.theme-settings'
     const persistedSettingsKey = 'ui.preferences.v1'
     // ========== 基础设置 ==========
@@ -93,7 +139,11 @@ export const useUIStore = defineStore(
     // Transient song palette; theme selection remains the persisted preference.
     const songThemeColor = ref<string | null>(null)
     const activeThemeColor = computed(() => {
-      if (!useCustomBg.value && systemBackground.value !== 'none') {
+      if (
+        !customThemeOverridesBackground.value &&
+        !useCustomBg.value &&
+        systemBackground.value !== 'none'
+      ) {
         if (systemBackground.value === 'solid' && songThemeColor.value)
           return accessibleSongAccent(songThemeColor.value)
         return getSystemBackgroundTheme(systemBackground.value).accentColor
@@ -151,6 +201,10 @@ export const useUIStore = defineStore(
     const playerSpectrumStyle = ref<'bars' | 'dots'>('bars')
     const showPlayer = ref(false)
     const footerOpenMode = ref<'all' | 'cover'>('all')
+    const footerLayout = ref<FooterLayout>({ ...DEFAULT_FOOTER_LAYOUT })
+    function resetFooterLayout(): void {
+      footerLayout.value = { ...DEFAULT_FOOTER_LAYOUT }
+    }
     const autoHideFooter = ref(false)
     // ========== 标签与来源 ==========
     const tagStyle = ref(TagStyle.Full)
@@ -243,7 +297,11 @@ export const useUIStore = defineStore(
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
       if (activeThemeColor.value) root.style.setProperty('--color-primary', activeThemeColor.value)
       else root.style.removeProperty('--color-primary')
-      if (!useCustomBg.value && systemBackground.value === 'solid') {
+      if (
+        !customThemeOverridesBackground.value &&
+        !useCustomBg.value &&
+        systemBackground.value === 'solid'
+      ) {
         const fill = songThemeColor.value ?? activeThemeColor.value
         const surface = primarySurfaceColors(fill)
         root.style.setProperty('--color-primary-fill', fill)
@@ -259,6 +317,7 @@ export const useUIStore = defineStore(
       if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
       root.style.setProperty('--lrc-padding', `${normalizedPadding}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
+      refreshCustomTheme()
     }
     function beginThemeTransition(): void {
       if (!themeInitialized || reduceMotion.value || typeof document === 'undefined') return
@@ -342,25 +401,36 @@ export const useUIStore = defineStore(
         useCustomBg.value = false
         systemBackground.value = 'none'
       }
-      const theme = getSystemBackgroundTheme(useCustomBg.value ? 'none' : systemBackground.value)
-      if (!useCustomBg.value && systemBackground.value !== 'none') {
+      const overridesBackground = customThemeOverridesBackground.value
+      const theme = getSystemBackgroundTheme(
+        useCustomBg.value || overridesBackground ? 'none' : systemBackground.value
+      )
+      if (!overridesBackground && !useCustomBg.value && systemBackground.value !== 'none') {
         useDarkMode.value = theme.colorMode === 'dark'
       }
       const root = document.documentElement
-      root.dataset.systemTheme = useCustomBg.value ? 'custom' : systemBackground.value
+      root.dataset.systemTheme = overridesBackground
+        ? 'none'
+        : useCustomBg.value
+          ? 'custom'
+          : systemBackground.value
       root.style.setProperty(
         '--app-header-bg',
-        useCustomBg.value ? customBg.headerBackground : theme.headerBackground
+        useCustomBg.value && !overridesBackground
+          ? customBg.headerBackground
+          : theme.headerBackground
       )
       root.style.setProperty(
         '--app-footer-bg',
-        useCustomBg.value ? customBg.footerBackground : theme.footerBackground
+        useCustomBg.value && !overridesBackground
+          ? customBg.footerBackground
+          : theme.footerBackground
       )
       root.style.setProperty(
         '--app-chrome-border',
-        useCustomBg.value ? customBg.chromeBorder : theme.chromeBorder
+        useCustomBg.value && !overridesBackground ? customBg.chromeBorder : theme.chromeBorder
       )
-      if (useCustomBg.value) {
+      if (useCustomBg.value && !overridesBackground) {
         root.style.setProperty('--color-border', customBg.chromeBorder)
         root.style.setProperty(
           '--color-border-l',
@@ -556,6 +626,7 @@ export const useUIStore = defineStore(
     }
 
     function resetTheme(): void {
+      activeCustomThemeName.value = ''
       useDarkMode.value = true
       followSystemTheme.value = false
       themeBeforeFollowingSystem.value = null
@@ -616,7 +687,15 @@ export const useUIStore = defineStore(
       showLyricsRomanization.value = !showLyricsRomanization.value
     }
     watch(
-      [useDarkMode, useMica, customThemeColor, useCustomBg, systemBackground, () => customBg.url],
+      [
+        useDarkMode,
+        useMica,
+        customThemeColor,
+        useCustomBg,
+        systemBackground,
+        customThemeOverridesBackground,
+        () => customBg.url
+      ],
       applyVisualThemeWithTransition
     )
     watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], applyTheme)
@@ -650,6 +729,12 @@ export const useUIStore = defineStore(
       syncSystemBackgroundThemeColor
     )
     return {
+      customThemes,
+      customThemeText,
+      customThemeOverridesBackground,
+      activeCustomThemeName,
+      importCustomTheme,
+      removeCustomTheme,
       locale,
       platform,
       logoText,
@@ -719,6 +804,8 @@ export const useUIStore = defineStore(
       playerSpectrumStyle,
       showPlayer,
       footerOpenMode,
+      footerLayout,
+      resetFooterLayout,
       autoHideFooter,
       tagStyle,
       tagSelected,
@@ -762,6 +849,8 @@ export const useUIStore = defineStore(
       key: 'ui.preferences.v1',
       storage: playerDataStorage,
       pick: [
+        'customThemes',
+        'activeCustomThemeName',
         'locale',
         'logoText',
         'userName',
@@ -815,6 +904,7 @@ export const useUIStore = defineStore(
         'showPlayerSpectrum',
         'playerSpectrumStyle',
         'footerOpenMode',
+        'footerLayout',
         'autoHideFooter',
         'allowSwitchCoverStyle',
         'isCircularCover',

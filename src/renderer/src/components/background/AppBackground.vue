@@ -12,12 +12,18 @@ const player = usePlayerStore()
 const { t } = useI18n()
 const { error: showError } = useMessage()
 const activeTheme = computed(() => getSystemBackgroundTheme(ui.systemBackground))
-const isSystemTheme = computed(() => !ui.useCustomBg && ui.systemBackground !== 'none')
+const isSystemTheme = computed(
+  () => !ui.customThemeOverridesBackground && !ui.useCustomBg && ui.systemBackground !== 'none'
+)
 const isBackgroundActive = ref(!document.hidden && document.hasFocus())
 const isSolidTheme = computed(() => isSystemTheme.value && ui.systemBackground === 'solid')
 const video = ref<HTMLVideoElement | null>(null)
 const customMotionPaused = computed(
-  () => !isBackgroundActive.value || ui.showPlayer || ui.reduceMotion
+  () =>
+    ui.customThemeOverridesBackground ||
+    !isBackgroundActive.value ||
+    ui.showPlayer ||
+    ui.reduceMotion
 )
 function syncCustomVideo(): void {
   if (!video.value) return
@@ -83,7 +89,13 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="app-theme-background">
-    <div v-if="ui.useCustomBg" key="custom" class="app-background-layer" aria-hidden="true">
+    <div
+      v-if="ui.customThemeOverridesBackground"
+      key="imported-theme"
+      class="ep-app-background absolute inset-0 z-0 overflow-hidden pointer-events-none"
+      aria-hidden="true"
+    />
+    <div v-else-if="ui.useCustomBg" key="custom" class="app-background-layer" aria-hidden="true">
       <div
         v-if="ui.customBg.kind === 'image'"
         class="absolute -inset-6 bg-cover bg-center transition-[filter] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-standard)]"
