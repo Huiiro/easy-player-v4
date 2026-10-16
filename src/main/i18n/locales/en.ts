@@ -1,4 +1,5 @@
 export default {
+  audioFiles: 'Audio files',
   invalidSongId: 'Invalid song id',
   songFileNotFound: 'Song file not found',
   remoteUnsupported: 'Remote songs are not supported',

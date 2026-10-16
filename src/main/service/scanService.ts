@@ -17,6 +17,7 @@ export interface ScanCallback {
 export interface ScanResult {
   added: number
   duplicates: number
+  skipped: number
   total: number
 }
 
@@ -86,7 +87,8 @@ async function collectMusicFiles(directory: string, files: string[]): Promise<vo
 export async function scanMusicDirectory(
   dirPath: string,
   callback?: ScanCallback,
-  selectedFiles?: string[]
+  selectedFiles?: string[],
+  ignoreShortSongs = true
 ): Promise<ScanResult> {
   return logOperation(
     '[Scanner] scanMusicDirectory',
@@ -138,6 +140,7 @@ export async function scanMusicDirectory(
 
       let added = 0
       let duplicates = 0
+      let skipped = 0
       let failed = 0
       for (const [index, fullPath] of files.entries()) {
         // Explicit file opens are part of playback; only library scans wait.
@@ -148,9 +151,14 @@ export async function scanMusicDirectory(
             continue
           }
 
-          const metadata = await parseFile(fullPath)
+          const metadata = await parseFile(fullPath, { duration: true })
           const common = metadata.common
           const format = metadata.format
+          // File selection and duration filtering are independent. Unknown durations are retained.
+          if (ignoreShortSongs && format.duration != null && format.duration < 5) {
+            skipped++
+            continue
+          }
           const picture = common.picture?.[0]
           let cover: string | null = null
           if (picture) {
@@ -210,7 +218,7 @@ export async function scanMusicDirectory(
         })
       if (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get())
         refreshNewestSongs(db)
-      return { added, duplicates, total: files.length }
+      return { added, duplicates, skipped, total: files.length }
     },
     { successLevel: 'info', warnOnFalse: false }
   )

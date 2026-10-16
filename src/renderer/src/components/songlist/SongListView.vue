@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
+import { createSongTextComparator, songSortText } from '@/utils/songTextSort'
 import SongListHeader from './SongListHeader.vue'
 import SongListItem from './SongListItem.vue'
 import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
@@ -114,6 +115,20 @@ const songTextCollator = new Intl.Collator(undefined, {
   sensitivity: 'base',
   numeric: true
 })
+const compareSongNames = createSongTextComparator()
+const nameSortValues = computed(() => {
+  const field = sortBy.value
+  if (field !== 'title' && field !== 'artist' && field !== 'album') return new Map<number, string>()
+  return new Map(
+    songs.value.map((song) => [
+      song.id,
+      songSortText(
+        song,
+        field === 'title' && showFileName.value && song.fileName ? 'fileName' : field
+      )
+    ])
+  )
+})
 
 function compareSongs(left: LibrarySong, right: LibrarySong): number {
   const field = sortBy.value
@@ -140,11 +155,10 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
   } else if (field === 'id' || field === 'duration') {
     result = Number(left[field] ?? 0) - Number(right[field] ?? 0)
   } else {
-    const leftValue =
-      field === 'title' && showFileName.value ? left.fileName || left.title : left[field]
-    const rightValue =
-      field === 'title' && showFileName.value ? right.fileName || right.title : right[field]
-    result = songTextCollator.compare(String(leftValue ?? ''), String(rightValue ?? ''))
+    const leftValue = field === 'playTime' ? left.playTime : nameSortValues.value.get(left.id)
+    const rightValue = field === 'playTime' ? right.playTime : nameSortValues.value.get(right.id)
+    const compare = field === 'playTime' ? songTextCollator.compare : compareSongNames
+    result = compare(String(leftValue ?? ''), String(rightValue ?? ''))
   }
 
   if (result !== 0) return result * (sortOrder.value === 'asc' ? 1 : -1)

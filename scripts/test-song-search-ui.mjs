@@ -8,6 +8,13 @@ import { parse, compileScript } from '@vue/compiler-sfc'
 import * as Vue from 'vue'
 
 const require = createRequire(import.meta.url)
+const sortModule = { exports: {} }
+vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/renderer/src/utils/songTextSort.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  { exports: sortModule.exports, module: sortModule, require }
+)
 const filename = 'src/renderer/src/components/songlist/SongListView.vue'
 const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
 const source = ts.transpileModule(compileScript(descriptor, { id: 'song-search-ui' }).content, {
@@ -52,6 +59,7 @@ vm.runInNewContext(
       timers.delete(id)
     },
     require(name) {
+      if (name.endsWith('songTextSort')) return sortModule.exports
       if (name === 'vue')
         return {
           ...Vue,
@@ -103,6 +111,59 @@ const ids = () => Array.from(state.filteredSongs.value, (song) => song.id)
 try {
   mounts.forEach((mount) => mount())
   await reply(requests.shift(), [])
+  state.songs.value = [
+    { id: 1, title: '七里香', artist: '周杰伦', album: '晴天', fileName: 'Zebra' },
+    { id: 2, title: 'Banana', artist: 'Adele', album: '爱你', fileName: '七里香' },
+    { id: 3, title: 'Zebra', artist: '陈奕迅', album: 'Zoo', fileName: 'Banana' },
+    { id: 4, title: '爱你', artist: '张学友', album: 'Blue', fileName: '爱你' },
+    { id: 5, title: '晴天', artist: 'Bob', album: 'Morning', fileName: '晴天' }
+  ]
+  state.toggleSort('title')
+  assert.deepEqual(ids(), [4, 2, 1, 5, 3], 'Chinese pinyin and English share A–Z ordering')
+  state.toggleSort('title')
+  assert.deepEqual(ids(), [3, 5, 1, 2, 4], 'descending reverses the combined alphabet')
+  state.toggleSort('artist')
+  assert.deepEqual(ids(), [2, 5, 3, 4, 1], 'artists use the same alphabet')
+  state.toggleSort('album')
+  assert.deepEqual(ids(), [2, 4, 5, 1, 3], 'albums use the same alphabet')
+  state.toggleSort('title')
+  state.showFileName.value = true
+  assert.deepEqual(ids(), [4, 3, 2, 5, 1], 'file-name view sorts the displayed names')
+  state.showFileName.value = false
+  const compareNames = sortModule.exports.createSongTextComparator()
+  assert.ok(compareNames('Track 2', 'Track 10') < 0, 'natural number order remains')
+  assert.equal(compareNames('ＡＢＣ', 'abc'), 0, 'width and case are normalized')
+  assert.ok(compareNames('重庆森林', 'Dawn') < 0, 'word-aware pinyin handles common polyphones')
+  state.songs.value = [
+    { id: 6, title: 'Zebra' },
+    { id: 5, title: '東京', artist: 'ヨル', sortReadings: { title: 'toukyou' } },
+    { id: 4, title: '七里香' },
+    { id: 3, title: '君が好き', sortReadings: { title: 'kimigasuki' } },
+    { id: 2, title: 'Banana' },
+    { id: 1, title: '爱你' }
+  ]
+  assert.deepEqual(
+    ids(),
+    [1, 2, 3, 4, 5, 6],
+    'Japanese romaji shares the Chinese/English A–Z order'
+  )
+  state.toggleSort('title')
+  assert.deepEqual(ids(), [6, 5, 4, 3, 2, 1], 'Japanese mixed order reverses too')
+  state.toggleSort('title')
+  assert.equal(
+    sortModule.exports.songSortText(
+      { title: '七里香', sortReadings: { title: 'japanesealias' } },
+      'title'
+    ),
+    '七里香',
+    'Chinese metadata keeps its pinyin'
+  )
+  assert.equal(
+    sortModule.exports.songSortText({ title: 'ｷﾐ', sortReadings: { title: 'kimi' } }, 'title'),
+    'kimi',
+    'halfwidth kana supplies Japanese context'
+  )
+  state.songs.value = []
   state.keyword.value = 'qlx'
   await flushSearch()
   assert.equal(state.sortBy.value, 'relevance')

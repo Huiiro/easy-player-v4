@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref } from 'vue'
+import BaseDialog from '@/components/ui/BaseDialog.vue'
 import ScanProgress from '@/components/scan/ScanProgress.vue'
 import SearchIndexStatus from '@/components/search/SearchIndexStatus.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
@@ -9,13 +10,20 @@ import router from '@/router'
 import { useI18n } from 'vue-i18n'
 import { VERSION } from '@/consts'
 import eventBus from '@/utils/eventBus'
+import { useMessage } from '@/components/ui/useMessage'
+
+const AudioControlPanelV2 = defineAsyncComponent(
+  () => import('@/components/player/AudioControlPanelV2.vue')
+)
 
 const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
 const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
 const ui = useUIStore()
 const { t } = useI18n()
+const { info } = useMessage()
 const route = useRoute()
 const maximized = ref(false)
+const audioControlsVisible = ref(false)
 const scanVisible = ref(false)
 const scanning = ref(false)
 const scanCurrent = ref(0)
@@ -48,7 +56,12 @@ onBeforeUnmount(() => {
   removeScanProgressListener()
   removeWindowStateListener()
   eventBus.off('importLocalMusic', uploadLocalFiles)
+  eventBus.off('openAudioControls', openAudioControls)
 })
+
+function openAudioControls(): void {
+  audioControlsVisible.value = true
+}
 
 function go(path: string): void {
   if (ui.useCardView) ui.setCardStyle(false)
@@ -74,17 +87,21 @@ async function uploadLocalFiles(): Promise<void> {
     scanAdded.value = 0
     scanDuplicates.value = 0
     await nextTick()
-    const response = await window.api.library.scanLocalMusicFolder(directory)
+    const response = await window.api.library.scanLocalMusicFolder(directory, ui.ignoreShortSongs)
     scanCurrent.value = response.result.total
     scanTotal.value = response.result.total
     scanAdded.value = response.result.added
     scanDuplicates.value = response.result.duplicates
+    if (response.result.skipped > 0) {
+      info(t('settings.shortSongsSkipped', { count: response.result.skipped }))
+    }
   } finally {
     importingLocalFolder.value = false
     if (scanVisible.value) scanning.value = false
   }
 }
 eventBus.on('importLocalMusic', uploadLocalFiles)
+eventBus.on('openAudioControls', openAudioControls)
 </script>
 
 <template>
@@ -155,6 +172,16 @@ eventBus.on('importLocalMusic', uploadLocalFiles)
       </button>
       <button
         class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
+        :title="t('footer.audioControls')"
+        :aria-label="t('footer.audioControls')"
+        :aria-expanded="audioControlsVisible"
+        aria-haspopup="dialog"
+        @click="openAudioControls"
+      >
+        <svgIcon name="common-equalizer" class-name="size-4" />
+      </button>
+      <button
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="ui.useCardView ? t('header.exitCardMode') : t('header.cardMode')"
         @click="ui.toggleCardStyle"
       >
@@ -211,6 +238,9 @@ eventBus.on('importLocalMusic', uploadLocalFiles)
       </button>
     </div>
   </header>
+  <BaseDialog v-model="audioControlsVisible" :title="t('footer.audioControls')" width="max-w-6xl">
+    <AudioControlPanelV2 />
+  </BaseDialog>
 </template>
 
 <style scoped>

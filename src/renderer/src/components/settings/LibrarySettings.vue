@@ -9,11 +9,35 @@ import { useUIStore } from '@/stores/ui/uiStore'
 
 const { t } = useI18n()
 const ui = useUIStore()
-const { success, error } = useMessage()
+const { success, info, error } = useMessage()
+const importingSong = ref(false)
 const importProgress = ref<{ current: number; total: number } | null>(null)
 const missingSongIds = ref<number[]>([])
 const removeMissingDialogOpen = ref(false)
 let offProgress: (() => void) | undefined
+
+async function importSingleSong(): Promise<void> {
+  if (importingSong.value) return
+  importingSong.value = true
+  try {
+    const response = await window.api.library.importLocalMusicFile(ui.ignoreShortSongs)
+    if (!response) return
+    if (response.result.added > 0) {
+      eventBus.emit('scanFinished')
+      success(t('settings.singleSongImported'))
+    } else if (response.result.duplicates > 0) {
+      info(t('settings.singleSongExists'))
+    } else if (response.result.skipped > 0) {
+      info(t('settings.shortSongsSkipped', { count: response.result.skipped }))
+    } else {
+      error(t('settings.singleSongImportFailed'))
+    }
+  } catch {
+    error(t('settings.singleSongImportFailed'))
+  } finally {
+    importingSong.value = false
+  }
+}
 
 async function run(action: 'exportLibrary' | 'importLibrary' | 'recoverMovedSongs'): Promise<void> {
   const result =
@@ -84,6 +108,27 @@ onBeforeUnmount(() => offProgress?.())
     <button class="btn-hover-base text-sm" type="button" @click="eventBus.emit('importLocalMusic')">
       {{ t('settings.importSongs') }}
     </button>
+  </div>
+  <div class="setting-row">
+    <div>
+      <h3>{{ t('settings.importSingleSong') }}</h3>
+      <p>{{ t('settings.importSingleSongDescription') }}</p>
+    </div>
+    <button
+      class="btn-hover-base text-sm disabled:cursor-wait disabled:opacity-50"
+      type="button"
+      :disabled="importingSong"
+      @click="importSingleSong"
+    >
+      {{ t('settings.importSingleSong') }}
+    </button>
+  </div>
+  <div class="setting-row">
+    <div>
+      <h3>{{ t('settings.ignoreShortSongs') }}</h3>
+      <p>{{ t('settings.ignoreShortSongsDescription') }}</p>
+    </div>
+    <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
   </div>
   <div class="setting-row text-nowrap">
     <div>

@@ -9,6 +9,7 @@ Run this checklist from a clean Windows x64 checkout before creating a release.
 3. Run `npm run typecheck` and `npm run build:native`.
 4. Run `npm run build:unpack` and confirm `resources/native/` contains `easy_player_native.node`, FFmpeg DLLs, `samplerate.dll`, and `SoundTouch.dll`.
 5. Start the unpacked application and confirm the native addon loads without an error panel entry.
+6. Confirm Settings → Other → Build number and the `[Main] starting application` log show the same build number. It is generated from the UTC build time (`YYYYMMDDHHmmss`) once per `electron-vite` invocation. Rebuilding or restarting the development server generates a new number; restarting a packaged application keeps its original number. The release version in `package.json` remains independent.
 
 ## Playback regression
 

@@ -520,7 +520,7 @@ export default {
   },
   header: {
     back: 'Back',
-    importLocalMusic: 'Import local music',
+    importLocalMusic: 'Import folder',
     settings: 'Settings',
     cardMode: 'Card mode',
     exitCardMode: 'Exit card mode',
@@ -767,6 +767,9 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    ignoreShortSongs: 'Ignore songs shorter than 5 seconds',
+    ignoreShortSongsDescription:
+      'Skip audio shorter than 5 seconds when importing folders or songs.',
     normalizeArtistSeparator: 'Normalize separators',
     normalizeArtistSeparatorDescription:
       'When enabled, separators will be uniformly replaced with / .',
@@ -776,7 +779,13 @@ export default {
     cacheManagement: 'Cache Management',
     cacheManagementDescription: 'Manage the remote music cache location and storage limit.',
     libraryBackup: 'Library Backup',
-    importSongs: 'Import songs',
+    importSongs: 'Import folder',
+    shortSongsSkipped: 'Skipped {count} audio file(s) shorter than 5 seconds',
+    importSingleSong: 'Import a song',
+    importSingleSongDescription: 'Select a local audio file to import into your library.',
+    singleSongImported: 'Song imported successfully',
+    singleSongExists: 'This song is already in your library',
+    singleSongImportFailed: 'Could not import the song. Check that the audio file is available.',
     importSongsDescription: 'Choose a local music folder to import its songs into the library.',
     libraryBackupDescription: 'Export or import songs, playlists, tags, and settings.',
     exportLibrary: 'Export Backup',
@@ -797,6 +806,7 @@ export default {
     fileOperationDone: 'Operation completed',
     fileOperationFailed: 'Operation failed',
     filesRecovered: 'Recovered {recovered} / {total} tracks',
+    buildNumber: 'Build number',
     version: 'Version'
   },
   playerPanel: {

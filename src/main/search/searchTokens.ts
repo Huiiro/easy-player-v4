@@ -7,6 +7,20 @@ export const INITIAL_TOKEN = 'epinitial'
 export const FULL_INITIAL_TOKEN = 'epfullinitial'
 export const KANA_TOKEN = 'epkana'
 export const FULL_KANA_TOKEN = 'epfullkana'
+/** Pick the first complete Japanese reading, skipping a preceding Mandarin alias. */
+export function japaneseSortReading(terms: string, original: string): string | null {
+  const basic = new Set(
+    buildBasicSearchTerms({
+      title: original,
+      artist: null,
+      album: null,
+      fileName: null
+    }).title.split(' ')
+  )
+  const readings = terms.split(' ').filter((term) => term.startsWith(FULL_READING_TOKEN))
+  const japanese = readings.find((term) => !basic.has(term))
+  return japanese ? japanese.slice(FULL_READING_TOKEN.length) : null
+}
 export const normalizeSearchText = (text: string): string =>
   text.normalize('NFKC').toLowerCase().trim()
 export const splitSearchText = (text: string): string[] =>

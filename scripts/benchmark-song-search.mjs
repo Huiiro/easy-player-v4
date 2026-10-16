@@ -141,6 +141,7 @@ try {
   db.pragma('foreign_keys=ON')
   db.pragma('journal_mode=WAL')
   db.function('search_normalize', { deterministic: true }, runtime.normalizeSearchText)
+  db.function('search_japanese_sort', { deterministic: true }, runtime.japaneseSortReading)
   for (const schema of [
     runtime.schemaV1,
     runtime.schemaV2,
@@ -148,7 +149,8 @@ try {
     runtime.schemaV4,
     runtime.schemaV5.addSongPreference,
     runtime.searchSchemaV6,
-    runtime.searchSchemaV7
+    runtime.searchSchemaV7,
+    runtime.searchSchemaV8
   ])
     db.exec(schema)
   db.exec(

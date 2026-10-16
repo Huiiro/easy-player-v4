@@ -1,4 +1,5 @@
 declare const __APP_VERSION__: string
+declare const __APP_BUILD__: string
 export enum PlayMode {
   Sequential = 0,
   List = 1,
@@ -63,4 +64,5 @@ export enum TagStyle {
   Full = 3
 }
 export const VERSION = __APP_VERSION__
-export const ENGINE_VERSION = '1.0.2'
+export const BUILD_NUMBER = __APP_BUILD__
+export const ENGINE_VERSION = '1.0.3'

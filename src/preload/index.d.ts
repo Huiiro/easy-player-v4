@@ -316,8 +316,12 @@ declare global {
         ): () => void
       }
       library: {
+        importLocalMusicFile(ignoreShortSongs?: boolean): Promise<ScanLocalMusicResult | null>
         selectLocalMusicFolder(): Promise<string | null>
-        scanLocalMusicFolder(directory: string): Promise<ScanLocalMusicResult>
+        scanLocalMusicFolder(
+          directory: string,
+          ignoreShortSongs?: boolean
+        ): Promise<ScanLocalMusicResult>
         showSongInFolder(songId: number): Promise<{ success: boolean; error?: string }>
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }

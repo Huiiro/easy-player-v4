@@ -1,4 +1,10 @@
 export interface LibrarySong {
+  sortReadings?: {
+    title: string | null
+    artist: string | null
+    album: string | null
+    fileName: string | null
+  }
   searchScore?: number
   id: number
   title: string

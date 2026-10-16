@@ -57,6 +57,7 @@ try {
     buildBasicSearchTerms,
     buildSearchTerms,
     normalizeSearchText,
+    japaneseSortReading,
     buildSongSearchFilter,
     commitSearchTerms,
     pendingSearchRows,
@@ -65,6 +66,7 @@ try {
   db = new Database(':memory:')
   db.pragma('foreign_keys=ON')
   db.function('search_normalize', { deterministic: true }, normalizeSearchText)
+  db.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
   // Build the production song schema and its existing additive migrations.
   db.exec(helpers.schemaV1)
   db.exec(helpers.schemaV2)
@@ -95,6 +97,7 @@ try {
   // Existing songs are queued by the migration.
   db.exec(helpers.searchSchemaV6)
   db.exec(helpers.searchSchemaV7)
+  db.exec(helpers.searchSchemaV8)
   assert.equal(pendingSearchRows(db).length, 1)
   const search = (text) => {
     const filter = buildSongSearchFilter(db, text)
@@ -151,6 +154,25 @@ try {
   assert.ok(
     !search('qili').includes(11),
     'Japanese 綺麗 must not get Mandarin qili aliases in title or filename'
+  )
+  const sortReading = (id) =>
+    db.prepare('SELECT title FROM song_sort_reading WHERE song_id=?').get(id)?.title
+  assert.equal(
+    sortReading(2),
+    'kimigasuki',
+    'persist the complete romaji, not a partial search alias'
+  )
+  assert.equal(sortReading(3), 'tokyo', 'Han-only Japanese reading excludes the Mandarin alias')
+  const rememberedReading = sortReading(11)
+  assert.ok(rememberedReading.startsWith('tsuki'))
+  db.exec(
+    'DROP TRIGGER song_sort_insert; DROP TRIGGER song_sort_update; DROP TRIGGER song_sort_delete; DROP TABLE song_sort_reading;'
+  )
+  db.exec(helpers.searchSchemaV8)
+  assert.equal(
+    sortReading(11),
+    rememberedReading,
+    'migration derives readings from existing indexes without reloading the dictionary'
   )
   assert.ok(
     search('qili').includes(1) && search('qili').includes(12),
@@ -255,6 +277,7 @@ try {
   let external
   try {
     resumed.function('search_normalize', { deterministic: true }, normalizeSearchText)
+    resumed.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
     assert.ok(
       pendingSearchRows(resumed).some((row) => row.id === 8),
       'pending work survives reopening the database'
@@ -269,6 +292,7 @@ try {
     assert.ok(resumedSearch('新名字').includes(8))
     external = new Database(join(directory, 'resume.db'))
     external.function('search_normalize', { deterministic: true }, normalizeSearchText)
+    external.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
     external.prepare('UPDATE song SET title=?, file_name=? WHERE id=8').run('外部新名', '外部新名')
     assert.ok(
       !resumedSearch('新名字').includes(8),

@@ -6,8 +6,14 @@ import tailwindcss from '@tailwindcss/vite'
 import pkg from './package.json'
 import path from 'path'
 
+// Evaluate once per Vite invocation so the main and renderer bundles share a fixed build ID.
+const buildNumber = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
+
 export default defineConfig({
   main: {
+    define: {
+      __APP_BUILD__: JSON.stringify(buildNumber)
+    },
     build: {
       rollupOptions: {
         input: {
@@ -36,7 +42,8 @@ export default defineConfig({
       }
     },
     define: {
-      __APP_VERSION__: JSON.stringify(pkg.version)
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_BUILD__: JSON.stringify(buildNumber)
     },
     resolve: {
       alias: {

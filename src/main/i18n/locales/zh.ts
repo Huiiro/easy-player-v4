@@ -1,4 +1,5 @@
 export default {
+  audioFiles: '音频文件',
   invalidSongId: '无效的歌曲 ID',
   songFileNotFound: '歌曲文件不存在',
   remoteUnsupported: '不支持远程歌曲',

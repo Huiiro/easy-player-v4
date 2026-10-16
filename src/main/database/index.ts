@@ -7,8 +7,8 @@ import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2, schemaV3, schemaV4, schema
 import { refreshNewestSongs } from './newestSongs'
 import { migratePlayHistory } from './playHistoryMigration'
 import { getDataPath } from '../utils/pathUtils'
-import { searchSchemaV6, searchSchemaV7 } from '../search/schema'
-import { normalizeSearchText } from '../search/searchTokens'
+import { searchSchemaV6, searchSchemaV7, searchSchemaV8 } from '../search/schema'
+import { normalizeSearchText, japaneseSortReading } from '../search/searchTokens'
 
 let database: Database.Database | undefined
 
@@ -70,6 +70,10 @@ function migrate(db: Database.Database): void {
           db.exec(searchSchemaV7)
           db.prepare('INSERT INTO schema_migration (version) VALUES (7)').run()
         }
+        if (version < 8) {
+          db.exec(searchSchemaV8)
+          db.prepare('INSERT INTO schema_migration (version) VALUES (8)').run()
+        }
       })()
       Logger.info('[Database] schema migrated', {
         fromVersion: version,
@@ -91,6 +95,7 @@ export function initDatabase(overridePath?: string): Database.Database {
       const db = new Database(databasePath(overridePath))
       try {
         db.function('search_normalize', { deterministic: true }, normalizeSearchText)
+        db.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
         db.pragma('foreign_keys = ON')
         db.pragma('journal_mode = WAL')
         db.pragma('busy_timeout = 5000')

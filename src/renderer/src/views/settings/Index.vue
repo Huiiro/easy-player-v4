@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
-import { ENGINE_VERSION, VERSION } from '@/consts'
+import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/consts'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
 import PlayerAppearanceSettings from '@/components/settings/PlayerAppearanceSettings.vue'
 import LyricsSettings from '@/components/settings/LyricsSettings.vue'
@@ -322,6 +322,12 @@ onBeforeUnmount(() => {
                 <span class="text-text">v{{ VERSION }}</span>
                 <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
               </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.buildNumber') }}</h3>
+              </div>
+              <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
             </div>
           </div>
         </section>

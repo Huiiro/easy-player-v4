@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
-import AudioControlPanelV2 from '@/components/player/AudioControlPanelV2.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -44,7 +43,6 @@ const REVEAL_MARGIN = 8
 let autoHideTimer: ReturnType<typeof setTimeout> | null = null
 let peekTimer: ReturnType<typeof setTimeout> | null = null
 const queueVisible = ref(false)
-const audioControlsVisible = ref(false)
 const moreVisible = ref(false)
 const detailsVisible = ref(false)
 const tagVisible = ref(false)
@@ -53,7 +51,6 @@ const lyricSourceVisible = ref(false)
 const footerBusy = computed(
   () =>
     queueVisible.value ||
-    audioControlsVisible.value ||
     moreVisible.value ||
     detailsVisible.value ||
     tagVisible.value ||
@@ -394,10 +391,6 @@ function toggleCollapsed(): void {
   if (collapsed.value) closeMoreMenu()
 }
 
-function openAudioControls(): void {
-  audioControlsVisible.value = true
-}
-
 function openDesktopLyrics(): void {
   ui.useDesktopLyrics = !ui.useDesktopLyrics
 }
@@ -544,7 +537,6 @@ const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
 }
 onMounted(() => {
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
-  eventBus.on('openAudioControls', openAudioControls)
   window.addEventListener('click', closeMoreMenu)
   window.addEventListener('pointermove', onWindowPointerMove, { passive: true })
   window.addEventListener('pointerout', onWindowPointerOut)
@@ -553,7 +545,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
-  eventBus.off('openAudioControls', openAudioControls)
   window.removeEventListener('click', closeMoreMenu)
   window.removeEventListener('pointermove', onWindowPointerMove)
   window.removeEventListener('pointerout', onWindowPointerOut)
@@ -765,13 +756,6 @@ onBeforeUnmount(() => {
         </button>
         <button
           class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-          :title="t('footer.audioControls')"
-          @click.stop="openAudioControls"
-        >
-          <SvgIcon name="common-equalizer" class-name="size-4" />
-        </button>
-        <button
-          class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
           :title="t('footer.desktopLyrics')"
           @click.stop="openDesktopLyrics"
         >
@@ -859,14 +843,6 @@ onBeforeUnmount(() => {
       </button>
     </section>
     <PlayQueueDrawer v-model="queueVisible" class="pointer-events-auto" />
-    <BaseDialog
-      v-model="audioControlsVisible"
-      class="pointer-events-auto"
-      :title="t('footer.audioControls')"
-      width="max-w-6xl"
-    >
-      <AudioControlPanelV2 />
-    </BaseDialog>
     <SongDetailsDialog v-model="detailsVisible" :song-id="currentSong?.id ?? null" />
     <SongTagDialog v-model="tagVisible" :song-id="currentSong?.id ?? null" />
     <AddSongsToPlaylistDialog

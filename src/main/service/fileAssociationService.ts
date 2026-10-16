@@ -72,7 +72,8 @@ async function deliverFiles(): Promise<void> {
           let row = getDatabase().prepare('SELECT id FROM song WHERE audio = ?').get(file) as
             { id: number } | undefined
           if (!row) {
-            await scanMusicDirectory(dirname(file), undefined, [file])
+            // Explicit playback should accept short audio regardless of the library import filter.
+            await scanMusicDirectory(dirname(file), undefined, [file], false)
             row = getDatabase().prepare('SELECT id FROM song WHERE audio = ?').get(file) as
               { id: number } | undefined
           }

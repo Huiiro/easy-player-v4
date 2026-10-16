@@ -157,6 +157,7 @@ export const useUIStore = defineStore(
     const musicSource = ref<'all' | 'local' | 'remote'>('all')
     const musicSourceId = ref(0)
     const normalizeArtistSeparator = ref(false)
+    const ignoreShortSongs = ref(true)
     const artistSeparator = ref('/；;、')
     const librarySortOrder = reactive<Record<'album' | 'artist' | 'genre', 'asc' | 'desc'>>({
       album: 'asc',
@@ -735,6 +736,7 @@ export const useUIStore = defineStore(
       musicSource,
       musicSourceId,
       normalizeArtistSeparator,
+      ignoreShortSongs,
       artistSeparator,
       librarySortOrder,
       libraryCardSize,
@@ -832,6 +834,7 @@ export const useUIStore = defineStore(
         'musicSource',
         'musicSourceId',
         'normalizeArtistSeparator',
+        'ignoreShortSongs',
         'artistSeparator',
         'librarySortOrder',
         'libraryCardSize',

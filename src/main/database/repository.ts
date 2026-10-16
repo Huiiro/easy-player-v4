@@ -88,7 +88,19 @@ function attachTags(songs: Song[]): Song[] {
     tags.push(tag)
     tagsBySong.set(songId, tags)
   }
-  return songs.map((song) => ({ ...song, tags: tagsBySong.get(song.id) ?? [] }))
+  const readings = getDatabase()
+    .prepare(
+      `SELECT song_id AS songId, title, artist, album, file_name AS fileName FROM song_sort_reading WHERE song_id IN (${placeholders})`
+    )
+    .all(...songs.map((song) => song.id)) as Array<
+    NonNullable<Song['sortReadings']> & { songId: number }
+  >
+  const readingsBySong = new Map(readings.map(({ songId, ...reading }) => [songId, reading]))
+  return songs.map((song) => ({
+    ...song,
+    tags: tagsBySong.get(song.id) ?? [],
+    sortReadings: readingsBySong.get(song.id)
+  }))
 }
 
 function relevanceOrder(search: string, query: SongQuery = {}): string {

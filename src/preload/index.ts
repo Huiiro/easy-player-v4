@@ -269,12 +269,17 @@ const downloadsAPI = {
 }
 
 const libraryAPI = {
+  importLocalMusicFile: (ignoreShortSongs = true) =>
+    ipcRenderer.invoke('library:import-local-file', ignoreShortSongs) as Promise<{
+      directory: string
+      result: { added: number; duplicates: number; skipped: number; total: number }
+    } | null>,
   selectLocalMusicFolder: () =>
     ipcRenderer.invoke('library:select-local-folder') as Promise<string | null>,
-  scanLocalMusicFolder: (directory: string) =>
-    ipcRenderer.invoke('library:scan-local-folder', directory) as Promise<{
+  scanLocalMusicFolder: (directory: string, ignoreShortSongs = true) =>
+    ipcRenderer.invoke('library:scan-local-folder', directory, ignoreShortSongs) as Promise<{
       directory: string
-      result: { added: number; duplicates: number; total: number }
+      result: { added: number; duplicates: number; skipped: number; total: number }
     }>,
   showSongInFolder: (songId: number) =>
     ipcRenderer.invoke('library:show-song-in-folder', songId) as Promise<{

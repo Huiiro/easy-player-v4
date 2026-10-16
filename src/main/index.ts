@@ -1,3 +1,5 @@
+declare const __APP_BUILD__: string
+
 import { setMainLocale, t } from './i18n'
 import { logError, logOperation, logParams, logUrl } from './service/operationLogger'
 import { performance } from 'node:perf_hooks'
@@ -801,6 +803,7 @@ app.whenReady().then(() =>
       Logger.registerIpc()
       Logger.info('[Main] starting application', {
         version: app.getVersion(),
+        build: __APP_BUILD__,
         platform: process.platform,
         arch: process.arch,
         packaged: app.isPackaged

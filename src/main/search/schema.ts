@@ -61,3 +61,30 @@ export const searchSchemaV7 = `
     DELETE FROM song_original_fts WHERE rowid=old.id;
   END;
 `
+
+// Persist small display sort keys instead of transferring complete search terms to the UI.
+const sortValues = (prefix: string): string =>
+  ['title', 'artist', 'album', 'file_name']
+    .map(
+      (field) =>
+        `search_japanese_sort(${prefix}.${field}, COALESCE((SELECT ${field} FROM song WHERE id=${prefix}.song_id),''))`
+    )
+    .join(',')
+export const searchSchemaV8 = `
+  CREATE TABLE song_sort_reading (
+    song_id INTEGER PRIMARY KEY REFERENCES song(id) ON DELETE CASCADE,
+    title TEXT, artist TEXT, album TEXT, file_name TEXT
+  );
+  INSERT INTO song_sort_reading SELECT song_id,${sortValues('song_search')} FROM song_search;
+  CREATE TRIGGER song_sort_insert AFTER INSERT ON song_search BEGIN
+    INSERT INTO song_sort_reading VALUES(new.song_id,${sortValues('new')})
+    ON CONFLICT(song_id) DO UPDATE SET title=excluded.title,artist=excluded.artist,album=excluded.album,file_name=excluded.file_name;
+  END;
+  CREATE TRIGGER song_sort_update AFTER UPDATE ON song_search BEGIN
+    INSERT INTO song_sort_reading VALUES(new.song_id,${sortValues('new')})
+    ON CONFLICT(song_id) DO UPDATE SET title=excluded.title,artist=excluded.artist,album=excluded.album,file_name=excluded.file_name;
+  END;
+  CREATE TRIGGER song_sort_delete AFTER DELETE ON song_search BEGIN
+    DELETE FROM song_sort_reading WHERE song_id=old.song_id;
+  END;
+`
