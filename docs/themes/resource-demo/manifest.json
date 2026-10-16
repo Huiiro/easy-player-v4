@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "id": "resource-demo",
+  "theme": "theme.json",
+  "resources": {
+    "nebula": {
+      "type": "image",
+      "path": "images/nebula.png"
+    }
+  },
+  "slots": {
+    "appBackground": {
+      "image": "nebula"
+    },
+    "sidebar": {
+      "image": "nebula"
+    }
+  },
+  "text": {
+    "appTitle": "Easy Player · 星海",
+    "homeWelcome": "星海资源主题包已加载，开始听歌吧"
+  }
+}

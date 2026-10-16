@@ -1,0 +1,322 @@
+/* Stable public theme hooks. Layout stays in Tailwind; shared materials live here. */
+.ep-header {
+  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-border) 82%, transparent));
+  background: var(--app-header-bg, color-mix(in srgb, var(--color-bg) 82%, transparent));
+}
+.ep-footer {
+  border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-text) 10%, transparent));
+  background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));
+}
+.ep-footer.app-footer--expanded {
+  position: relative;
+  width: 100%;
+  max-width: var(--ep-footer-max-width, 1320px);
+  gap: var(--ep-footer-gap, 20px);
+  grid-template-columns: var(
+    --ep-footer-columns,
+    32px minmax(0, 1fr) minmax(180px, 2.2fr) minmax(0, 1fr) 32px
+  );
+  grid-template-areas: var(--ep-footer-areas, 'info info playback actions toggle');
+}
+.app-footer--expanded > .ep-footer-info {
+  grid-area: info;
+  justify-self: start;
+  width: 100%;
+}
+.app-footer--expanded > .ep-footer-playback {
+  grid-area: playback;
+  display: var(--ep-footer-playback-display, grid);
+}
+.ep-footer-transport {
+  grid-area: var(--ep-footer-transport-area, auto);
+  flex-direction: column;
+}
+.ep-footer-top-time {
+  display: var(--ep-footer-top-time-display, none);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+.ep-footer-transport-buttons {
+  position: relative;
+}
+.ep-footer-progress {
+  --ep-range-unplayed-color: var(--ep-footer-unplayed-color, var(--ep-progress-track));
+  --ep-range-show-unplayed: var(--ep-footer-show-unplayed, 1);
+  display: grid;
+  grid-template-columns: var(--ep-footer-progress-columns, 3.5rem minmax(0, 1fr) 3.5rem);
+  grid-area: var(--ep-footer-progress-area, auto);
+  position: var(--ep-footer-progress-position, static);
+  inset: var(--ep-footer-progress-inset, auto);
+  transform: var(--ep-footer-progress-transform, none);
+  gap: var(--ep-footer-progress-gap, 8px);
+  z-index: 1;
+}
+.ep-footer-progress > span {
+  display: var(--ep-footer-progress-times-display, block);
+  white-space: nowrap;
+}
+.ep-footer-progress > span:first-child {
+  text-align: right;
+}
+.app-footer--expanded > .ep-footer-actions {
+  grid-area: actions;
+  justify-self: end;
+  width: 100%;
+  container: footer-actions / inline-size;
+}
+.ep-footer-actions > * {
+  flex-shrink: 0;
+}
+.app-footer--expanded > .ep-footer-toggle {
+  grid-area: toggle;
+}
+.ep-footer-actions .ep-footer-menu-secondary,
+.ep-footer-actions .ep-footer-menu-mode,
+.ep-footer-actions .ep-footer-menu-queue,
+.ep-footer-actions .ep-footer-menu-volume {
+  display: none;
+}
+@container footer-actions (width < 272px) {
+  .ep-footer-action-secondary {
+    display: none;
+  }
+  .ep-footer-actions .ep-footer-menu-secondary {
+    display: flex;
+  }
+}
+@container footer-actions (width < 152px) {
+  .ep-footer-action-mode {
+    display: none;
+  }
+  .ep-footer-actions .ep-footer-menu-mode {
+    display: flex;
+  }
+}
+@container footer-actions (width < 112px) {
+  .ep-footer-action-queue {
+    display: none;
+  }
+  .ep-footer-actions .ep-footer-menu-queue {
+    display: flex;
+  }
+}
+@container footer-actions (width < 72px) {
+  .ep-footer-action-volume {
+    display: none;
+  }
+  .ep-footer-actions .ep-footer-menu-volume {
+    display: flex;
+  }
+}
+@media (width <= 980px) {
+  .ep-footer.app-footer--expanded {
+    grid-template-columns: 32px minmax(0, 1fr) minmax(110px, 1.5fr) minmax(0, 1fr) 32px;
+    grid-template-areas: 'info info transport actions toggle';
+    gap: min(var(--ep-footer-gap, 20px), 8px);
+  }
+  .app-footer--expanded > .ep-footer-playback {
+    display: contents;
+  }
+  .app-footer--expanded .ep-footer-transport {
+    grid-area: transport;
+  }
+  .app-footer--expanded .ep-footer-top-time {
+    display: block;
+  }
+  .app-footer--expanded .ep-footer-progress {
+    --ep-range-unplayed-color: transparent;
+    --ep-range-show-unplayed: 0;
+    grid-area: auto;
+    position: absolute;
+    inset: 0 24px auto;
+    transform: translateY(-50%);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .app-footer--expanded .ep-footer-progress > span {
+    display: none;
+  }
+}
+@media (width <= 640px) {
+  .ep-footer-top-time {
+    left: calc(100% + 8px);
+  }
+  .ep-footer-total-time {
+    display: none;
+  }
+}
+:root {
+  --ep-button-radius: 0.375rem;
+  --ep-sidebar-bg: transparent;
+  --ep-sidebar-text: var(--color-text-l);
+  --ep-sidebar-active-bg: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  --ep-sidebar-active-text: var(--color-primary);
+  --ep-sidebar-item-radius: 0.5rem;
+  --ep-progress-track: var(--color-border);
+  --ep-progress-fill: var(--color-primary);
+  --ep-progress-thumb: var(--color-bg);
+  --ep-app-bg: var(--color-bg);
+  --ep-dialog-bg: var(--color-bg);
+  --ep-dialog-radius: 1rem;
+  --ep-overlay-bg: rgb(0 0 0 / 50%);
+  --ep-surface-shadow: 0 20px 25px -5px rgb(0 0 0 / 10%), 0 8px 10px -6px rgb(0 0 0 / 10%);
+}
+
+.ep-button {
+  border-radius: var(--ep-button-radius);
+}
+.ep-button--primary {
+  border-color: transparent;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+  --tw-ring-color: var(--btn-primary-ring);
+}
+.ep-button--primary:where(:enabled):hover {
+  background: var(--btn-primary-bg-hover);
+}
+.ep-button--secondary {
+  border-color: var(--color-border);
+  background: var(--color-bg-l2);
+  color: var(--color-text);
+}
+.ep-button--secondary:where(:enabled):hover,
+.ep-button--ghost:where(:enabled):hover {
+  background: var(--color-hover-bg);
+}
+.ep-button--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+}
+.ep-button--ghost:where(:enabled):hover {
+  color: var(--color-primary);
+}
+.ep-button--danger {
+  border-color: transparent;
+  background: var(--btn-danger-bg);
+  color: var(--btn-danger-text);
+  --tw-ring-color: var(--btn-danger-ring);
+}
+.ep-button--danger:where(:enabled):hover {
+  background: var(--btn-danger-bg-hover);
+}
+.ep-sidebar {
+  background: var(--ep-sidebar-bg);
+}
+.ep-sidebar-item {
+  color: var(--ep-sidebar-text);
+  border-radius: var(--ep-sidebar-item-radius);
+}
+.ep-sidebar-item:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.ep-sidebar-item--active,
+.ep-sidebar-item--active:hover {
+  background: var(--ep-sidebar-active-bg);
+  color: var(--ep-sidebar-active-text);
+}
+.ep-dialog-panel,
+.ep-drawer-panel {
+  background: var(--ep-dialog-bg);
+  color: var(--color-text);
+  box-shadow: var(--ep-surface-shadow);
+}
+.ep-dialog-panel {
+  border-radius: var(--ep-dialog-radius);
+}
+.ep-overlay {
+  background: var(--ep-overlay-bg);
+}
+.ep-progress-track {
+  background: var(--ep-progress-track);
+}
+.ep-progress-fill {
+  background: var(--ep-progress-fill);
+}
+.ep-progress-thumb {
+  background: var(--ep-progress-thumb);
+  border-color: var(--ep-progress-fill);
+}
+.ep-range {
+  appearance: none;
+  background: transparent;
+  accent-color: var(--ep-progress-fill);
+}
+.ep-range::-webkit-slider-runnable-track {
+  height: var(--ep-range-track-height, 0.25rem);
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      to right,
+      transparent 0%,
+      transparent
+        calc(
+          var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
+            var(--ep-range-progress, 0)
+        ),
+      var(--ep-range-unplayed-color, var(--ep-progress-track))
+        calc(
+          var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
+            var(--ep-range-progress, 0)
+        ),
+      var(--ep-range-unplayed-color, var(--ep-progress-track)) 100%
+    ),
+    var(
+      --ep-range-fill-background,
+      linear-gradient(var(--ep-progress-fill), var(--ep-progress-fill))
+    );
+  background-size:
+    100% 100%,
+    max(
+        calc(100% * var(--ep-range-show-unplayed, 1)),
+        calc(
+          (
+              var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
+                var(--ep-range-progress, 0)
+            ) *
+            var(--ep-range-has-progress, 0)
+        )
+      )
+      100%;
+  background-repeat: no-repeat;
+}
+.ep-range::-webkit-slider-thumb {
+  appearance: none;
+  width: var(--ep-range-thumb-width, 1rem);
+  height: var(--ep-range-thumb-height, 1rem);
+  margin-top: calc(
+    (var(--ep-range-track-height, 0.25rem) - var(--ep-range-thumb-height, 1rem)) / 2
+  );
+  border-radius: var(--ep-range-thumb-radius, 999px);
+  background: var(--ep-range-thumb-bg, var(--ep-progress-fill));
+  background-image: var(--ep-range-thumb-image, none);
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  image-rendering: pixelated;
+}
+.ep-input,
+.input-base {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+.ep-input:focus,
+.input-base:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 25%, transparent);
+}
+.ep-menu,
+.ep-popover {
+  background: var(--color-bg-l);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.ep-app-background {
+  background: var(--ep-app-bg);
+}

@@ -1,0 +1,127 @@
+{
+  "version": 1,
+  "name": "霓虹蓝紫 · 组件测试",
+  "tokens": {
+    "--color-primary": "#a78bfa",
+    "--color-primary-fill": "#a78bfa",
+    "--color-on-primary": "#130d25",
+    "--color-text": "#f1edff",
+    "--color-text-l": "#c1b9db",
+    "--color-text-l2": "#9b90b8",
+    "--color-text-l3": "#65567e",
+    "--color-bg": "#151121",
+    "--color-bg-l": "#201a30",
+    "--color-bg-l2": "#2c2340",
+    "--color-bg-d": "#0d0916",
+    "--color-border": "#665184",
+    "--color-border-l": "#8e75b5",
+    "--color-hover": "#a78bfa24",
+    "--color-hover-bg": "#3e3059",
+    "--color-icon": "#e4daff",
+    "--color-icon-l": "#ad9dca",
+    "--color-danger": "#fb7185",
+    "--color-success": "#5eead4",
+    "--color-warning": "#fcd34d",
+    "--btn-primary-bg": "#a78bfa",
+    "--btn-primary-text": "#130d25",
+    "--btn-primary-bg-hover": "#c4b5fd",
+    "--btn-primary-ring": "#22d3ee",
+    "--btn-danger-bg": "#5c2339",
+    "--btn-danger-bg-hover": "#79314b",
+    "--btn-danger-text": "#fecdd3",
+    "--btn-danger-ring": "#fb7185",
+    "--scrollbar-track": "#151121",
+    "--scrollbar-thumb": "#665184",
+    "--scrollbar-thumb-hover": "#a78bfa",
+    "--app-header-bg": "#221933",
+    "--app-footer-bg": "#201832f2",
+    "--app-chrome-border": "#8b5cf680",
+    "--ep-sidebar-bg": "linear-gradient(180deg, #241735, #102631)",
+    "--ep-sidebar-text": "#d7c9ee",
+    "--ep-sidebar-active-bg": "#22d3ee30",
+    "--ep-sidebar-active-text": "#67e8f9",
+    "--ep-sidebar-item-radius": "14px",
+    "--ep-button-radius": "999px",
+    "--ep-progress-track": "#51416b",
+    "--ep-progress-fill": "#22d3ee",
+    "--ep-progress-thumb": "#f0fdff",
+    "--ep-dialog-bg": "#251b36",
+    "--ep-dialog-radius": "24px",
+    "--ep-overlay-bg": "#080413b8",
+    "--ep-surface-shadow": "0 20px 70px #00000070, 0 0 0 1px #a78bfa60",
+    "--ep-switch-active": "#22d3ee",
+    "--ep-switch-inactive": "#67517f",
+    "--ep-app-bg": "radial-gradient(ellipse at 80% 0%, #35204c 0%, #151121 65%)"
+  },
+  "rules": {
+    ".ep-sidebar": {
+      "border-right": "1px solid #22d3ee66"
+    },
+    ".ep-sidebar-item--active": {
+      "box-shadow": "inset 3px 0 0 #22d3ee"
+    },
+    ".ep-button--primary": {
+      "box-shadow": "0 3px 14px #a78bfa40"
+    },
+    ".ep-button--primary:hover": {
+      "filter": "brightness(1.1)"
+    },
+    ".ep-button:focus-visible": {
+      "outline": "2px solid #22d3ee",
+      "outline-offset": "3px"
+    },
+    ".ep-button:disabled": {
+      "filter": "grayscale(0.8)"
+    },
+    ".ep-dialog-panel": {
+      "border": "1px solid #a78bfa99"
+    },
+    ".ep-dialog-header": {
+      "background": "linear-gradient(90deg, #a78bfa24, #22d3ee12)",
+      "border-bottom": "1px solid #a78bfa44",
+      "border-radius": "24px 24px 0 0"
+    },
+    ".ep-dialog-title": {
+      "color": "#c4b5fd"
+    },
+    ".ep-dialog-footer": {
+      "border-top": "1px solid #a78bfa44"
+    },
+    ".ep-drawer-panel": {
+      "border": "1px solid #22d3ee66"
+    },
+    ".ep-drawer-header": {
+      "background": "#22d3ee12"
+    },
+    ".ep-input": {
+      "border-radius": "10px"
+    },
+    ".ep-select": {
+      "border-radius": "10px",
+      "border-color": "#8e75b5"
+    },
+    ".ep-select-options": {
+      "background": "#251b36",
+      "border": "1px solid #a78bfa99"
+    },
+    ".ep-menu": {
+      "border-radius": "16px",
+      "border": "1px solid #a78bfa99"
+    },
+    ".ep-popover": {
+      "border-radius": "16px",
+      "border": "1px solid #22d3ee99"
+    },
+    ".ep-progress-thumb": {
+      "box-shadow": "0 0 10px #22d3ee80"
+    },
+    ".ep-switch-thumb": {
+      "background": "#f0fdff"
+    },
+    ".ep-footer": {
+      "border-radius": "20px",
+      "box-shadow": "0 0 24px #a78bfa24"
+    }
+  },
+  "background": "replace"
+}

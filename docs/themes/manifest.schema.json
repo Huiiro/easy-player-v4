@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Easy Player Theme Manifest",
+  "type": "object",
+  "required": ["version", "id", "theme", "resources", "slots"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"
+    },
+    "theme": {
+      "type": "string",
+      "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+[.]json$"
+    },
+    "resources": {
+      "type": "object",
+      "maxProperties": 64,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["type", "path"],
+        "properties": {
+          "type": {
+            "enum": ["font", "image"]
+          },
+          "path": {
+            "type": "string",
+            "maxLength": 160,
+            "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+[.][a-zA-Z0-9]+$"
+          },
+          "weight": {
+            "type": "string",
+            "pattern": "^(?:[1-9]00|[1-9]00 [1-9]00)$"
+          },
+          "style": {
+            "enum": ["normal", "italic"]
+          }
+        }
+      }
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appBackground": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            }
+          }
+        },
+        "home": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "sidebar": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "header": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "footer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "button": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "dialog": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "drawer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "menu": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            },
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "global": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "font": {
+              "type": "string"
+            }
+          }
+        },
+        "playbackThumb": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "image": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "text": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "appTitle": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "homeWelcome": {
+          "type": "string",
+          "maxLength": 200
+        }
+      }
+    },
+    "licenses": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "string",
+        "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+[.]txt$"
+      }
+    }
+  }
+}

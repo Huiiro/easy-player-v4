@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "id": "nyan-cat",
+  "theme": "theme.json",
+  "resources": {
+    "cute": {
+      "type": "font",
+      "path": "fonts/kuaile.ttf",
+      "weight": "400"
+    },
+    "cat": {
+      "type": "image",
+      "path": "images/nyan-cat.png"
+    },
+    "sky": {
+      "type": "image",
+      "path": "images/starfield.png"
+    }
+  },
+  "slots": {
+    "global": {
+      "font": "cute"
+    },
+    "appBackground": {
+      "image": "sky"
+    },
+    "playbackThumb": {
+      "image": "cat"
+    }
+  },
+  "text": {
+    "appTitle": "Nyan Player",
+    "homeWelcome": "Nyan~ 今天也要开心听歌喵！"
+  },
+  "licenses": [
+    "fonts/OFL.txt"
+  ]
+}
