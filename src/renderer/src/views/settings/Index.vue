@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/consts'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
@@ -22,21 +23,42 @@ const settingsScroller = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | undefined
 let navigatingBySidebar = false
 let sidebarScrollTimer: number | undefined
-const navigationSections = computed(() => [
-  { id: 'playback', label: t('settings.playback') },
-  { id: 'fonts', label: t('settings.fonts') },
-  { id: 'language', label: t('settings.language') },
-  { id: 'background', label: t('settings.playerBackground') },
-  { id: 'theme', label: t('settings.theme') },
-  { id: 'customBackground', label: t('settings.customBackground') },
-  { id: 'lyrics', label: t('settings.lyrics') },
-  { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
-  { id: 'shortcuts', label: t('settings.shortcuts') },
-  { id: 'library', label: t('settings.library') },
-  { id: 'cache', label: t('settings.cacheManagement') },
-  { id: 'system', label: t('settings.system') },
-  { id: 'other', label: t('settings.other') }
-])
+// Heading sizes follow the playback icon's 26 / 20 ratio; nav sizes compensate for SVG whitespace.
+const sectionIcons = {
+  playback: { name: 'common-headphone', size: 26, navSize: 20 },
+  fonts: { name: 'menu-font', size: 15.6, navSize: 12 },
+  language: { name: 'common-locale', size: 19.5, navSize: 15 },
+  background: { name: 'menu-display', size: 19.5, navSize: 15 },
+  theme: { name: 'common-dark-sun', size: 36.4, navSize: 28 },
+  customBackground: { name: 'common-theme', size: 28.6, navSize: 22 },
+  lyrics: { name: 'common-lyrics-music', size: 19.5, navSize: 15 },
+  'desktop-lyrics': { name: 'common-lyrics2', size: 23.4, navSize: 18 },
+  shortcuts: { name: 'common-shortcuts', size: 23.4, navSize: 18 },
+  library: { name: 'menu-library', size: 23.4, navSize: 18 },
+  cache: { name: 'common-database', size: 23.4, navSize: 18 },
+  system: { name: 'common-settings', size: 20.8, navSize: 16 },
+  other: { name: 'common-info', size: 26, navSize: 20 }
+} as const
+const navigationSections = computed(() =>
+  [
+    { id: 'playback', label: t('settings.playback') },
+    { id: 'fonts', label: t('settings.fonts') },
+    { id: 'language', label: t('settings.language') },
+    { id: 'background', label: t('settings.playerBackground') },
+    { id: 'theme', label: t('settings.theme') },
+    { id: 'customBackground', label: t('settings.customBackground') },
+    { id: 'lyrics', label: t('settings.lyrics') },
+    { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
+    { id: 'shortcuts', label: t('settings.shortcuts') },
+    { id: 'library', label: t('settings.library') },
+    { id: 'cache', label: t('settings.cacheManagement') },
+    { id: 'system', label: t('settings.system') },
+    { id: 'other', label: t('settings.other') }
+  ].map((section) => ({
+    ...section,
+    icon: sectionIcons[section.id as keyof typeof sectionIcons]
+  }))
+)
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
   set: (value) => {
@@ -118,25 +140,32 @@ onBeforeUnmount(() => {
     @scroll="onSettingsScroll"
   >
     <div
-      class="mx-auto grid w-full max-w-7xl grid-cols-[10rem_minmax(0,1fr)] gap-10 px-6 py-8 pb-28 sm:px-10"
+      class="mx-auto grid w-full max-w-7xl grid-cols-[11.5rem_minmax(0,1fr)] gap-10 px-6 pt-[var(--settings-top-offset)] sm:px-10"
     >
       <aside class="settings-nav">
         <p class="settings-nav-title">{{ t('settings.navigation') }}</p>
         <button
           v-for="section in navigationSections"
           :key="section.id"
+          type="button"
           class="settings-nav-item"
           :class="activeSection === section.id && 'active'"
+          :aria-current="activeSection === section.id ? 'location' : undefined"
           @click="navigateTo(section.id)"
         >
-          {{ section.label }}
+          <span class="settings-nav-icon">
+            <SvgIcon :name="section.icon.name" :size="section.icon.navSize" class-name="shrink-0" />
+          </span>
+          <span>{{ section.label }}</span>
         </button>
       </aside>
-      <div class="min-w-0 flex-1">
+      <!-- Keep bottom spacing inside the content column so it does not push the sticky nav up. -->
+      <div class="min-w-0 flex-1 pb-28">
         <!-- header -->
         <div class="mb-8">
           <p class="text-xs font-semibold tracking-[0.14em] text-primary">PREFERENCES</p>
-          <h1 class="mt-2 text-2xl font-semibold tracking-tight text-text">
+          <h1 class="mt-2 flex items-center gap-2 text-2xl font-semibold tracking-tight text-text">
+            <SvgIcon name="menu-settings" :size="28" class-name="shrink-0" />
             {{ t('settings.title') }}
           </h1>
           <p class="mt-2 text-sm text-text-l">
@@ -147,7 +176,14 @@ onBeforeUnmount(() => {
         <section id="playback" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.playback') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.playback.name"
+                  :size="sectionIcons.playback.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.playback') }}</span>
+              </h2>
               <p>{{ t('settings.playbackDescription') }}</p>
             </div>
           </div>
@@ -157,7 +193,14 @@ onBeforeUnmount(() => {
         <section id="fonts" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.fonts') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.fonts.name"
+                  :size="sectionIcons.fonts.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.fonts') }}</span>
+              </h2>
               <p>{{ t('settings.fontsDescription') }}</p>
             </div>
           </div>
@@ -193,7 +236,14 @@ onBeforeUnmount(() => {
         <section id="language" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.language') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.language.name"
+                  :size="sectionIcons.language.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.language') }}</span>
+              </h2>
               <p>{{ t('settings.languageDescription') }}</p>
             </div>
           </div>
@@ -211,7 +261,14 @@ onBeforeUnmount(() => {
         <section id="background" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.playerBackground') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.background.name"
+                  :size="sectionIcons.background.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.playerBackground') }}</span>
+              </h2>
               <p>{{ t('settings.playerBackgroundDescription') }}</p>
             </div>
           </div>
@@ -221,7 +278,14 @@ onBeforeUnmount(() => {
         <section id="theme" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.theme') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.theme.name"
+                  :size="sectionIcons.theme.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.theme') }}</span>
+              </h2>
               <p>{{ t('settings.themeDescription') }}</p>
             </div>
             <button class="reset-button" type="button" @click="ui.resetTheme">
@@ -234,7 +298,14 @@ onBeforeUnmount(() => {
         <section id="customBackground" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.customBackground') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.customBackground.name"
+                  :size="sectionIcons.customBackground.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.customBackground') }}</span>
+              </h2>
               <p>{{ t('settings.customBackgroundDescription') }}</p>
             </div>
             <span class="text-xs text-text-l">
@@ -247,7 +318,14 @@ onBeforeUnmount(() => {
         <section id="lyrics" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.lyrics') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.lyrics.name"
+                  :size="sectionIcons.lyrics.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.lyrics') }}</span>
+              </h2>
               <p>{{ t('settings.lyricsDescription') }}</p>
             </div>
           </div>
@@ -257,7 +335,14 @@ onBeforeUnmount(() => {
         <section id="desktop-lyrics" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.desktopLyrics') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons['desktop-lyrics'].name"
+                  :size="sectionIcons['desktop-lyrics'].size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.desktopLyrics') }}</span>
+              </h2>
               <p>{{ t('settings.desktopLyricsDescription') }}</p>
             </div>
           </div>
@@ -267,7 +352,14 @@ onBeforeUnmount(() => {
         <section id="shortcuts" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.shortcuts') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.shortcuts.name"
+                  :size="sectionIcons.shortcuts.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.shortcuts') }}</span>
+              </h2>
               <p>{{ t('settings.shortcutsDescription') }}</p>
             </div>
           </div>
@@ -277,7 +369,14 @@ onBeforeUnmount(() => {
         <section id="library" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.library') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.library.name"
+                  :size="sectionIcons.library.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.library') }}</span>
+              </h2>
               <p>{{ t('settings.libraryDescription') }}</p>
             </div>
           </div>
@@ -289,7 +388,14 @@ onBeforeUnmount(() => {
         <section id="cache" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.cacheManagement') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.cache.name"
+                  :size="sectionIcons.cache.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.cacheManagement') }}</span>
+              </h2>
               <p>{{ t('settings.cacheManagementDescription') }}</p>
             </div>
           </div>
@@ -299,7 +405,14 @@ onBeforeUnmount(() => {
         <section id="system" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.system') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.system.name"
+                  :size="sectionIcons.system.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.system') }}</span>
+              </h2>
               <p>{{ t('settings.systemDescription') }}</p>
             </div>
           </div>
@@ -309,7 +422,14 @@ onBeforeUnmount(() => {
         <section id="other" class="settings-section">
           <div class="section-heading">
             <div>
-              <h2>{{ t('settings.other') }}</h2>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons.other.name"
+                  :size="sectionIcons.other.size"
+                  class-name="settings-heading-icon"
+                />
+                <span>{{ t('settings.other') }}</span>
+              </h2>
               <p>{{ t('settings.otherDescription') }}</p>
             </div>
           </div>
@@ -339,11 +459,15 @@ onBeforeUnmount(() => {
 <style src="@/styles/settings.css"></style>
 
 <style scoped>
+.settings-page {
+  /* Keep page padding and the sticky offset equal to avoid movement near scrollTop = 0. */
+  --settings-top-offset: 2rem;
+}
 .settings-nav {
   position: sticky;
-  top: 1.5rem;
+  top: var(--settings-top-offset);
   display: flex;
-  flex: 0 0 10rem;
+  flex: 0 0 11.5rem;
   align-self: flex-start;
   flex-direction: column;
   gap: 0.2rem;
@@ -353,16 +477,29 @@ onBeforeUnmount(() => {
 .settings-nav-title {
   margin: 0 0 0.45rem 0.35rem;
   color: var(--color-text-l);
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 650;
   letter-spacing: 0.08em;
 }
 .settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   border-radius: 7px;
-  padding: 0.45rem 0.55rem;
+  padding: 0.55rem 0.65rem;
   color: var(--color-text-l);
-  font-size: 0.8rem;
+  font-size: 0.9375rem;
+  line-height: 1.4;
   text-align: left;
+}
+.settings-nav-icon {
+  display: inline-flex;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: 0 0 1.5rem;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
 }
 .settings-nav-item:hover,
 .settings-nav-item.active {

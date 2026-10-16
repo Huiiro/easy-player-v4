@@ -65,7 +65,7 @@
 
 @scope (.settings-page) {
   .settings-section {
-    margin-top: 2.5rem;
+    margin-top: 3.6rem;
     scroll-margin-top: 1.5rem;
   }
   .section-heading {
@@ -73,17 +73,28 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 0.9rem;
+    margin-bottom: 0.8rem;
+    margin-left: 0.8rem;
   }
   .section-heading h2 {
+    display: grid;
+    grid-template-columns: 1.75rem minmax(0, 1fr);
+    min-height: 2rem;
+    align-items: center;
+    gap: 0.5rem;
     color: var(--color-text);
-    font-size: 1rem;
+    font-size: 1.3rem;
     font-weight: 650;
+    line-height: 1.4;
+  }
+  .settings-heading-icon {
+    justify-self: center;
+    color: inherit;
   }
   .section-heading p {
     margin-top: 0.25rem;
     color: var(--color-text-l);
-    font-size: 0.8125rem;
+    font-size: 0.875rem;
     line-height: 1.45;
   }
   .custom-background-chrome {
