@@ -3,30 +3,25 @@ import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import ShortcutInput from './ShortcutInput.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 const ui = useUIStore()
 const { t } = useI18n()
 const actions = [
-  { key: 'previous', label: 'settings.shortcutPrevious' },
   { key: 'toggle', label: 'settings.shortcutToggle' },
+  { key: 'previous', label: 'settings.shortcutPrevious' },
   { key: 'next', label: 'settings.shortcutNext' },
   { key: 'volumeUp', label: 'settings.shortcutVolumeUp' },
-  { key: 'volumeDown', label: 'settings.shortcutVolumeDown' }
+  { key: 'volumeDown', label: 'settings.shortcutVolumeDown' },
+  { key: 'seekBackward', label: 'settings.shortcutSeekBackward' },
+  { key: 'seekForward', label: 'settings.shortcutSeekForward' },
+  { key: 'like', label: 'settings.shortcutLike' },
+  { key: 'dislike', label: 'settings.shortcutDislike' },
+  { key: 'toggleDesktopLyrics', label: 'settings.shortcutDesktopLyrics' },
+  { key: 'enableLightweight', label: 'settings.shortcutLightweight' }
 ] as const
 function reset(): void {
-  Object.assign(ui.shortcutKeys, {
-    previous: 'ctrl+left',
-    toggle: 'space',
-    next: 'ctrl+right',
-    volumeUp: 'ctrl+up',
-    volumeDown: 'ctrl+down'
-  })
-  Object.assign(ui.globalShortcutKeys, {
-    previous: '',
-    toggle: '',
-    next: '',
-    volumeUp: '',
-    volumeDown: ''
-  })
+  Object.assign(ui.shortcutKeys, DEFAULT_LOCAL_SHORTCUTS)
+  Object.assign(ui.globalShortcutKeys, DEFAULT_GLOBAL_SHORTCUTS)
   ui.useGlobalShortcutKeys = false
 }
 </script>

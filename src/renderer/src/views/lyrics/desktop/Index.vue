@@ -135,7 +135,9 @@ const marqueeProgress = computed(() => {
   return Math.max(0, Math.min(1, (displayPositionMs.value - startMs) / (endMs - startMs)))
 })
 const activeOverflows = computed(() =>
-  activeSlot.value === 'first' ? currentOverflows.value : !state.value.translation && secondOverflows.value
+  activeSlot.value === 'first'
+    ? currentOverflows.value
+    : !state.value.translation && secondOverflows.value
 )
 
 function animateSweep(now: number): void {
@@ -282,10 +284,7 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
     displayedFirst.value = state.value.current
     displayedSecond.value = state.value.next
     activeSlot.value = 'first'
-  } else if (
-    next.current !== previousCurrent ||
-    next.currentStartMs !== previousCurrentStartMs
-  ) {
+  } else if (next.current !== previousCurrent || next.currentStartMs !== previousCurrentStartMs) {
     if (state.value.translation) {
       displayedFirst.value = state.value.current
       displayedSecond.value = state.value.next
@@ -408,16 +407,20 @@ onUnmounted(() => {
         </button>
       </div>
       <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 text-center">
-        <div ref="currentBox" class="marquee-box" :class="currentOverflows && 'marquee-box--overflow'">
-          <p
-            ref="currentText"
-            class="marquee-text"
-            :style="lineStyle('first')"
-          >
+        <div
+          ref="currentBox"
+          class="marquee-box"
+          :class="currentOverflows && 'marquee-box--overflow'"
+        >
+          <p ref="currentText" class="marquee-text" :style="lineStyle('first')">
             {{ displayedFirst }}
           </p>
         </div>
-        <div ref="secondBox" class="marquee-box" :class="secondOverflows && 'marquee-box--overflow'">
+        <div
+          ref="secondBox"
+          class="marquee-box"
+          :class="secondOverflows && 'marquee-box--overflow'"
+        >
           <p
             ref="secondText"
             class="marquee-text"

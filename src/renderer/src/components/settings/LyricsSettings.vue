@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -9,27 +7,11 @@ import Draggable from 'vuedraggable'
 
 const ui = useUIStore()
 const { t } = useI18n()
-const karaokeAnimationOptions = computed(() => [
-  { label: t('settings.karaokeAnimationWave'), value: 'wave' },
-  { label: t('settings.karaokeAnimationFloat'), value: 'float' }
-])
 const lyricSourceKey = (source: string): string => source
 </script>
 
 <template>
   <div class="settings-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.karaokeAnimation') }}</h3>
-        <p>{{ t('settings.karaokeAnimationDescription') }}</p>
-      </div>
-      <BaseSelect
-        v-model="ui.karaokeAnimation"
-        :options="karaokeAnimationOptions"
-        teleport
-        class="w-32"
-      />
-    </div>
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>

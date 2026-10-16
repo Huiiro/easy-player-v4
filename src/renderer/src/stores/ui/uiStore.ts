@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 import { accessibleSongAccent, primarySurfaceColors } from '@/components/background/songThemeColors'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import {
@@ -184,20 +185,8 @@ export const useUIStore = defineStore(
     })
     // ========== 快捷键 ==========
     const useGlobalShortcutKeys = ref(false)
-    const shortcutKeys = reactive({
-      previous: 'ctrl+left',
-      toggle: 'space',
-      next: 'ctrl+right',
-      volumeUp: 'ctrl+up',
-      volumeDown: 'ctrl+down'
-    })
-    const globalShortcutKeys = reactive({
-      previous: '',
-      toggle: '',
-      next: '',
-      volumeUp: '',
-      volumeDown: ''
-    })
+    const shortcutKeys = reactive({ ...DEFAULT_LOCAL_SHORTCUTS })
+    const globalShortcutKeys = reactive({ ...DEFAULT_GLOBAL_SHORTCUTS })
     const presetFontStacks: Record<string, string> = {
       'system-ui': 'system-ui, "Segoe UI Variable", "Segoe UI", "Microsoft YaHei", sans-serif',
       'SF Pro Display':

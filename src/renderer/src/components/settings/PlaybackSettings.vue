@@ -29,19 +29,14 @@ function setSmartShuffle(value: boolean | string | number): void {
         {{ t('settings.openAudioControlPanel') }}
       </button>
     </div>
+    <SleepTimerSettings />
     <div class="setting-row">
       <div>
-        <h3>{{ t('settings.extremePlayback') }}</h3>
-        <p>{{ t('settings.extremePlaybackDescription') }}</p>
+        <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
+        <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
       </div>
-      <BaseSwitch
-        :model-value="ui.extremePlayback"
-        :disabled="player.playbackModeChanging"
-        size="md"
-        @update:model-value="player.setExtremePlayback($event === true)"
-      />
+      <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
     </div>
-    <SleepTimerSettings />
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.smartShuffle') }}</h3>
@@ -55,18 +50,22 @@ function setSmartShuffle(value: boolean | string | number): void {
     </div>
     <div class="setting-row">
       <div>
-        <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-        <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-      </div>
-      <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-    </div>
-
-    <div class="setting-row">
-      <div>
         <h3>{{ t('settings.reduceMotion') }}</h3>
         <p>{{ t('settings.reduceMotionDescription') }}</p>
       </div>
       <BaseSwitch v-model="ui.reduceMotion" size="md" />
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.extremePlayback') }}</h3>
+        <p>{{ t('settings.extremePlaybackDescription') }}</p>
+      </div>
+      <BaseSwitch
+        :model-value="ui.extremePlayback"
+        :disabled="player.playbackModeChanging"
+        size="md"
+        @update:model-value="player.setExtremePlayback($event === true)"
+      />
     </div>
   </div>
 </template>

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { tmpdir } from 'node:os'
 import vm from 'node:vm'
 import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
@@ -32,95 +33,76 @@ function loadTypeScript(file, imports = {}) {
 
 const db = new Database(':memory:')
 db.pragma('foreign_keys = ON')
-db.exec(`
-  CREATE TABLE song (id INTEGER PRIMARY KEY, artist TEXT, album TEXT, genre TEXT, year INTEGER,
-    play_times INTEGER, duration INTEGER, song_status INTEGER, is_newest INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT '2020-01-01 00:00:00');
-  CREATE TABLE song_list (id INTEGER PRIMARY KEY);
-  CREATE TABLE song_tag (song_id INTEGER, tag_id INTEGER);
-  CREATE TABLE play_history (
-    id INTEGER PRIMARY KEY, song_id INTEGER NOT NULL, playlist_id INTEGER, playlist_name TEXT,
-    played_seconds INTEGER DEFAULT 0, started_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(song_id) REFERENCES song(id) ON DELETE CASCADE,
-    FOREIGN KEY(playlist_id) REFERENCES song_list(id) ON DELETE SET NULL
-  );
-`)
-const schema = loadTypeScript(path.join(__dirname, '../src/main/database/schema.ts'))
-const { migratePlayHistory } = loadTypeScript(
-  path.join(__dirname, '../src/main/database/playHistoryMigration.ts')
+const { schemaV1, DATABASE_SCHEMA_VERSION } = loadTypeScript(
+  path.join(__dirname, '../src/main/database/schema.ts')
 )
-const freshDb = new Database(':memory:')
-freshDb.exec(schema.schemaV1)
-freshDb.exec(schema.schemaV2)
-freshDb.exec(schema.schemaV3)
-freshDb.exec(schema.schemaV4)
+const databaseApi = loadTypeScript(path.join(__dirname, '../src/main/database/index.ts'), {
+  '../i18n': { t: (key) => key },
+  '../service/operationLogger': { logOperation: (_label, _context, operation) => operation() },
+  'better-sqlite3': { default: Database },
+  'node:path': path,
+  './schema': { schemaV1, DATABASE_SCHEMA_VERSION },
+  './newestSongs': loadTypeScript(path.join(__dirname, '../src/main/database/newestSongs.ts')),
+  '../utils/pathUtils': { getDataPath: () => '.' },
+  '../search/schema': loadTypeScript(path.join(__dirname, '../src/main/search/schema.ts')),
+  '../search/searchTokens': {
+    normalizeSearchText: (value) => String(value ?? '').toLowerCase(),
+    japaneseSortReading: (value) => value
+  }
+})
+const databaseDirectory = fs.mkdtempSync(path.join(tmpdir(), 'easy-player-schema-'))
+const databasePath = path.join(databaseDirectory, 'player.db')
+try {
+  const initialized = databaseApi.initDatabase(databasePath)
+  assert.equal(DATABASE_SCHEMA_VERSION, 1)
+  assert.deepEqual(initialized.prepare('SELECT version FROM schema_migration').all(), [
+    { version: 1 }
+  ])
+  assert.ok(
+    initialized.prepare("SELECT 1 FROM sqlite_master WHERE name = 'song_sort_reading'").get()
+  )
+  initialized.prepare("INSERT INTO app_setting (key, value_json) VALUES ('test', 'true')").run()
+  databaseApi.closeDatabase()
+  const reopened = databaseApi.initDatabase(databasePath)
+  assert.deepEqual(reopened.prepare('SELECT version FROM schema_migration').all(), [{ version: 1 }])
+  assert.equal(
+    reopened.prepare("SELECT value_json FROM app_setting WHERE key = 'test'").get().value_json,
+    'true'
+  )
+} finally {
+  databaseApi.closeDatabase()
+  fs.rmSync(databasePath, { force: true })
+  fs.rmdirSync(databaseDirectory)
+}
+db.exec(schemaV1)
+db.exec(schemaV1)
 assert.equal(
-  freshDb.pragma('table_info(play_history)').some((column) => column.name === 'played_seconds'),
-  true,
-  'v1 retains the historical play_history layout until v5'
-)
-freshDb.exec(schema.schemaV5.addSongPreference)
-migratePlayHistory(freshDb, schema.schemaV5)
-assert.equal(
-  freshDb.pragma('table_info(song)').some((column) => column.name === 'preference'),
-  true,
-  'v5 stores feedback on song'
-)
-assert.equal(
-  freshDb.pragma('table_info(play_history)').find((column) => column.name === 'started_at').type,
+  db.pragma('table_info(play_history)').find((column) => column.name === 'started_at').type,
   'INTEGER'
 )
 assert.equal(
-  freshDb.pragma('table_info(play_history)').some((column) => column.name === 'played_seconds'),
+  db.pragma('table_info(play_history)').some((column) => column.name === 'played_seconds'),
   false
 )
-assert.ok(freshDb.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recommendation_daily'").get())
-freshDb.close()
+assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'recommendation_daily'").get())
+db.prepare(
+  "INSERT INTO folder (id, name, full_path, is_root_path, import_time) VALUES (1, 'Test', '/test', 1, '2020-01-01')"
+).run()
 const songs = db.prepare(
-  'INSERT INTO song (id, artist, album, genre, year, play_times, duration, song_status) VALUES (?, ?, ?, ?, ?, ?, ?, 1)'
+  `INSERT INTO song (id, title, audio, folder_id, artist, album, genre, year, play_times, duration, song_status, created_at)
+   VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 1, '2020-01-01 00:00:00')`
 )
-songs.run(1, 'Artist A', 'Album X', 'Rock', 2002, 4, 180)
-songs.run(2, null, null, null, null, 3, 180)
-songs.run(3, null, null, null, null, 0, 180)
-songs.run(4, null, null, null, null, 1, 180)
-songs.run(5, 'Artist A', 'Album Y', 'Rock', 1995, 20, 240)
-songs.run(6, 'Artist A', 'Album X', 'Rock', 2003, 0, 180)
-songs.run(7, null, null, null, null, 2, 180)
-songs.run(8, null, null, null, null, 1, 180)
-songs.run(9, null, null, null, null, 1, 180)
-songs.run(10, null, null, null, null, 1, 180)
-songs.run(11, null, null, null, null, 1, 180)
-db.prepare('INSERT INTO song_list (id) VALUES (1)').run()
-const legacyStartedAt = Date.parse('2025-01-01T00:00:00Z')
-db.prepare(
-  'INSERT INTO play_history (song_id, playlist_id, playlist_name, played_seconds, started_at, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-).run(11, 1, 'Saved list', 170, String(legacyStartedAt), '2025-01-01 00:03:00')
-db.prepare(
-  'INSERT INTO play_history (song_id, played_seconds, started_at, created_at) VALUES (?, ?, ?, ?)'
-).run(10, 45, '2025-01-02 00:00:00', '2025-01-02 00:01:00')
-db.exec(schema.schemaV5.addSongPreference)
-const migration = migratePlayHistory(db, schema.schemaV5)
-assert.equal(migration.historyRows, 2)
-const migrated = db.prepare('SELECT * FROM play_history WHERE song_id = 11').get()
-assert.equal(migrated.started_at, legacyStartedAt)
-assert.equal(migrated.created_at, Date.parse('2025-01-01T00:03:00Z'))
-assert.equal(migrated.played_ms, 170_000)
-assert.equal(migrated.playlist_id, 1)
-assert.equal(migrated.playlist_name, 'Saved list')
-assert.equal(migrated.duration_ms, null)
-assert.equal(migrated.end_reason, null)
-assert.equal(migrated.start_origin, 'automatic')
-assert.equal(migrated.ended_at, null)
-assert.equal(Object.hasOwn(migrated, 'played_seconds'), false)
-assert.equal(
-  db.prepare('SELECT started_at FROM play_history WHERE song_id = 10').get().started_at,
-  Date.parse('2025-01-02T00:00:00Z')
-)
-assert.equal(
-  db.prepare('SELECT played_ms FROM play_history WHERE song_id = 10').get().played_ms,
-  45_000
-)
+songs.run(1, 'Test 1', '/test/1', 'Artist A', 'Album X', 'Rock', 2002, 4, 180)
+songs.run(2, 'Test 2', '/test/2', null, null, null, null, 3, 180)
+songs.run(3, 'Test 3', '/test/3', null, null, null, null, 0, 180)
+songs.run(4, 'Test 4', '/test/4', null, null, null, null, 1, 180)
+songs.run(5, 'Test 5', '/test/5', 'Artist A', 'Album Y', 'Rock', 1995, 20, 240)
+songs.run(6, 'Test 6', '/test/6', 'Artist A', 'Album X', 'Rock', 2003, 0, 180)
+songs.run(7, 'Test 7', '/test/7', null, null, null, null, 2, 180)
+songs.run(8, 'Test 8', '/test/8', null, null, null, null, 1, 180)
+songs.run(9, 'Test 9', '/test/9', null, null, null, null, 1, 180)
+songs.run(10, 'Test 10', '/test/10', null, null, null, null, 1, 180)
+songs.run(11, 'Test 11', '/test/11', null, null, null, null, 1, 180)
 const startWriteDb = new Database(':memory:')
 startWriteDb.exec(`
   CREATE TABLE song (id INTEGER PRIMARY KEY, play_times INTEGER NOT NULL DEFAULT 0);
@@ -133,20 +115,11 @@ startWriteDb.exec(`
   INSERT INTO song (id) VALUES (1);
 `)
 const { savePlayHistory } = loadTypeScript(
-  path.join(__dirname, '../src/main/database/repository.ts'),
+  path.join(__dirname, '../src/main/database/repository/playHistory.ts'),
   {
-    '../i18n': { t: (key) => key },
-    'node:fs': fs,
-    electron: { safeStorage: {} },
-    'node:path': path,
-    'node:crypto': { randomUUID: () => 'test-id' },
-    './index': { getDatabase: () => startWriteDb },
-    './recommendations': {},
-    '../service/loggerService': { Logger: {} },
-    './newestSongs': {},
-    './listeningStats': {},
-    './libraryQuality': {},
-    '../utils/pathUtils': {}
+    '../index': { getDatabase: () => startWriteDb },
+    '../../search/searchQuery': {},
+    './songHelpers': {}
   }
 )
 const { recordPlayEvent: finishStart } = loadTypeScript(

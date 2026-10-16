@@ -5,7 +5,7 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import { formatShortcut, normalizeShortcut } from '@/utils/shortcut'
 
-type ShortcutAction = 'previous' | 'toggle' | 'next' | 'volumeUp' | 'volumeDown'
+import type { ShortcutAction } from '../../../../shared/shortcuts'
 
 const props = defineProps<{
   action: ShortcutAction

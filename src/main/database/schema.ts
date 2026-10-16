@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 8
+export const DATABASE_SCHEMA_VERSION = 1
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -35,11 +35,20 @@ export const schemaV1 = `
     album TEXT,
     duration INTEGER,
     cover TEXT,
+    cover_analysis_path TEXT,
+    cover_primary TEXT,
+    cover_secondary TEXT,
+    cover_lyrics_dark INTEGER,
+    cover_analysis_version INTEGER,
     audio TEXT NOT NULL UNIQUE,
     folder_id INTEGER NOT NULL,
     is_newest INTEGER DEFAULT 0,
     lrc TEXT,
+    lyric_format TEXT,
     translation TEXT,
+    translation_format TEXT,
+    romanization TEXT,
+    romanization_format TEXT,
     year INTEGER,
     genre TEXT,
     bitrate INTEGER,
@@ -55,6 +64,7 @@ export const schemaV1 = `
     song_status INTEGER DEFAULT 1,
     source_id INTEGER,
     remote_id TEXT,
+    preference INTEGER NOT NULL DEFAULT 0 CHECK(preference IN (-1, 0, 1)),
     created_at DATETIME DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY(folder_id) REFERENCES folder(id) ON DELETE RESTRICT,
     FOREIGN KEY(source_id) REFERENCES music_source(id) ON DELETE CASCADE
@@ -110,9 +120,13 @@ export const schemaV1 = `
     song_id INTEGER NOT NULL,
     playlist_id INTEGER,
     playlist_name TEXT,
-    played_seconds INTEGER DEFAULT 0,
-    started_at DATETIME NOT NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    started_at INTEGER NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+    played_ms INTEGER NOT NULL DEFAULT 0,
+    duration_ms INTEGER,
+    end_reason TEXT,
+    start_origin TEXT NOT NULL DEFAULT 'automatic',
+    ended_at INTEGER,
     FOREIGN KEY(song_id) REFERENCES song(id) ON DELETE CASCADE,
     FOREIGN KEY(playlist_id) REFERENCES song_list(id) ON DELETE SET NULL
   );
@@ -137,6 +151,13 @@ export const schemaV1 = `
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS recommendation_daily (
+    local_date TEXT PRIMARY KEY,
+    cutoff_at INTEGER NOT NULL,
+    groups_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_song_title ON song(title);
   CREATE INDEX IF NOT EXISTS idx_song_artist ON song(artist);
   CREATE INDEX IF NOT EXISTS idx_song_album ON song(album);
@@ -145,28 +166,11 @@ export const schemaV1 = `
   CREATE INDEX IF NOT EXISTS idx_song_source_remote ON song(source_id, remote_id);
   CREATE INDEX IF NOT EXISTS idx_history_play_time ON history(play_time DESC);
   CREATE INDEX IF NOT EXISTS idx_play_history_song_id ON play_history(song_id);
+  CREATE INDEX IF NOT EXISTS idx_play_history_song_time ON play_history(song_id, started_at DESC);
   CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_task
     ON download_task (platform, resource_id, sub_id, quality);
-`
 
-export const schemaV2 = `
-  ALTER TABLE song ADD COLUMN lyric_format TEXT;
-  ALTER TABLE song ADD COLUMN translation_format TEXT;
-  ALTER TABLE song ADD COLUMN romanization TEXT;
-  ALTER TABLE song ADD COLUMN romanization_format TEXT;
-`
-
-export const schemaV3 = `
-  ALTER TABLE song ADD COLUMN cover_analysis_path TEXT;
-  ALTER TABLE song ADD COLUMN cover_primary TEXT;
-  ALTER TABLE song ADD COLUMN cover_secondary TEXT;
-  ALTER TABLE song ADD COLUMN cover_lyrics_dark INTEGER;
-  ALTER TABLE song ADD COLUMN cover_analysis_version INTEGER;
-`
-
-// Cover-derived values are a cache. Keep it impossible for a changed cover to
-// reuse colors or lyric-contrast data calculated from the previous artwork.
-export const schemaV4 = `
+  -- Clear cached artwork analysis whenever the cover changes.
   CREATE TRIGGER IF NOT EXISTS invalidate_song_cover_analysis
   AFTER UPDATE OF cover ON song
   WHEN OLD.cover IS NOT NEW.cover
@@ -180,39 +184,3 @@ export const schemaV4 = `
     WHERE id = NEW.id;
   END;
 `
-
-export const schemaV5 = {
-  addSongPreference: `
-    ALTER TABLE song ADD COLUMN preference INTEGER NOT NULL DEFAULT 0
-      CHECK(preference IN (-1, 0, 1));
-  `,
-  prepare: `
-    CREATE TABLE play_history_v5 (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      song_id INTEGER NOT NULL,
-      playlist_id INTEGER,
-      playlist_name TEXT,
-      started_at INTEGER NOT NULL,
-      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-      played_ms INTEGER NOT NULL DEFAULT 0,
-      duration_ms INTEGER,
-      end_reason TEXT,
-      start_origin TEXT NOT NULL DEFAULT 'automatic',
-      ended_at INTEGER,
-      FOREIGN KEY(song_id) REFERENCES song(id) ON DELETE CASCADE,
-      FOREIGN KEY(playlist_id) REFERENCES song_list(id) ON DELETE SET NULL
-    );
-  `,
-  complete: `
-    DROP TABLE play_history;
-    ALTER TABLE play_history_v5 RENAME TO play_history;
-    CREATE INDEX idx_play_history_song_id ON play_history(song_id);
-    CREATE INDEX idx_play_history_song_time ON play_history(song_id, started_at DESC);
-    CREATE TABLE recommendation_daily (
-      local_date TEXT PRIMARY KEY,
-      cutoff_at INTEGER NOT NULL,
-      groups_json TEXT NOT NULL,
-      created_at INTEGER NOT NULL
-    );
-  `
-}

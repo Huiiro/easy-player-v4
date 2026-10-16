@@ -32,7 +32,7 @@ import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 
 export const usePlayerStore = defineStore('player', () => {
-  const { warning } = useMessage()
+  const { warning, success, info } = useMessage()
   const ui = useUIStore()
   // ── State ──
   const playbackModeChanging = ref(false)
@@ -274,6 +274,11 @@ export const usePlayerStore = defineStore('player', () => {
   async function setPreference(songId: number, preference: -1 | 0 | 1): Promise<boolean> {
     const result = await window.api.database.command('setSongPreference', { songId, preference })
     if (result.success) {
+      if (preference === 0) info(t('recommendation.feedbackCleared'))
+      else
+        success(
+          t(preference === 1 ? 'recommendation.likeSaved' : 'recommendation.lessRecommendedSaved')
+        )
       eventBus.emit('songPreferenceChanged', { songId, preference })
       await loadRecommendationScores()
     }

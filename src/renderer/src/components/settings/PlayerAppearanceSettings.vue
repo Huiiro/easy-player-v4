@@ -12,6 +12,10 @@ const spectrumStyleOptions = computed(() => [
   { label: t('settings.playerSpectrumBars'), value: 'bars' },
   { label: t('settings.playerSpectrumDots'), value: 'dots' }
 ])
+const karaokeAnimationOptions = computed(() => [
+  { label: t('settings.karaokeAnimationWave'), value: 'wave' },
+  { label: t('settings.karaokeAnimationFloat'), value: 'float' }
+])
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
   set: (value) => {
@@ -123,6 +127,18 @@ const openFooterAnywhere = computed({
       <BaseSelect
         v-model="ui.playerSpectrumStyle"
         :options="spectrumStyleOptions"
+        teleport
+        class="w-32"
+      />
+    </div>
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.karaokeAnimation') }}</h3>
+        <p>{{ t('settings.karaokeAnimationDescription') }}</p>
+      </div>
+      <BaseSelect
+        v-model="ui.karaokeAnimation"
+        :options="karaokeAnimationOptions"
         teleport
         class="w-32"
       />

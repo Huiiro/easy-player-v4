@@ -1,6 +1,7 @@
 declare const __APP_BUILD__: string
 
 import { setMainLocale, t } from './i18n'
+import { SHORTCUT_ACTIONS, type ShortcutAction } from '../shared/shortcuts'
 import { logError, logOperation, logParams, logUrl } from './service/operationLogger'
 import { performance } from 'node:perf_hooks'
 import { isPlaybackOnly, onPlaybackModeChanged } from './service/playbackMode'
@@ -243,14 +244,12 @@ function createTray(): void {
   }
   updateTrayMenu()
 }
-const shortcutActions = ['previous', 'toggle', 'next', 'volumeUp', 'volumeDown'] as const
-type ShortcutAction = (typeof shortcutActions)[number]
 
 function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, string>>): string[] {
   globalShortcut.unregisterAll()
   const failed: string[] = []
   const registeredAccelerators = new Set<string>()
-  for (const action of shortcutActions) {
+  for (const action of SHORTCUT_ACTIONS) {
     const accelerator = shortcuts[action]?.trim()
     if (!accelerator) continue
     const electronAccelerator = accelerator.replace(
@@ -921,7 +920,8 @@ app.whenReady().then(() =>
       // IPC test
       ipcMain.on('ping', () => Logger.debug('pong'))
       const isPersistedRendererSettingKey = (key: unknown): key is string =>
-        typeof key === 'string' && (key.startsWith('player.') || key.startsWith('ui.'))
+        typeof key === 'string' &&
+        (key.startsWith('pinia.') || key.startsWith('player.') || key.startsWith('ui.'))
       ipcMain.on(
         'database:save-setting-sync',
         (event, request: { key?: unknown; value?: unknown }) => {

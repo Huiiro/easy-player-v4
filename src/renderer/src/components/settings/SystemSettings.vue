@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import ChangelogDialog from './ChangelogDialog.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { LogEntry } from '@/types/audio'
@@ -14,6 +15,7 @@ const { error: showError } = useMessage()
 const logLevel = ref<LogEntry['level']>('info')
 const logLevelBusy = ref(true)
 const associationBusy = ref(false)
+const changelogOpen = ref(false)
 async function openDefaultApps(): Promise<void> {
   associationBusy.value = true
   try {
@@ -198,6 +200,22 @@ watch(
       {{ t('settings.checkForUpdates') }}
     </button>
   </div>
+  <div class="setting-row">
+    <div>
+      <h3>{{ t('settings.changelog') }}</h3>
+      <p>{{ t('settings.changelogDescription') }}</p>
+    </div>
+    <button
+      class="btn-hover-base text-sm text-nowrap"
+      type="button"
+      aria-haspopup="dialog"
+      :aria-expanded="changelogOpen"
+      @click="changelogOpen = true"
+    >
+      {{ t('settings.viewChangelog') }}
+    </button>
+  </div>
+  <ChangelogDialog v-model="changelogOpen" />
 </template>
 
 <style scoped>

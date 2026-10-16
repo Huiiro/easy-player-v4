@@ -142,17 +142,8 @@ try {
   db.pragma('journal_mode=WAL')
   db.function('search_normalize', { deterministic: true }, runtime.normalizeSearchText)
   db.function('search_japanese_sort', { deterministic: true }, runtime.japaneseSortReading)
-  for (const schema of [
-    runtime.schemaV1,
-    runtime.schemaV2,
-    runtime.schemaV3,
-    runtime.schemaV4,
-    runtime.schemaV5.addSongPreference,
-    runtime.searchSchemaV6,
-    runtime.searchSchemaV7,
-    runtime.searchSchemaV8
-  ])
-    db.exec(schema)
+  db.exec(runtime.schemaV1)
+  db.exec(runtime.searchSchema)
   db.exec(
     "INSERT INTO folder(id,name,full_path,is_root_path,import_time) VALUES(1,'Benchmark','benchmark',1,'2026-10-16')"
   )

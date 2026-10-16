@@ -13,6 +13,7 @@ const lyrics = ref<LyricLine[]>([])
 const displayLyrics = computed(() => lyrics.value.filter((line) => line.text.trim()))
 let requestId = 0
 let lyricRevision = 0
+let disposed = false
 
 async function loadLyrics(): Promise<void> {
   const id = ++requestId
@@ -64,7 +65,7 @@ function lyricSweepRange(
 }
 
 function publish(): void {
-  if (!ui.useDesktopLyrics) return
+  if (disposed || !ui.useDesktopLyrics) return
   const active = activeLines()
   const fallbackIndex = currentIndex()
   const current =
@@ -142,8 +143,11 @@ onMounted(() => {
   )
 })
 onBeforeUnmount(() => {
+  disposed = true
   requestId += 1
   cleanups.forEach((cleanup) => cleanup())
+  // The parent's v-if unmounts this component before its disabled-state watcher can run.
+  void window.api.desktopLyrics.close()
 })
 
 watch(

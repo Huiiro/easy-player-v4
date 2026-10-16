@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { spawnSync } from 'node:child_process'
 import { Worker } from 'node:worker_threads'
-import { buildSync } from 'esbuild'
+import { build, buildSync } from 'esbuild'
 
 // Use the app's Electron ABI without rebuilding the installed SQLite addon.
 const require = createRequire(import.meta.url)
@@ -67,12 +67,9 @@ try {
   db.pragma('foreign_keys=ON')
   db.function('search_normalize', { deterministic: true }, normalizeSearchText)
   db.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
-  // Build the production song schema and its existing additive migrations.
+  // Initialize the same schemas as the application.
   db.exec(helpers.schemaV1)
-  db.exec(helpers.schemaV2)
-  db.exec(helpers.schemaV3)
-  db.exec(helpers.schemaV4)
-  db.exec(helpers.schemaV5.addSongPreference)
+  db.exec(helpers.searchSchema)
   db.prepare(
     `INSERT INTO folder(id,name,full_path,is_root_path,import_time) VALUES(1,'Music','D:/Music',1,'2026-10-16')`
   ).run()
@@ -94,11 +91,12 @@ try {
       ...extra
     })
   add(1, '七里香')
-  // Existing songs are queued by the migration.
-  db.exec(helpers.searchSchemaV6)
-  db.exec(helpers.searchSchemaV7)
-  db.exec(helpers.searchSchemaV8)
+  // New songs enter the indexing queue through the insert trigger.
   assert.equal(pendingSearchRows(db).length, 1)
+  const pendingBeforeReopen = db.prepare('SELECT * FROM song_search_pending').all()
+  db.exec(helpers.schemaV1)
+  db.exec(helpers.searchSchema)
+  assert.deepEqual(db.prepare('SELECT * FROM song_search_pending').all(), pendingBeforeReopen)
   const search = (text) => {
     const filter = buildSongSearchFilter(db, text)
     return db
@@ -163,17 +161,20 @@ try {
     'persist the complete romaji, not a partial search alias'
   )
   assert.equal(sortReading(3), 'tokyo', 'Han-only Japanese reading excludes the Mandarin alias')
-  const rememberedReading = sortReading(11)
-  assert.ok(rememberedReading.startsWith('tsuki'))
-  db.exec(
-    'DROP TRIGGER song_sort_insert; DROP TRIGGER song_sort_update; DROP TRIGGER song_sort_delete; DROP TABLE song_sort_reading;'
+  assert.ok(sortReading(11).startsWith('tsuki'))
+  const indexesBeforeReopen = db.prepare('SELECT * FROM song_search ORDER BY song_id').all()
+  const readingsBeforeReopen = db.prepare('SELECT * FROM song_sort_reading ORDER BY song_id').all()
+  db.exec(helpers.schemaV1)
+  db.exec(helpers.searchSchema)
+  assert.deepEqual(
+    db.prepare('SELECT * FROM song_search ORDER BY song_id').all(),
+    indexesBeforeReopen
   )
-  db.exec(helpers.searchSchemaV8)
-  assert.equal(
-    sortReading(11),
-    rememberedReading,
-    'migration derives readings from existing indexes without reloading the dictionary'
+  assert.deepEqual(
+    db.prepare('SELECT * FROM song_sort_reading ORDER BY song_id').all(),
+    readingsBeforeReopen
   )
+  assert.equal(pendingSearchRows(db).length, 0, 'initialization does not requeue indexed songs')
   assert.ok(
     search('qili').includes(1) && search('qili').includes(12),
     'Chinese pinyin prefixes and ambiguous Han-only names remain searchable'
@@ -322,14 +323,6 @@ try {
   assert.ok(search('nul\0literal').includes(15), 'NUL remains literal original input')
 
   // Exercise the actual repository query paths with isolated application services.
-  const repoSource = require('node:fs')
-    .readFileSync('src/main/database/repository.ts', 'utf8')
-    .replace("from './index'", "from 'search-test-database'")
-    .replace("from '../i18n'", "from 'search-test-i18n'")
-    .replace("from '../service/loggerService'", "from 'search-test-logger'")
-    .replace("from './recommendations'", "from 'search-test-recommendations'")
-    .replace("from '../utils/pathUtils'", "from 'search-test-path'")
-  // BuildSync does not support plugins; supply the small mocks using aliases.
   const mocks = {
     'search-test-database': 'export const getDatabase=()=>globalThis.__searchTestDb',
     'search-test-i18n': 'export const t=(key)=>key',
@@ -338,22 +331,37 @@ try {
       'export const getDailyRecommendationGroups=()=>[]; export const getRecentDiscoveryGroups=()=>[]; export const invalidateDailyRecommendations=()=>{}',
     'search-test-path': 'export const getDataPath=()=>"."'
   }
-  const { writeFileSync } = require('node:fs')
   const alias = {}
   for (const [name, content] of Object.entries(mocks)) {
-    const path = join(directory, `${name}.js`)
+    const path = join(directory, name + '.js')
     writeFileSync(path, content)
     alias[name] = path
   }
-  buildSync({
+  const mockModules = new Map([
+    [resolve('src/main/database/index'), 'search-test-database'],
+    [resolve('src/main/i18n'), 'search-test-i18n'],
+    [resolve('src/main/service/loggerService'), 'search-test-logger'],
+    [resolve('src/main/database/recommendations'), 'search-test-recommendations'],
+    [resolve('src/main/utils/pathUtils'), 'search-test-path']
+  ])
+  await build({
     ...buildOptions,
-    stdin: {
-      contents: repoSource,
-      loader: 'ts',
-      resolveDir: resolve('src/main/database'),
-      sourcefile: 'repository.ts'
-    },
-    alias,
+    entryPoints: ['src/main/database/repository.ts'],
+    plugins: [
+      {
+        name: 'repository-test-services',
+        setup(build) {
+          build.onResolve({ filter: /^\./ }, (args) => {
+            const name = mockModules.get(resolve(args.resolveDir, args.path).replace(/\.ts$/, ''))
+            return name ? { path: name, namespace: 'test-service' } : undefined
+          })
+          build.onLoad({ filter: /.*/, namespace: 'test-service' }, (args) => ({
+            contents: mocks[args.path],
+            loader: 'js'
+          }))
+        }
+      }
+    ],
     outfile: join(directory, 'repository.cjs')
   })
   globalThis.__searchTestDb = db

@@ -52,6 +52,8 @@ policy.setPlaybackOnly(false)
 
 const ui = reactive({ extremePlayback: false, showPlayer: true, customBg: {} })
 const calls = []
+const feedbackMessages = []
+let preferenceAccepted = true
 let accepted = true
 let acceptView = true
 const viewRequests = []
@@ -74,7 +76,10 @@ const api = {
   },
   database: {
     saveSync: () => ({ success: true }),
-    command: async () => ({ success: true, data: [] })
+    command: async (action) =>
+      action === 'setSongPreference' && !preferenceAccepted
+        ? { success: false }
+        : { success: true, data: [] }
   },
   miniPlayer: { update() {} },
   system: { updateTray() {} }
@@ -90,7 +95,13 @@ const playerModule = load(
     './smartShuffle': { selectSmartNext: () => -1 },
     '@/stores/log/logStore': { useLogStore: () => ({ addEntry() {} }) },
     '@/stores/ui/uiStore': { useUIStore: () => ui },
-    '@/components/ui/useMessage': { useMessage: () => ({ warning() {} }) },
+    '@/components/ui/useMessage': {
+      useMessage: () => ({
+        warning() {},
+        success: (message) => feedbackMessages.push(['success', message]),
+        info: (message) => feedbackMessages.push(['info', message])
+      })
+    },
     '@/i18n': { t: (key) => key },
     '@/consts': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
@@ -138,6 +149,22 @@ assert.equal(
   viewRequestCount,
   'initialization must not replace its own window'
 )
+assert.equal(ui.extremePlayback, true)
+await player.setPreference(42, 1)
+await player.setPreference(42, -1)
+await player.setPreference(42, 0)
+assert.deepEqual(feedbackMessages, [
+  ['success', 'recommendation.likeSaved'],
+  ['success', 'recommendation.lessRecommendedSaved'],
+  ['info', 'recommendation.feedbackCleared']
+])
+preferenceAccepted = false
+assert.equal(await player.setPreference(42, 1), false)
+assert.equal(feedbackMessages.length, 3, 'Rejected changes must not show success feedback')
+preferenceAccepted = true
+ui.extremePlayback = false
+await player.setPreference(42, 1)
+assert.equal(feedbackMessages.length, 4, 'Feedback must work in the full player too')
 console.log(
   'Playback policy suspension/resume, mode switching, analysis suppression and failure recovery passed.'
 )

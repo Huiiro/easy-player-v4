@@ -27,6 +27,7 @@
     "build:mac": "npm run build:native && node scripts/bundle-macos-native-deps.js && npm run build:nocheck && electron-builder --mac",
     "build:linux": "npm run build:nocheck && electron-builder --linux",
     "test:playback-mode": "node scripts/test-playback-mode.mjs",
+    "test:shortcuts": "node scripts/test-shortcuts.mjs && node scripts/test-renderer-persistence.mjs",
     "test:song-search": "node scripts/test-song-search-ui.mjs && node scripts/test-song-search.mjs",
     "perf:song-search": "node scripts/benchmark-song-search.mjs",
     "perf:playback": "node scripts/check-playback-performance.cjs",
