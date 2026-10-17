@@ -17,8 +17,10 @@ import SystemSettings from '@/components/settings/SystemSettings.vue'
 import CacheSettings from '@/components/settings/CacheSettings.vue'
 import LibrarySettings from '@/components/settings/LibrarySettings.vue'
 import StatisticsSettings from '@/components/settings/StatisticsSettings.vue'
+import ResetPreferencesSettings from '@/components/settings/ResetPreferencesSettings.vue'
 
 const ui = useUIStore()
+const preferencesRevision = ref(0)
 const repositoryUrl = 'https://github.com/Huiiro/easy-player-v4'
 const themeDocumentationUrl = `${repositoryUrl}/blob/master/docs/custom-themes.md`
 const lyricsUtilUrl = 'https://github.com/Huiiro/easy-lyrics'
@@ -408,7 +410,7 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.cacheManagementDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card"><CacheSettings /></div>
+          <div class="settings-card"><CacheSettings :key="preferencesRevision" /></div>
         </section>
         <!-- system -->
         <section id="system" class="settings-section">
@@ -425,7 +427,7 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.systemDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card"><SystemSettings /></div>
+          <div class="settings-card"><SystemSettings :key="preferencesRevision" /></div>
         </section>
         <!-- other -->
         <section id="other" class="settings-section">
@@ -459,6 +461,7 @@ onBeforeUnmount(() => {
               <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
             </div>
             <StatisticsSettings />
+            <ResetPreferencesSettings @reset="preferencesRevision++" />
             <div class="setting-row">
               <h3 class="flex items-center gap-2">{{ t('settings.util') }}</h3>
               <div class="flex flex-wrap items-center justify-end gap-2">

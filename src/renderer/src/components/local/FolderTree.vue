@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
@@ -13,22 +13,17 @@ export interface FolderTreeNode {
 const props = defineProps<{
   nodes: FolderTreeNode[]
   selectedId: number | null
+  expandedIds: Set<number>
   depth?: number
 }>()
 
 const emit = defineEmits<{
   select: [id: number]
+  toggle: [id: number]
   contextmenu: [node: FolderTreeNode, event: MouseEvent]
 }>()
 const { t } = useI18n()
-const expanded = ref<Set<number>>(new Set(props.nodes.map((node) => node.id)))
 const level = computed(() => props.depth ?? 0)
-
-function toggle(id: number): void {
-  const next = new Set(expanded.value)
-  next.has(id) ? next.delete(id) : next.add(id)
-  expanded.value = next
-}
 </script>
 
 <template>
@@ -47,13 +42,14 @@ function toggle(id: number): void {
         <button
           class="grid size-6 shrink-0 place-items-center"
           :class="node.children.length ? '' : 'invisible'"
-          :aria-label="expanded.has(node.id) ? t('localFiles.collapse') : t('localFiles.expand')"
-          @click.stop="toggle(node.id)"
+          :aria-label="expandedIds.has(node.id) ? t('localFiles.collapse') : t('localFiles.expand')"
+          :aria-expanded="node.children.length ? expandedIds.has(node.id) : undefined"
+          @click.stop="emit('toggle', node.id)"
         >
           <SvgIcon
             name="arrow-arrow-right-light"
             class-name="size-3"
-            :class="expanded.has(node.id) ? 'rotate-90' : ''"
+            :class="expandedIds.has(node.id) ? 'rotate-90' : ''"
           />
         </button>
         <button
@@ -66,11 +62,13 @@ function toggle(id: number): void {
         </button>
       </div>
       <FolderTree
-        v-if="node.children.length && expanded.has(node.id)"
+        v-if="node.children.length && expandedIds.has(node.id)"
         :nodes="node.children"
         :selected-id="selectedId"
+        :expanded-ids="expandedIds"
         :depth="level + 1"
         @select="emit('select', $event)"
+        @toggle="emit('toggle', $event)"
         @contextmenu="(folder, event) => emit('contextmenu', folder, event)"
       />
     </li>

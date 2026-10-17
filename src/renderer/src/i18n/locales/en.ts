@@ -68,12 +68,17 @@ export default {
     settings: 'Settings'
   },
   localFiles: {
+    play: 'Play',
+    playFailed: 'Unable to play songs in folder',
+    noPlayableSongs: 'No playable songs in folder',
     rebuild: 'Rebuild folder hierarchy',
     rebuildDone: 'Folder hierarchy updated for {count} local tracks',
     title: 'Local files',
     empty: 'No imported local folders',
     expand: 'Expand folder',
     collapse: 'Collapse folder',
+    expandAll: 'Expand all',
+    collapseAll: 'Collapse all',
     deleteSongs: 'Delete songs in folder',
     confirmDeleteSongs:
       'Remove “{name}”, its subfolders, and {count} songs from the library? Playlist, tag, and play history links will also be removed. Files and folders on disk will be kept.',
@@ -859,6 +864,13 @@ export default {
     buildNumber: 'Build number',
     repository: 'Repository',
     statistics: 'Data statistics',
+    restorePreferences: 'Restore default configuration',
+    restorePreferencesDescription:
+      'Restore initial app preferences while keeping your library, playlists, history and statistics.',
+    confirmRestorePreferences:
+      'Restore default configuration? Interface, theme, lyrics, shortcuts, audio effects and system preferences will return to their initial values. Your library, playlists, tags, play history, statistics, imported themes and fonts will be kept. The database will not be cleared.',
+    preferencesRestored: 'Default preferences restored',
+    preferencesRestoreFailed: 'Some preferences could not be restored. Please try again.',
     statisticsDescription:
       'Track local play history, play counts and listening time. Turning this off stops recording and reading statistics and pauses statistics-based recommendations. Existing data is kept.',
     statisticsDisabled: 'Data statistics are off. Enable them in Settings → Other.',

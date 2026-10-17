@@ -64,12 +64,17 @@ export default {
     settings: '设置'
   },
   localFiles: {
+    play: '播放',
+    playFailed: '播放文件夹中的歌曲失败',
+    noPlayableSongs: '文件夹中没有可播放的歌曲',
     rebuild: '重新检测目录层级',
     rebuildDone: '目录层级已更新，共检测 {count} 首本地歌曲',
     title: '本地文件',
     empty: '暂无已导入的本地文件夹',
     expand: '展开目录',
     collapse: '折叠目录',
+    expandAll: '全部展开',
+    collapseAll: '全部收起',
     deleteSongs: '删除文件夹中的歌曲',
     confirmDeleteSongs:
       '确定从资料库删除文件夹“{name}”、其子文件夹及其中的 {count} 首歌曲吗？关联的歌单、标签和播放历史也会移除。磁盘上的文件和文件夹不会删除。',
@@ -825,6 +830,12 @@ export default {
     buildNumber: '构建号',
     repository: '项目仓库',
     statistics: '数据统计',
+    restorePreferences: '还原默认配置',
+    restorePreferencesDescription: '将应用偏好还原为初始配置，保留曲库、歌单、历史及统计数据。',
+    confirmRestorePreferences:
+      '确定还原默认配置吗？界面、主题、歌词、快捷键、音效及系统偏好将恢复初始值。曲库、歌单、标签、播放历史、统计记录和已导入的主题、字体会保留，不会清空数据库。',
+    preferencesRestored: '偏好设置已还原为初始配置',
+    preferencesRestoreFailed: '部分配置还原失败，请重试',
     statisticsDescription:
       '统计本地播放历史、播放次数和收听时长。关闭后停止记录和读取统计数据，暂停基于统计的推荐；已有数据会保留。',
     statisticsDisabled: '数据统计已关闭，可在设置 → 其他中开启。',
