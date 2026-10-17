@@ -10,6 +10,14 @@ export default {
     reset: '恢复默认'
   },
   customTheme: {
+    thirdPartyTitle: '第三方主题与资源风险',
+    thirdPartyRisk:
+      '第三方主题由外部作者提供，可能影响界面可用性，或携带有问题的字体与图片。请仅使用可信来源；资源校验不代表安全认证。',
+    previewTitle: '保留导入的主题吗？',
+    previewDescription: '正在预览新导入的“{name}”。请检查主题显示正常。',
+    previewCountdown: '若未确认，将在 {seconds} 秒后自动恢复原主题。',
+    keep: '保留此主题',
+    revert: '恢复原主题',
     title: '自定义主题',
     description: '导入 JSON 配色或 ZIP 资源主题包。同名主题会被替换。',
     slots: '可用资源位置与当前分配',

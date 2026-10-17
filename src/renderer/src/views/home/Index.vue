@@ -204,8 +204,10 @@ const activeRecommendationCard = computed(() =>
 )
 
 const greeting = computed(() => {
-  const customText = (uiStore.customThemeText.homeWelcome ?? uiStore.homeWelcomeText).trim()
+  const customText = uiStore.homeWelcomeText.trim()
   if (customText) return customText
+  const themeText = uiStore.customThemeText.homeWelcome?.trim()
+  if (themeText) return themeText
   const hour = new Date().getHours()
   const key = (() => {
     switch (true) {

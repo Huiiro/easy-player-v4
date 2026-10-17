@@ -31,23 +31,8 @@ function isThemeBackgroundSelected(value: ThemeBackgroundChoice): boolean {
   return ui.systemBackground === value
 }
 function selectThemeBackground(value: ThemeBackgroundChoice): void {
-  if (ui.followSystemTheme) return
-  ui.useCustomBg = false
-  if (value === 'custom') {
-    ui.systemBackground = 'none'
-    ui.useCustomBg = true
-    ui.setTheme('dark')
-    emit('navigate', 'customBackground')
-    return
-  }
-  if (value === 'light' || value === 'dark') {
-    ui.systemBackground = 'none'
-    ui.setTheme(value)
-    return
-  }
-  const background = systemBackgroundThemes.find((item) => item.id === value)
-  ui.systemBackground = value
-  ui.setTheme(background?.colorMode ?? 'dark')
+  if (!ui.selectThemeBackground(value)) return
+  if (value === 'custom') emit('navigate', 'customBackground')
 }
 </script>
 

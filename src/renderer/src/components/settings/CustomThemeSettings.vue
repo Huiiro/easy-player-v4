@@ -6,6 +6,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { MAX_THEME_BYTES } from '@/services/customTheme'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const { t } = useI18n()
@@ -14,12 +15,13 @@ const error = ref('')
 const importing = ref(false)
 const deleteVisible = ref(false)
 const themeToDelete = ref('')
-const selected = computed(() =>
-  ui.customThemes.find((theme) => theme.name === ui.activeCustomThemeName)
-)
+const selected = computed(() => ui.effectiveCustomTheme)
 const themeOptions = computed(() => [
   { label: t('customTheme.default'), value: '' },
-  ...ui.customThemes.map((theme) => ({ label: theme.name, value: theme.name }))
+  ...ui.customThemes.map((theme) => ({ label: theme.name, value: theme.name })),
+  ...(selected.value && !ui.customThemes.some((theme) => theme.name === selected.value?.name)
+    ? [{ label: selected.value.name, value: selected.value.name }]
+    : [])
 ])
 
 function requestDelete(): void {
@@ -98,6 +100,16 @@ async function exportTheme(): Promise<void> {
 
 <template>
   <section :aria-label="t('customTheme.title')">
+    <div
+      role="note"
+      class="mx-5 my-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-text"
+    >
+      <div class="flex items-center gap-1">
+        <svg-icon name="common-warning" class-name="size-4.5 text-warning" />
+        <p class="font-semibold">{{ t('customTheme.thirdPartyTitle') }}</p>
+      </div>
+      <p class="mt-1 text-xs">{{ t('customTheme.thirdPartyRisk') }}</p>
+    </div>
     <div class="setting-row">
       <div>
         <h3>{{ t('customTheme.title') }}</h3>
@@ -111,7 +123,11 @@ async function exportTheme(): Promise<void> {
           class="hidden"
           @change="importFile"
         />
-        <BaseButton size="sm" :disabled="importing" @click="fileInput?.click()">
+        <BaseButton
+          size="sm"
+          :disabled="importing || ui.customThemePreviewActive"
+          @click="fileInput?.click()"
+        >
           {{ t('customTheme.import') }}
         </BaseButton>
         <BaseButton size="sm" variant="secondary" @click="exportTheme">
@@ -123,11 +139,13 @@ async function exportTheme(): Promise<void> {
       <span class="text-sm">{{ t('customTheme.active') }}</span>
       <div class="flex items-center gap-3">
         <BaseSelect
-          v-model="ui.activeCustomThemeName"
+          :model-value="ui.effectiveCustomThemeName"
+          :disabled="ui.customThemePreviewActive"
           :options="themeOptions"
           :aria-label="t('customTheme.active')"
           class="w-72"
           teleport
+          @update:model-value="ui.selectCustomTheme(String($event))"
         />
         <BaseButton v-if="selected" size="sm" variant="danger" @click="requestDelete">
           {{ t('customTheme.remove') }}

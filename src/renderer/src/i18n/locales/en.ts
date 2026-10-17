@@ -10,6 +10,16 @@ export default {
     reset: 'Restore defaults'
   },
   customTheme: {
+    thirdPartyTitle: 'Third-party theme and resource risks',
+    thirdPartyRisk:
+      'Third-party themes come from external authors and may make the interface unusable or include problematic fonts and images. Use trusted sources only; validation is not a security certification.',
+    previewTitle: 'Keep this imported theme?',
+    previewDescription:
+      'Previewing the newly imported “{name}”. Check that theme display correctly.',
+    previewCountdown:
+      'Your previous theme will be restored in {seconds} seconds unless you confirm.',
+    keep: 'Keep this theme',
+    revert: 'Restore previous theme',
     title: 'Custom themes',
     description:
       'Import JSON colors or a ZIP theme package with resources. Matching names replace existing themes.',

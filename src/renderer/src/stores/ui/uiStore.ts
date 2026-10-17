@@ -3,9 +3,10 @@ import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import type { InstalledThemePackage } from '../../../../shared/themePackage'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
+import { createThemePreviewTimer } from '@/services/themePreview'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 import { accessibleSongAccent, primarySurfaceColors } from '@/components/background/songThemeColors'
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
   DEFAULT_PLAYER_COVER_STYLE,
@@ -120,20 +121,93 @@ export const useUIStore = defineStore(
   () => {
     const customThemes = ref<CustomTheme[]>([])
     const activeCustomThemeName = ref('')
-    const customThemeText = computed(
-      () =>
-        customThemes.value.find((theme) => theme.name === activeCustomThemeName.value)?.package
-          ?.manifest.text ?? {}
+    // Preview state is deliberately excluded from UI_PREFERENCE_KEYS.
+    const pendingCustomTheme = shallowRef<CustomTheme | null>(null)
+    const customThemePreviewSeconds = ref(0)
+    const customThemePreviewActive = computed(() => pendingCustomTheme.value !== null)
+    const effectiveCustomThemeName = computed(
+      () => pendingCustomTheme.value?.name ?? activeCustomThemeName.value
     )
+    const effectiveCustomTheme = computed(
+      () =>
+        pendingCustomTheme.value ??
+        customThemes.value.find((theme) => theme.name === effectiveCustomThemeName.value)
+    )
+    const themePreviewTimer = createThemePreviewTimer((seconds) => {
+      customThemePreviewSeconds.value = seconds
+    }, cancelCustomThemePreview)
+    function releaseThemePackage(id?: string): void {
+      if (!id || customThemes.value.some((theme) => theme.package?.id === id)) return
+      void window.api.themes
+        .removePackage(id)
+        .catch((error) => console.warn('[Theme] Resource cleanup failed', error))
+    }
+    function cancelCustomThemePreview(): void {
+      themePreviewTimer.stop()
+      const pendingPackage = pendingCustomTheme.value?.package?.id
+      pendingCustomTheme.value = null
+      releaseThemePackage(pendingPackage)
+    }
+    function selectCustomTheme(name: string): void {
+      if (name && !customThemes.value.some((theme) => theme.name === name)) return
+      cancelCustomThemePreview()
+      activeCustomThemeName.value = name
+    }
+    function selectThemeBackground(value: SystemBackground | 'light' | 'dark' | 'custom'): boolean {
+      if (followSystemTheme.value || useMica.value) return false
+      if (value !== 'light' && value !== 'dark' && value !== 'custom' && !isSystemBackground(value))
+        return false
+      cancelCustomThemePreview()
+      const background =
+        value === 'light' || value === 'dark' || value === 'custom' ? 'none' : value
+      const dark =
+        value === 'light'
+          ? false
+          : value === 'dark' || value === 'custom'
+            ? true
+            : getSystemBackgroundTheme(value).colorMode === 'dark'
+      if (
+        !activeCustomThemeName.value &&
+        useCustomBg.value === (value === 'custom') &&
+        systemBackground.value === background &&
+        useDarkMode.value === dark
+      )
+        return false
+      useCustomBg.value = value === 'custom'
+      systemBackground.value = background
+      useDarkMode.value = dark
+      activeCustomThemeName.value = ''
+      return true
+    }
+    function confirmCustomThemePreview(): void {
+      if (!customThemePreviewActive.value || !themePreviewTimer.confirm()) return
+      const pending = pendingCustomTheme.value
+      let previousPackage: string | undefined
+      if (pending) {
+        const index = customThemes.value.findIndex((theme) => theme.name === pending.name)
+        previousPackage = customThemes.value[index]?.package?.id
+        if (index >= 0) customThemes.value.splice(index, 1, pending)
+        else customThemes.value.push(pending)
+      }
+      activeCustomThemeName.value = pending?.name ?? activeCustomThemeName.value
+      pendingCustomTheme.value = null
+      releaseThemePackage(previousPackage)
+    }
+    const customThemeText = computed(() => effectiveCustomTheme.value?.package?.manifest.text ?? {})
     const customThemeOverridesBackground = computed(() => {
-      const theme = customThemes.value.find((item) => item.name === activeCustomThemeName.value)
+      const theme = effectiveCustomTheme.value
       return !!theme && theme.background !== 'inherit'
     })
     function refreshCustomTheme(): void {
-      const theme = customThemes.value.find((item) => item.name === activeCustomThemeName.value)
+      const theme = effectiveCustomTheme.value
       try {
         applyCustomTheme(theme ? parseCustomTheme(JSON.stringify(theme)) : null)
       } catch {
+        if (customThemePreviewActive.value) {
+          cancelCustomThemePreview()
+          refreshCustomTheme()
+          return
+        }
         applyCustomTheme(null)
         activeCustomThemeName.value = ''
       }
@@ -145,22 +219,19 @@ export const useUIStore = defineStore(
       if (installed) theme.package = installed
       const validated = parseCustomTheme(JSON.stringify(theme))
       const index = customThemes.value.findIndex((item) => item.name === theme.name)
-      const previous = customThemes.value[index]?.package?.id
-      if (index >= 0) customThemes.value.splice(index, 1, validated)
-      else {
-        if (customThemes.value.length >= 20) throw new Error('At most 20 themes')
-        customThemes.value.push(validated)
-      }
-      activeCustomThemeName.value = theme.name
-      if (previous && previous !== installed?.id) void window.api.themes.removePackage(previous)
+      if (index < 0 && customThemes.value.length >= 20) throw new Error('At most 20 themes')
+      cancelCustomThemePreview()
+      pendingCustomTheme.value = validated
+      themePreviewTimer.start()
     }
     function removeCustomTheme(name: string): void {
+      cancelCustomThemePreview()
       const previous = customThemes.value.find((theme) => theme.name === name)?.package?.id
       customThemes.value = customThemes.value.filter((theme) => theme.name !== name)
       if (activeCustomThemeName.value === name) activeCustomThemeName.value = ''
-      if (previous) void window.api.themes.removePackage(previous)
+      releaseThemePackage(previous)
     }
-    watch([customThemes, activeCustomThemeName], refreshCustomTheme, { deep: true })
+    watch([customThemes, effectiveCustomTheme], refreshCustomTheme, { deep: true })
     const themeSettingsKey = 'ui.theme-settings'
     const persistedSettingsKey = 'ui.preferences.v1'
     // ========== 基础设置 ==========
@@ -703,6 +774,7 @@ export const useUIStore = defineStore(
     }
 
     function resetTheme(): void {
+      cancelCustomThemePreview()
       activeCustomThemeName.value = ''
       useDarkMode.value = true
       followSystemTheme.value = false
@@ -807,6 +879,15 @@ export const useUIStore = defineStore(
     )
     const state = {
       customThemes,
+      selectThemeBackground,
+      effectiveCustomThemeName,
+      effectiveCustomTheme,
+      customThemePreviewActive,
+      customThemePreviewSeconds,
+      selectCustomTheme,
+      confirmCustomThemePreview,
+      cancelCustomThemePreview,
+      checkCustomThemePreviewDeadline: themePreviewTimer.check,
       customThemeText,
       customThemeOverridesBackground,
       activeCustomThemeName,
