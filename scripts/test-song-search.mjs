@@ -532,6 +532,19 @@ try {
   )
   assert.equal(stopIndex.getStatus().phase, 'paused')
   assert.equal(stopIndex.getStatus().pending, 1)
+  const originalPrepare = db.prepare.bind(db)
+  let aggregateQueries = 0
+  db.prepare = (sql) => {
+    if (sql.includes('(SELECT COUNT(*) FROM song)')) aggregateQueries++
+    return originalPrepare(sql)
+  }
+  for (let i = 0; i < 100; i++) stopIndex.getStatus()
+  assert.equal(aggregateQueries, 0, 'unchanged DB must reuse index counts')
+  db.prepare('UPDATE song SET title=title WHERE id=20').run()
+  stopIndex.getStatus()
+  assert.equal(aggregateQueries, 1, 'same-connection writes invalidate counts')
+  db.prepare = originalPrepare
+
   await new Promise((resolveWait) => setTimeout(resolveWait, 1100))
   assert.equal(db.prepare('SELECT 1 FROM song_search WHERE song_id=20').get(), undefined)
   globalThis.__searchPaused = false
@@ -567,9 +580,38 @@ try {
     'a usable basic index is not reported as fully complete'
   )
   assert.ok(retryStatus.nextRetryAt > Date.now())
+  db.prepare('UPDATE song_search_pending SET retry_at=? WHERE song_id=21').run(Date.now() + 80)
+  assert.equal(stopIndex.getStatus().phase, 'retrying')
+  await new Promise((resolveWait) => setTimeout(resolveWait, 100))
+  assert.equal(stopIndex.getStatus().phase, 'queued', 'retry deadlines invalidate cached readiness')
+
   stopIndex.stop()
   stopIndex = undefined
   delete globalThis.__searchPaused
+
+  // Writes through another connection change data_version, not total_changes().
+  const statusFile = join(directory, 'status-cache.db')
+  await db.backup(statusFile)
+  const observedDb = new Database(statusFile)
+  const externalWriter = new Database(statusFile)
+  externalWriter.function('search_normalize', { deterministic: true }, normalizeSearchText)
+  externalWriter.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
+  globalThis.__searchPaused = true
+  const observedIndex = startSearchIndexService(observedDb, () => {})
+  try {
+    const before = observedIndex.getStatus().pending
+    externalWriter.prepare("UPDATE song SET title=title || ' changed' WHERE id=20").run()
+    assert.equal(
+      observedIndex.getStatus().pending,
+      before + 1,
+      'external DB writes invalidate counts'
+    )
+  } finally {
+    observedIndex.stop()
+    externalWriter.close()
+    observedDb.close()
+    delete globalThis.__searchPaused
+  }
 
   if (process.argv.includes('--built-worker')) {
     worker = new Worker(resolve('out/main/searchWorker.js'))

@@ -26,6 +26,10 @@ function scheduleRender(): void {
 function updateTarget(values: number[]): void {
   if (target.length !== values.length) target = new Float32Array(values.length)
   target.set(values)
+  if (!document.hidden) {
+    if (ui.reduceMotion || props.active === false) render()
+    else scheduleRender()
+  }
 }
 
 function render(): void {
@@ -41,10 +45,7 @@ function render(): void {
   if (!c) return
   context = c
   c.clearRect(0, 0, width, height)
-  if (!target.length) {
-    scheduleRender()
-    return
-  }
+  if (!target.length) return
 
   const barCount = target.length * 2
   if (bars.length !== barCount) bars = new Float32Array(barCount)
@@ -69,9 +70,15 @@ function render(): void {
   const dotSize = Math.min(barWidth, 3 * pixelScale)
   const dotStep = dotSize + Math.max(pixelScale, dotSize * 0.5)
   c.fillStyle = gradient
+  let moving = false
   for (let index = 0; index < barCount; index += 1) {
     const value = bars[index]
-    levels[index] += (Math.max(0, Math.min(1, value)) - levels[index]) * 0.28
+    const desired = Math.max(0, Math.min(1, value))
+    const delta = desired - levels[index]
+    if (!ui.reduceMotion && props.active !== false && Math.abs(delta) > 0.001) {
+      levels[index] += delta * 0.28
+      moving = true
+    } else levels[index] = desired
     const barHeight = Math.max(2 * pixelScale, levels[index] * height)
     if (ui.playerSpectrumStyle === 'dots') {
       const x = index * bw + (bw - dotSize) / 2
@@ -85,11 +92,11 @@ function render(): void {
       c.fillRect(index * bw + (bw - barWidth) / 2, height - barHeight, barWidth, barHeight)
     }
   }
-  scheduleRender()
+  if (moving) scheduleRender()
 }
 watch(() => props.spectrum, updateTarget, { immediate: true })
 watch(
-  () => ui.playerSpectrumStyle,
+  () => [ui.playerSpectrumStyle, props.color],
   () => {
     if (ui.reduceMotion || props.active === false) render()
     else scheduleRender()

@@ -29,6 +29,7 @@ import {
   useUIStore
 } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
+import { useVisibleInterval } from '@/hooks/useVisibleInterval'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
@@ -191,7 +192,6 @@ const playingRecommendationCard = ref<string | null>(null)
 const recommendationQueue = shallowRef<LibrarySong[] | null>(null)
 const pendingRecommendationCard = ref<string | null>(null)
 const refreshing = ref(false)
-let recommendationDateTimer: ReturnType<typeof setInterval> | undefined
 const activePlaylistId = computed(() =>
   player.currentQueueSong && (player.isPlaying || player.isPaused) ? player.queuePlaylistId : null
 )
@@ -386,11 +386,11 @@ onMounted(() => {
   eventBus.on('playlistsChanged', loadPlaylists)
   eventBus.on('songPreferenceChanged', loadPlaylists)
   eventBus.on('scanFinished', loadPlaylists)
-  recommendationDateTimer = setInterval(() => {
-    if (recommendationGeneratedFor.value && recommendationGeneratedFor.value !== todayKey())
-      void loadRecommendations()
-  }, 60_000)
 })
+useVisibleInterval(() => {
+  if (recommendationGeneratedFor.value && recommendationGeneratedFor.value !== todayKey())
+    void loadRecommendations()
+}, 60_000)
 onActivated(() => {
   if (!loading.value) void loadRecommendations()
 })
@@ -402,7 +402,6 @@ onBeforeUnmount(() => {
   eventBus.off('playlistsChanged', loadPlaylists)
   eventBus.off('songPreferenceChanged', loadPlaylists)
   eventBus.off('scanFinished', loadPlaylists)
-  if (recommendationDateTimer) clearInterval(recommendationDateTimer)
 })
 </script>
 

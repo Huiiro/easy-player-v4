@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onActivated, ref, watch } from 'vue'
+import { useVisibleInterval } from '@/hooks/useVisibleInterval'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
@@ -56,7 +57,6 @@ const moreLoading = ref<Record<Group, boolean>>({
 })
 const playbackPending = ref(false)
 let loadRevision = 0
-let dateTimer: ReturnType<typeof setInterval> | undefined
 
 function todayKey(): string {
   const date = new Date()
@@ -184,14 +184,9 @@ watch(
     if (statistics.enabled) void load()
   }
 )
-onMounted(() => {
-  dateTimer = setInterval(() => {
-    if (generatedFor.value && generatedFor.value !== todayKey()) void load()
-  }, 60_000)
-})
-onBeforeUnmount(() => {
-  if (dateTimer) clearInterval(dateTimer)
-})
+useVisibleInterval(() => {
+  if (generatedFor.value && generatedFor.value !== todayKey()) void load()
+}, 60_000)
 </script>
 
 <template>

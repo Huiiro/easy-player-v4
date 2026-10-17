@@ -68,6 +68,7 @@ vm.runInNewContext(
         }
       if (name === 'vue-i18n') return { useI18n: () => ({ t: (key) => key }) }
       if (name.endsWith('playerStore')) return { usePlayerStore: () => ({ queue: [] }) }
+      if (name.endsWith('statisticsStore')) return { useStatisticsStore: () => ({ enabled: true }) }
       if (name.endsWith('uiStore'))
         return { useUIStore: () => Vue.reactive({ musicSource: 'all', musicSourceId: 0 }) }
       if (name.endsWith('useMessage'))

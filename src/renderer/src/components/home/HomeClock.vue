@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useVisibleInterval } from '@/hooks/useVisibleInterval'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -9,16 +10,12 @@ const time = computed(() =>
     .map((value) => String(value).padStart(2, '0'))
     .join(':')
 )
-let timer: ReturnType<typeof setTimeout> | undefined
-function tick(): void {
-  now.value = new Date()
-  // Align each update with the wall clock, including after sleep or a delayed frame.
-  timer = setTimeout(tick, 1000 - (Date.now() % 1000))
-}
-onMounted(tick)
-onBeforeUnmount(() => {
-  if (timer !== undefined) clearTimeout(timer)
-})
+useVisibleInterval(
+  () => {
+    now.value = new Date()
+  },
+  () => 1000 - (Date.now() % 1000)
+)
 </script>
 
 <template>

@@ -35,8 +35,29 @@ export function startSearchIndexService(
   let lastPublished = ''
   let lastPublishedAt = 0
 
+  const changeCount = db.prepare('SELECT total_changes() AS changes')
+  let cachedCounts: ReturnType<typeof readSearchIndexCounts> | undefined
+  let lastChanges = -1
+  let lastDataVersion: unknown
+  function getCounts(): ReturnType<typeof readSearchIndexCounts> {
+    const { changes } = changeCount.get() as { changes: number }
+    const dataVersion = db.pragma('data_version', { simple: true })
+    if (
+      !cachedCounts ||
+      changes !== lastChanges ||
+      dataVersion !== lastDataVersion ||
+      (cachedCounts.nextRetryAt !== null && cachedCounts.nextRetryAt <= Date.now())
+    ) {
+      cachedCounts = readSearchIndexCounts(db)
+      lastChanges = changes
+      lastDataVersion = dataVersion
+    }
+    return cachedCounts
+  }
+
   function getStatus(): SearchIndexStatus {
-    const counts = readSearchIndexCounts(db)
+    // Large-library counts stay cached until a DB write or a retry deadline.
+    const counts = getCounts()
     const phase: SearchIndexStatus['phase'] = !counts.pending
       ? 'ready'
       : isPlaybackOnly()
