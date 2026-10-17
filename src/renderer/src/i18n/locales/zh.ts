@@ -836,6 +836,8 @@ export default {
     statisticsSaveFailed: '无法更新数据统计设置',
     statisticsClearFailed: '清空统计数据失败',
     themeDocumentation: '主题插件文档',
+    lyricsUtil: '歌词工具',
+    util: '标签工具',
     version: '版本'
   },
   playerPanel: {

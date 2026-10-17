@@ -871,6 +871,8 @@ export default {
     statisticsSaveFailed: 'Unable to update statistics settings',
     statisticsClearFailed: 'Unable to clear statistics',
     themeDocumentation: 'Theme plugin documentation',
+    lyricsUtil: 'Lyrics Tools',
+    util: 'Tag Tools',
     version: 'Version'
   },
   playerPanel: {

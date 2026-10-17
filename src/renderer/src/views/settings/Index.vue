@@ -21,6 +21,10 @@ import StatisticsSettings from '@/components/settings/StatisticsSettings.vue'
 const ui = useUIStore()
 const repositoryUrl = 'https://github.com/Huiiro/easy-player-v4'
 const themeDocumentationUrl = `${repositoryUrl}/blob/master/docs/custom-themes.md`
+const lyricsUtilUrl = 'https://github.com/Huiiro/easy-lyrics'
+const musicTagUrl = 'https://www.cnblogs.com/vinlxc/p/11347744.html'
+const mp3tagUrl = 'https://www.mp3tag.de/'
+const tagScannerUrl = 'https://www.xdlab.ru/en/download.htm'
 const { locale, t } = useI18n()
 const activeSection = ref('playback')
 const resetThemeVisible = ref(false)
@@ -456,6 +460,38 @@ onBeforeUnmount(() => {
             </div>
             <StatisticsSettings />
             <div class="setting-row">
+              <h3 class="flex items-center gap-2">{{ t('settings.util') }}</h3>
+              <div class="flex flex-wrap items-center justify-end gap-2">
+                <a
+                  :href="musicTagUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                  musicTag
+                </a>
+                <a
+                  :href="tagScannerUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                  tagScanner
+                </a>
+                <a
+                  :href="mp3tagUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                  mp3Tag
+                </a>
+              </div>
+            </div>
+            <div class="setting-row">
               <h3 class="flex items-center gap-2">GitHub</h3>
               <div class="flex flex-wrap items-center justify-end gap-2">
                 <a
@@ -475,6 +511,15 @@ onBeforeUnmount(() => {
                 >
                   <SvgIcon name="third-github" class-name="size-4 shrink-0" />
                   {{ t('settings.themeDocumentation') }}
+                </a>
+                <a
+                  :href="lyricsUtilUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="secondary-button"
+                >
+                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                  {{ t('settings.lyricsUtil') }}
                 </a>
               </div>
             </div>
