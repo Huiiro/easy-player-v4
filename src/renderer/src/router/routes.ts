@@ -91,6 +91,12 @@ export const constRoutes = [
         component: () => import('@/views/recommend/Index.vue')
       },
       {
+        path: '/recommend/playlist/:group/:generatedFor',
+        name: 'RecommendationPlaylist',
+        meta: { title: '推荐歌单', keepAlive: false },
+        component: () => import('@/views/recommend/RecommendationPlaylist.vue')
+      },
+      {
         path: '/settings',
         name: 'Settings',
         meta: { title: '设置' },

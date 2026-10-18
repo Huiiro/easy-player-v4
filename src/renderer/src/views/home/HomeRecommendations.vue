@@ -90,8 +90,13 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
           :class="props.activeCard === recommendationCardKey(card) ? 'text-primary' : ''"
           :aria-label="recommendationCardName(card)"
           :title="recommendationCardName(card)"
-          :disabled="props.pending || props.playlistBusy || card.total === 0"
-          @click="emit('play', card)"
+          @click="
+            router.push({
+              name: 'RecommendationPlaylist',
+              params: { group: card.group, generatedFor: card.generatedFor },
+              query: { cover: card.songs.find((song) => song.cover)?.cover || undefined }
+            })
+          "
         >
           {{ t(`recommendation.${card.group}`) }}
         </button>

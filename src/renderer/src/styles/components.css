@@ -249,39 +249,26 @@
 .ep-range::-webkit-slider-runnable-track {
   height: var(--ep-range-track-height, 0.25rem);
   border-radius: 999px;
+  /* Paint the played segment separately so translucent tracks cannot reveal the fill. */
   background:
-    linear-gradient(
-      to right,
-      transparent 0%,
-      transparent
-        calc(
-          var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
-            var(--ep-range-progress, 0)
-        ),
-      var(--ep-range-unplayed-color, var(--ep-progress-track))
-        calc(
-          var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
-            var(--ep-range-progress, 0)
-        ),
-      var(--ep-range-unplayed-color, var(--ep-progress-track)) 100%
-    ),
     var(
       --ep-range-fill-background,
       linear-gradient(var(--ep-progress-fill), var(--ep-progress-fill))
+    ),
+    linear-gradient(
+      var(--ep-range-unplayed-color, var(--ep-progress-track)),
+      var(--ep-range-unplayed-color, var(--ep-progress-track))
     );
   background-size:
-    100% 100%,
-    max(
-        calc(100% * var(--ep-range-show-unplayed, 1)),
-        calc(
-          (
-              var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
-                var(--ep-range-progress, 0)
-            ) *
-            var(--ep-range-has-progress, 0)
-        )
+    calc(
+        (
+            var(--ep-range-thumb-width, 1rem) / 2 + (100% - var(--ep-range-thumb-width, 1rem)) *
+              var(--ep-range-progress, 0)
+          ) *
+          var(--ep-range-has-progress, 0)
       )
-      100%;
+      100%,
+    calc(100% * var(--ep-range-show-unplayed, 1)) 100%;
   background-repeat: no-repeat;
 }
 .ep-range::-webkit-slider-thumb {

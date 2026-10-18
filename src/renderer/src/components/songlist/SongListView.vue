@@ -19,6 +19,7 @@ import SongDetailsDialog from './SongDetailsDialog.vue'
 import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
 import MetadataEditDialog from './MetadataEditDialog.vue'
+import type { RecommendationGroup } from '@/views/home/types'
 
 type SongListSource =
   | { type: 'songs' | 'local' | 'remote' | 'history' | 'liked' }
@@ -27,6 +28,7 @@ type SongListSource =
   | { type: 'album'; album: string; artist?: string }
   | { type: 'artist'; artist: string }
   | { type: 'genre'; genre: string }
+  | { type: 'recommendation'; group: RecommendationGroup; generatedFor: string }
 type SortField =
   'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface MusicSourceOption {
@@ -38,6 +40,16 @@ const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
   source: () => ({ type: 'songs' })
 })
 
+const collectionPlaylistId = computed(() =>
+  props.source.type === 'playlist'
+    ? props.source.id
+    : props.source.type === 'liked'
+      ? LIKED_PLAYLIST_ID
+      : null
+)
+const playbackOrigin = computed(() =>
+  props.source.type === 'recommendation' ? ('recommendation' as const) : ('manual' as const)
+)
 const player = usePlayerStore()
 const uiStore = useUIStore()
 const statistics = useStatisticsStore()
@@ -132,10 +144,19 @@ const nameSortValues = computed(() => {
     ])
   )
 })
+const recommendationOrder = computed(
+  () => new Map(songs.value.map((song, index) => [song.id, index]))
+)
 
 function compareSongs(left: LibrarySong, right: LibrarySong): number {
   const field = sortBy.value
   let result = 0
+
+  if (field === 'id' && props.source.type === 'recommendation') {
+    result =
+      (recommendationOrder.value.get(right.id) ?? 0) - (recommendationOrder.value.get(left.id) ?? 0)
+    return result * (sortOrder.value === 'asc' ? 1 : -1)
+  }
 
   if (field === 'relevance') {
     result = (left.searchScore ?? 0) - (right.searchScore ?? 0)
@@ -178,11 +199,17 @@ const allSelected = computed(
 const getSongs = async (): Promise<LibrarySong[]> => {
   const { source } = props
   const { type } = source
-  if (type === 'history' && !statistics.enabled) return []
+  const requiresStatistics = type === 'history' || type === 'recommendation'
+  if (requiresStatistics && !statistics.enabled) return []
   const statisticsGeneration = statistics.generation
 
   const getCommand = (): { name: DatabaseAction; params: unknown } => {
     switch (type) {
+      case 'recommendation':
+        return {
+          name: 'getHomeRecommendationSongs',
+          params: { group: source.group, generatedFor: source.generatedFor }
+        }
       case 'playlist':
         return {
           name: 'queryPlaylistSongs',
@@ -258,12 +285,25 @@ const getSongs = async (): Promise<LibrarySong[]> => {
 
   const { name, params } = getCommand()
   const response = await window.api.database.command(name, params)
-  if (type === 'history' && (!statistics.enabled || statisticsGeneration !== statistics.generation))
+  if (requiresStatistics && (!statistics.enabled || statisticsGeneration !== statistics.generation))
     return []
 
   if (!response.success) throw new Error(response.error)
   const data = response.data as LibrarySong[] | PagedLibrarySongs
-  return Array.isArray(data) ? data : data.data
+  const result = Array.isArray(data) ? data : data.data
+  if (type === 'recommendation' && appliedSearch) {
+    // Use the shared search index, then restrict results to this dated collection.
+    const search = await window.api.database.command('querySongs', { search: appliedSearch })
+    if (!statistics.enabled || statisticsGeneration !== statistics.generation) return []
+    if (!search.success) throw new Error(search.error)
+    const matches = new Map(
+      (search.data as PagedLibrarySongs).data.map((song) => [song.id, song.searchScore])
+    )
+    return result
+      .filter((song) => matches.has(song.id))
+      .map((song) => ({ ...song, searchScore: matches.get(song.id) }))
+  }
+  return result
 }
 
 const load = async (): Promise<void> => {
@@ -279,9 +319,9 @@ const load = async (): Promise<void> => {
   }
 }
 watch(
-  () => statistics.generation,
+  () => [statistics.generation, statistics.enabled],
   () => {
-    if (props.source.type === 'history') void load()
+    if (props.source.type === 'history' || props.source.type === 'recommendation') void load()
   }
 )
 async function refreshSongs(): Promise<void> {
@@ -354,11 +394,8 @@ const playSong = async (song: LibrarySong): Promise<void> => {
   await player.playCollection(
     filteredSongs.value,
     song.id,
-    props.source.type === 'playlist'
-      ? props.source.id
-      : props.source.type === 'liked'
-        ? LIKED_PLAYLIST_ID
-        : null
+    collectionPlaylistId.value,
+    playbackOrigin.value
   )
 }
 const playSelected = (): void => {
@@ -367,13 +404,28 @@ const playSelected = (): void => {
     void player.playCollection(
       selectedSongs,
       selectedSongs[0].id,
-      props.source.type === 'playlist'
-        ? props.source.id
-        : props.source.type === 'liked'
-          ? LIKED_PLAYLIST_ID
-          : null
+      collectionPlaylistId.value,
+      playbackOrigin.value
     )
 }
+async function playAll(): Promise<void> {
+  if (loading.value) return
+  const playable = filteredSongs.value.filter((song) => song.songStatus !== 0)
+  if (!playable.length) {
+    warning(t('playlist.empty'))
+    return
+  }
+  if (
+    !(await player.playCollection(
+      playable,
+      playable[0].id,
+      collectionPlaylistId.value,
+      playbackOrigin.value
+    ))
+  )
+    showError(t('playlist.playFailed'))
+}
+defineExpose({ playAll, loading })
 const addActiveMenuSongToQueue = (): void => {
   const song = activeMenuSong.value
   if (song) {
