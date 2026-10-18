@@ -45,8 +45,11 @@ const audioAPI = {
   setDopEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('audio:command', { action: 'setDopEnabled', params: { enabled } }),
   getDopEnabled: () => ipcRenderer.invoke('audio:command', { action: 'getDopEnabled', params: {} }),
-  setNextTrack: (filePath: string) =>
-    ipcRenderer.invoke('audio:command', { action: 'setNextTrack', params: { filePath } }),
+  setNextTrack: (filePath: string, sourceFile?: string) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'setNextTrack',
+      params: { filePath, sourceFile }
+    }),
   setTransitionConfig: (config: unknown) =>
     ipcRenderer.invoke('audio:command', { action: 'setTransitionConfig', params: { config } }),
   getTransitionConfig: () =>
@@ -164,7 +167,7 @@ const audioAPI = {
     return (this as any).onEvent('positionChanged', callback)
   },
   onTrackEnded: function (
-    callback: (data: { reason: string; filePath: string }) => void
+    callback: (data: { reason: string; filePath: string; nextFilePath?: string }) => void
   ): () => void {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (this as any).onEvent('trackEnded', callback)

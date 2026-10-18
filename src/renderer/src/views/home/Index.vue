@@ -231,9 +231,11 @@ const navigation = computed(() => [
   { label: t('nav.artists'), path: '/artist', icon: 'menu-artist' },
   { label: t('nav.albums'), path: '/album', icon: 'menu-album' },
   { label: t('nav.genres'), path: '/genre', icon: 'menu-genre' },
+  { label: t('nav.history'), path: '/history', icon: 'menu-history' },
+  { label: t('playlist.likedSongs'), path: '/liked', icon: 'play-like-fill' },
+  { label: t('nav.recommend'), path: '/recommend', icon: 'control-shuffle' },
   { label: t('nav.localFiles'), path: '/local', icon: 'menu-folder' },
   { label: t('nav.remoteFiles'), path: '/remote', icon: 'menu-remote' },
-  { label: t('nav.history'), path: '/history', icon: 'menu-history' },
   { label: t('nav.settings'), path: '/settings', icon: 'menu-settings' }
 ])
 
@@ -285,7 +287,7 @@ async function playPlaylist(playlist: Playlist): Promise<void> {
       warning(t('playlist.empty'))
       return
     }
-    if (!(await player.playCollection(songs, songs[0].id, playlist.id)))
+    if (!(await player.playCollection(songs, null, playlist.id)))
       showError(t('playlist.playFailed'))
   } finally {
     playingPlaylistId.value = null
@@ -318,7 +320,7 @@ async function playRecommendation(card: RecommendationCard): Promise<void> {
       void loadRecommendations()
       return
     }
-    if (!(await player.playCollection(songs, songs[0].id, null, 'recommendation'))) {
+    if (!(await player.playCollection(songs, null, null, 'recommendation'))) {
       showError(t('home.playRecommendationFailed'))
       return
     }
@@ -420,7 +422,7 @@ onBeforeUnmount(() => {
         <HomeClock v-if="section === 'clock'" class="xl:col-span-2" />
         <section v-if="section === 'navigation'" class="xl:col-span-2">
           <h2 class="mb-3 text-lg font-semibold">{{ t('home.quickNavigation') }}</h2>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             <button
               v-for="item in navigation"
               :key="item.path"

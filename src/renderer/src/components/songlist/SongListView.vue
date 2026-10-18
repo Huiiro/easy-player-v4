@@ -403,7 +403,7 @@ const playSelected = (): void => {
   if (selectedSongs[0])
     void player.playCollection(
       selectedSongs,
-      selectedSongs[0].id,
+      null,
       collectionPlaylistId.value,
       playbackOrigin.value
     )
@@ -418,7 +418,7 @@ async function playAll(): Promise<void> {
   if (
     !(await player.playCollection(
       playable,
-      playable[0].id,
+      null,
       collectionPlaylistId.value,
       playbackOrigin.value
     ))

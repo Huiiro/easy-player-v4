@@ -261,8 +261,8 @@ export class AudioEngineManager {
   getDopEnabled(): boolean {
     return this.engine?.getDopEnabled() === true
   }
-  setNextTrack(filePath: string): boolean {
-    return this.engine?.setNextTrack?.(filePath) ?? false
+  setNextTrack(filePath: string, sourceFile?: string): boolean {
+    return this.engine?.setNextTrack?.(filePath, sourceFile) ?? false
   }
   setTransitionConfig(config: {
     gaplessEnabled: boolean

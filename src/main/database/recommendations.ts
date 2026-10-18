@@ -120,6 +120,17 @@ export function getRecommendationScores(
 ): RecommendationScore[] {
   const db = getDatabase()
   const now = asOf
+  const resetRows = db
+    .prepare(
+      "SELECT key, value_json AS value FROM app_setting WHERE key LIKE 'recommendation.reset.%'"
+    )
+    .all() as Array<{ key: string; value: string }>
+  const resets = new Map(
+    resetRows.map((row) => [
+      Number(row.key.slice('recommendation.reset.'.length)),
+      Number(row.value)
+    ])
+  )
   const allSongs = db
     .prepare(
       'SELECT id, preference, artist, album, genre, year, play_times AS playTimes, duration, song_status AS songStatus, is_newest AS isNewest, created_at AS createdAt FROM song WHERE song_status != 0'
@@ -202,7 +213,8 @@ export function getRecommendationScores(
     for (const tagId of tagsBySong.get(song.id) ?? []) add(tagCatalogue, tagId, 1)
   }
   const base = songs.map((song) => {
-    const recent = eventsBySong.get(song.id) ?? []
+    const resetAt = resets.get(song.id) ?? 0
+    const recent = (eventsBySong.get(song.id) ?? []).filter((event) => event.startedAt > resetAt)
     let completions = 0
     let skips = 0
     let listened = 0
@@ -241,7 +253,7 @@ export function getRecommendationScores(
     const preference = song.preference
     const playTimes = Math.max(0, song.playTimes - (todayStarts.get(song.id) ?? 0))
     // play_times counts starts. Remove sessions already represented by detailed events.
-    const legacyPlays = Math.max(0, playTimes - recent.length)
+    const legacyPlays = resetAt ? 0 : Math.max(0, playTimes - recent.length)
     const engagedPlays = legacyPlays + engagedRecent
     // An early skip of a familiar song is weak evidence: it may mean the listener wants variety.
     const skipReliability = Math.max(0.25, 1 / (1 + engagedPlays / 3))
@@ -254,7 +266,7 @@ export function getRecommendationScores(
       history: Math.min(1.5, Math.log1p(legacyPlays) * 0.35)
     }
     const evidence = Object.values(behaviorParts).reduce((sum, part) => sum + part, 0)
-    const positive = preference === 1 ? 3 : clamp(evidence, -2, 4)
+    const positive = preference === 1 ? Math.max(1, clamp(evidence, -2, 4)) : clamp(evidence, -2, 4)
     if (positive > 0.5 && preference !== -1) {
       const contribution = Math.min(2, positive) / 2
       const artist = normalize(song.artist)
@@ -328,7 +340,7 @@ export function getRecommendationScores(
       const recentPenalty = latest ? 1 - 0.3 * Math.exp(-(now - latest) / (48 * 3600_000)) : 1
       const exploration = recentEngagedPlays === 0 ? 1.25 : recentEngagedPlays <= 2 ? 1.08 : 1
       const behavior = clamp(evidence, -1.5, 4) * 0.5
-      const feedback = preference === 1 ? 1.5 : 0
+      const feedback = preference === 1 ? 0.5 : 0
       const isNewest = dailySnapshot
         ? latestImportDay
           ? localDateKey(Date.parse((song.createdAt ?? '').replace(' ', 'T'))) === latestImportDay
@@ -370,7 +382,9 @@ export function getRecommendationScores(
         plays,
         engagedPlays,
         recentEngagedPlays,
-        recentPlays: eventsBySong.get(song.id)?.length ?? 0,
+        recentPlays: (eventsBySong.get(song.id) ?? []).filter(
+          (event) => event.startedAt > (resets.get(song.id) ?? 0)
+        ).length,
         completions,
         skips,
         factors: {
@@ -448,32 +462,57 @@ function mixDiscovery(items: RecommendationScore[], limit: number): Recommendati
 
 export function selectRecommendationGroups(
   scores: RecommendationScore[],
-  limit: number
+  limit: number,
+  at = Date.now()
 ): {
   recommended: RecommendationScore[]
   discovery: RecommendationScore[]
   lessRecommended: RecommendationScore[]
 } {
   const eligible = scores.filter((score) => score.preference !== -1)
-  const favorites = eligible
-    .filter(
-      (score) =>
-        score.preference === 1 ||
-        (score.reason !== 'skipped' &&
-          (score.completions >= 0.8 ||
-            score.engagedPlays >= 3 ||
-            (score.behaviorParts?.intent ?? 0) >= 1 ||
-            (score.engagedPlays > 1 && score.weight > 1)))
+  const favorites = eligible.filter(
+    (score) =>
+      score.reason !== 'skipped' &&
+      (score.completions >= 0.8 ||
+        score.engagedPlays >= 3 ||
+        (score.behaviorParts?.intent ?? 0) >= 1 ||
+        (score.engagedPlays > 1 && score.weight > 1))
+  )
+  // Stable weighted sampling for the day: strong evidence helps without
+  // permanently reserving every slot for the same liked songs.
+  const date = new Date(at)
+  const day = date.getFullYear() * 372 + (date.getMonth() + 1) * 31 + date.getDate()
+  const rank = (score: RecommendationScore): number => {
+    let hash = Math.imul(score.songId ^ day, 0x45d9f3b)
+    hash = Math.imul(hash ^ (hash >>> 16), 0x45d9f3b)
+    hash ^= hash >>> 16
+    const uniform = ((hash >>> 0) + 1) / 0x100000001
+    return -Math.log(uniform) / Math.max(0.02, score.weight)
+  }
+  const ranked = diversifyByArtist(
+    [...favorites].sort((a, b) => rank(a) - rank(b)),
+    favorites.length
+  )
+  const target = Math.min(limit, ranked.length)
+  const neutralCount = ranked.filter((score) => score.preference !== 1).length
+  const likedLimit = Math.max(Math.ceil(target / 3), target - neutralCount)
+  const liked = ranked.filter((score) => score.preference === 1).slice(0, likedLimit)
+  const neutral = ranked.filter((score) => score.preference !== 1)
+  const recommended: RecommendationScore[] = []
+  let likedIndex = 0
+  let neutralIndex = 0
+  while (recommended.length < target) {
+    if (
+      likedIndex < liked.length &&
+      (recommended.length % 3 === 2 || neutralIndex >= neutral.length)
     )
-    .sort(
-      (a, b) =>
-        Number(b.preference === 1) - Number(a.preference === 1) ||
-        b.weight - a.weight ||
-        b.plays - a.plays
-    )
-  const favoriteIds = new Set(favorites.map((score) => score.songId))
+      recommended.push(liked[likedIndex++])
+    else if (neutralIndex < neutral.length) recommended.push(neutral[neutralIndex++])
+    else break
+  }
+  const favoriteIds = new Set(recommended.map((score) => score.songId))
   return {
-    recommended: favorites.slice(0, limit),
+    recommended,
     discovery: mixDiscovery(
       eligible.filter(
         (score) =>
@@ -511,18 +550,27 @@ export function getDailyRecommendationGroups(at = Date.now()): {
     .get(generatedFor) as { cutoffAt: number; groupsJson: string } | undefined
   if (cached?.cutoffAt === cutoffAt) {
     try {
-      const groups = JSON.parse(cached.groupsJson) as ReturnType<typeof selectRecommendationGroups>
+      const groups = JSON.parse(cached.groupsJson) as ReturnType<
+        typeof selectRecommendationGroups
+      > & { algorithmVersion?: number }
       if (
+        groups.algorithmVersion === 2 &&
         Array.isArray(groups.recommended) &&
         Array.isArray(groups.discovery) &&
         Array.isArray(groups.lessRecommended)
       )
-        return { generatedFor, dataThrough, ...groups }
+        return {
+          generatedFor,
+          dataThrough,
+          recommended: groups.recommended,
+          discovery: groups.discovery,
+          lessRecommended: groups.lessRecommended
+        }
     } catch {
       // Rebuild a corrupt or outdated local snapshot.
     }
   }
-  const groups = selectRecommendationGroups(getRecommendationScores(cutoffAt, true), 100)
+  const groups = selectRecommendationGroups(getRecommendationScores(cutoffAt, true), 100, cutoffAt)
   db.prepare(
     `INSERT INTO recommendation_daily (local_date, cutoff_at, groups_json, created_at)
      VALUES (?, ?, ?, ?)
@@ -530,7 +578,7 @@ export function getDailyRecommendationGroups(at = Date.now()): {
        cutoff_at = excluded.cutoff_at,
        groups_json = excluded.groups_json,
        created_at = excluded.created_at`
-  ).run(generatedFor, cutoffAt, JSON.stringify(groups), at)
+  ).run(generatedFor, cutoffAt, JSON.stringify({ ...groups, algorithmVersion: 2 }), at)
   return { generatedFor, dataThrough, ...groups }
 }
 
@@ -621,4 +669,18 @@ export function setSongPreference(songId: number, preference: -1 | 0 | 1): void 
   if (!Number.isInteger(songId) || songId <= 0) return
   if (preference !== -1 && preference !== 0 && preference !== 1) return
   getDatabase().prepare('UPDATE song SET preference = ? WHERE id = ?').run(preference, songId)
+}
+
+/** Reset personal recommendation evidence without deleting listening statistics. */
+export function resetSongRecommendation(songId: number): void {
+  if (!Number.isInteger(songId) || songId <= 0) throw new Error('Invalid song ID')
+  const db = getDatabase()
+  db.transaction(() => {
+    const updated = db.prepare('UPDATE song SET preference = 0 WHERE id = ?').run(songId)
+    if (!updated.changes) throw new Error('Song not found')
+    db.prepare(
+      `INSERT INTO app_setting (key, value_json) VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json`
+    ).run(`recommendation.reset.${songId}`, JSON.stringify(Date.now()))
+  })()
 }

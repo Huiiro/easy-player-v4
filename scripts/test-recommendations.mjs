@@ -194,6 +194,7 @@ const {
   getRecentDiscoveryGroups,
   recordPlayEvent,
   setSongPreference,
+  resetSongRecommendation,
   diversifyByArtist,
   selectRecommendationGroups
 } = loadTypeScript(path.join(__dirname, '../src/main/database/recommendations.ts'), {
@@ -286,6 +287,62 @@ assert.equal(
   'the displayed group respects its 100-song limit'
 )
 
+const likedCandidates = manyFavorites
+  .slice(0, 100)
+  .map((score) => ({ ...score, preference: 1, reason: 'liked', weight: 6 }))
+const neutralCandidates = manyFavorites.slice(100, 200)
+const selectionDate = new Date(2026, 9, 18, 12).getTime()
+const balanced = selectRecommendationGroups(
+  [...likedCandidates, ...neutralCandidates],
+  20,
+  selectionDate
+)
+assert.equal(balanced.recommended.length, 20)
+assert.ok(
+  balanced.recommended.filter((song) => song.preference === 1).length <= 7,
+  'liked tracks cannot dominate when neutral candidates are available'
+)
+const fullBalanced = selectRecommendationGroups(
+  [...likedCandidates, ...neutralCandidates],
+  100,
+  selectionDate
+)
+assert.ok(
+  fullBalanced.recommended.slice(0, 20).filter((song) => song.preference === 1).length <= 7,
+  'the first visible page also respects the liked proportion'
+)
+assert.deepEqual(
+  balanced,
+  selectRecommendationGroups([...likedCandidates, ...neutralCandidates], 20, selectionDate),
+  'weighted selection is stable within a day'
+)
+assert.notDeepEqual(
+  balanced.recommended,
+  selectRecommendationGroups(
+    [...likedCandidates, ...neutralCandidates],
+    20,
+    selectionDate + 86400_000
+  ).recommended,
+  'daily sampling rotates the selection'
+)
+assert.equal(
+  selectRecommendationGroups(likedCandidates, 20, selectionDate).recommended.length,
+  20,
+  'small neutral pools do not leave unnecessary empty slots'
+)
+const likedWithoutEvidence = likedCandidates.map((score) => ({
+  ...score,
+  completions: 0,
+  engagedPlays: 0,
+  plays: 0,
+  factors: { artist: 0, album: 0, genre: 0, tag: 0, era: 0, length: 0, variation: 1, freshness: 0 }
+}))
+assert.equal(
+  selectRecommendationGroups(likedWithoutEvidence, 20, selectionDate).recommended.length,
+  0,
+  'liking a song alone is not listening evidence'
+)
+
 const discoveryCandidates = Array.from({ length: 12 }, (_, index) => ({
   songId: index + 400,
   artistKey: index < 6 ? 'familiar-artist' : `rare-artist-${index}`,
@@ -325,7 +382,10 @@ assert.ok(scores.get(3).weight > scores.get(1).weight, 'explicit feedback outwei
 assert.equal(scores.get(1).preference, -1)
 assert.equal(db.prepare('SELECT preference FROM song WHERE id = 1').get().preference, -1)
 groups = selectRecommendationGroups(Array.from(scores.values()), 20)
-assert.equal(groups.recommended[0].songId, 3, 'explicitly liked tracks lead Favorites')
+assert.ok(
+  !groups.recommended.some((song) => song.songId === 3),
+  'a like without listening evidence does not guarantee admission'
+)
 setSongPreference(1, 0)
 scores = new Map(getRecommendationScores().map((score) => [score.songId, score]))
 assert.equal(scores.get(1).preference, 0, 'feedback can be undone')
@@ -495,6 +555,68 @@ for (let i = 0; i < 1000; i++) {
   if (index === 1) reducedPicks++
 }
 assert.ok(likedPicks > reducedPicks * 10, 'reduced preference should lower exposure')
+
+const historyCount = db
+  .prepare('SELECT COUNT(*) AS count FROM play_history WHERE song_id = 2')
+  .get().count
+const startsCount = db.prepare('SELECT play_times FROM song WHERE id = 2').get().play_times
+setSongPreference(2, -1)
+resetSongRecommendation(2)
+const resetScore = getRecommendationScores().find((score) => score.songId === 2)
+assert.equal(resetScore.preference, 0)
+assert.equal(resetScore.recentPlays, 0)
+assert.equal(resetScore.engagedPlays, 0, 'legacy starts do not undo a reset')
+assert.equal(resetScore.factors.behavior, 0)
+assert.notEqual(resetScore.reason, 'skipped')
+assert.ok(resetScore.weight > 0.06)
+assert.equal(
+  db.prepare('SELECT COUNT(*) AS count FROM play_history WHERE song_id = 2').get().count,
+  historyCount
+)
+assert.equal(db.prepare('SELECT play_times FROM song WHERE id = 2').get().play_times, startsCount)
+assert.throws(() => resetSongRecommendation(-1))
+assert.throws(() => resetSongRecommendation(999999))
+assert.equal(
+  db
+    .prepare("SELECT COUNT(*) AS count FROM app_setting WHERE key = 'recommendation.reset.999999'")
+    .get().count,
+  0
+)
+const recommendationRepository = loadTypeScript(
+  path.join(__dirname, '../src/main/database/repository/recommendations.ts'),
+  {
+    '../index': { getDatabase: () => db },
+    '../recommendations': {
+      getDailyRecommendationGroups,
+      getRecentDiscoveryGroups,
+      getRecommendationScores,
+      selectRecommendationGroups
+    },
+    './songHelpers': {
+      songColumns: 'id, preference',
+      mapSong: (row) => row,
+      attachTags: (rows) => rows
+    }
+  }
+)
+assert.ok(
+  !recommendationRepository.getRecommendations().lessRecommended.some((song) => song.songId === 2)
+)
+assert.ok(
+  !recommendationRepository
+    .getRecommendationPage('lessRecommended')
+    .items.some((song) => song.songId === 2),
+  'reset songs stay removed after reload and pagination'
+)
+// New listening after the reset becomes evidence again.
+const resetAt = Number(
+  db.prepare("SELECT value_json FROM app_setting WHERE key = 'recommendation.reset.2'").get()
+    .value_json
+)
+insertHistory.run(2, resetAt + 1, 170000, 180000, 'ended')
+const relearned = getRecommendationScores(resetAt + 200000).find((score) => score.songId === 2)
+assert.equal(relearned.recentEngagedPlays, 1)
+assert.ok(relearned.factors.behavior > 0)
 
 db.prepare('DELETE FROM song WHERE id = 1').run()
 assert.equal(

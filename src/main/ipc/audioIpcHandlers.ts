@@ -27,7 +27,7 @@ export function registerIpcHandlers(
   mainWindow: () => BrowserWindow | null
 ): void {
   let readyRendererId = 0
-  const pendingEnds: Array<{ reason: string; filePath: string }> = []
+  const pendingEnds: Array<{ reason: string; filePath: string; nextFilePath?: string }> = []
   let reclaimTimer: ReturnType<typeof setTimeout> | undefined
   // Keep the frequently updated resume point separate from the queue snapshot.
   // The latter can be large, while this value is written from position events.
@@ -190,7 +190,7 @@ export function registerIpcHandlers(
           case 'getDopEnabled':
             return { success: true, data: engine.getDopEnabled() }
           case 'setNextTrack':
-            return { success: engine.setNextTrack(params.filePath) }
+            return { success: engine.setNextTrack(params.filePath, params.sourceFile) }
           case 'setTransitionConfig': {
             const ok = engine.setTransitionConfig(params.config)
             if (ok) sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
@@ -415,14 +415,16 @@ export function registerIpcHandlers(
     })
   })
   engine.onTrackEnded((reason: string, filePath: string) => {
+    let nextFilePath: string | undefined
     if (reason === 'transition') {
       const status = engine.getStatus()
       const nextFile = status?.trackInfo?.filePath
+      nextFilePath = nextFile
       if (nextFile) saveCheckpoint({ currentFile: nextFile, positionMs: status.positionMs })
     }
     if (readyRendererId !== mainWindow()?.webContents.id) {
-      pendingEnds.push({ reason, filePath })
-    } else sendEvent(mainWindow, 'trackEnded', { reason, filePath })
+      pendingEnds.push({ reason, filePath, nextFilePath })
+    } else sendEvent(mainWindow, 'trackEnded', { reason, filePath, nextFilePath })
     Logger.write('debug', 'native', `Track ended: reason=${reason}, path=${filePath}`)
   })
 

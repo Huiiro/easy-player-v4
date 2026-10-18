@@ -120,7 +120,7 @@ public:
     bool set_limiter_config(const LimiterConfig& config) { return dsp_pipeline_.set_limiter_config(config); }
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
     bool set_transition_config(const TransitionConfig& config);
-    bool set_next_track(const std::string& file_path);
+    bool set_next_track(const std::string& file_path, const std::string& source_path = "");
     TransitionConfig transition_config() const {
         return {gapless_enabled_.load(std::memory_order_acquire),
                 crossfade_enabled_.load(std::memory_order_acquire),

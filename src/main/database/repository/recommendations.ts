@@ -1,5 +1,10 @@
 import { getDatabase } from '../index'
-import { getDailyRecommendationGroups, getRecentDiscoveryGroups } from '../recommendations'
+import {
+  getDailyRecommendationGroups,
+  getRecentDiscoveryGroups,
+  getRecommendationScores,
+  selectRecommendationGroups
+} from '../recommendations'
 import type { RecommendationScore } from '../recommendations'
 import type { Song } from '../types'
 import { songColumns, type SongRow, attachTags, mapSong } from './songHelpers'
@@ -74,14 +79,16 @@ export function getRecommendations(limit = 24): {
 } {
   const bounded = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 24
   const groups = getDailyRecommendationGroups()
+  // Feedback management reflects resets immediately; daily listening lists stay fixed.
+  const lessRecommended = selectRecommendationGroups(getRecommendationScores(), 100).lessRecommended
   return {
     recommended: attachRecommendationSongs(groups.recommended.slice(0, bounded)),
     discovery: attachRecommendationSongs(groups.discovery.slice(0, bounded)),
-    lessRecommended: attachRecommendationSongs(groups.lessRecommended.slice(0, bounded)),
+    lessRecommended: attachRecommendationSongs(lessRecommended.slice(0, bounded)),
     totals: {
       recommended: groups.recommended.length,
       discovery: groups.discovery.length,
-      lessRecommended: groups.lessRecommended.length
+      lessRecommended: lessRecommended.length
     },
     generatedFor: groups.generatedFor,
     dataThrough: groups.dataThrough
@@ -102,7 +109,10 @@ export function getRecommendationPage(
   )
   const size = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 24
   const daily = getDailyRecommendationGroups()
-  const scores = daily[group]
+  const scores =
+    group === 'lessRecommended'
+      ? selectRecommendationGroups(getRecommendationScores(), 100).lessRecommended
+      : daily[group]
   return {
     items: attachRecommendationSongs(
       scores.filter((score) => !excluded.has(score.songId)).slice(0, size)

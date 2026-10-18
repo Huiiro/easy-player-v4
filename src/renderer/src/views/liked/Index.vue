@@ -99,7 +99,7 @@ async function playLikedSongs(): Promise<void> {
     warning(t('playlist.empty'))
     return
   }
-  if (!(await player.playCollection(songs, songs[0].id, LIKED_PLAYLIST_ID)))
+  if (!(await player.playCollection(songs, null, LIKED_PLAYLIST_ID)))
     showError(t('playlist.playFailed'))
 }
 </script>

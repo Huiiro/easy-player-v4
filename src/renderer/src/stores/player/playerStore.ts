@@ -167,6 +167,8 @@ export const usePlayerStore = defineStore('player', () => {
   const playMode = ref<PlayMode>(PlayMode.List)
   const smartShuffleEnabled = ref(false)
   const shufflePlayedSongIds = new Set<number>()
+  let normalShuffleOrder: number[] | null = null
+  let normalShuffleStartsRound = false
   const shuffleHistory: number[] = []
   let shuffleHistoryIndex = -1
   const shuffleNavigationRevision = ref(0)
@@ -174,10 +176,26 @@ export const usePlayerStore = defineStore('player', () => {
     number,
     { weight: number; plays: number; preference: number }
   >()
-  let pendingSmartIndex = -1
+  let recommendationRevision = 0
+  let shuffleReservation: {
+    songId: number
+    sourceSongId: number | undefined
+    startsRound: boolean
+  } | null = null
+  const unavailableSongIds = new Set<number>()
+  let queueRevision = 0
+  let queuePlaybackInProgress = false
+  let playbackEpoch = 0
   const stopAfterCurrent = ref(false)
   let preparedNextIndex = -1
   let preparedNextPath = ''
+  let preparedNextSongId: number | undefined
+  const resolvedQueuePaths = new Map<number, string>()
+  let nextTrackRequest: {
+    sourceFile: string | null
+    path: string
+    ready: Promise<boolean>
+  } | null = null
   let nextTrackRevision = 0
   let playbackSessionTimer: ReturnType<typeof setTimeout> | undefined
   let deferredRestore: { filePath: string; positionMs: number } | null = null
@@ -259,8 +277,15 @@ export const usePlayerStore = defineStore('player', () => {
   async function loadRecommendationScores(): Promise<void> {
     if (ui.extremePlayback || !statistics.enabled) return
     const generation = statistics.generation
+    const revision = ++recommendationRevision
     const response = await window.api.database.command('getRecommendationScores')
-    if (ui.extremePlayback || !statistics.enabled || generation !== statistics.generation) return
+    if (
+      revision !== recommendationRevision ||
+      ui.extremePlayback ||
+      !statistics.enabled ||
+      generation !== statistics.generation
+    )
+      return
     if (!response.success) return
     recommendationScores.clear()
     for (const score of response.data as Array<{
@@ -277,7 +302,6 @@ export const usePlayerStore = defineStore('player', () => {
       })
     shuffleNavigationRevision.value++
     if (playMode.value === PlayMode.Random && smartShuffleEnabled.value && !ui.extremePlayback) {
-      pendingSmartIndex = -1
       void syncNextTrack()
     }
   }
@@ -308,6 +332,18 @@ export const usePlayerStore = defineStore('player', () => {
     )
   }
 
+  async function resetSongRecommendation(songId: number): Promise<boolean> {
+    const result = await window.api.database.command('resetSongRecommendation', { songId })
+    if (!result.success) return false
+    for (const song of queue.value) if (song.id === songId) song.preference = 0
+    recommendationScores.delete(songId)
+    shuffleNavigationRevision.value++
+    eventBus.emit('songPreferenceChanged', { songId, preference: 0 })
+    success(t('recommendation.scoreReset'))
+    await loadRecommendationScores()
+    return true
+  }
+
   async function loadSmartShuffleConfig(): Promise<void> {
     try {
       const response = await window.api.database.command('getSetting', {
@@ -326,7 +362,9 @@ export const usePlayerStore = defineStore('player', () => {
     })
     if (!response.success) return
     smartShuffleEnabled.value = enabled
-    pendingSmartIndex = -1
+    normalShuffleOrder = null
+    normalShuffleStartsRound = false
+    shuffleReservation = null
     shuffleNavigationRevision.value++
     if (playMode.value === PlayMode.Random) void syncNextTrack()
   }
@@ -363,7 +401,9 @@ export const usePlayerStore = defineStore('player', () => {
     () => {
       historySession = undefined
       recommendationScores.clear()
-      pendingSmartIndex = -1
+      normalShuffleOrder = null
+      normalShuffleStartsRound = false
+      shuffleReservation = null
       shuffleNavigationRevision.value++
       if (statistics.enabled && !ui.extremePlayback) {
         if (isPlaying.value && currentQueueSong.value) beginHistory(currentQueueSong.value)
@@ -379,10 +419,13 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Actions ──
   async function openFile(filePath: string): Promise<boolean> {
+    playbackEpoch++
     deferredRestore = null
     nextTrackRevision++
     preparedNextIndex = -1
     preparedNextPath = ''
+    preparedNextSongId = undefined
+    nextTrackRequest = null
     currentFile.value = filePath
     const ok = await audioBridge.open(filePath)
     if (ok) {
@@ -417,8 +460,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   function setPlayMode(mode: PlayMode): void {
     playMode.value = mode
-    pendingSmartIndex = -1
+    shuffleReservation = null
     shufflePlayedSongIds.clear()
+    normalShuffleOrder = null
+    normalShuffleStartsRound = false
     shuffleHistory.length = 0
     shuffleHistoryIndex = -1
     if (mode === PlayMode.Random && currentQueueSong.value) {
@@ -433,7 +478,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   function addToQueue(songs: LibrarySong[], insertAfterCurrent = false): void {
     const existingIds = new Set(queue.value.map((song) => song.id))
-    const additions = songs.filter((song) => !existingIds.has(song.id))
+    const additions = songs.filter((song) => {
+      if (existingIds.has(song.id)) return false
+      existingIds.add(song.id)
+      return true
+    })
     if (!additions.length) return
     if (insertAfterCurrent && currentQueueIndex.value >= 0) {
       queue.value.splice(currentQueueIndex.value + 1, 0, ...additions)
@@ -445,6 +494,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function setQueue(songs: LibrarySong[], playlistId: number | null = null): void {
+    queueRevision++
     const ids = new Set<number>()
     queue.value = songs.filter((song) => {
       if (ids.has(song.id)) return false
@@ -453,10 +503,14 @@ export const usePlayerStore = defineStore('player', () => {
     })
     queuePlaylistId.value = playlistId
     currentQueueIndex.value = -1
+    unavailableSongIds.clear()
+    resolvedQueuePaths.clear()
     shufflePlayedSongIds.clear()
+    normalShuffleOrder = null
+    normalShuffleStartsRound = false
     shuffleHistory.length = 0
     shuffleHistoryIndex = -1
-    pendingSmartIndex = -1
+    shuffleReservation = null
     shuffleNavigationRevision.value++
     savePlaybackSessionSync()
     void loadRecommendationScores()
@@ -473,10 +527,13 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function tryPlayQueueItem(
     index: number,
-    startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation'
+    startOrigin: 'automatic' | 'manual' | 'search' | 'return' | 'recommendation',
+    consumeShuffle = true,
+    revision = queueRevision
   ): Promise<boolean> {
     const song = queue.value[index]
     if (!song) return false
+    const startsRound = shuffleReservation?.songId === song.id && shuffleReservation.startsRound
     const songName = displaySongName(song)
     if (song.songStatus === 0) {
       warning(t('queue.trackSkipped', { title: songName }))
@@ -484,7 +541,13 @@ export const usePlayerStore = defineStore('player', () => {
     }
     currentQueueIndex.value = index
     savePlaybackSessionSync()
-    const remoteFile = song.sourceId ? await window.api.remoteSource.cacheSong(song.id) : null
+    let remoteFile: { success: boolean; data?: string; error?: string } | null = null
+    try {
+      remoteFile = song.sourceId ? await window.api.remoteSource.cacheSong(song.id) : null
+    } catch (error) {
+      remoteFile = { success: false, error: String(error) }
+    }
+    if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
     if (song.sourceId && (!remoteFile?.success || !remoteFile.data)) {
       console.warn('[player] Unable to cache remote song:', remoteFile?.error)
       warning(t('queue.trackSkipped', { title: songName }))
@@ -495,10 +558,17 @@ export const usePlayerStore = defineStore('player', () => {
       })
       return false
     }
-    const opened = await openFile(remoteFile?.data || song.audio)
+    const path = remoteFile?.data || song.audio
+    resolvedQueuePaths.set(song.id, path)
+    const opened = await openFile(path)
+    if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
+    currentQueueIndex.value = queue.value.findIndex((item) => item.id === song.id)
     const started = opened && (await play(startOrigin))
+    if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
+    currentQueueIndex.value = queue.value.findIndex((item) => item.id === song.id)
     if (started) {
-      if (playMode.value === PlayMode.Random) shufflePlayedSongIds.add(song.id)
+      if (playMode.value === PlayMode.Random && consumeShuffle)
+        recordShufflePlayed(currentQueueIndex.value, startsRound)
       beginHistory(song, startOrigin)
       return true
     }
@@ -525,48 +595,87 @@ export const usePlayerStore = defineStore('player', () => {
       : 'manual'
   ): Promise<boolean> {
     if (index < 0 || index >= queue.value.length) return false
-    await stop(reason)
-    pendingSmartIndex = -1
-    const attempted = new Set<number>()
-    let candidate = index
-    while (candidate >= 0 && !attempted.has(candidate) && attempted.size < queue.value.length) {
-      attempted.add(candidate)
-      if (await tryPlayQueueItem(candidate, candidate === index ? startOrigin : 'automatic')) {
-        if (playMode.value === PlayMode.Random) {
-          const songId = queue.value[candidate].id
-          if (historyIndex >= 0 && shuffleHistory[historyIndex] === songId) {
-            shuffleHistoryIndex = historyIndex
-          } else {
-            shuffleHistory.splice(shuffleHistoryIndex + 1)
-            shuffleHistory.push(songId)
-            shuffleHistoryIndex = shuffleHistory.length - 1
+    if (queuePlaybackInProgress) return false
+    if (reason === 'selected') unavailableSongIds.delete(queue.value[index].id)
+    queuePlaybackInProgress = true
+    const revision = queueRevision
+    const requestedId = queue.value[index].id
+    try {
+      await stop(reason, true)
+      if (revision !== queueRevision) return false
+      const attempted = new Set<number>()
+      let candidate = index
+      while (
+        candidate >= 0 &&
+        queue.value[candidate] &&
+        !attempted.has(queue.value[candidate].id)
+      ) {
+        const candidateId = queue.value[candidate].id
+        attempted.add(candidateId)
+        if (
+          await tryPlayQueueItem(
+            candidate,
+            candidateId === requestedId ? startOrigin : 'automatic',
+            candidateId !== requestedId || (historyIndex < 0 && reason !== 'previous'),
+            revision
+          )
+        ) {
+          if (playMode.value === PlayMode.Random) {
+            const songId = candidateId
+            if (historyIndex >= 0 && shuffleHistory[historyIndex] === songId) {
+              shuffleHistoryIndex = historyIndex
+            } else {
+              shuffleHistory.splice(shuffleHistoryIndex + 1)
+              shuffleHistory.push(songId)
+              shuffleHistoryIndex = shuffleHistory.length - 1
+            }
+            shuffleNavigationRevision.value++
+            savePlaybackSessionSync()
           }
-          shuffleNavigationRevision.value++
-          savePlaybackSessionSync()
+          return true
         }
-        void syncNextTrack()
-        return true
+        if (revision !== queueRevision) return false
+        unavailableSongIds.add(candidateId)
+        shuffleReservation = null
+        candidate = nextIndex(
+          new Set(queue.value.flatMap((song, index) => (attempted.has(song.id) ? [index] : [])))
+        )
       }
-      pendingSmartIndex = -1
-      candidate = nextIndex()
+      currentFile.value = null
+      trackInfo.value = null
+      positionMs.value = 0
+      durationMs.value = 0
+      state.value = 'stopped'
+      savePlaybackSessionSync()
+      return false
+    } finally {
+      queuePlaybackInProgress = false
+      void syncNextTrack()
     }
-    currentFile.value = null
-    trackInfo.value = null
-    positionMs.value = 0
-    durationMs.value = 0
-    state.value = 'stopped'
-    savePlaybackSessionSync()
-    return false
   }
 
   async function playCollection(
     songs: LibrarySong[],
-    songId: number,
+    songId: number | null,
     playlistId: number | null = null,
     startOrigin: 'manual' | 'search' | 'recommendation' = 'manual'
   ): Promise<boolean> {
+    if (queuePlaybackInProgress) return false
     setQueue(songs, playlistId)
-    const index = queue.value.findIndex((song) => song.id === songId)
+    const revision = queueRevision
+    if (playMode.value === PlayMode.Random && !usesNormalShuffle()) await loadRecommendationScores()
+    if (revision !== queueRevision) return false
+    const playable = queue.value
+      .map((song, index) => ({ song, index }))
+      .filter(({ song }) => song.songStatus !== 0)
+    const index =
+      songId === null
+        ? playMode.value === PlayMode.Random
+          ? usesNormalShuffle()
+            ? nextNormalShuffleIndex(new Set())
+            : selectSmartNext(queue.value, -1, new Set(), recommendationScores)
+          : (playable[0]?.index ?? -1)
+        : queue.value.findIndex((song) => song.id === songId)
     return index >= 0 ? playQueueItem(index, -1, 'selected', startOrigin) : false
   }
 
@@ -613,67 +722,182 @@ export const usePlayerStore = defineStore('player', () => {
       savePlaybackSessionSync()
       return
     }
-    currentQueueIndex.value = Math.min(index, queue.value.length - 1)
+    currentQueueIndex.value =
+      playMode.value === PlayMode.Random ? -1 : Math.min(index, queue.value.length - 1)
     schedulePlaybackSessionSave()
-    await playQueueItem(currentQueueIndex.value)
+    await playQueueItem(playMode.value === PlayMode.Random ? nextIndex() : currentQueueIndex.value)
   }
 
   function clearQueue(): void {
+    queueRevision++
+    unavailableSongIds.clear()
+    resolvedQueuePaths.clear()
     queue.value = []
     queuePlaylistId.value = null
     currentQueueIndex.value = -1
     shufflePlayedSongIds.clear()
+    normalShuffleOrder = null
+    normalShuffleStartsRound = false
     shuffleHistory.length = 0
     shuffleHistoryIndex = -1
-    pendingSmartIndex = -1
+    shuffleReservation = null
     shuffleNavigationRevision.value++
     schedulePlaybackSessionSave()
     void syncNextTrack()
   }
 
-  function nextIndex(): number {
-    const length = queue.value.length
-    if (!length || currentQueueIndex.value < 0) return -1
-    if (playMode.value === PlayMode.Single) return currentQueueIndex.value
-    if (
-      playMode.value === PlayMode.Random &&
-      smartShuffleEnabled.value &&
-      statistics.enabled &&
-      !ui.extremePlayback
-    ) {
-      if (
-        pendingSmartIndex >= 0 &&
-        pendingSmartIndex < length &&
-        pendingSmartIndex !== currentQueueIndex.value &&
-        queue.value[pendingSmartIndex].songStatus !== 0 &&
-        !shufflePlayedSongIds.has(queue.value[pendingSmartIndex].id)
-      )
-        return pendingSmartIndex
-      pendingSmartIndex = selectSmartNext(
-        queue.value,
-        currentQueueIndex.value,
-        shufflePlayedSongIds,
-        recommendationScores
-      )
-      return pendingSmartIndex
+  // Previews and gapless preparation share a reservation. Only playback
+  // commits a new round; asking for the next item never consumes played IDs.
+  function recordShufflePlayed(
+    index: number,
+    startsRound = shuffleReservation?.songId === queue.value[index]?.id &&
+      shuffleReservation.startsRound
+  ): void {
+    if (usesNormalShuffle()) {
+      if (normalShuffleStartsRound) {
+        shufflePlayedSongIds.clear()
+        normalShuffleStartsRound = false
+      }
+      normalShuffleOrder = normalShuffleOrder?.filter((id) => id !== queue.value[index].id) ?? null
+      shufflePlayedSongIds.add(queue.value[index].id)
+      shuffleReservation = null
+      return
     }
+    if (startsRound) {
+      shufflePlayedSongIds.clear()
+    }
+    shufflePlayedSongIds.add(queue.value[index].id)
+    shuffleReservation = null
+  }
+
+  function usesNormalShuffle(): boolean {
+    return !smartShuffleEnabled.value || !statistics.enabled || ui.extremePlayback
+  }
+
+  function shuffledIds(ids: number[]): number[] {
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[ids[i], ids[j]] = [ids[j], ids[i]]
+    }
+    return ids
+  }
+
+  function nextNormalShuffleIndex(excluded: Set<number>): number {
+    const playable = queue.value.filter(
+      (song) => song.songStatus !== 0 && !unavailableSongIds.has(song.id)
+    )
+    const validIds = new Set(playable.map((song) => song.id))
+    normalShuffleOrder =
+      normalShuffleOrder?.filter(
+        (id) => validIds.has(id) && (normalShuffleStartsRound || !shufflePlayedSongIds.has(id))
+      ) ?? null
+    const remaining = playable.filter((song) => !shufflePlayedSongIds.has(song.id))
+    if (normalShuffleOrder === null) {
+      normalShuffleOrder = shuffledIds(remaining.map((song) => song.id))
+    } else {
+      // Queue additions join the current round once; moving items does not
+      // change the permutation because it stores song IDs rather than indices.
+      const ordered = new Set(normalShuffleOrder)
+      for (const song of normalShuffleStartsRound ? playable : remaining) {
+        if (!ordered.has(song.id)) {
+          const position = Math.floor(Math.random() * (normalShuffleOrder.length + 1))
+          normalShuffleOrder.splice(position, 0, song.id)
+          ordered.add(song.id)
+        }
+      }
+    }
+    if (!normalShuffleOrder.length && playable.length) {
+      normalShuffleOrder = shuffledIds(playable.map((song) => song.id))
+      normalShuffleStartsRound = true
+      // Prevent the boundary from immediately repeating the previous song.
+      if (normalShuffleOrder.length > 1 && normalShuffleOrder[0] === currentQueueSong.value?.id) {
+        const swap = 1 + Math.floor(Math.random() * (normalShuffleOrder.length - 1))
+        ;[normalShuffleOrder[0], normalShuffleOrder[swap]] = [
+          normalShuffleOrder[swap],
+          normalShuffleOrder[0]
+        ]
+      }
+    }
+    const reservedId =
+      shuffleReservation?.sourceSongId === currentQueueSong.value?.id
+        ? shuffleReservation?.songId
+        : undefined
+    const ordered =
+      reservedId !== undefined && normalShuffleOrder.includes(reservedId)
+        ? [reservedId, ...normalShuffleOrder.filter((id) => id !== reservedId)]
+        : normalShuffleOrder
+    const nextId = ordered.find((id) => {
+      const index = queue.value.findIndex((song) => song.id === id)
+      return !excluded.has(index)
+    })
+    shuffleReservation =
+      nextId === undefined
+        ? null
+        : {
+            songId: nextId,
+            sourceSongId: currentQueueSong.value?.id,
+            startsRound: normalShuffleStartsRound
+          }
+    return nextId === undefined ? -1 : queue.value.findIndex((song) => song.id === nextId)
+  }
+
+  function nextIndex(excluded = new Set<number>()): number {
+    const length = queue.value.length
+    if (!length || (currentQueueIndex.value < 0 && playMode.value !== PlayMode.Random)) return -1
+    if (playMode.value === PlayMode.Single) return currentQueueIndex.value
     if (playMode.value === PlayMode.Random) {
-      if (length === 1) return 0
-      const currentId = queue.value[currentQueueIndex.value]?.id
-      let candidates = queue.value
+      if (usesNormalShuffle()) return nextNormalShuffleIndex(excluded)
+      const currentId = currentQueueSong.value?.id
+      const available = queue.value
         .map((song, index) => ({ song, index }))
         .filter(
           ({ song, index }) =>
-            index !== currentQueueIndex.value && !shufflePlayedSongIds.has(song.id)
+            song.songStatus !== 0 && !unavailableSongIds.has(song.id) && !excluded.has(index)
         )
-      if (!candidates.length) {
-        shufflePlayedSongIds.clear()
-        if (currentId !== undefined) shufflePlayedSongIds.add(currentId)
-        candidates = queue.value
-          .map((song, index) => ({ song, index }))
-          .filter(({ index }) => index !== currentQueueIndex.value)
+      const alternatives = available.filter(({ song }) => song.id !== currentId)
+      if (!alternatives.length)
+        return available.find(({ song }) => song.id === currentId)?.index ?? -1
+      let candidates = alternatives.filter(({ song }) => !shufflePlayedSongIds.has(song.id))
+      const newRound = !candidates.length
+      if (newRound) candidates = alternatives
+      // Separate recent tracks across round boundaries when enough tracks exist.
+      const recentCount = Math.min(5, Math.floor((alternatives.length + 1) / 2))
+      const recentIds = new Set(
+        shuffleHistory.slice(
+          Math.max(0, shuffleHistoryIndex - recentCount + 1),
+          shuffleHistoryIndex + 1
+        )
+      )
+      const fresh = candidates.filter(({ song }) => !recentIds.has(song.id))
+      if (fresh.length) candidates = fresh
+      if (shuffleReservation?.sourceSongId === currentId) {
+        const reserved = candidates.find(({ song }) => song.id === shuffleReservation?.songId)
+        if (reserved) return reserved.index
       }
-      return candidates[Math.floor(Math.random() * candidates.length)]?.index ?? -1
+      let selectedIndex: number
+      if (smartShuffleEnabled.value && statistics.enabled && !ui.extremePlayback) {
+        const candidateIds = new Set(candidates.map(({ song }) => song.id))
+        const excludedIds = new Set(
+          queue.value.filter((song) => !candidateIds.has(song.id)).map((song) => song.id)
+        )
+        selectedIndex = selectSmartNext(
+          queue.value,
+          currentQueueIndex.value,
+          excludedIds,
+          recommendationScores
+        )
+      } else {
+        selectedIndex = candidates[Math.floor(Math.random() * candidates.length)].index
+      }
+      shuffleReservation =
+        selectedIndex < 0
+          ? null
+          : {
+              songId: queue.value[selectedIndex].id,
+              sourceSongId: currentId,
+              startsRound: newRound
+            }
+      return selectedIndex
     }
     const next = currentQueueIndex.value + 1
     if (next < length) return next
@@ -700,6 +924,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function syncNextTrack(): Promise<void> {
+    if (queuePlaybackInProgress) return
     const revision = ++nextTrackRevision
     const index =
       !ui.extremePlayback && !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled
@@ -716,10 +941,26 @@ export const usePlayerStore = defineStore('player', () => {
       }
     }
     if (revision !== nextTrackRevision) return
-    const ready = await audioBridge.setNextTrack(path).catch(() => false)
+    if (song && path) resolvedQueuePaths.set(song.id, path)
+    // A decoder may consume the target before its transition event reaches us.
+    // Re-sending the same target during that window queues the incoming track twice.
+    if (
+      !nextTrackRequest ||
+      nextTrackRequest.sourceFile !== currentFile.value ||
+      nextTrackRequest.path !== path
+    ) {
+      nextTrackRequest = {
+        sourceFile: currentFile.value,
+        path,
+        ready: audioBridge.setNextTrack(path, currentFile.value ?? undefined).catch(() => false)
+      }
+    }
+    const ready = await nextTrackRequest.ready
     if (revision !== nextTrackRevision) return
     preparedNextIndex = ready ? index : -1
     preparedNextPath = ready ? path : ''
+    preparedNextSongId = ready ? song?.id : undefined
+    if (ready) schedulePlaybackSessionSave()
   }
 
   async function playNext(previewIndex?: number, automatic = false): Promise<boolean> {
@@ -734,7 +975,8 @@ export const usePlayerStore = defineStore('player', () => {
       previewIndex !== undefined &&
       previewIndex >= 0 &&
       previewIndex < queue.value.length &&
-      previewIndex !== currentQueueIndex.value
+      previewIndex !== currentQueueIndex.value &&
+      previewIndex === previewNextIndex()
         ? previewIndex
         : nextIndex()
     return index >= 0 ? playQueueItem(index, -1, 'next', automatic ? 'automatic' : 'manual') : false
@@ -757,11 +999,16 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function stop(
-    reason: 'next' | 'previous' | 'selected' | 'stopped' = 'stopped'
+    reason: 'next' | 'previous' | 'selected' | 'stopped' = 'stopped',
+    preserveQueueRequest = false
   ): Promise<boolean> {
+    if (!preserveQueueRequest) queueRevision++
+    playbackEpoch++
     nextTrackRevision++
     preparedNextIndex = -1
     preparedNextPath = ''
+    preparedNextSongId = undefined
+    nextTrackRequest = null
     const result = await audioBridge.stop()
     if (result) flushHistory(true, reason)
     return result
@@ -787,6 +1034,14 @@ export const usePlayerStore = defineStore('player', () => {
     shuffleHistory?: number[]
     shuffleHistoryIndex?: number
     shufflePlayedSongIds?: number[]
+    normalShuffleOrder?: number[] | null
+    normalShuffleStartsRound?: boolean
+    shuffleReservation?: {
+      songId: number
+      sourceSongId: number | undefined
+      startsRound: boolean
+    } | null
+    resolvedQueuePaths?: Array<[number, string]>
     stopAfterCurrent?: boolean
   }
 
@@ -862,7 +1117,11 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleHistory: shuffleHistory,
       shuffleHistoryIndex,
       stopAfterCurrent: stopAfterCurrent.value,
-      shufflePlayedSongIds: [...shufflePlayedSongIds]
+      shufflePlayedSongIds: [...shufflePlayedSongIds],
+      normalShuffleOrder,
+      normalShuffleStartsRound,
+      shuffleReservation,
+      resolvedQueuePaths: [...resolvedQueuePaths]
     }
     try {
       const result = window.api.database.saveSync('player.playback-session', session)
@@ -886,7 +1145,30 @@ export const usePlayerStore = defineStore('player', () => {
         typeof checkpointResponse.data === 'object'
           ? (checkpointResponse.data as Partial<PlaybackCheckpoint>)
           : session
-      if (Array.isArray(session.queue)) queue.value = session.queue as LibrarySong[]
+      shufflePlayedSongIds.clear()
+      shuffleHistory.length = 0
+      shuffleHistoryIndex = -1
+      normalShuffleOrder = null
+      normalShuffleStartsRound = false
+      shuffleReservation = null
+      unavailableSongIds.clear()
+      resolvedQueuePaths.clear()
+      const savedCurrentId = session.queue?.[session.currentQueueIndex ?? -1]?.id
+      if (Array.isArray(session.queue)) {
+        const ids = new Set<number>()
+        queue.value = (session.queue as LibrarySong[]).filter((song) => {
+          if (!song || !Number.isInteger(song.id) || ids.has(song.id)) return false
+          ids.add(song.id)
+          return true
+        })
+      }
+      if (Array.isArray(session.resolvedQueuePaths)) {
+        const queueIds = new Set(queue.value.map((song) => song.id))
+        for (const entry of session.resolvedQueuePaths) {
+          if (Array.isArray(entry) && queueIds.has(entry[0]) && typeof entry[1] === 'string')
+            resolvedQueuePaths.set(entry[0], entry[1])
+        }
+      }
       stopAfterCurrent.value = session.stopAfterCurrent === true
       queuePlaylistId.value =
         typeof session.queuePlaylistId === 'number' && Number.isInteger(session.queuePlaylistId)
@@ -898,12 +1180,13 @@ export const usePlayerStore = defineStore('player', () => {
       if (typeof session.durationMs === 'number' && session.durationMs >= 0) {
         durationMs.value = session.durationMs
       }
-      if (typeof session.currentQueueIndex === 'number') {
-        currentQueueIndex.value = Math.max(
-          -1,
-          Math.min(session.currentQueueIndex, queue.value.length - 1)
-        )
-      }
+      currentQueueIndex.value = queue.value.findIndex((song) => song.id === savedCurrentId)
+      const checkpointIndex = queue.value.findIndex(
+        (song) =>
+          song.audio === checkpoint.currentFile ||
+          (resolvedQueuePaths.get(song.id) === checkpoint.currentFile && !!checkpoint.currentFile)
+      )
+      if (checkpointIndex >= 0) currentQueueIndex.value = checkpointIndex
       if (typeof session.playMode === 'number' && session.playMode >= 0 && session.playMode <= 4) {
         // Sessions saved by the earlier five-mode version used 4 for smart shuffle.
         if (Number(session.playMode) === 4) await setSmartShuffleEnabled(true)
@@ -913,17 +1196,21 @@ export const usePlayerStore = defineStore('player', () => {
       if (playMode.value === PlayMode.Random) {
         const queueIds = new Set(queue.value.map((song) => song.id))
         if (Array.isArray(session.shuffleHistory)) {
+          const savedCursor = Number.isInteger(session.shuffleHistoryIndex)
+            ? Math.max(
+                -1,
+                Math.min(session.shuffleHistoryIndex!, session.shuffleHistory.length - 1)
+              )
+            : session.shuffleHistory.length - 1
+          shuffleHistoryIndex =
+            session.shuffleHistory.slice(0, savedCursor + 1).filter((id) => queueIds.has(id))
+              .length - 1
           shuffleHistory.push(
             ...session.shuffleHistory.filter(
               (id): id is number => typeof id === 'number' && queueIds.has(id)
             )
           )
         }
-        shuffleHistoryIndex =
-          typeof session.shuffleHistoryIndex === 'number' &&
-          Number.isInteger(session.shuffleHistoryIndex)
-            ? Math.max(-1, Math.min(session.shuffleHistoryIndex, shuffleHistory.length - 1))
-            : shuffleHistory.length - 1
         const currentId = currentQueueSong.value?.id
         if (currentId !== undefined && shuffleHistory[shuffleHistoryIndex] !== currentId) {
           shuffleHistory.splice(shuffleHistoryIndex + 1)
@@ -935,7 +1222,32 @@ export const usePlayerStore = defineStore('player', () => {
             if (typeof id === 'number' && queueIds.has(id)) shufflePlayedSongIds.add(id)
           }
         }
-        for (const id of shuffleHistory) shufflePlayedSongIds.add(id)
+        if (!Array.isArray(session.shufflePlayedSongIds)) {
+          for (const id of shuffleHistory) shufflePlayedSongIds.add(id)
+        }
+        const advanced = currentId !== undefined && currentId !== savedCurrentId
+        const consumedRoundStart =
+          advanced &&
+          (usesNormalShuffle()
+            ? session.normalShuffleStartsRound === true
+            : session.shuffleReservation?.songId === currentId &&
+              session.shuffleReservation.startsRound)
+        if (consumedRoundStart) shufflePlayedSongIds.clear()
+        if (currentId !== undefined) shufflePlayedSongIds.add(currentId)
+        normalShuffleOrder = Array.isArray(session.normalShuffleOrder)
+          ? [
+              ...new Set(
+                session.normalShuffleOrder.filter(
+                  (id) => typeof id === 'number' && queueIds.has(id)
+                )
+              )
+            ]
+          : null
+        normalShuffleStartsRound = session.normalShuffleStartsRound === true && !consumedRoundStart
+        const reserved = session.shuffleReservation
+        if (reserved && queueIds.has(reserved.songId) && reserved.sourceSongId === currentId) {
+          shuffleReservation = { ...reserved, startsRound: reserved.startsRound === true }
+        }
         shuffleNavigationRevision.value++
       }
       if (typeof checkpoint.currentFile !== 'string' || !checkpoint.currentFile) return
@@ -948,7 +1260,11 @@ export const usePlayerStore = defineStore('player', () => {
       // or seeking it. Queue/UI ownership changes; audio ownership stays native.
       const live = await audioBridge.getStatus()
       if (live?.trackInfo?.filePath === checkpoint.currentFile && live.state !== 'idle') {
-        const liveIndex = queue.value.findIndex((song) => song.audio === live.trackInfo?.filePath)
+        const liveIndex = queue.value.findIndex(
+          (song) =>
+            song.audio === live.trackInfo?.filePath ||
+            resolvedQueuePaths.get(song.id) === live.trackInfo?.filePath
+        )
         if (liveIndex >= 0) currentQueueIndex.value = liveIndex
         state.value = live.state
         trackInfo.value = live.trackInfo
@@ -1512,25 +1828,70 @@ export const usePlayerStore = defineStore('player', () => {
     updateAudioAnalysisPolling()
   }
 
-  async function handleTrackEnded(reason: string, filePath?: string): Promise<void> {
+  async function handleTrackEnded(
+    reason: string,
+    filePath?: string,
+    nextFilePath?: string
+  ): Promise<void> {
     // `trackEnded` crosses the native, main and renderer event queues. If a
     // user selects the next track just as the old one ends, its late event
     // must not advance the newly selected track a second time.
     if (filePath && filePath !== currentFile.value) return
-    if (reason === 'transition' && preparedNextIndex >= 0) {
-      const song = queue.value[preparedNextIndex]
-      if (song && preparedNextPath) {
+    if (queuePlaybackInProgress) return
+    if (reason === 'transition') {
+      const epoch = ++playbackEpoch
+      const incomingPath = nextFilePath || preparedNextPath
+      const index = nextFilePath
+        ? queue.value.findIndex(
+            (song) =>
+              song.audio === nextFilePath || resolvedQueuePaths.get(song.id) === nextFilePath
+          )
+        : queue.value.findIndex((song) => song.id === preparedNextSongId)
+      const song = queue.value[index]
+      // The transition already happened natively; never reopen its target as
+      // an ordinary EOF fallback, even if a preloading response arrived late.
+      nextTrackRevision++
+      nextTrackRequest = null
+      preparedNextIndex = -1
+      preparedNextPath = ''
+      preparedNextSongId = undefined
+      if (!song && incomingPath) {
+        // The user may remove an already-decoded target before its event arrives.
+        // Follow the native source before choosing a replacement, or its later EOF
+        // would be mistaken for an event from an unrelated track and ignored.
         flushHistory(true, 'ended')
-        currentQueueIndex.value = preparedNextIndex
-        currentFile.value = preparedNextPath
+        currentFile.value = incomingPath
+        currentQueueIndex.value = -1
+        if (!queue.value.length || stopAfterCurrent.value) {
+          stopAfterCurrent.value = false
+          await stop()
+        } else {
+          const next = playMode.value === PlayMode.Random ? nextIndex() : 0
+          if (next >= 0) await playQueueItem(next, -1, 'next', 'automatic')
+        }
+        return
+      }
+      if (song && incomingPath) {
+        flushHistory(true, 'ended')
+        if (
+          playMode.value === PlayMode.Random &&
+          shuffleHistory[shuffleHistoryIndex + 1] !== song.id
+        )
+          recordShufflePlayed(index)
+        currentQueueIndex.value = index
+        currentFile.value = incomingPath
         if (playMode.value === PlayMode.Random) {
-          shufflePlayedSongIds.add(song.id)
-          shuffleHistory.splice(shuffleHistoryIndex + 1)
-          shuffleHistory.push(song.id)
-          shuffleHistoryIndex = shuffleHistory.length - 1
+          if (shuffleHistory[shuffleHistoryIndex + 1] === song.id) {
+            shuffleHistoryIndex++
+          } else {
+            shuffleHistory.splice(shuffleHistoryIndex + 1)
+            shuffleHistory.push(song.id)
+            shuffleHistoryIndex = shuffleHistory.length - 1
+          }
           shuffleNavigationRevision.value++
         }
         const status = await audioBridge.getStatus()
+        if (epoch !== playbackEpoch) return
         if (status) {
           trackInfo.value = status.trackInfo
           durationMs.value = status.durationMs
@@ -1544,7 +1905,7 @@ export const usePlayerStore = defineStore('player', () => {
     const now = Date.now()
     // Native backends may emit an EOF notification more than once while the
     // previous output callback drains. Only one event may advance the queue.
-    if (autoAdvanceInProgress || now - lastTrackEndedAt < 500) return
+    if (autoAdvanceInProgress || (!filePath && now - lastTrackEndedAt < 500)) return
     lastTrackEndedAt = now
     autoAdvanceInProgress = true
     state.value = 'stopped'
@@ -1577,12 +1938,14 @@ export const usePlayerStore = defineStore('player', () => {
         pauseHistory()
         historySession = undefined
         recommendationScores.clear()
-        pendingSmartIndex = -1
+        shuffleReservation = null
         // A window switch must not collapse the outgoing immersive player.
         // The new renderer starts with this transient state cleared already.
         if (!switchView) ui.showPlayer = false
       }
       ui.extremePlayback = enabled
+      normalShuffleOrder = null
+      normalShuffleStartsRound = false
       document.documentElement.classList.toggle('extreme-playback', enabled)
       updateAudioAnalysisPolling()
       if (!enabled) {
@@ -1647,14 +2010,17 @@ export const usePlayerStore = defineStore('player', () => {
     )
 
     unsubs.push(
-      audioBridge.onTrackEnded((data) => void handleTrackEnded(data.reason, data.filePath))
+      audioBridge.onTrackEnded(
+        (data) => void handleTrackEnded(data.reason, data.filePath, data.nextFilePath)
+      )
     )
   }
 
   async function attachRenderer(): Promise<void> {
     const result = await window.api.audio.attachRenderer()
     if (result.success)
-      for (const ended of result.data ?? []) await handleTrackEnded(ended.reason, ended.filePath)
+      for (const ended of result.data ?? [])
+        await handleTrackEnded(ended.reason, ended.filePath, ended.nextFilePath)
   }
 
   function unsubscribe(): void {
@@ -1781,6 +2147,7 @@ export const usePlayerStore = defineStore('player', () => {
     loadSmartShuffleConfig,
     setSmartShuffleEnabled,
     setPreference,
+    resetSongRecommendation,
     getSongPreference,
     finishHistoryOnUnload,
     addToQueue,

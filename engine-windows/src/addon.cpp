@@ -922,7 +922,9 @@ private:
     Napi::Value SetNextTrack(const Napi::CallbackInfo& info) {
         if (!info[0].IsString()) return RejectCommand(info, "setNextTrack", "string");
         return RunBoolCommand(info, "setNextTrack", [&](std::string& parameters) {
-            return engine_->set_next_track(info[0].As<Napi::String>().Utf8Value());
+            const std::string source = info.Length() > 1 && info[1].IsString()
+                ? info[1].As<Napi::String>().Utf8Value() : "";
+            return engine_->set_next_track(info[0].As<Napi::String>().Utf8Value(), source);
         });
     }
 

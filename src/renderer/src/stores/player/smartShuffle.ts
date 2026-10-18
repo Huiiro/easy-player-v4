@@ -11,7 +11,7 @@ export interface ShuffleScore {
   preference: number
 }
 
-/** Weighted sampling without replacement inside each queue round. */
+/** Pure weighted sampling; the player commits round progress after playback succeeds. */
 export function selectSmartNext(
   queue: ShuffleSong[],
   currentIndex: number,
@@ -19,7 +19,7 @@ export function selectSmartNext(
   scores: Map<number, ShuffleScore>,
   random: () => number = Math.random
 ): number {
-  if (currentIndex < 0 || currentIndex >= queue.length) return -1
+  if (currentIndex < -1 || currentIndex >= queue.length) return -1
   let candidates = queue
     .map((song, index) => ({ song, index }))
     .filter(
@@ -27,8 +27,6 @@ export function selectSmartNext(
         index !== currentIndex && song.songStatus !== 0 && !playedIds.has(song.id)
     )
   if (!candidates.length) {
-    playedIds.clear()
-    playedIds.add(queue[currentIndex].id)
     candidates = queue
       .map((song, index) => ({ song, index }))
       .filter(({ song, index }) => index !== currentIndex && song.songStatus !== 0)
@@ -37,9 +35,15 @@ export function selectSmartNext(
 
   const familiar = candidates.filter(({ song }) => {
     const score = scores.get(song.id)
-    return score && (score.plays > 2 || score.preference === 1)
+    return score && score.preference !== -1 && (score.plays > 2 || score.preference === 1)
   })
-  const discovery = candidates.filter(({ song }) => (scores.get(song.id)?.plays ?? 0) <= 2)
+  const familiarIds = new Set(familiar.map(({ song }) => song.id))
+  const discovery = candidates.filter(
+    ({ song }) =>
+      !familiarIds.has(song.id) &&
+      (scores.get(song.id)?.preference ?? 0) !== -1 &&
+      (scores.get(song.id)?.plays ?? 0) <= 2
+  )
   const roll = random()
   const pool =
     roll < 0.7 && familiar.length
@@ -50,10 +54,15 @@ export function selectSmartNext(
   const current = queue[currentIndex]
   const weighted = pool.map(({ song, index }) => {
     const score = scores.get(song.id)
-    const sameArtist = current.artist && song.artist === current.artist
-    const sameAlbum = current.album && song.album === current.album
+    const sameArtist =
+      current?.artist &&
+      song.artist?.trim().toLocaleLowerCase() === current.artist.trim().toLocaleLowerCase()
+    const sameAlbum =
+      current?.album &&
+      song.album?.trim().toLocaleLowerCase() === current.album.trim().toLocaleLowerCase()
     const diversity = sameArtist || sameAlbum ? 0.4 : 1
-    return { index, weight: Math.max(0.02, (score?.weight ?? 1) * diversity) }
+    const weight = Number.isFinite(score?.weight) ? score!.weight : 1
+    return { index, weight: Math.max(0.02, weight * diversity) }
   })
   const total = weighted.reduce((sum, item) => sum + item.weight, 0)
   let target = random() * total

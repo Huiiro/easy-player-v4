@@ -56,6 +56,7 @@ const moreLoading = ref<Record<Group, boolean>>({
   lessRecommended: false
 })
 const playbackPending = ref(false)
+const resettingSongIds = ref(new Set<number>())
 let loadRevision = 0
 
 function todayKey(): string {
@@ -126,6 +127,29 @@ async function setPreference(song: RecommendedSong, preference: -1 | 0 | 1): Pro
     return
   }
   song.preference = preference
+}
+
+async function resetRecommendation(song: RecommendedSong): Promise<void> {
+  if (resettingSongIds.value.has(song.id)) return
+  resettingSongIds.value.add(song.id)
+  try {
+    if (!(await player.resetSongRecommendation(song.id))) {
+      error(t('recommendation.failed'))
+      return
+    }
+    for (const group of groupOrder) {
+      for (const item of groups.value[group]) if (item.id === song.id) item.preference = 0
+    }
+    groups.value.lessRecommended = groups.value.lessRecommended.filter(
+      (item) => item.id !== song.id
+    )
+    totals.value.lessRecommended = Math.max(0, totals.value.lessRecommended - 1)
+    await load()
+  } catch {
+    error(t('recommendation.failed'))
+  } finally {
+    resettingSongIds.value.delete(song.id)
+  }
 }
 
 async function playGroup(group: Group, song: RecommendedSong): Promise<void> {
@@ -259,6 +283,15 @@ useVisibleInterval(() => {
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <button
+                v-if="group === 'lessRecommended'"
+                class="btn-hover rounded-md px-2 py-1 text-xs text-text-l"
+                :title="t('recommendation.resetScoreHelp')"
+                :disabled="resettingSongIds.has(song.id)"
+                @click="resetRecommendation(song)"
+              >
+                {{ t('recommendation.removeAndReset') }}
+              </button>
+              <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
                 :title="
                   isCurrentSong(song) && player.isPlaying
@@ -281,6 +314,7 @@ useVisibleInterval(() => {
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
                 :class="song.preference === 1 ? 'text-primary' : ''"
+                :disabled="resettingSongIds.has(song.id)"
                 :title="
                   song.preference === 1 ? t('recommendation.reset') : t('recommendation.like')
                 "
@@ -294,6 +328,7 @@ useVisibleInterval(() => {
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
                 :class="song.preference === -1 ? 'text-red-400' : ''"
+                :disabled="resettingSongIds.has(song.id)"
                 :title="
                   song.preference === -1 ? t('recommendation.reset') : t('recommendation.dislike')
                 "

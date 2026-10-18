@@ -547,6 +547,10 @@ export default {
     likeSaved: 'Song liked',
     lessRecommendedSaved: 'This song will be recommended less',
     feedbackCleared: 'Song feedback cleared',
+    removeAndReset: 'Remove and reset score',
+    resetScoreHelp:
+      'Remove from Show less, clear feedback and relearn listening preferences for this song. History and statistics are kept.',
+    scoreReset: 'Recommendation score reset for this song',
     failed: 'Could not save preference',
     showMore: 'Show more',
     reasons: {

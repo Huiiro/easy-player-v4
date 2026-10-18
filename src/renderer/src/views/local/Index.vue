@@ -131,7 +131,7 @@ async function runFolderAction(action: 'play' | 'addToPlaylist'): Promise<void> 
         warning(t('localFiles.noPlayableSongs'))
         return
       }
-      if (!(await player.playCollection(playableSongs, playableSongs[0].id, null))) {
+      if (!(await player.playCollection(playableSongs, null, null))) {
         showError(t(failureKey))
       }
     } else {

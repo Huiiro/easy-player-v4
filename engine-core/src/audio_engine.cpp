@@ -322,10 +322,14 @@ bool AudioEngine::prepare_next_decoder_locked() {
     return compatible;
 }
 
-bool AudioEngine::set_next_track(const std::string& file_path) {
+bool AudioEngine::set_next_track(const std::string& file_path, const std::string& source_path) {
     bool ready = true;
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
+        // Decoding can run ahead of the renderer and the audible transition.
+        // A command prepared for the outgoing decoder must never modify the
+        // incoming decoder's next track, including stale clear requests.
+        if (!source_path.empty() && decoder_.track_info().file_path != source_path) return false;
         if (file_path == next_track_path_ &&
             (file_path.empty() || !next_decoder_.track_info().file_path.empty())) return true;
         next_track_path_ = file_path;

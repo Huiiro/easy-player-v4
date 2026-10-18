@@ -77,7 +77,7 @@ const api = {
   database: {
     saveSync: () => ({ success: true }),
     command: async (action) =>
-      action === 'setSongPreference' && !preferenceAccepted
+      ['setSongPreference', 'resetSongRecommendation'].includes(action) && !preferenceAccepted
         ? { success: false }
         : { success: true, data: [] }
   },
@@ -168,6 +168,14 @@ preferenceAccepted = true
 ui.extremePlayback = false
 await player.setPreference(42, 1)
 assert.equal(feedbackMessages.length, 4, 'Feedback must work in the full player too')
+player.setQueue([{ id: 42, audio: '/42.flac', preference: -1, songStatus: 1 }])
+assert.equal(await player.resetSongRecommendation(42), true)
+assert.equal(player.queue[0].preference, 0)
+assert.deepEqual(feedbackMessages.at(-1), ['success', 'recommendation.scoreReset'])
+preferenceAccepted = false
+const feedbackCount = feedbackMessages.length
+assert.equal(await player.resetSongRecommendation(42), false)
+assert.equal(feedbackMessages.length, feedbackCount)
 console.log(
   'Playback policy suspension/resume, mode switching, analysis suppression and failure recovery passed.'
 )

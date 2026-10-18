@@ -106,8 +106,8 @@ export const audioBridge = {
   async setTransitionConfig(config: TransitionConfig): Promise<boolean> {
     return (await window.api.audio.setTransitionConfig(config)).success
   },
-  async setNextTrack(filePath: string): Promise<boolean> {
-    return (await window.api.audio.setNextTrack(filePath)).success
+  async setNextTrack(filePath: string, sourceFile?: string): Promise<boolean> {
+    return (await window.api.audio.setNextTrack(filePath, sourceFile)).success
   },
   async getTransitionConfig(): Promise<TransitionConfig | null> {
     return cmd(await window.api.audio.getTransitionConfig())
@@ -276,7 +276,9 @@ export const audioBridge = {
     return window.api.audio.onPositionChanged(callback)
   },
 
-  onTrackEnded(callback: (data: { reason: string; filePath: string }) => void): () => void {
+  onTrackEnded(
+    callback: (data: { reason: string; filePath: string; nextFilePath?: string }) => void
+  ): () => void {
     return window.api.audio.onTrackEnded(callback)
   },
 

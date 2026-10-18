@@ -69,7 +69,7 @@ declare global {
         setDopEnabled(enabled: boolean): Promise<{ success: boolean }>
         getDopEnabled(): Promise<{ success: boolean; data?: boolean; error?: string }>
         setTransitionConfig(config: TransitionConfig): Promise<{ success: boolean }>
-        setNextTrack(filePath: string): Promise<{ success: boolean }>
+        setNextTrack(filePath: string, sourceFile?: string): Promise<{ success: boolean }>
         getTransitionConfig(): Promise<{
           success: boolean
           data?: TransitionConfig
@@ -211,7 +211,7 @@ declare global {
         setAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
         attachRenderer(): Promise<{
           success: boolean
-          data?: Array<{ reason: string; filePath: string }>
+          data?: Array<{ reason: string; filePath: string; nextFilePath?: string }>
         }>
         switchPlaybackView(enabled: boolean): Promise<{ success: boolean; error?: string }>
         setExtremePlayback(enabled: boolean): Promise<{ success: boolean; error?: string }>
@@ -224,7 +224,9 @@ declare global {
         onPositionChanged(
           callback: (data: { positionMs: number; durationMs: number }) => void
         ): () => void
-        onTrackEnded(callback: (data: { reason: string; filePath: string }) => void): () => void
+        onTrackEnded(
+          callback: (data: { reason: string; filePath: string; nextFilePath?: string }) => void
+        ): () => void
         onAudioChainChanged(callback: (data: AudioChainStatus) => void): () => void
         onError(
           callback: (data: { code: number; message: string; recoverable: boolean }) => void

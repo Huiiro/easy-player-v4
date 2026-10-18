@@ -305,6 +305,7 @@ const defaultOrder = [...viewUi.homeSectionOrder, 'navigation', 'clock']
 const hooks = { ...Vue, onMounted() {}, onActivated() {}, onDeactivated() {}, onBeforeUnmount() {} }
 const viewMocks = {
   vue: hooks,
+  '@/hooks/useVisibleInterval': { useVisibleInterval() {} },
   'vue-i18n': { useI18n: () => ({ t: (key) => key }) },
   'vue-router': { useRouter: () => ({}) },
   '@/stores/player/playerStore': { usePlayerStore: () => player },
@@ -369,7 +370,8 @@ scope.run(() => {
     {
       window: { api: viewApi },
       defineProps: () => ({ source: { type: 'history' } }),
-      withDefaults: (props) => props
+      withDefaults: (props) => props,
+      defineExpose() {}
     },
     'exports.fixture={getSongs}'
   ).fixture

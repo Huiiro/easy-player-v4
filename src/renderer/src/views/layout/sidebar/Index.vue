@@ -147,7 +147,7 @@ async function playPlaylist(playlist: Playlist): Promise<void> {
       warning(t('playlist.empty'))
       return
     }
-    if (!(await player.playCollection(songs, songs[0].id, playlist.id)))
+    if (!(await player.playCollection(songs, null, playlist.id)))
       showError(t('playlist.playFailed'))
   } finally {
     playingPlaylistId.value = null

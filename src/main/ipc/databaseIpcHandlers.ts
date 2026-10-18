@@ -4,6 +4,7 @@ import * as library from '../database/repository'
 import {
   getRecommendationScores,
   recordPlayEvent,
+  resetSongRecommendation,
   setSongPreference
 } from '../database/recommendations'
 import { Logger } from '../service/loggerService'
@@ -141,6 +142,7 @@ const handlers = {
   },
   setSongPreference: ({ songId, preference }: { songId: number; preference: -1 | 0 | 1 }) =>
     setSongPreference(songId, preference),
+  resetSongRecommendation: ({ songId }: { songId: number }) => resetSongRecommendation(songId),
 
   listPlaylists: () => library.listPlaylists(),
   getPlaylist: ({ id }: { id: number }) => library.getPlaylist(id),

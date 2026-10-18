@@ -536,6 +536,9 @@ export default {
     likeSaved: '已喜欢该歌曲',
     lessRecommendedSaved: '已减少推荐该歌曲',
     feedbackCleared: '已撤销该歌曲的偏好标记',
+    removeAndReset: '移除并重置评分',
+    resetScoreHelp: '移出减少推荐，清除偏好标记并重新学习该曲的收听偏好；保留播放历史和统计。',
+    scoreReset: '已重置该歌曲的推荐评分',
     failed: '保存偏好失败',
     showMore: '显示更多',
     reasons: {
