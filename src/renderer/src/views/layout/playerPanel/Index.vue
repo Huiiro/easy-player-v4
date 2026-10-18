@@ -20,12 +20,40 @@ import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { formatArtists } from '@/utils/artists'
 import type { SongDetails } from '@/types/library'
+import { useMessage } from '@/components/ui/useMessage'
 
 const COVER_ANALYSIS_VERSION = 11
 
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
+const { error: showError } = useMessage()
+const preferencePending = ref(false)
+const currentPreference = computed(() =>
+  player.currentQueueSong ? player.getSongPreference(player.currentQueueSong.id) : 0
+)
+const preferenceLabel = computed(() =>
+  t(
+    currentPreference.value === 1
+      ? 'playerPanel.preferenceLiked'
+      : currentPreference.value === -1
+        ? 'playerPanel.preferenceDisliked'
+        : 'playerPanel.preferenceNeutral'
+  )
+)
+async function cyclePreference(): Promise<void> {
+  const song = player.currentQueueSong
+  if (!song || preferencePending.value) return
+  const next = currentPreference.value === 0 ? 1 : currentPreference.value === 1 ? -1 : 0
+  preferencePending.value = true
+  try {
+    if (!(await player.setPreference(song.id, next))) showError(t('recommendation.failed'))
+  } catch {
+    showError(t('recommendation.failed'))
+  } finally {
+    preferencePending.value = false
+  }
+}
 const currentSongDetails = shallowRef<SongDetails | null>(null)
 watch(
   () => player.currentQueueSong?.id,
@@ -647,6 +675,27 @@ function changeLyricsOffset(event: WheelEvent): void {
           </dl>
           <!-- args control -->
           <div class="flex w-full flex-nowrap items-center justify-center gap-1 text-xs">
+            <!-- song preference: neutral → liked → disliked → neutral -->
+            <button
+              type="button"
+              class="panel-tool shrink-0 disabled:cursor-not-allowed disabled:opacity-35"
+              :class="currentPreference !== 0 && 'active'"
+              :disabled="!player.currentQueueSong || preferencePending"
+              :title="preferenceLabel"
+              :aria-label="preferenceLabel"
+              @click="cyclePreference"
+            >
+              <SvgIcon
+                :name="
+                  currentPreference === 1
+                    ? 'play-like-fill'
+                    : currentPreference === -1
+                      ? 'play-dislike'
+                      : 'play-like'
+                "
+                :class-name="currentPreference === -1 ? 'size-4 scale-125 text-red-400' : 'size-4'"
+              />
+            </button>
             <!-- speed -->
             <label
               class="panel-tool vertical-tool"

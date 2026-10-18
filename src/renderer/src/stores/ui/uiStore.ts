@@ -70,6 +70,8 @@ export const UI_PREFERENCE_KEYS = [
   'homeClockEnabled',
   'sidebarExpanded',
   'sidebarPlaylistsExpanded',
+  'playlistHeaderCollapsed',
+  'recommendationPlaylistHeaderCollapsed',
   'customFontFamily',
   'customThemeColor',
   'systemBackground',
@@ -276,6 +278,8 @@ export const useUIStore = defineStore(
     const homeLayoutOpen = ref(false)
     const sidebarExpanded = ref(true)
     const sidebarPlaylistsExpanded = ref(true)
+    const playlistHeaderCollapsed = ref(false)
+    const recommendationPlaylistHeaderCollapsed = ref(false)
     const customFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
@@ -923,6 +927,8 @@ export const useUIStore = defineStore(
       homeLayoutOpen,
       sidebarExpanded,
       sidebarPlaylistsExpanded,
+      playlistHeaderCollapsed,
+      recommendationPlaylistHeaderCollapsed,
       customFontFamily,
       customFonts,
       customThemeColor,

@@ -55,6 +55,8 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
 })
 const stored = JSON.stringify({
   extremePlayback: true,
+  playlistHeaderCollapsed: true,
+  recommendationPlaylistHeaderCollapsed: false,
   footerLayout: { enabled: true, mode: 'stacked', maxWidth: 1500, progressWeight: 3, gap: 12 },
   shortcutKeys: { enableLightweight: 'ctrl+shift+m' }
 })
@@ -78,6 +80,29 @@ assert.equal(
 )
 
 const startup = {}
+const restoredHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(restoredHeaders.playlistHeaderCollapsed, true, 'Playlist headers restore collapsed')
+assert.equal(
+  restoredHeaders.recommendationPlaylistHeaderCollapsed,
+  false,
+  'Recommendation headers retain their independent expanded state'
+)
+exports.playerDataStorage.setItem(
+  'ui.preferences.v1',
+  JSON.stringify({
+    ...restoredHeaders,
+    playlistHeaderCollapsed: false,
+    recommendationPlaylistHeaderCollapsed: true
+  })
+)
+exports.flushPlayerDataStorage()
+const toggledHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(toggledHeaders.playlistHeaderCollapsed, false, 'Expanded playlist state is saved')
+assert.equal(
+  toggledHeaders.recommendationPlaylistHeaderCollapsed,
+  true,
+  'Collapsed recommendations are saved'
+)
 vm.runInNewContext(
   compile(
     mainSource.slice(

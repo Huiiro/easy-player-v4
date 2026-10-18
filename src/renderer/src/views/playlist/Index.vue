@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
@@ -33,7 +35,7 @@ const editDescription = ref('')
 const editingField = ref<'name' | 'description' | null>(null)
 const saving = ref(false)
 const playing = ref(false)
-const headerCollapsed = ref(false)
+const { playlistHeaderCollapsed: headerCollapsed } = storeToRefs(useUIStore())
 const player = usePlayerStore()
 const { success, warning, error: showError } = useMessage()
 const { t, locale } = useI18n()

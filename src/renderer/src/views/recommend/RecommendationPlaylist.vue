@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import type { RecommendationGroup } from '@/views/home/types'
 
 const route = useRoute()
@@ -14,7 +16,7 @@ const statistics = useStatisticsStore()
 const { t } = useI18n()
 const songList = ref<InstanceType<typeof SongListView> | null>(null)
 const playing = ref(false)
-const headerCollapsed = ref(false)
+const { recommendationPlaylistHeaderCollapsed: headerCollapsed } = storeToRefs(useUIStore())
 const source = computed(() => {
   const { group, generatedFor } = route.params
   if (

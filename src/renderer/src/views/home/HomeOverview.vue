@@ -307,11 +307,11 @@ watch(
         </div>
       </article>
       <article
-        class="home-surface home-stat flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
+        class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
         :title="t('home.listeningPeriodsHint')"
       >
         <span
-          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
         >
           <SvgIcon name="common-time" class-name="size-5" />
         </span>
@@ -348,11 +348,11 @@ watch(
         </button>
       </article>
       <article
-        class="home-surface home-stat flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
+        class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
         :title="t('home.qualityHint')"
       >
         <span
-          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary"
+          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
         >
           <SvgIcon name="common-music" class-name="size-5" />
         </span>
