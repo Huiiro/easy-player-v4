@@ -1,7 +1,7 @@
 # Easy Player Android 正式移植开发文档
 
-> 状态：执行中  
-> 更新：2026-08-05  
+> 状态：执行中
+> 更新：2026-08-05
 > 适用范围：`engine-core/`、`engine-android/` 与 `android-app/`
 
 ## 1. 目标与边界
@@ -199,5 +199,5 @@ Scaffold
 ## 8. 关联文档
 
 - [Android 原型与环境状态](android-development-plan.md)
-- [引擎架构说明](engine/architecture.md)
-- [引擎构建与集成说明](engine/build-and-integration.md)
+- [引擎架构说明](../engine/architecture.md)
+- [引擎构建与集成说明](../engine/build-and-integration.md)

@@ -157,11 +157,11 @@ weight = clamp(
 
 ## 代码入口
 
-- [播放会话、计时与结束事件](../src/renderer/src/stores/player/playerStore.ts)
-- [播放开始写入与首页统计查询](../src/main/database/repository.ts)
-- [推荐评分、分组、快照与结束补写](../src/main/database/recommendations.ts)
-- [完播率与时间段](../src/main/database/listeningStats.ts)
-- [智能随机抽样](../src/renderer/src/stores/player/smartShuffle.ts)
-- [v5 表结构](../src/main/database/schema.ts)
+- [播放会话、计时与结束事件](../../src/renderer/src/stores/player/playerStore.ts)
+- [播放开始写入与首页统计查询](../../src/main/database/repository.ts)
+- [推荐评分、分组、快照与结束补写](../../src/main/database/recommendations.ts)
+- [完播率与时间段](../../src/main/database/listeningStats.ts)
+- [智能随机抽样](../../src/renderer/src/stores/player/smartShuffle.ts)
+- [v5 表结构](../../src/main/database/schema.ts)
 
 推荐算法版本升级时会自动重建当天的旧版快照，保留历史日期的探索歌单。

@@ -6,6 +6,7 @@ out
 *.log*
 .idea/
 .vscode/
+.update/
 
 # Native addon build
 build/

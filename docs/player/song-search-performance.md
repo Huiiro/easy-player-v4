@@ -1,6 +1,6 @@
 # 歌曲搜索性能与后台状态
 
-日期：2026-10-16。原始数据：[2500/10000 首优化前](./song-search-performance.json)、[20000 首优化前后对比](./song-search-performance-20k.json)。
+日期：2026-10-16。原始数据：[2500/10000 首优化前](song-search-performance.json)、[20000 首优化前后对比](song-search-performance-20k.json)。
 
 复现当前实现：`npm run perf:song-search -- --sizes=20000 --output=docs/song-search-performance-20k.json`。可通过 `--baseline=旧版searchQuery.ts的路径` 额外比较旧查询；本次对比在修改前保存了旧源码，使用相同数据库逐项验证命中数、ID 顺序和搜索分数一致。
 
