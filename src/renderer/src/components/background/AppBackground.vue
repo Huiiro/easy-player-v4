@@ -209,23 +209,23 @@ onBeforeUnmount(() => {
 }
 
 .app-background-scrim--matrix {
-  background: color-mix(in srgb, var(--color-bg) 38%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 42%, transparent);
 }
 
 .app-background-scrim--ocean {
-  background: color-mix(in srgb, var(--color-bg) 34%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 52%, transparent);
 }
 
 .app-background-scrim--forest {
-  background: color-mix(in srgb, var(--color-bg) 40%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 56%, transparent);
 }
 
 .app-background-scrim--sunset {
-  background: color-mix(in srgb, var(--color-bg) 36%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
 }
 
 .app-background-scrim--aurora {
-  background: color-mix(in srgb, var(--color-bg) 28%, transparent);
+  background: color-mix(in srgb, var(--color-bg) 32%, transparent);
 }
 
 .app-background-scrim--rainy {
