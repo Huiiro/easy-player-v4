@@ -1,168 +1,353 @@
 <script setup lang="ts">
-const codeTokens = ['0101', 'A7F2', '110X', 'E8F2', '7C9D', 'AF03', '9B41', '0011', 'C2E0', '4D7A']
-const codeColumns = Array.from({ length: 14 }, (_, index) => ({
-  id: index,
-  x: `${5 + index * 8.2}%`,
-  delay: `${-index * 1.35}s`,
-  duration: `${10 + (index % 4) * 2.2}s`,
-  opacity: 0.24 + (index % 3) * 0.1,
-  code: Array.from(
-    { length: 12 },
-    (_, row) => codeTokens[(index * 3 + row * 7) % codeTokens.length]
-  ).join('\n')
-}))
-const scanBars = [
-  { id: 'top', top: '18%', delay: '0s' },
-  { id: 'middle', top: '46%', delay: '-2.7s' },
-  { id: 'bottom', top: '72%', delay: '-5.1s' }
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+interface DataStream {
+  x: number
+  offset: number
+  speed: number
+  scale: number
+  opacity: number
+  phase: number
+  variant: number
+  glyph: number
+  token: number
+  depth: number
+}
+
+const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false })
+const canvas = ref<HTMLCanvasElement | null>(null)
+// All text uses the same ASCII monospace face. Continuous character ribbons
+// provide the motion; short code tokens stay attached to their leading edge.
+const glyphs = Array.from('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ[]{}<>/=:;+-')
+const tokens = [
+  'read()',
+  'recv()',
+  'sync()',
+  'decode()',
+  'push()',
+  'frame[]',
+  '0x7F',
+  '0xA3',
+  'ACK',
+  'READY',
+  'crc.ok',
+  'bit>>1'
 ]
+const cellWidth = 20
+const cellHeight = 24
+const atlasScale = 2
+const atlasColumns = 16
+const glyphRegion = Math.ceil(glyphs.length / atlasColumns) * cellHeight
+const tokenRegion = Math.ceil(tokens.length / 4) * cellHeight
+const trailRows = Array.from({ length: 12 }, (_, index) => 18 + ((index * 7) % 19))
+let context: CanvasRenderingContext2D | null = null
+let codeAtlas: HTMLCanvasElement | null = null
+let trailAtlas: HTMLCanvasElement | null = null
+let streams: DataStream[] = []
+let observer: ResizeObserver | null = null
+let motion: MediaQueryList | null = null
+let width = 1
+let height = 1
+let pixelScale = 1
+let streamCount = 0
+let frame = 0
+let lastFrame = 0
+let lastTick = 0
+let elapsed = 0
+
+function createRandom(seed: number): () => number {
+  let state = seed
+  return () => {
+    state ^= state << 13
+    state ^= state >>> 17
+    state ^= state << 5
+    return (state >>> 0) / 4294967296
+  }
+}
+
+function createAtlas(): HTMLCanvasElement {
+  const atlas = document.createElement('canvas')
+  atlas.width = 512 * atlasScale
+  atlas.height = (glyphRegion + tokenRegion) * 2 * atlasScale
+  const ctx = atlas.getContext('2d')
+  if (!ctx) return atlas
+  ctx.scale(atlasScale, atlasScale)
+  ctx.font = '16px Consolas, monospace'
+  ctx.textBaseline = 'middle'
+  for (let palette = 0; palette < 2; palette++) {
+    ctx.fillStyle = palette ? '#e1ffe8' : '#64d990'
+    ctx.shadowColor = palette ? '#8defb3' : 'transparent'
+    ctx.shadowBlur = palette ? 2 : 0
+    ctx.textAlign = 'center'
+    glyphs.forEach((glyph, index) => {
+      ctx.fillText(
+        glyph,
+        ((index % atlasColumns) + 0.5) * cellWidth,
+        palette * glyphRegion + (Math.floor(index / atlasColumns) + 0.5) * cellHeight
+      )
+    })
+    ctx.textAlign = 'left'
+    tokens.forEach((token, index) => {
+      ctx.fillText(
+        token,
+        (index % 4) * 128 + 4,
+        glyphRegion * 2 + palette * tokenRegion + (Math.floor(index / 4) + 0.5) * cellHeight
+      )
+    })
+  }
+  return atlas
+}
+
+function drawGlyph(
+  ctx: CanvasRenderingContext2D,
+  glyph: number,
+  bright: boolean,
+  x: number,
+  y: number,
+  scale: number
+): void {
+  if (!codeAtlas) return
+  ctx.drawImage(
+    codeAtlas,
+    (glyph % atlasColumns) * cellWidth * atlasScale,
+    ((bright ? glyphRegion : 0) + Math.floor(glyph / atlasColumns) * cellHeight) * atlasScale,
+    cellWidth * atlasScale,
+    cellHeight * atlasScale,
+    x,
+    y,
+    cellWidth * scale,
+    cellHeight * scale
+  )
+}
+
+// Twelve fixed ribbon textures share one atlas. They are reused by every
+// stream, including after resize, so the animation never rasterises text or
+// allocates a canvas. Long tails are faded into the cache once.
+function createTrails(): HTMLCanvasElement {
+  const atlas = document.createElement('canvas')
+  atlas.width = trailRows.length * cellWidth * atlasScale
+  atlas.height = Math.max(...trailRows) * cellHeight * atlasScale
+  const ctx = atlas.getContext('2d')
+  if (!ctx) return atlas
+  const random = createRandom(481927)
+  trailRows.forEach((rows, variant) => {
+    for (let row = 0; row < rows; row++) {
+      if (random() < 0.07) continue
+      const depth = (row + 1) / rows
+      ctx.globalAlpha = 0.012 + Math.pow(depth, 2.5) * 0.92
+      drawGlyph(
+        ctx,
+        Math.floor(random() * glyphs.length),
+        false,
+        variant * cellWidth * atlasScale,
+        row * cellHeight * atlasScale,
+        atlasScale
+      )
+    }
+  })
+  ctx.globalAlpha = 1
+  return atlas
+}
+
+function createStreams(count: number): void {
+  const random = createRandom(219437)
+  streamCount = count
+  streams = Array.from({ length: count }, (_, index) => {
+    const foreground = index % 15 === 10
+    const distant = index % 4 === 0 && !foreground
+    return {
+      x: (index + 0.1 + random() * 0.8) / count,
+      offset: random(),
+      speed: foreground
+        ? 320 + random() * 120
+        : distant
+          ? 80 + random() * 60
+          : 150 + random() * 110,
+      scale: foreground
+        ? 1.18 + random() * 0.22
+        : distant
+          ? 0.7 + random() * 0.12
+          : 0.88 + random() * 0.16,
+      opacity: foreground
+        ? 0.7 + random() * 0.12
+        : distant
+          ? 0.25 + random() * 0.1
+          : 0.48 + random() * 0.22,
+      phase: random() * Math.PI * 2,
+      variant: Math.floor(random() * trailRows.length),
+      glyph: Math.floor(random() * glyphs.length),
+      token: index % 10 === 3 && !foreground ? Math.floor(random() * tokens.length) : -1,
+      depth: foreground ? 2 : distant ? 0 : 1
+    }
+  }).sort((left, right) => left.depth - right.depth)
+}
+
+function draw(): void {
+  if (!context || !codeAtlas || !trailAtlas) return
+  context.clearRect(0, 0, width, height)
+  for (const stream of streams) {
+    const scale = stream.scale * pixelScale
+    const glyphHeight = cellHeight * scale
+    const rows = trailRows[stream.variant]
+    const tailHeight = rows * glyphHeight
+    const travel = height + tailHeight + glyphHeight
+    const clock = elapsed + 0.18 * (Math.sin(elapsed * 0.7 + stream.phase) - Math.sin(stream.phase))
+    const headY =
+      ((stream.offset * travel + clock * stream.speed * pixelScale) % travel) - glyphHeight
+    const x = stream.x * width - (cellWidth * scale) / 2
+    const centre = Math.abs(stream.x - 0.5) * 2
+    const breathingRoom = 0.4 + centre * 0.6
+    const pulse = 0.86 + 0.14 * Math.sin(elapsed * 0.5 + stream.phase)
+    const opacity = stream.opacity * breathingRoom * pulse
+    context.globalAlpha = opacity
+    context.drawImage(
+      trailAtlas,
+      stream.variant * cellWidth * atlasScale,
+      0,
+      cellWidth * atlasScale,
+      rows * cellHeight * atlasScale,
+      x,
+      headY - tailHeight,
+      cellWidth * scale,
+      tailHeight
+    )
+    // Only draw leading glyphs and tokens while they intersect the viewport.
+    if (headY >= height || headY + glyphHeight <= 0) continue
+    const glyph = (stream.glyph + Math.floor(elapsed * 6 + stream.phase)) % glyphs.length
+    context.globalAlpha = Math.min(0.88, opacity * (stream.depth === 0 ? 0.7 : 1.2))
+    drawGlyph(context, glyph, stream.depth > 0, x, headY, scale)
+    if (stream.depth === 2) {
+      // A short highlight follows the fast leading edge, rather than a
+      // screen-wide blur or scan pass.
+      context.globalAlpha = opacity * 0.2
+      context.fillStyle = '#b2f6cc'
+      context.fillRect(
+        x + cellWidth * scale * 0.47,
+        headY - glyphHeight * 0.6,
+        Math.max(1, scale),
+        glyphHeight * 1.2
+      )
+    }
+    if (stream.token >= 0) {
+      const signal = Math.pow(Math.max(0, Math.sin(elapsed * 0.7 + stream.phase)), 2)
+      context.globalAlpha = opacity * signal * 0.75
+      context.drawImage(
+        codeAtlas,
+        (stream.token % 4) * 128 * atlasScale,
+        (glyphRegion * 2 + tokenRegion + Math.floor(stream.token / 4) * cellHeight) * atlasScale,
+        128 * atlasScale,
+        cellHeight * atlasScale,
+        x + cellWidth * scale,
+        headY,
+        128 * scale,
+        glyphHeight
+      )
+    }
+  }
+  context.globalAlpha = 1
+}
+
+function resize(): void {
+  const element = canvas.value
+  if (!element) return
+  const bounds = element.getBoundingClientRect()
+  const scale = Math.min(
+    window.devicePixelRatio || 1,
+    1.25,
+    1440 / Math.max(bounds.width, 1),
+    900 / Math.max(bounds.height, 1),
+    Math.sqrt(720_000 / Math.max(bounds.width * bounds.height, 1))
+  )
+  const nextWidth = Math.max(1, Math.floor(bounds.width * scale))
+  const nextHeight = Math.max(1, Math.floor(bounds.height * scale))
+  const count = Math.max(12, Math.min(64, Math.ceil(bounds.width / 32)))
+  if (width === nextWidth && height === nextHeight && pixelScale === scale && streamCount === count)
+    return
+  width = element.width = nextWidth
+  height = element.height = nextHeight
+  pixelScale = scale
+  if (streamCount !== count) createStreams(count)
+  draw()
+}
+
+function inactive(): boolean {
+  return props.paused || document.hidden || !document.hasFocus() || !!motion?.matches
+}
+function stop(): void {
+  cancelAnimationFrame(frame)
+  frame = 0
+  lastFrame = 0
+  lastTick = 0
+}
+function tick(now: number): void {
+  frame = 0
+  if (inactive()) return
+  elapsed += lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0
+  lastTick = now
+  const interval = 1000 / 24
+  if (!lastFrame || now - lastFrame >= interval) {
+    // Carry the vsync remainder so a 60 Hz display averages 24 updates,
+    // instead of rounding every update down to 20 fps.
+    lastFrame = lastFrame ? now - ((now - lastFrame) % interval) : now
+    draw()
+  }
+  frame = requestAnimationFrame(tick)
+}
+function syncAnimation(): void {
+  stop()
+  if (!inactive()) frame = requestAnimationFrame(tick)
+}
+watch(() => props.paused, syncAnimation)
+onMounted(() => {
+  context = canvas.value?.getContext('2d') ?? null
+  if (!context) return
+  codeAtlas = createAtlas()
+  trailAtlas = createTrails()
+  motion = window.matchMedia('(prefers-reduced-motion: reduce)')
+  motion.addEventListener('change', syncAnimation)
+  document.addEventListener('visibilitychange', syncAnimation)
+  window.addEventListener('focus', syncAnimation)
+  window.addEventListener('blur', syncAnimation)
+  observer = new ResizeObserver(resize)
+  if (canvas.value) observer.observe(canvas.value)
+  resize()
+  syncAnimation()
+})
+onBeforeUnmount(() => {
+  stop()
+  observer?.disconnect()
+  motion?.removeEventListener('change', syncAnimation)
+  document.removeEventListener('visibilitychange', syncAnimation)
+  window.removeEventListener('focus', syncAnimation)
+  window.removeEventListener('blur', syncAnimation)
+  streams = []
+  codeAtlas = trailAtlas = null
+  context = null
+})
 </script>
 
 <template>
-  <div
-    class="matrix-background pointer-events-none absolute -inset-6 z-0 overflow-hidden"
-    aria-hidden="true"
-  >
-    <span class="matrix-background__grid" />
-    <span
-      v-for="scan in scanBars"
-      :key="scan.id"
-      class="matrix-background__scan"
-      :style="{ top: scan.top, animationDelay: scan.delay }"
-    />
-    <span class="matrix-background__vertical-scan" />
-    <span class="matrix-background__core" />
-    <span
-      v-for="column in codeColumns"
-      :key="column.id"
-      class="matrix-background__code"
-      :style="{
-        left: column.x,
-        opacity: column.opacity,
-        animationDelay: column.delay,
-        animationDuration: column.duration
-      }"
-    >
-      {{ column.code }}
-    </span>
+  <div class="matrix-background" aria-hidden="true">
+    <canvas ref="canvas" />
   </div>
 </template>
 
 <style scoped>
 .matrix-background {
-  contain: paint;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
   background:
-    radial-gradient(ellipse at 50% 48%, rgb(19 124 76 / 0.24), transparent 37%),
-    linear-gradient(135deg, #020b08, #071911 54%, #020806);
+    radial-gradient(ellipse 70% 100% at 18% 30%, rgb(24 62 46 / 15%), transparent 80%),
+    linear-gradient(155deg, #030a07, #06110b 58%, #020705);
 }
-.matrix-background__grid {
+canvas {
   position: absolute;
-  inset: 11% 10%;
-  border: 1px solid rgb(84 255 165 / 0.13);
-  background:
-    linear-gradient(rgb(72 255 153 / 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(72 255 153 / 0.08) 1px, transparent 1px);
-  background-size: 36px 36px;
-  box-shadow:
-    inset 0 0 50px rgb(19 227 113 / 0.08),
-    0 0 45px rgb(24 236 119 / 0.07);
-}
-.matrix-background__core {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: min(48vw, 540px);
-  height: min(28vw, 280px);
-  border: 1px solid rgb(113 255 178 / 0.24);
-  background: linear-gradient(135deg, rgb(9 48 29 / 0.22), transparent 66%);
-  box-shadow:
-    0 0 35px rgb(36 255 137 / 0.12),
-    inset 0 0 28px rgb(66 255 146 / 0.06);
-  transform: translate(-50%, -50%);
-}
-.matrix-background__core::before,
-.matrix-background__core::after {
-  position: absolute;
-  width: 18px;
-  height: 18px;
-  border-color: #86ffc1;
-  border-style: solid;
-  content: '';
-}
-.matrix-background__core::before {
-  top: -1px;
-  left: -1px;
-  border-width: 1px 0 0 1px;
-}
-.matrix-background__core::after {
-  right: -1px;
-  bottom: -1px;
-  border-width: 0 1px 1px 0;
-}
-.matrix-background__scan {
-  position: absolute;
-  right: 11%;
-  left: 11%;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(140 255 190 / 0.9), transparent);
-  box-shadow: 0 0 13px rgb(82 255 156 / 0.74);
-  animation: matrix-scan 7.5s ease-in-out infinite;
-}
-.matrix-background__vertical-scan {
-  position: absolute;
-  top: 12%;
-  bottom: 12%;
-  left: 16%;
-  width: 1px;
-  background: linear-gradient(transparent, rgb(113 255 178 / 0.72), transparent);
-  box-shadow: 0 0 10px rgb(65 255 145 / 0.54);
-  animation: matrix-vertical-scan 9s ease-in-out infinite;
-}
-.matrix-background__code {
-  position: absolute;
-  top: -32%;
-  color: #8cffbd;
-  font-family: 'Cascadia Code', Consolas, monospace;
-  font-size: 11px;
-  letter-spacing: 0.15em;
-  line-height: 1.82;
-  text-align: center;
-  text-shadow: 0 0 8px rgb(75 255 147 / 0.62);
-  white-space: pre-line;
-  animation-name: matrix-rain;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-}
-@keyframes matrix-rain {
-  to {
-    transform: translateY(148vh);
-  }
-}
-@keyframes matrix-scan {
-  0%,
-  100% {
-    transform: translateX(-8%);
-    opacity: 0.12;
-  }
-  50% {
-    transform: translateX(8%);
-    opacity: 0.9;
-  }
-}
-@keyframes matrix-vertical-scan {
-  0%,
-  100% {
-    transform: translateX(0);
-    opacity: 0.18;
-  }
-  50% {
-    transform: translateX(68vw);
-    opacity: 0.8;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .matrix-background * {
-    animation: none;
-  }
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 </style>

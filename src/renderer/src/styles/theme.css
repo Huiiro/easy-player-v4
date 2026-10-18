@@ -235,18 +235,18 @@
 }
 
 :root[data-system-theme='rainy'] {
-  --color-bg: rgb(18 22 30);
-  --color-bg-l: rgb(34 37 45);
-  --color-bg-l2: rgb(45 47 55);
-  --color-bg-d: rgb(12 16 24);
-  --color-border: rgb(224 181 135 / 0.34);
-  --color-border-l: rgb(239 199 153 / 0.48);
-  --color-hover: rgb(236 186 123 / 0.1);
-  --color-hover-bg: rgb(236 186 123 / 0.16);
-  --color-icon: rgb(245 226 206);
-  --color-icon-l: rgb(198 179 160);
-  --scrollbar-thumb: rgb(203 156 111 / 0.46);
-  --scrollbar-thumb-hover: rgb(230 184 135 / 0.68);
+  --color-bg: rgb(9 19 31);
+  --color-bg-l: rgb(19 34 48);
+  --color-bg-l2: rgb(29 46 61);
+  --color-bg-d: rgb(5 12 22);
+  --color-border: rgb(139 179 205 / 0.28);
+  --color-border-l: rgb(181 211 227 / 0.42);
+  --color-hover: rgb(142 190 217 / 0.09);
+  --color-hover-bg: rgb(102 155 188 / 0.17);
+  --color-icon: rgb(218 234 244);
+  --color-icon-l: rgb(147 180 201);
+  --scrollbar-thumb: rgb(112 157 186 / 0.44);
+  --scrollbar-thumb-hover: rgb(159 202 225 / 0.66);
 }
 
 :root[data-system-theme='starfield'] {
@@ -284,77 +284,61 @@
 }
 
 :root[data-system-theme='ocean'] {
-  /*--color-text: rgb(239 249 255);*/
-  /*--color-text-l: rgb(181 214 235);*/
-  /*--color-text-l2: rgb(128 172 204);*/
-  /*--color-text-l3: rgb(75 123 159);*/
-  --color-bg: rgb(4 20 39);
-  --color-bg-l: rgb(10 41 67);
-  --color-bg-l2: rgb(16 55 86);
-  --color-bg-d: rgb(2 13 28);
-  --color-border: rgb(112 199 255 / 0.5);
-  --color-border-l: rgb(161 224 255 / 0.68);
-  --color-hover: rgb(111 203 255 / 0.12);
-  --color-hover-bg: rgb(73 166 224 / 0.2);
-  --color-icon: rgb(218 243 255);
-  --color-icon-l: rgb(135 194 228);
-  --scrollbar-thumb: rgb(78 171 224 / 0.5);
-  --scrollbar-thumb-hover: rgb(138 215 255 / 0.72);
+  --color-bg: rgb(6 25 35);
+  --color-bg-l: rgb(14 42 52);
+  --color-bg-l2: rgb(23 56 65);
+  --color-bg-d: rgb(4 17 26);
+  --color-border: rgb(129 184 189 / 0.26);
+  --color-border-l: rgb(169 216 215 / 0.4);
+  --color-hover: rgb(139 202 201 / 0.09);
+  --color-hover-bg: rgb(83 153 166 / 0.18);
+  --color-icon: rgb(216 239 237);
+  --color-icon-l: rgb(140 187 193);
+  --scrollbar-thumb: rgb(103 168 180 / 0.42);
+  --scrollbar-thumb-hover: rgb(150 209 212 / 0.65);
 }
 
 :root[data-system-theme='sunset'] {
-  /*--color-text: rgb(255 244 254);*/
-  /*--color-text-l: rgb(233 196 228);*/
-  /*--color-text-l2: rgb(194 145 191);*/
-  /*--color-text-l3: rgb(145 94 146);*/
-  --color-bg: rgb(39 15 50);
-  --color-bg-l: rgb(65 26 71);
-  --color-bg-l2: rgb(81 33 86);
-  --color-bg-d: rgb(26 10 39);
-  --color-border: rgb(255 126 217 / 0.5);
-  --color-border-l: rgb(255 179 231 / 0.68);
-  --color-hover: rgb(255 118 212 / 0.12);
-  --color-hover-bg: rgb(221 82 182 / 0.22);
-  --color-icon: rgb(255 220 246);
-  --color-icon-l: rgb(223 151 210);
-  --scrollbar-thumb: rgb(215 87 181 / 0.52);
-  --scrollbar-thumb-hover: rgb(255 159 224 / 0.72);
+  --color-bg: rgb(29 28 35);
+  --color-bg-l: rgb(44 39 44);
+  --color-bg-l2: rgb(58 49 52);
+  --color-bg-d: rgb(20 21 28);
+  --color-border: rgb(236 180 137 / 0.24);
+  --color-border-l: rgb(245 206 166 / 0.4);
+  --color-hover: rgb(243 179 127 / 0.1);
+  --color-hover-bg: rgb(218 146 99 / 0.19);
+  --color-icon: rgb(250 228 205);
+  --color-icon-l: rgb(204 169 146);
+  --scrollbar-thumb: rgb(208 151 111 / 0.42);
+  --scrollbar-thumb-hover: rgb(245 195 146 / 0.65);
 }
 
 :root[data-system-theme='forest'] {
-  /*--color-text: rgb(222 231 219);*/
-  /*--color-text-l: rgb(181 197 175);*/
-  /*--color-text-l2: rgb(139 160 133);*/
-  /*--color-text-l3: rgb(99 121 95);*/
-  --color-bg: rgb(7 28 21);
-  --color-bg-l: rgb(17 53 36);
-  --color-bg-l2: rgb(27 68 44);
-  --color-bg-d: rgb(4 19 14);
-  --color-border: rgb(132 181 119 / 0.48);
-  --color-border-l: rgb(170 205 155 / 0.62);
-  --color-hover: rgb(135 188 117 / 0.11);
-  --color-hover-bg: rgb(79 133 73 / 0.24);
-  --color-icon: rgb(198 214 194);
-  --color-icon-l: rgb(145 168 137);
-  --scrollbar-thumb: rgb(76 135 75 / 0.56);
-  --scrollbar-thumb-hover: rgb(139 185 125 / 0.68);
+  --color-bg: rgb(21 34 28);
+  --color-bg-l: rgb(32 47 37);
+  --color-bg-l2: rgb(43 60 45);
+  --color-bg-d: rgb(14 25 21);
+  --color-border: rgb(174 193 145 / 0.24);
+  --color-border-l: rgb(204 215 176 / 0.38);
+  --color-hover: rgb(185 202 151 / 0.1);
+  --color-hover-bg: rgb(146 169 112 / 0.18);
+  --color-icon: rgb(221 228 206);
+  --color-icon-l: rgb(170 185 155);
+  --scrollbar-thumb: rgb(150 173 119 / 0.4);
+  --scrollbar-thumb-hover: rgb(197 212 163 / 0.62);
 }
 
 :root[data-system-theme='matrix'] {
-  /*--color-text: rgb(211 226 213);*/
-  /*--color-text-l: rgb(160 190 166);*/
-  /*--color-text-l2: rgb(106 149 116);*/
-  /*--color-text-l3: rgb(65 111 78);*/
-  --color-bg: rgb(2 19 11);
-  --color-bg-l: rgb(6 39 22);
-  --color-bg-l2: rgb(10 54 30);
-  --color-bg-d: rgb(1 12 7);
-  --color-border: rgb(81 190 123 / 0.46);
-  --color-border-l: rgb(123 215 156 / 0.62);
-  --color-hover: rgb(78 195 124 / 0.11);
-  --color-hover-bg: rgb(31 120 70 / 0.26);
-  --color-icon: rgb(177 205 184);
-  --color-icon-l: rgb(108 163 125);
-  --scrollbar-thumb: rgb(35 126 73 / 0.58);
-  --scrollbar-thumb-hover: rgb(91 183 126 / 0.68);
+  --color-bg: rgb(8 19 15);
+  --color-bg-l: rgb(16 31 24);
+  --color-bg-l2: rgb(24 43 33);
+  --color-bg-d: rgb(4 12 9);
+  --color-border: rgb(126 187 151 / 0.22);
+  --color-border-l: rgb(171 218 189 / 0.36);
+  --color-hover: rgb(126 199 156 / 0.09);
+  --color-hover-bg: rgb(87 158 117 / 0.18);
+  --color-icon: rgb(209 232 217);
+  --color-icon-l: rgb(140 181 154);
+  --scrollbar-thumb: rgb(99 160 120 / 0.4);
+  --scrollbar-thumb-hover: rgb(156 212 177 / 0.62);
 }

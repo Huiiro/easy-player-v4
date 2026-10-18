@@ -3,144 +3,169 @@ in vec2 a_position;
 void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
 `
 
-// The supplied Heartfelt shader informed the glass-rain direction. These shapes,
-// image compositing and lighting are implemented for this theme's fixed backdrop.
+// Adapted from the user's local rainy_window_shader_adapted.html.
+// Rain functions originate from Heartfelt, Martijn Steinrucken (BigWings), 2017.
+// https://www.shadertoy.com/view/ltffzl — original shader: CC BY-NC-SA 3.0.
+// Preserve its field sampling and focus parameters; the host bounds pixel cost.
 export const rainyFragmentShader = `#version 300 es
-precision highp float;
-uniform vec2 u_resolution;
-uniform vec2 u_imageSize;
-uniform float u_time;
-uniform sampler2D u_image;
-out vec4 outColor;
+  precision highp float;
 
-float hash(vec2 p) {
-  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-}
+  uniform vec2 u_resolution;
+  uniform vec2 u_imageSize;
+  uniform float u_time;
+  uniform sampler2D u_image;
 
-float softNoise(vec2 p) {
-  vec2 cell = floor(p);
-  vec2 blend = fract(p);
-  blend = blend * blend * (3.0 - 2.0 * blend);
-  return mix(mix(hash(cell), hash(cell + vec2(1.0, 0.0)), blend.x),
-             mix(hash(cell + vec2(0.0, 1.0)), hash(cell + vec2(1.0)), blend.x), blend.y);
-}
+  out vec4 outColor;
 
-vec2 imageUv(vec2 uv) {
-  float scale = max(u_resolution.x / u_imageSize.x, u_resolution.y / u_imageSize.y);
-  vec2 visible = u_resolution / (u_imageSize * scale);
-  return (uv - 0.5) * visible + 0.5;
-}
+  // Explicit Hermite interpolation supports the reference's descending edges.
+  float S(float start, float end, float value) {
+    float t = clamp((value - start) / (end - start), 0.0, 1.0);
+    return t * t * (3.0 - 2.0 * t);
+  }
 
-vec3 backdrop(vec2 uv, float lod) {
-  return textureLod(u_image, clamp(imageUv(uv), vec2(0.001), vec2(0.999)), lod).rgb;
-}
+  vec2 imageUv(vec2 uv) {
+    float scale = max(u_resolution.x / u_imageSize.x, u_resolution.y / u_imageSize.y);
+    vec2 visible = u_resolution / (u_imageSize * scale);
+    return clamp((uv - 0.5) * visible + 0.5, vec2(0.001), vec2(0.999));
+  }
+  #define USE_POST_PROCESSING
 
-vec2 rainLayer(vec2 p, float time, vec2 grid, float seed) {
-  p *= grid;
-  p.y += time * (0.42 + seed * 0.16);
-  p.y += hash(vec2(floor(p.x), seed)) * 0.7;
-  vec2 cell = floor(p);
-  vec2 local = fract(p);
-  float random = hash(cell + seed);
-  vec2 center = vec2(0.24 + 0.52 * hash(cell + seed + 3.1),
-                     0.22 + 0.48 * hash(cell + seed + 7.3));
-  center.x += 0.035 * sin(time * 0.7 + cell.y * 1.9);
-  float radius = mix(0.11, 0.23, hash(cell + seed + 9.7));
-  vec2 offset = (local - center) / vec2(radius * 0.72, radius * 1.18);
-  float bodyHeight = pow(max(0.0, 1.0 - dot(offset, offset)), 1.6);
-  float body = smoothstep(0.0, 0.48, bodyHeight);
-  float wiggle = sin(local.y * 13.0 + random * 6.28) * 0.018;
-  float tailWidth = mix(0.055, 0.018, smoothstep(center.y, 1.0, local.y));
-  float trail = (1.0 - smoothstep(tailWidth * 0.4, tailWidth, abs(local.x - center.x - wiggle)))
-              * smoothstep(center.y - 0.04, center.y + 0.05, local.y)
-              * (1.0 - smoothstep(center.y + 0.15, 1.15, local.y));
-  float dropVisibility = smoothstep(0.08, 0.38, random);
-  return vec2(max(body, trail * 0.5) * dropVisibility,
-              (bodyHeight + trail * 0.18) * dropVisibility);
-}
+  vec3 N13(float p) {
+     vec3 p3 = fract(vec3(p) * vec3(.1031,.11369,.13787));
+     p3 += dot(p3, p3.yzx + 19.19);
+     return fract(vec3((p3.x + p3.y)*p3.z, (p3.x+p3.z)*p3.y, (p3.y+p3.z)*p3.x));
+  }
 
-float fineDrops(vec2 p, float time) {
-  p *= vec2(68.0, 43.0);
-  vec2 cell = floor(p);
-  vec2 point = vec2(hash(cell + 1.8), hash(cell + 5.2));
-  float life = fract(hash(cell + 9.1) + time * 0.085);
-  float fade = smoothstep(0.0, 0.16, life) * (1.0 - smoothstep(0.75, 1.0, life));
-  float d = length((fract(p) - point) * vec2(1.0, 1.3));
-  return (1.0 - smoothstep(0.08, 0.23, d)) * fade * step(0.18, hash(cell + 12.4));
-}
+  float N(float t) {
+      return fract(sin(t*12345.564)*7658.76);
+  }
 
-float fallingRain(vec2 p, float time) {
-  vec2 q = p * vec2(105.0, 14.0);
-  q.y += time * 6.8;
-  vec2 cell = floor(q);
-  float random = hash(cell);
-  float x = fract(q.x) - hash(cell + 3.7);
-  float streak = (1.0 - smoothstep(0.005, 0.034, abs(x)))
-               * smoothstep(0.08, 0.38, fract(q.y))
-               * (1.0 - smoothstep(0.56, 0.96, fract(q.y)));
-  return streak * step(0.7, random);
-}
+  float Saw(float b, float t) {
+    return S(0., b, t)*S(1., b, t);
+  }
 
-// Lamp positions are in the source image, so their glow stays aligned when the
-// cover crop changes with the window size.
-float lightHalo(vec2 imagePoint, vec2 light, float radius) {
-  vec2 offset = (imagePoint - light) * vec2(u_imageSize.x / u_imageSize.y, 1.0);
-  float distanceFromLight = length(offset) / radius;
-  float bloom = exp(-distanceFromLight * distanceFromLight * 1.8);
-  float core = exp(-distanceFromLight * distanceFromLight * 18.0);
-  return bloom * 0.65 + core * 0.35;
-}
+  vec2 DropLayer2(vec2 uv, float t) {
+      vec2 UV = uv;
 
-void main() {
-  vec2 uv = gl_FragCoord.xy / u_resolution;
-  vec2 rainUv = (gl_FragCoord.xy - u_resolution * 0.5) / u_resolution.y;
-  vec2 large = rainLayer(rainUv + 4.2, u_time * 0.7, vec2(9.0, 4.0), 0.3);
-  vec2 small = rainLayer(rainUv + 8.7, u_time, vec2(17.0, 8.0), 4.1);
-  float fine = fineDrops(rainUv, u_time);
-  float drops = clamp(large.x * 0.82 + small.x * 0.52 + fine * 0.28, 0.0, 1.0);
-  float height = large.y * 0.9 + small.y * 0.55 + fine * 0.12;
-  // A smooth water height avoids the hard embossed rings produced by the coverage mask.
-  vec2 normal = vec2(dFdx(height), dFdy(height));
-  vec2 refracted = uv + normal * vec2(0.045, 0.055);
+      uv.y += t*0.75;
+      vec2 a = vec2(6., 1.);
+      vec2 grid = a*2.;
+      vec2 id = floor(uv*grid);
 
-  vec3 clear = backdrop(refracted, 0.0);
-  // The source photo already has optical defocus; only add a little glass haze.
-  vec3 fog = backdrop(uv, 2.0);
-  vec3 color = mix(fog, clear, 0.55 + drops * 0.24);
-  float mist = softNoise(uv * vec2(4.0, 3.0) + vec2(u_time * 0.018, -u_time * 0.009));
-  float distanceHaze = exp(-pow((uv.y - 0.55) * 2.4, 2.0)) * smoothstep(0.2, 0.65, uv.x);
-  color = mix(color, vec3(0.08, 0.14, 0.23),
-              smoothstep(0.27, 0.78, mist) * distanceHaze * (1.0 - drops * 0.5) * 0.22);
-  vec3 glow = backdrop(uv, 5.0);
-  float bright = smoothstep(0.34, 0.78, dot(glow, vec3(0.2126, 0.7152, 0.0722)));
-  color += glow * bright * 0.23;
-  vec2 imagePoint = imageUv(uv);
-  float warmHalo =
-      lightHalo(imagePoint, vec2(0.032, 0.695), 0.065) * 0.75
-    + lightHalo(imagePoint, vec2(0.553, 0.671), 0.09) * 0.9
-    + lightHalo(imagePoint, vec2(0.612, 0.584), 0.055) * 0.55
-    + lightHalo(imagePoint, vec2(0.325, 0.541), 0.06) * 0.4
-    + lightHalo(imagePoint, vec2(0.585, 0.288), 0.07) * 0.65
-    + lightHalo(imagePoint, vec2(0.675, 0.286), 0.07) * 0.65;
-  color += vec3(1.0, 0.56, 0.29) * warmHalo * 0.29;
-  float localLight = 0.18 + smoothstep(0.22, 0.65, dot(glow, vec3(0.2126, 0.7152, 0.0722)))
-                   + min(warmHalo, 1.0) * 0.45;
-  float glint = clamp(dot(normal, vec2(-0.6, 0.8)) * 5.5, 0.0, 1.0) * drops;
-  color += vec3(1.0, 0.83, 0.67) * glint * localLight * 0.2;
-  color *= 1.0 - clamp(dot(normal, vec2(0.6, -0.8)) * 3.0, 0.0, 1.0) * drops * 0.1;
-  float rainLight = clamp(bright + warmHalo * 0.7, 0.0, 1.0);
-  vec3 rainColor = mix(vec3(0.28, 0.39, 0.5), vec3(1.0, 0.77, 0.51), rainLight);
-  color += rainColor * fallingRain(rainUv, u_time) * 0.22;
+      float colShift = N(id.x);
+      uv.y += colShift;
 
-  float pulse = pow(max(0.0, sin(u_time * 0.33 + sin(u_time * 0.71))), 24.0) * 0.055;
-  color += vec3(0.65, 0.72, 0.84) * pulse;
+      id = floor(uv*grid);
+      vec3 n = N13(id.x*35.2+id.y*2376.1);
+      vec2 st = fract(uv*grid)-vec2(.5, 0);
 
-  float luminance = dot(color, vec3(0.2126, 0.7152, 0.0722));
-  float highlight = smoothstep(0.22, 0.78, luminance);
-  color *= mix(vec3(0.68, 0.73, 0.82), vec3(0.86, 0.83, 0.79), highlight);
-  color *= mix(vec3(1.0), vec3(0.74, 0.79, 0.91), smoothstep(0.48, 0.98, uv.y) * 0.6);
-  color = pow(max(color, vec3(0.0)), vec3(1.08));
-  color *= mix(0.68, 1.0, smoothstep(0.0, 0.72, 1.0 - length((uv - 0.5) * vec2(1.0, 0.8))));
-  outColor = vec4(color, 1.0);
-}
+      float x = n.x-.5;
+
+      float y = UV.y*20.;
+      float wiggle = sin(y+sin(y));
+      x += wiggle*(.5-abs(x))*(n.z-.5);
+      x *= .7;
+      float ti = fract(t+n.z);
+      y = (Saw(.85, ti)-.5)*.9+.5;
+      vec2 p = vec2(x, y);
+
+      float d = length((st-p)*a.yx);
+
+      float mainDrop = S(.4, .0, d);
+
+      float r = sqrt(S(1., y, st.y));
+      float cd = abs(st.x-x);
+      float trail = S(.23*r, .15*r*r, cd);
+      float trailFront = S(-.02, .02, st.y-y);
+      trail *= trailFront*r*r;
+
+      y = UV.y;
+      float trail2 = S(.2*r, .0, cd);
+      float droplets = max(0., (sin(y*(1.-y)*120.)-st.y))*trail2*trailFront*n.z;
+      y = fract(y*10.)+(st.y-.5);
+      float dd = length(st-vec2(x, y));
+      droplets = S(.3, 0., dd);
+      float m = mainDrop+droplets*r*trailFront;
+
+      return vec2(m, trail);
+  }
+
+  float StaticDrops(vec2 uv, float t) {
+    uv *= 40.;
+
+    vec2 id = floor(uv);
+    uv = fract(uv)-.5;
+    vec3 n = N13(id.x*107.45+id.y*3543.654);
+    vec2 p = (n.xy-.5)*.7;
+    float d = length(uv-p);
+
+    float fade = Saw(.025, fract(t+n.z));
+    float c = S(.3, 0., d)*fract(n.z*10.)*fade;
+    return c;
+  }
+
+  vec2 Drops(vec2 uv, float t, float l0, float l1, float l2) {
+    float s = StaticDrops(uv, t)*l0;
+    vec2 m1 = DropLayer2(uv, t)*l1;
+    vec2 m2 = DropLayer2(uv*1.85, t)*l2;
+
+    float c = s+m1.x+m2.x;
+    c = S(.3, 1., c);
+
+    return vec2(c, max(m1.y*l0, m2.y*l1));
+  }
+
+  void main() {
+    vec2 fragCoord = gl_FragCoord.xy;
+    vec2 uv = (fragCoord.xy-.5*u_resolution) / u_resolution.y;
+    vec2 UV = fragCoord.xy/u_resolution;
+
+    float T = u_time;
+
+    float t = T*.2;
+
+    float rainAmount = (sin(T*.05)*.3+.7);
+
+    // Camera / framing kept subtle; stronger fogginess than the original version.
+    float zoom = 0.96 + 0.04*sin(T*.08);
+    uv *= zoom;
+    UV = (UV-.5)*(0.94+0.03*sin(T*.09)) + .5;
+
+    float maxBlur = mix(3.5, 7.0, rainAmount);
+    float minBlur = 2.5;
+
+    float staticDrops = S(-.5, 1., rainAmount)*2.0;
+    float layer1 = S(.25, .75, rainAmount);
+    float layer2 = S(.0, .5, rainAmount);
+
+    vec2 c = Drops(uv, t, staticDrops, layer1, layer2);
+
+    vec2 e = vec2(.0012, 0.);
+    float cx = Drops(uv+e, t, staticDrops, layer1, layer2).x;
+    float cy = Drops(uv+e.yx, t, staticDrops, layer1, layer2).x;
+    vec2 n = vec2(cx-c.x, cy-c.x);
+
+    float focus = mix(maxBlur-c.y, minBlur, S(.1, .2, c.x));
+
+    // Stronger refraction / distortion than the earlier attempts.
+    vec2 distort = n * mix(0.5, 1.2, rainAmount);
+    vec3 col = textureLod(u_image, imageUv(clamp(UV + distort, 0.0, 1.0)), focus).rgb;
+
+    #ifdef USE_POST_PROCESSING
+      float tt = (T+3.)*.5;
+      float colFade = sin(tt*.2)*.5+.5;
+      col *= mix(vec3(1.), vec3(.84, .92, 1.18), colFade*0.55); // subtle cool lift
+      float lightning = sin(tt*sin(tt*10.));
+      lightning *= pow(max(0., sin(tt+sin(tt))), 10.);
+      col *= 1. + lightning * 0.12;
+      vec2 vv = UV - .5;
+      col *= 1.0 - dot(vv, vv) * 0.65;
+    #endif
+
+    // Slight bloom-like lift for warm lights.
+    float lum = dot(col, vec3(0.299, 0.587, 0.114));
+    col += pow(max(lum - 0.42, 0.0), 1.6) * vec3(0.09, 0.07, 0.05);
+
+    outColor = vec4(col, 1.0);
+  }
 `

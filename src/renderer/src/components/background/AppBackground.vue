@@ -139,7 +139,12 @@ onBeforeUnmount(() => {
                   active: isBackgroundActive && !ui.showPlayer,
                   reducedMotion: ui.reduceMotion
                 }
-              : activeTheme.id === 'blackhole' ||
+              : activeTheme.id === 'matrix' ||
+                  activeTheme.id === 'forest' ||
+                  activeTheme.id === 'ocean' ||
+                  activeTheme.id === 'sunset' ||
+                  activeTheme.id === 'aurora' ||
+                  activeTheme.id === 'blackhole' ||
                   activeTheme.id === 'rainy' ||
                   activeTheme.id === 'starfield'
                 ? { paused: !isBackgroundActive || ui.showPlayer || ui.reduceMotion }
@@ -151,6 +156,11 @@ onBeforeUnmount(() => {
         v-if="!isSolidTheme"
         class="app-background-scrim app-background-scrim--system"
         :class="{
+          'app-background-scrim--matrix': ui.systemBackground === 'matrix',
+          'app-background-scrim--ocean': ui.systemBackground === 'ocean',
+          'app-background-scrim--forest': ui.systemBackground === 'forest',
+          'app-background-scrim--sunset': ui.systemBackground === 'sunset',
+          'app-background-scrim--aurora': ui.systemBackground === 'aurora',
           'app-background-scrim--rainy': ui.systemBackground === 'rainy',
           'app-background-scrim--starfield': ui.systemBackground === 'starfield'
         }"
@@ -196,6 +206,26 @@ onBeforeUnmount(() => {
 
 .app-background-scrim--system {
   background: color-mix(in srgb, var(--color-bg) 62%, transparent);
+}
+
+.app-background-scrim--matrix {
+  background: color-mix(in srgb, var(--color-bg) 38%, transparent);
+}
+
+.app-background-scrim--ocean {
+  background: color-mix(in srgb, var(--color-bg) 34%, transparent);
+}
+
+.app-background-scrim--forest {
+  background: color-mix(in srgb, var(--color-bg) 40%, transparent);
+}
+
+.app-background-scrim--sunset {
+  background: color-mix(in srgb, var(--color-bg) 36%, transparent);
+}
+
+.app-background-scrim--aurora {
+  background: color-mix(in srgb, var(--color-bg) 28%, transparent);
 }
 
 .app-background-scrim--rainy {

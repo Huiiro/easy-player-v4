@@ -7,17 +7,14 @@ interface Star {
   radius: number
   opacity: number
   phase: number
-  twinkle: number
-  depth: number
+  speed: number
   color: number
-  bright: boolean
 }
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false })
 const canvas = ref<HTMLCanvasElement | null>(null)
-const nebulaCanvas = ref<HTMLCanvasElement | null>(null)
-const palette = ['#eaf3ff', '#b7d3ff', '#ffe7c1', '#d8caff']
-const glowPalette = ['234,243,255', '174,207,255', '255,223,169', '218,192,255']
+const distantCanvas = ref<HTMLCanvasElement | null>(null)
+const palette = ['#e5edf5', '#c4d5e8', '#a4bfdc']
 let context: CanvasRenderingContext2D | null = null
 let observer: ResizeObserver | null = null
 let motion: MediaQueryList | null = null
@@ -26,10 +23,8 @@ let lastFrame = 0
 let elapsed = 0
 let width = 1
 let height = 1
-let nebulaWidth = 0
-let nebulaHeight = 0
-let nebulaResizeTimer: ReturnType<typeof setTimeout> | undefined
-let glowSprites: HTMLCanvasElement[] = []
+let glowSprite: HTMLCanvasElement | null = null
+let visibleStars = 0
 
 function createRandom(seed: number): () => number {
   let state = seed
@@ -42,177 +37,110 @@ function createRandom(seed: number): () => number {
 }
 
 const random = createRandom(88427)
-const stars: Star[] = Array.from({ length: 1600 }, () => {
-  const x = random()
-  const clustered = random() < 0.55
-  const bandY = 0.77 - x * 0.53 + (random() + random() + random() - 1.5) * 0.15
-  const y = clustered ? Math.max(0.01, Math.min(0.99, bandY)) : random()
-  const bright = random() < 0.035
+function createStar(): Star {
   return {
-    x,
-    y,
-    radius: bright ? 1.2 + random() * 1.1 : 0.5 + Math.pow(random(), 6) * 1.15,
-    opacity: (clustered ? 0.31 : 0.35) + random() * 0.58,
+    x: random(),
+    y: random(),
+    radius: 0.35 + Math.pow(random(), 3) * 0.55,
+    opacity: 0.18 + random() * 0.44,
     phase: random() * Math.PI * 2,
-    twinkle: 0.65 + random() * 1.55,
-    depth: 0.35 + random() * 0.9,
-    color: Math.floor(random() * palette.length),
-    bright
+    speed: 0.35 + random() * 0.4,
+    color: Math.floor(random() * palette.length)
   }
-})
-
-function noiseHash(x: number, y: number): number {
-  let value = Math.imul(x, 374761393) + Math.imul(y, 668265263)
-  value = Math.imul(value ^ (value >>> 13), 1274126177)
-  return ((value ^ (value >>> 16)) >>> 0) / 4294967295
 }
 
-function softNoise(x: number, y: number): number {
-  const cellX = Math.floor(x)
-  const cellY = Math.floor(y)
-  let blendX = x - cellX
-  let blendY = y - cellY
-  blendX = blendX * blendX * (3 - 2 * blendX)
-  blendY = blendY * blendY * (3 - 2 * blendY)
-  const top = noiseHash(cellX, cellY) * (1 - blendX) + noiseHash(cellX + 1, cellY) * blendX
-  const bottom =
-    noiseHash(cellX, cellY + 1) * (1 - blendX) + noiseHash(cellX + 1, cellY + 1) * blendX
-  return top * (1 - blendY) + bottom * blendY
-}
+// The distant field is painted only on resize. Keep animation work independent
+// of its density, including on large / high-DPI displays.
+const distantStars = Array.from({ length: 580 }, createStar)
+const stars = Array.from({ length: 36 }, createStar)
 
-function renderNebula(boundsWidth: number, boundsHeight: number): void {
-  const element = nebulaCanvas.value
-  if (!element || boundsWidth < 1 || boundsHeight < 1) return
-  const nextWidth = Math.max(180, Math.min(560, Math.round(boundsWidth * 0.5)))
-  const nextHeight = Math.max(100, Math.round((nextWidth * boundsHeight) / boundsWidth))
-  if (nextWidth === nebulaWidth && nextHeight === nebulaHeight) return
-  nebulaWidth = nextWidth
-  nebulaHeight = nextHeight
-  element.width = nextWidth
-  element.height = nextHeight
-  const ctx = element.getContext('2d')
-  if (!ctx) return
-  const image = ctx.createImageData(nextWidth, nextHeight)
-  const pixels = image.data
-  for (let x = 0; x < nextWidth; x++) {
-    const u = x / nextWidth
-    for (let y = 0; y < nextHeight; y++) {
-      const v = y / nextHeight
-      const warp = softNoise(u * 9.9, v * 1.9)
-      const broad = softNoise(u * 11.5, v * 13.4)
-      const detail = softNoise(u * 14.2, v * 14.7)
-      const wisps = softNoise(u * 28.0, v * 18.0)
-      const center = 0.58 - u * 0.53 + warp * 0.24 + (detail - 0.5) * 0.13
-      const reach = 0.12 + (broad - 0.5) * 0.32 + (detail - 0.5) * 0.22
-      const contour = Math.max(0, Math.min(1, (reach - Math.abs(v - center) + 0.025) / 0.09))
-      const cloud = broad * 0.24 + detail * 0.24 + wisps * 0.12
-      let density = contour * Math.max(0, Math.min(1, (cloud - 0.28) / 0.78))
-      density = density * density * (3 - 2 * density)
-      const dust = Math.max(0, (softNoise(u * 9.2 + 34.0, v * 9.2 + 6.0) - 0.62) / 0.38)
-      density *= 1 - dust * 0.75
-      const violet = Math.max(0, Math.min(1, 0.18 + broad * 0.65 + detail * 0.18))
-      const index = (y * nextWidth + x) * 4
-      pixels[index] = 61 + violet * 73
-      pixels[index + 1] = 108 - violet * 28
-      pixels[index + 2] = 169 + violet * 29
-      pixels[index + 3] = density * (0.27 + broad * 0.17) * 255
-    }
-  }
-  ctx.putImageData(image, 0, 0)
-}
-
-function scheduleNebula(boundsWidth: number, boundsHeight: number): void {
-  if (!nebulaWidth) {
-    renderNebula(boundsWidth, boundsHeight)
-    return
-  }
-  if (nebulaResizeTimer) clearTimeout(nebulaResizeTimer)
-  nebulaResizeTimer = setTimeout(() => {
-    nebulaResizeTimer = undefined
-    renderNebula(boundsWidth, boundsHeight)
-  }, 150)
-}
-
-function createGlowSprite(rgb: string): HTMLCanvasElement {
+function createGlowSprite(): HTMLCanvasElement {
   const sprite = document.createElement('canvas')
-  sprite.width = sprite.height = 64
+  sprite.width = sprite.height = 48
   const ctx = sprite.getContext('2d')
   if (!ctx) return sprite
-  const halo = ctx.createRadialGradient(32, 32, 0, 32, 32, 31)
-  halo.addColorStop(0, `rgba(${rgb}, 0.95)`)
-  halo.addColorStop(0.1, `rgba(${rgb}, 0.48)`)
-  halo.addColorStop(0.38, `rgba(${rgb}, 0.12)`)
-  halo.addColorStop(1, `rgba(${rgb}, 0)`)
+  const halo = ctx.createRadialGradient(24, 24, 0, 24, 24, 24)
+  halo.addColorStop(0, 'rgba(210,229,248,0.45)')
+  halo.addColorStop(0.12, 'rgba(184,212,241,0.18)')
+  halo.addColorStop(0.4, 'rgba(150,187,225,0.035)')
+  halo.addColorStop(1, 'rgba(150,187,225,0)')
   ctx.fillStyle = halo
-  ctx.fillRect(0, 0, 64, 64)
-  const flare = ctx.createLinearGradient(0, 32, 64, 32)
-  flare.addColorStop(0, `rgba(${rgb}, 0)`)
-  flare.addColorStop(0.5, `rgba(${rgb}, 0.32)`)
-  flare.addColorStop(1, `rgba(${rgb}, 0)`)
-  ctx.fillStyle = flare
-  ctx.fillRect(0, 31.5, 64, 1)
-  ctx.save()
-  ctx.translate(32, 32)
-  ctx.rotate(Math.PI / 2)
-  ctx.translate(-32, -32)
-  ctx.fillRect(0, 31.5, 64, 1)
-  ctx.restore()
+  ctx.fillRect(0, 0, 48, 48)
   return sprite
+}
+
+function drawDistantStars(): void {
+  const ctx = distantCanvas.value?.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, width, height)
+  const count = Math.min(distantStars.length, Math.round((width * height) / 2700))
+  for (let index = 0; index < count; index++) {
+    const star = distantStars[index]
+    // A broad, faint concentration gives depth without a dense, dusty stripe.
+    const space = 0.65 + 0.35 * Math.sin(star.x * Math.PI)
+    ctx.globalAlpha = star.opacity * space
+    ctx.fillStyle = palette[star.color]
+    ctx.beginPath()
+    ctx.arc(star.x * width, star.y * height, star.radius, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.globalAlpha = 1
 }
 
 function draw(): void {
   if (!context) return
   context.clearRect(0, 0, width, height)
-  const count = Math.min(stars.length, Math.round((width * height) / 600))
-  const sizeScale = Math.max(0.72, Math.min(1.3, height / 750))
-  for (let index = 0; index < count; index++) {
+  for (let index = 0; index < visibleStars; index++) {
     const star = stars[index]
-    const x = ((star.x + elapsed * 0.00055 * star.depth) % 1) * width
-    const y = ((star.y - elapsed * 0.00016 * star.depth + 1) % 1) * height
-    const twinkle = 0.55 + 0.45 * Math.sin(elapsed * star.twinkle + star.phase)
-    const opacity = star.opacity * twinkle
-    const radius = star.radius * sizeScale
-    if (star.bright) {
-      const spriteSize = radius * 12
-      context.globalAlpha = opacity * 0.8
-      context.drawImage(
-        glowSprites[star.color],
-        x - spriteSize / 2,
-        y - spriteSize / 2,
-        spriteSize,
-        spriteSize
-      )
+    // Wrap outside the viewport so a halo never disappears at the edge.
+    const x = ((star.x * (width + 24) + elapsed * star.speed * 0.45) % (width + 24)) - 12
+    const y = ((star.y * (height + 24) + elapsed * star.speed * 0.12) % (height + 24)) - 12
+    const opacity =
+      (0.6 + star.opacity * 0.4) * (0.86 + 0.14 * Math.sin(elapsed * star.speed + star.phase))
+    const radius = 0.7 + star.radius * 0.65
+    if (index % 4 === 0 && glowSprite) {
+      const size = radius * 15
+      context.globalAlpha = opacity * 0.7
+      context.drawImage(glowSprite, x - size / 2, y - size / 2, size, size)
     }
     context.globalAlpha = opacity
     context.fillStyle = palette[star.color]
-    if (radius < 1.15) {
-      const size = Math.max(1, Math.round(radius * 1.35))
-      context.fillRect(Math.round(x), Math.round(y), size, size)
-    } else {
-      context.beginPath()
-      context.arc(x, y, radius, 0, Math.PI * 2)
-      context.fill()
-    }
+    context.beginPath()
+    context.arc(x, y, radius, 0, Math.PI * 2)
+    context.fill()
   }
   context.globalAlpha = 1
 }
 
 function resize(): void {
-  if (!canvas.value) return
+  if (!canvas.value || !distantCanvas.value) return
   const bounds = canvas.value.getBoundingClientRect()
+  const nextWidth = Math.max(1, bounds.width)
+  const nextHeight = Math.max(1, bounds.height)
   const scale = Math.min(
     window.devicePixelRatio || 1,
     1.5,
-    1800 / Math.max(bounds.width, bounds.height, 1),
-    Math.sqrt(1_300_000 / Math.max(bounds.width * bounds.height, 1))
+    1800 / Math.max(nextWidth, nextHeight),
+    Math.sqrt(1_000_000 / (nextWidth * nextHeight))
   )
-  width = Math.max(1, Math.floor(bounds.width * scale))
-  height = Math.max(1, Math.floor(bounds.height * scale))
-  if (canvas.value.width !== width || canvas.value.height !== height) {
-    canvas.value.width = width
-    canvas.value.height = height
+  const pixelWidth = Math.max(1, Math.floor(nextWidth * scale))
+  const pixelHeight = Math.max(1, Math.floor(nextHeight * scale))
+  if (
+    width === nextWidth &&
+    height === nextHeight &&
+    canvas.value.width === pixelWidth &&
+    canvas.value.height === pixelHeight
+  )
+    return
+  width = nextWidth
+  height = nextHeight
+  for (const element of [canvas.value, distantCanvas.value]) {
+    element.width = pixelWidth
+    element.height = pixelHeight
+    element.getContext('2d')?.setTransform(pixelWidth / width, 0, 0, pixelHeight / height, 0, 0)
   }
-  scheduleNebula(bounds.width, bounds.height)
+  visibleStars = Math.min(stars.length, Math.round((width * height) / 42000))
+  drawDistantStars()
   draw()
 }
 
@@ -239,7 +167,6 @@ function tick(now: number): void {
 
 function syncAnimation(): void {
   stop()
-  draw()
   if (!inactive()) frame = requestAnimationFrame(tick)
 }
 
@@ -247,7 +174,7 @@ watch(() => props.paused, syncAnimation)
 onMounted(() => {
   context = canvas.value?.getContext('2d', { alpha: true }) ?? null
   if (!context) return
-  glowSprites = glowPalette.map(createGlowSprite)
+  glowSprite = createGlowSprite()
   motion = window.matchMedia('(prefers-reduced-motion: reduce)')
   motion.addEventListener('change', syncAnimation)
   document.addEventListener('visibilitychange', syncAnimation)
@@ -260,20 +187,19 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   stop()
-  if (nebulaResizeTimer) clearTimeout(nebulaResizeTimer)
   observer?.disconnect()
   motion?.removeEventListener('change', syncAnimation)
   document.removeEventListener('visibilitychange', syncAnimation)
   window.removeEventListener('focus', syncAnimation)
   window.removeEventListener('blur', syncAnimation)
-  glowSprites = []
+  glowSprite = null
   context = null
 })
 </script>
 
 <template>
   <div class="starfield-background" aria-hidden="true">
-    <canvas ref="nebulaCanvas" class="nebula-layer" />
+    <canvas ref="distantCanvas" class="distant-layer" />
     <canvas ref="canvas" class="star-layer" />
   </div>
 </template>
@@ -286,8 +212,9 @@ onBeforeUnmount(() => {
   pointer-events: none;
   contain: strict;
   background:
-    radial-gradient(ellipse 65% 48% at 55% 52%, rgb(28 36 76 / 26%), transparent 85%),
-    linear-gradient(145deg, #030713, #090f22 52%, #050816);
+    radial-gradient(ellipse 95% 85% at 76% 18%, rgb(38 67 97 / 30%), transparent 75%),
+    radial-gradient(ellipse 80% 70% at 14% 92%, rgb(22 43 65 / 20%), transparent 80%),
+    linear-gradient(155deg, #080f1b, #0b1625 52%, #060c16);
 }
 
 canvas {
@@ -298,9 +225,8 @@ canvas {
   height: 100%;
 }
 
-.nebula-layer {
+.distant-layer {
   z-index: 0;
-  filter: blur(3px);
 }
 
 .star-layer {

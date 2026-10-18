@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import rainyImage from '@/assets/img/rainy_bg.jpg'
+import rainyImage from '@/assets/img/rainy-night-cool.webp'
 import { rainyFragmentShader, rainyVertexShader } from '@/shaders/rainyShader'
 
 const props = withDefaults(defineProps<{ paused?: boolean }>(), { paused: false })
@@ -15,6 +15,7 @@ let observer: ResizeObserver | null = null
 let motion: MediaQueryList | null = null
 let frame = 0
 let lastFrame = 0
+let lastTick = 0
 let elapsed = 0
 let disposed = false
 
@@ -36,6 +37,7 @@ function stop(): void {
   cancelAnimationFrame(frame)
   frame = 0
   lastFrame = 0
+  lastTick = 0
 }
 
 function release(): void {
@@ -58,7 +60,8 @@ function resize(): void {
   const scale = Math.min(
     window.devicePixelRatio || 1,
     1.25,
-    1200 / Math.max(bounds.width, bounds.height, 1)
+    1200 / Math.max(bounds.width, bounds.height, 1),
+    Math.sqrt(640_000 / Math.max(bounds.width * bounds.height, 1))
   )
   const width = Math.max(1, Math.floor(bounds.width * scale))
   const height = Math.max(1, Math.floor(bounds.height * scale))
@@ -93,9 +96,11 @@ function inactive(): boolean {
 function tick(now: number): void {
   frame = 0
   if (inactive() || !ready.value) return
-  if (!lastFrame || now - lastFrame >= 1000 / 30) {
-    elapsed += lastFrame ? Math.min((now - lastFrame) / 1000, 0.1) : 0
-    lastFrame = now
+  elapsed += lastTick ? Math.min((now - lastTick) / 1000, 0.1) : 0
+  lastTick = now
+  const interval = 1000 / 24
+  if (!lastFrame || now - lastFrame >= interval) {
+    lastFrame = lastFrame ? now - ((now - lastFrame) % interval) : now
     draw()
   }
   frame = requestAnimationFrame(tick)
@@ -219,9 +224,9 @@ onBeforeUnmount(() => {
   pointer-events: none;
   contain: strict;
   background:
-    linear-gradient(rgb(15 19 30 / 15%), rgb(9 15 24 / 28%)),
-    url('@/assets/img/rainy_bg.jpg') center / cover,
-    #0f131e;
+    linear-gradient(rgb(10 20 34 / 16%), rgb(5 13 24 / 30%)),
+    url('@/assets/img/rainy-night-cool.webp') center / cover,
+    #080f1b;
 }
 
 canvas {
