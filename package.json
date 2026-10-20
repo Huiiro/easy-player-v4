@@ -28,6 +28,8 @@
     "build:linux": "npm run build:nocheck && electron-builder --linux",
     "test:playback-mode": "node scripts/test-playback-mode.mjs",
     "test:shuffle": "node scripts/test-shuffle.mjs",
+    "migrate:legacy": "node scripts/migrate-legacy-library.mjs",
+    "test:legacy-migration": "node scripts/test-legacy-migration.mjs",
     "test:shortcuts": "node scripts/test-shortcuts.mjs && node scripts/test-renderer-persistence.mjs",
     "test:song-search": "node scripts/test-song-search-ui.mjs && node scripts/test-song-search.mjs",
     "perf:song-search": "node scripts/benchmark-song-search.mjs",

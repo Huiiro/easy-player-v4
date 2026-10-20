@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..')
 const buildDir = path.join(root, 'build')
 const isolated = path.join(buildDir, 'performance-app-data-' + Date.now())
 fs.mkdirSync(isolated, { recursive: true })
-process.env.APPDATA = isolated
+process.env.EASY_PLAYER_DATA_DIR = path.join(isolated, 'easy-player')
 app.setPath('userData', path.join(isolated, 'chromium'))
 app.setName('easy-player-performance-check')
 const oldPath = require.resolve(path.join(root, 'build/native-addon/easy_player_native.node'))

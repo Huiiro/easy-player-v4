@@ -6,6 +6,7 @@ const { messages, remove } = useMessage()
 usePlaybackLifecycle()
 </script>
 <template>
+  <div class="extreme-drag-region" aria-hidden="true"></div>
   <div class="extreme-shell"><ExtremePlayer /></div>
   <div class="lightweight-messages" role="status" aria-live="polite">
     <div
@@ -32,6 +33,14 @@ body,
 }
 * {
   box-sizing: border-box;
+}
+.extreme-drag-region {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48px;
+  -webkit-app-region: drag;
 }
 button,
 input {

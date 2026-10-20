@@ -178,9 +178,9 @@ assert.equal(warnings.at(-1), 'settings.shortcutActionFailed')
 rejectPreference = false
 await press('l', { ctrlKey: true })
 assert.equal(preference, 1, 'Feedback remains usable after an error')
-await press('l', { ctrlKey: true, shiftKey: true })
+await press('g', { ctrlKey: true })
 assert.equal(ui.useDesktopLyrics, true)
-await press('l', { ctrlKey: true, shiftKey: true })
+await press('g', { ctrlKey: true })
 assert.equal(ui.useDesktopLyrics, false)
 // A saved mode flag can disagree with the actual window after startup or a failed handoff.
 ui.extremePlayback = true
@@ -199,7 +199,7 @@ assert.deepEqual(
   [['lightweight', true]],
   'Lightweight mode must only be exited manually'
 )
-await press('l', { ctrlKey: true, shiftKey: true })
+await press('g', { ctrlKey: true })
 assert.equal(ui.useDesktopLyrics, false)
 assert.equal(warnings.at(-1), 'settings.desktopLyricsLightweight')
 globalAction('seekForward')

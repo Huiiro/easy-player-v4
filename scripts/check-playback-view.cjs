@@ -2,12 +2,12 @@
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
-const { app, BrowserWindow } = require('electron')
+const { app, BrowserWindow, screen } = require('electron')
 
 const root = path.resolve(__dirname, '..')
 const data = path.join(root, 'build', 'playback-view-check-' + Date.now())
 fs.mkdirSync(data, { recursive: true })
-process.env.APPDATA = data
+process.env.EASY_PLAYER_DATA_DIR = path.join(data, 'easy-player')
 app.setPath('userData', path.join(data, 'chromium'))
 app.setName('easy-player-playback-view-check')
 
@@ -57,7 +57,22 @@ async function ready(extreme, previous) {
 async function run() {
   await app.whenReady()
   let window = await ready(false)
-  window.setBounds({ x: 120, y: 90, width: 1320, height: 820 })
+  assert(
+    fs.existsSync(path.join(process.env.EASY_PLAYER_DATA_DIR, 'player_data/player.db')),
+    'Application must initialize the isolated library'
+  )
+  // Keep the fixture inside the work area: macOS clamps newly created windows
+  // below the menu bar/above the Dock, unlike a later setBounds call.
+  const area = screen.getDisplayMatching(window.getBounds()).workArea
+  const width = Math.min(1320, area.width)
+  const height = Math.min(820, area.height)
+  window.setBounds({
+    x: area.x + Math.floor((area.width - width) / 2),
+    y: area.y + Math.floor((area.height - height) / 2),
+    width,
+    height
+  })
+  await wait(200)
   const transitions = []
   for (const maximized of [false, true]) {
     if (maximized) {
@@ -88,6 +103,14 @@ async function run() {
       assert.equal(outgoing.changedView, false, 'Outgoing page changed layout before the handoff')
       assert.equal(outgoing.afterImmersive, outgoing.immersive, 'Outgoing immersive page collapsed')
       window = await ready(enabled, previous)
+      if (enabled) {
+        const regions = await window.webContents.executeJavaScript(`({
+          drag: getComputedStyle(document.querySelector('.extreme-drag-region')).getPropertyValue('-webkit-app-region'),
+          button: getComputedStyle(document.querySelector('.exit')).getPropertyValue('-webkit-app-region')
+        })`)
+        assert.equal(regions.drag.trim(), 'drag', 'Lightweight window needs a drag region')
+        assert.equal(regions.button.trim(), 'no-drag', 'Player controls must remain clickable')
+      }
       assert(previous.isDestroyed(), 'Old renderer was retained')
       assert.equal(window.isMaximized(), maximized, 'Maximized state changed')
       assert.deepEqual(window.getNormalBounds(), bounds, 'Window size or position changed')

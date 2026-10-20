@@ -22,6 +22,9 @@ $ npm install
 
 ### Development
 
+Upgrading a library from `b0947bc3` or later legacy V5–V8 databases:
+see [the one-time migration guide](docs/player/legacy-library-migration.md).
+
 ```bash
 $ npm run dev
 ```

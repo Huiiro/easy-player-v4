@@ -559,7 +559,9 @@ function createWindow(
     show: false,
     // Use renderer-owned caption buttons. Window Controls Overlay retains
     // native hit targets even when hidden, which conflicts with player UI.
-    frame: extremeView,
+    // Both macOS views use hiddenInset and renderer drag regions. Changing the
+    // native frame between views changes the content/titlebar bounds on macOS.
+    frame: process.platform === 'darwin' ? false : extremeView,
     // Extend the renderer into the native title bar while retaining macOS
     // traffic-light controls. The renderer reserves this area in Header.
     ...(process.platform === 'darwin'
@@ -591,11 +593,11 @@ function createWindow(
   )
 
   mainWindow.on('ready-to-show', () => {
+    // On macOS show() can return before the native window emits "show".
+    // Keep the outgoing renderer alive until that event, including maximize().
+    if (onShown) createdWindow.once('show', onShown)
     if (restoredState.maximized) createdWindow.maximize()
     createdWindow.show()
-    // Loading can finish before the first paint. Keep the previous window
-    // visible until its replacement has actually been shown.
-    onShown?.()
   })
 
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined

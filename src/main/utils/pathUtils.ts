@@ -3,6 +3,8 @@ import os from 'os'
 import fs from 'fs'
 
 export function getBaseDir(): string {
+  // One root for database, settings, themes and logs, including integration tests.
+  if (process.env.EASY_PLAYER_DATA_DIR) return path.resolve(process.env.EASY_PLAYER_DATA_DIR)
   const baseDir =
     process.platform === 'win32'
       ? process.env.APPDATA || ''
