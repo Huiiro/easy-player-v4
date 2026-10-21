@@ -607,6 +607,10 @@ export default {
     fonts: 'Fonts',
     fontsDescription: 'Set the global font style, custom fonts supported.',
     interfaceFont: 'Interface font',
+    playerLyricsFont: 'Player lyrics font',
+    playerLyricsFontDescription:
+      'choose a separate system or imported font for lyrics, translations, and romanization.',
+    playerLyricsFontInherit: 'Follow interface font',
     interfaceFontDescription: 'Choose a system font or an imported custom font.',
     fontSystemDefault: 'System default',
     fontSystemUi: 'System UI',

@@ -67,24 +67,26 @@ function parseColor(value: string): [number, number, number] {
 
 function ambientColor(
   color: RgbColor,
-  fallbackHue: number,
   hueOverride?: number
-): { rgb: RgbColor; hue: number } {
+): { rgb: RgbColor; hue: number; chromatic: boolean } {
   const channels = color.map((channel) => Math.max(0, Math.min(255, channel)) / 255)
   const maximum = Math.max(...channels)
   const minimum = Math.min(...channels)
   const chroma = maximum - minimum
   const originalLightness = (maximum + minimum) / 2
-  let hue = hueOverride ?? fallbackHue
-  if (hueOverride === undefined && chroma > 0.08) {
+  const saturation = chroma / (1 - Math.abs(2 * originalLightness - 1) || 1)
+  // Absolute RGB distance loses the hue of dark and pastel artwork. Retain
+  // meaningful tints, while keeping truly neutral artwork neutral.
+  const chromatic = chroma > 1 / 255 && saturation > 0.02
+  let hue = hueOverride ?? 0
+  if (hueOverride === undefined && chromatic) {
     const [red, green, blue] = channels
     if (maximum === red) hue = ((green - blue) / chroma + (green < blue ? 6 : 0)) * 60
     else if (maximum === green) hue = ((blue - red) / chroma + 2) * 60
     else hue = ((red - green) / chroma + 4) * 60
   }
-  const saturation = chroma / (1 - Math.abs(2 * originalLightness - 1) || 1)
   const lightness = Math.max(0.44, Math.min(0.6, originalLightness))
-  const vividness = Math.max(0.55, Math.min(0.82, saturation))
+  const vividness = chromatic ? Math.max(0.18, Math.min(0.82, saturation)) : 0
   const channelChroma = (1 - Math.abs(2 * lightness - 1)) * vividness
   const alternate = channelChroma * (1 - Math.abs(((hue / 60) % 2) - 1))
   const offset = lightness - channelChroma / 2
@@ -99,17 +101,17 @@ function ambientColor(
   const rgb = sectors[Math.floor(hue / 60) % 6].map((channel) =>
     Math.round((channel + offset) * 255)
   ) as RgbColor
-  return { rgb, hue }
+  return { rgb, hue, chromatic }
 }
 
 function readPalette(): Palette {
-  const primary = ambientColor(parseColor(props.primary), 215)
-  const secondary = ambientColor(parseColor(props.secondary), 315)
-  const tertiary = ambientColor(parseColor(props.tertiary), 165)
+  const primary = ambientColor(parseColor(props.primary))
+  const secondary = ambientColor(parseColor(props.secondary))
+  const tertiary = ambientColor(parseColor(props.tertiary))
   const hueDifference = Math.abs(((secondary.hue - primary.hue + 540) % 360) - 180)
   const secondColor =
-    hueDifference < 28
-      ? ambientColor(secondary.rgb, 315, (primary.hue + 42) % 360).rgb
+    primary.chromatic && secondary.chromatic && hueDifference < 28
+      ? ambientColor(secondary.rgb, (primary.hue + 42) % 360).rgb
       : secondary.rgb
   return [primary.rgb, secondColor, tertiary.rgb]
 }

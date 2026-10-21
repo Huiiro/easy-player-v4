@@ -1,6 +1,6 @@
 import { logError, logOperation } from './operationLogger'
 import path from 'path'
-import { parseFile } from 'music-metadata'
+import { parseAudioFile } from './audioMetadataService'
 import { writeMp3Metadata } from './mp3MetadataService'
 import { Logger } from './loggerService'
 import { writeNativeMetadata } from '../audioEngine'
@@ -59,7 +59,7 @@ export async function writeMetadata(
       if (fileType in ['MPEG', 'FLAC', 'M4A', 'AAC', 'UNKNOWN']) {
         return dispatchMetadata(filePath, fileType, input)
       }
-      const metadata = await parseFile(filePath).catch((error) => {
+      const metadata = await parseAudioFile(filePath).catch((error) => {
         Logger.debug(
           '[Metadata] format probe failed; falling back to extension',
           { filePath },
@@ -80,23 +80,7 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
     '[Metadata] readMetadata',
     { filePath },
     async () => {
-      let metadata
-      try {
-        metadata = await parseFile(filePath)
-      } catch (err) {
-        const ext = filePath.split('.').pop()?.toLowerCase()
-        if (ext === 'm4a' || ext === 'aac') {
-          Logger.warn(
-            '[Metadata] read failed; attempting native repair',
-            { filePath, extension: ext },
-            logError(err)
-          )
-          if (!writeNativeMetadata(filePath, {})) throw err
-          metadata = await parseFile(filePath)
-        } else {
-          throw err
-        }
-      }
+      const metadata = await parseAudioFile(filePath)
       const picture = metadata.common.picture?.[0]
 
       return {
@@ -127,7 +111,7 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
         codec: metadata.format.codec,
         container: metadata.format.container,
 
-        cover: picture?.data ?? null,
+        cover: picture ? Buffer.from(picture.data) : null,
         coverMimeType: picture?.format
       }
     },

@@ -50,10 +50,38 @@ const uiModule = load(
       DEFAULT_PLAYER_COVER_STYLE: 'standard'
     }
   },
-  { window: { matchMedia: () => ({ addEventListener() {} }) } }
+  {
+    window: {
+      matchMedia: () => ({ addEventListener() {} }),
+      api: { fonts: { list: async () => ({ success: true, data: [] }) } }
+    }
+  }
 )
 Pinia.setActivePinia(Pinia.createPinia())
 const ui = uiModule.useUIStore()
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
+assert.equal(ui.playerLyricsFontFamily, '', 'lyrics follow interface fonts by default')
+ui.customFontFamily = 'MiSans'
+assert.equal(
+  ui.getPlayerLyricsFontStyle.fontFamily,
+  undefined,
+  'follow mode leaves CSS inheritance intact'
+)
+ui.playerLyricsFontFamily = 'Noto Sans SC'
+const independentFont = ui.getPlayerLyricsFontStyle.fontFamily
+assert.match(independentFont, /Noto Sans SC/)
+ui.customFontFamily = 'Segoe UI Variable'
+assert.equal(
+  ui.getPlayerLyricsFontStyle.fontFamily,
+  independentFont,
+  'global font changes cannot override a separate lyrics font'
+)
+ui.playerLyricsFontFamily = 'EasyPlayerFont-demo'
+assert.match(ui.getPlayerLyricsFontStyle.fontFamily, /EasyPlayerFont-demo/)
+await ui.loadCustomFonts()
+assert.equal(ui.playerLyricsFontFamily, '', 'a removed imported font falls back to inheritance')
+assert.equal(ui.customFontFamily, 'Segoe UI Variable')
+ui.customFontFamily = ''
 const copy = (value) => JSON.parse(JSON.stringify(value))
 const expected = Object.fromEntries(
   uiModule.UI_PREFERENCE_KEYS.filter((key) => key !== 'customThemes').map((key) => [

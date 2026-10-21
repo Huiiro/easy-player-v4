@@ -756,6 +756,16 @@ watch(
   { flush: 'post' }
 )
 
+function refreshFontLayout(): void {
+  if (isUnmounted) return
+  refreshSweepElements()
+  scheduleSnapToCurrent()
+}
+watch(
+  [() => ui.playerLyricsFontFamily, () => ui.customFontFamily],
+  () => void nextTick(refreshFontLayout),
+  { flush: 'post' }
+)
 watch([() => ui.reduceMotion, () => props.allowTransform], () => requestSnapToCurrent())
 watch([() => props.currentTime, () => props.isPlaying], updatePlayback, { immediate: true })
 
@@ -768,6 +778,7 @@ onMounted(() => {
     passive: true
   })
   window.addEventListener('resize', handleWindowResize)
+  document.fonts.addEventListener('loadingdone', refreshFontLayout)
   resizeObserver = new ResizeObserver(() => requestSnapToCurrent())
   if (viewport) resizeObserver.observe(viewport)
   if (trackRef.value) resizeObserver.observe(trackRef.value)
@@ -779,6 +790,7 @@ onUnmounted(() => {
   const viewport = viewportRef.value
   viewport?.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleWindowResize)
+  document.fonts.removeEventListener('loadingdone', refreshFontLayout)
   if (snapRaf) cancelAnimationFrame(snapRaf)
   if (scrollTimer) clearTimeout(scrollTimer)
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -796,6 +808,7 @@ onUnmounted(() => {
   <div
     ref="viewportRef"
     class="lyric-viewport"
+    :style="ui.getPlayerLyricsFontStyle"
     :class="[
       props.darkText && 'player-lyrics--dark-text',
       ui.karaokeAnimation === 'float' && 'lyric-viewport--float',

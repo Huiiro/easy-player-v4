@@ -512,8 +512,8 @@ const local = load('src/main/service/lyrics/local.ts', {
 })
 assert.equal(local.readLocalLyrics('/music/track.flac').content, '[00:01.00]Local')
 const embedded = load('src/main/service/lyrics/embedded.ts', {
-  'music-metadata': {
-    parseFile: async () => ({
+  '../audioMetadataService': {
+    parseAudioFile: async () => ({
       common: { lyrics: [{ syncText: [{ timestamp: 1250, text: 'Embedded' }] }] }
     })
   }

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, promises as fs, readdirSync, rmSync, writeFileSy
 import { basename, dirname, extname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { parseFile } from 'music-metadata'
+import { parseAudioFile } from './audioMetadataService'
 import { getDataPath } from '../utils/pathUtils'
 import { getDatabase } from '../database'
 import { refreshNewestSongs } from '../database/newestSongs'
@@ -236,7 +236,7 @@ export async function importLibrary(
       mkdirSync(coverDir, { recursive: true })
       for (const [index, song] of imported.entries()) {
         try {
-          const picture = (await parseFile(song.audio)).common.picture?.[0]
+          const picture = (await parseAudioFile(song.audio)).common.picture?.[0]
           if (picture) {
             const cover = join(coverDir, `${randomUUID()}.jpg`)
             writeFileSync(cover, picture.data)

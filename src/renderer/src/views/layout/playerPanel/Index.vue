@@ -365,7 +365,10 @@ watch(
         .decode()
         .catch(() => {})
         .then(() => {
-          if (active) displayedCoverUrl.value = url
+          if (!active) return
+          // Palette extraction must not depend on a visible cover's load event.
+          analyzeCoverImage(image)
+          displayedCoverUrl.value = url
         })
     }
     image.onerror = () => {

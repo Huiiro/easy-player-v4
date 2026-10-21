@@ -32,6 +32,7 @@
     "test:legacy-migration": "node scripts/test-legacy-migration.mjs",
     "test:shortcuts": "node scripts/test-shortcuts.mjs && node scripts/test-renderer-persistence.mjs",
     "test:song-search": "node scripts/test-song-search-ui.mjs && node scripts/test-song-search.mjs",
+    "test:download-audio": "node scripts/test-download-audio.mjs",
     "perf:song-search": "node scripts/benchmark-song-search.mjs",
     "perf:playback": "node scripts/check-playback-performance.cjs",
     "perf:app": "electron scripts/check-player-app.cjs"

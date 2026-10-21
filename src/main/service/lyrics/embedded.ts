@@ -1,4 +1,4 @@
-import { parseFile } from 'music-metadata'
+import { parseAudioFile } from '../audioMetadataService'
 import type { LyricLoadPayload } from './types'
 
 function formatTimestamp(timestampMs: number): string {
@@ -9,7 +9,7 @@ function formatTimestamp(timestampMs: number): string {
 }
 
 function embeddedLyricsToPayload(
-  lyrics: Awaited<ReturnType<typeof parseFile>>['common']['lyrics']
+  lyrics: Awaited<ReturnType<typeof parseAudioFile>>['common']['lyrics']
 ): LyricLoadPayload | null {
   if (!lyrics?.length) return null
   const synchronized = lyrics.flatMap((tag) =>
@@ -26,6 +26,6 @@ function embeddedLyricsToPayload(
 }
 
 export async function readEmbeddedLyrics(audioPath: string): Promise<LyricLoadPayload | null> {
-  const metadata = await parseFile(audioPath, { skipCovers: true })
+  const metadata = await parseAudioFile(audioPath, { skipCovers: true })
   return embeddedLyricsToPayload(metadata.common.lyrics)
 }

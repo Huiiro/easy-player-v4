@@ -533,11 +533,14 @@ export class CoverAnalyzer {
   private static createPalette(primary: string, secondary: string): Palette {
     const [red, green, blue] = secondary.split(/\s+/).map(Number)
     const [hue, saturation, lightness] = this.rgbToHsl(red, green, blue)
-    const tertiary = this.hslToRgb(
-      (hue + (hue < 0.5 ? 0.085 : -0.085) + 1) % 1,
-      Math.min(0.82, saturation * 0.9 + 0.08),
-      Math.max(0.22, Math.min(0.76, lightness))
-    ).join(' ')
+    const tertiary =
+      saturation === 0
+        ? secondary
+        : this.hslToRgb(
+            (hue + (hue < 0.5 ? 0.085 : -0.085) + 1) % 1,
+            Math.min(0.82, saturation * 0.9 + 0.08),
+            Math.max(0.22, Math.min(0.76, lightness))
+          ).join(' ')
     return {
       primary,
       secondary,

@@ -95,6 +95,10 @@ const fontOptions = computed(() => [
   { label: t('settings.fontNotoSans'), value: 'Noto Sans SC' },
   ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
 ])
+const playerLyricsFontOptions = computed(() => [
+  { label: t('settings.playerLyricsFontInherit'), value: '' },
+  ...fontOptions.value.filter((option) => option.value !== '')
+])
 function navigateTo(sectionId: string): void {
   activeSection.value = sectionId
   const container = settingsScroller.value
@@ -240,6 +244,20 @@ onBeforeUnmount(() => {
                   {{ t('settings.openFontDirectory') }}
                 </button>
               </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <h3>{{ t('settings.playerLyricsFont') }}</h3>
+                <p>{{ t('settings.playerLyricsFontDescription') }}</p>
+              </div>
+              <BaseSelect
+                v-model="ui.playerLyricsFontFamily"
+                :options="playerLyricsFontOptions"
+                :placeholder="t('settings.playerLyricsFontInherit')"
+                :aria-label="t('settings.playerLyricsFont')"
+                teleport
+                class="w-64"
+              />
             </div>
           </div>
         </section>

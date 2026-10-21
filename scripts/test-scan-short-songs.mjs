@@ -47,8 +47,8 @@ const mocks = {
       }
     }
   },
-  'music-metadata': {
-    parseFile: async (file) => ({
+  './audioMetadataService': {
+    parseAudioFile: async (file) => ({
       common: { track: {}, disk: {}, picture: [{ data: new Uint8Array() }] },
       format: { duration: durations[files.indexOf(file)] }
     })
@@ -109,7 +109,7 @@ function wav(seconds, float) {
 }
 const wavDurations = [0.01, 0.5, 1, 4.999, 5]
 for (const float of [false, true]) {
-  mocks['music-metadata'].parseFile = (file, options) => {
+  mocks['./audioMetadataService'].parseAudioFile = (file, options) => {
     assert.equal(options.duration, true)
     return parseBuffer(
       wav(wavDurations[files.indexOf(file)], float),

@@ -4,7 +4,7 @@ import { logError, logOperation } from './operationLogger'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
-import { parseFile } from 'music-metadata'
+import { parseAudioFile } from './audioMetadataService'
 import { getDatabase } from '../database'
 import { getDataPath } from '../utils/pathUtils'
 import { Logger } from './loggerService'
@@ -151,7 +151,7 @@ export async function scanMusicDirectory(
             continue
           }
 
-          const metadata = await parseFile(fullPath, { duration: true })
+          const metadata = await parseAudioFile(fullPath, { duration: true })
           const common = metadata.common
           const format = metadata.format
           // File selection and duration filtering are independent. Unknown durations are retained.

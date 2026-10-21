@@ -594,6 +594,10 @@ export default {
     fonts: '字体',
     fontsDescription: '设置全局字体样式，支持自定义字体。',
     interfaceFont: '界面字体',
+    playerLyricsFont: '播放器歌词字体',
+    playerLyricsFontDescription:
+      '单独选择系统字体或已导入字体，应用于原文、翻译和罗马音。',
+    playerLyricsFontInherit: '跟随界面字体',
     interfaceFontDescription: '选择系统字体或已导入的自定义字体。',
     fontSystemDefault: '系统默认',
     fontSystemUi: '系统 UI',

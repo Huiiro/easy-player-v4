@@ -55,6 +55,7 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
 })
 const stored = JSON.stringify({
   extremePlayback: true,
+  playerLyricsFontFamily: 'Noto Sans SC',
   playlistHeaderCollapsed: true,
   recommendationPlaylistHeaderCollapsed: false,
   footerLayout: { enabled: true, mode: 'stacked', maxWidth: 1500, progressWeight: 3, gap: 12 },
@@ -80,6 +81,11 @@ assert.equal(
 )
 
 const startup = {}
+assert.equal(
+  JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1')).playerLyricsFontFamily,
+  'Noto Sans SC',
+  'Separate lyrics font survives a renderer restart'
+)
 const restoredHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
 assert.equal(restoredHeaders.playlistHeaderCollapsed, true, 'Playlist headers restore collapsed')
 assert.equal(

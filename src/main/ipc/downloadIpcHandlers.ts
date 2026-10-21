@@ -4,9 +4,10 @@ import { logError, logOperation, logParams, logUrl } from '../service/operationL
 import { Logger } from '../service/loggerService'
 import { app, BrowserWindow, dialog, ipcMain, net, Notification, shell } from 'electron'
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
-import { createWriteStream, existsSync } from 'node:fs'
+import { createWriteStream, existsSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { listDownloadTasks, saveDownloadTask } from '../database/repository'
+import { finalizeDownloadedAudio } from '../service/downloadAudioService'
 
 type DownloadPlatform = 'youtube' | 'bili'
 function trackProcess(child: ChildProcessWithoutNullStreams): ChildProcessWithoutNullStreams {
@@ -209,9 +210,19 @@ function normalizeBiliUrl(value: string): string {
 function biliImageDataUrl(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const request = backgroundRequest(url)
+    const timeout = setTimeout(() => {
+      reject(new Error('Cover request timed out'))
+      request.abort()
+    }, 15000)
+    request.once('close', () => clearTimeout(timeout))
     request.once('abort', () => reject(new Error('Lightweight mode')))
     Object.entries(BILI_HEADERS).forEach(([name, value]) => request.setHeader(name, value))
     request.on('response', (response) => {
+      if ((response.statusCode ?? 0) >= 400) {
+        reject(new Error(`Cover request failed: ${response.statusCode}`))
+        request.abort()
+        return
+      }
       const chunks: Buffer[] = []
       let size = 0
       response.on('data', (chunk: Buffer) => {
@@ -223,6 +234,8 @@ function biliImageDataUrl(url: string): Promise<string> {
         const mimeType = String(response.headers['content-type'] || 'image/jpeg').split(';')[0]
         resolve(`data:${mimeType};base64,${Buffer.concat(chunks).toString('base64')}`)
       })
+      response.once('error', reject)
+      response.once('aborted', () => reject(new Error('Cover response interrupted')))
     })
     request.on('error', reject)
     request.end()
@@ -481,6 +494,61 @@ function senderError(
   })
 }
 
+function downloadBiliMedia(
+  source: string,
+  filePath: string,
+  onProgress: (progress: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const mediaRequest = backgroundRequest(source)
+    let output: ReturnType<typeof createWriteStream> | undefined
+    let failure: Error | undefined
+    const fail = (error: Error): void => {
+      failure ??= error
+      if (output) output.destroy()
+      else reject(failure)
+    }
+    mediaRequest.once('abort', () => fail(new Error('Download interrupted by lightweight mode')))
+    mediaRequest.once('error', fail)
+    Object.entries(BILI_HEADERS).forEach(([name, value]) => mediaRequest.setHeader(name, value))
+    mediaRequest.setHeader('Range', 'bytes=0-')
+    mediaRequest.on('response', (response) => {
+      if ((response.statusCode ?? 0) >= 400) {
+        fail(new Error(t('biliMediaFailed', { status: response.statusCode ?? 'unknown' })))
+        mediaRequest.abort()
+        return
+      }
+      const total = Number(response.headers['content-length'] || 0)
+      let received = 0
+      output = createWriteStream(filePath)
+      // Wait for the handle to close before remuxing or removing a failed download on Windows.
+      output.once('close', () => {
+        if (failure) reject(failure)
+        else if (output?.writableFinished) resolve()
+        else reject(new Error('Downloaded file closed before completion'))
+      })
+      output.once('error', (error) => {
+        fail(error)
+        mediaRequest.abort()
+      })
+      response.once('error', fail)
+      response.once('aborted', () => fail(new Error('Media response interrupted')))
+      response.once('end', () => {
+        if (total > 0 && received !== total) {
+          fail(new Error('Downloaded media size does not match Content-Length'))
+        } else output?.end()
+      })
+      response.on('data', (chunk: Buffer) => {
+        if (failure) return
+        received += chunk.length
+        output?.write(chunk)
+        if (total > 0) onProgress(Math.min(99, Math.round((received / total) * 100)))
+      })
+    })
+    mediaRequest.end()
+  })
+}
+
 async function startBiliDownload(
   sender: Electron.WebContents,
   taskId: string,
@@ -498,9 +566,11 @@ async function startBiliDownload(
     async () => {
       const bvid = biliBvid(request.url)
       if (!bvid) throw new Error(t('biliInvalidId'))
-      const view = await biliApi<{ cid: number; pages?: Array<{ cid: number; page?: number }> }>(
-        `https://api.bilibili.com/x/web-interface/wbi/view?bvid=${bvid}`
-      )
+      const view = await biliApi<{
+        cid: number
+        pic?: string
+        pages?: Array<{ cid: number; page?: number }>
+      }>(`https://api.bilibili.com/x/web-interface/wbi/view?bvid=${bvid}`)
       const pageNumber = Number(new URL(request.url).searchParams.get('p') || '1')
       const cid = view.pages?.find((page) => page.page === pageNumber)?.cid ?? view.cid
       const play = await biliApi<{
@@ -523,39 +593,37 @@ async function startBiliDownload(
         request.directory,
         `${request.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180)} [${bvid}-${cid}].${extension}`
       )
-      await new Promise<void>((resolve, reject) => {
-        const mediaRequest = backgroundRequest(source)
-        mediaRequest.once('abort', () =>
-          reject(new Error('Download interrupted by lightweight mode'))
-        )
-        Object.entries(BILI_HEADERS).forEach(([name, value]) => mediaRequest.setHeader(name, value))
-        mediaRequest.setHeader('Range', 'bytes=0-')
-        mediaRequest.on('response', (response) => {
-          if ((response.statusCode ?? 0) >= 400) {
-            reject(new Error(t('biliMediaFailed', { status: response.statusCode ?? 'unknown' })))
-            return
-          }
-          const total = Number(response.headers['content-length'] || 0)
-          let received = 0
-          const output = createWriteStream(filePath)
-          mediaRequest.once('abort', () => output.destroy())
-          response.on('data', (chunk: Buffer) => {
-            received += chunk.length
-            output.write(chunk)
-            if (total > 0)
-              sender.send('media-download:progress', {
-                taskId,
-                status: 'downloading',
-                progress: Math.min(99, Math.round((received / total) * 100))
-              })
-          })
-          response.once('error', reject)
-          response.once('end', () => output.end(resolve))
-          output.once('error', reject)
+      // Publish the final filename only after remux/validation.
+      const stagingDirectory = await fs.mkdtemp(join(request.directory, '.easy-player-download-'))
+      const stagedPath = join(stagingDirectory, `audio.${extension}`)
+      try {
+        await downloadBiliMedia(source, stagedPath, (progress) => {
+          sender.send('media-download:progress', { taskId, status: 'downloading', progress })
         })
-        mediaRequest.on('error', reject)
-        mediaRequest.end()
-      })
+        requireBackgroundWork()
+        if (request.downloadType === 'audio') {
+          let coverData: Buffer | undefined
+          if (view.pic) {
+            try {
+              const dataUrl = await biliImageDataUrl(normalizeBiliUrl(view.pic))
+              coverData = Buffer.from(dataUrl.slice(dataUrl.indexOf(',') + 1), 'base64')
+            } catch (error) {
+              Logger.warn(
+                '[Download] cover fetch failed; continuing without cover',
+                { taskId },
+                logError(error)
+              )
+            }
+          }
+          await finalizeDownloadedAudio(stagedPath, { title: request.title }, coverData)
+        }
+        requireBackgroundWork()
+        await fs.rename(stagedPath, filePath)
+      } finally {
+        await fs.rm(stagingDirectory, { recursive: true, force: true }).catch((error) => {
+          Logger.warn('[Download] staging cleanup failed', { stagingDirectory }, logError(error))
+        })
+      }
       saveDownloadTask({
         platform: request.platform,
         resourceId: bvid,

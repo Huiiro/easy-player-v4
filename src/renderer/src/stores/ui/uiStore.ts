@@ -73,6 +73,7 @@ export const UI_PREFERENCE_KEYS = [
   'playlistHeaderCollapsed',
   'recommendationPlaylistHeaderCollapsed',
   'customFontFamily',
+  'playerLyricsFontFamily',
   'customThemeColor',
   'systemBackground',
   'customBg',
@@ -281,6 +282,7 @@ export const useUIStore = defineStore(
     const playlistHeaderCollapsed = ref(false)
     const recommendationPlaylistHeaderCollapsed = ref(false)
     const customFontFamily = ref('')
+    const playerLyricsFontFamily = ref('')
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
     let themeInitialized = false
@@ -418,6 +420,11 @@ export const useUIStore = defineStore(
       return Math.max(3, Math.min(78, Math.round(value / 3) * 3))
     }
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
+    const getPlayerLyricsFontStyle = computed(() => ({
+      fontFamily: playerLyricsFontFamily.value
+        ? resolveFontStack(playerLyricsFontFamily.value)
+        : undefined
+    }))
     const getBackgroundStyle = computed(() => {
       const blur = customBg.blur ?? 0
       const brightness = customBg.brightness ?? 100
@@ -599,20 +606,19 @@ export const useUIStore = defineStore(
         const response = await window.api.fonts.list()
         const fonts = response.success && Array.isArray(response.data) ? response.data : []
         customFonts.value = fonts
-        const legacyFamily = customFontFamily.value.replace(
-          /^EasyPlayerFont-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}-/i,
-          'EasyPlayerFont-'
-        )
-        if (
-          legacyFamily !== customFontFamily.value &&
-          fonts.some((font) => font.family === legacyFamily)
-        )
-          customFontFamily.value = legacyFamily
-        if (
-          customFontFamily.value.startsWith('EasyPlayerFont-') &&
-          !fonts.some((font) => font.family === customFontFamily.value)
-        ) {
-          customFontFamily.value = ''
+        for (const family of [customFontFamily, playerLyricsFontFamily]) {
+          const legacyFamily = family.value.replace(
+            /^EasyPlayerFont-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}-/i,
+            'EasyPlayerFont-'
+          )
+          if (legacyFamily !== family.value && fonts.some((font) => font.family === legacyFamily))
+            family.value = legacyFamily
+          if (
+            family.value.startsWith('EasyPlayerFont-') &&
+            !fonts.some((font) => font.family === family.value)
+          ) {
+            family.value = ''
+          }
         }
         await Promise.all(
           fonts.map(async (font) => {
@@ -930,6 +936,8 @@ export const useUIStore = defineStore(
       playlistHeaderCollapsed,
       recommendationPlaylistHeaderCollapsed,
       customFontFamily,
+      playerLyricsFontFamily,
+      getPlayerLyricsFontStyle,
       customFonts,
       customThemeColor,
       activeThemeColor,
