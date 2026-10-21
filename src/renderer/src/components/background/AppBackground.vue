@@ -146,7 +146,9 @@ onBeforeUnmount(() => {
                   activeTheme.id === 'aurora' ||
                   activeTheme.id === 'blackhole' ||
                   activeTheme.id === 'rainy' ||
-                  activeTheme.id === 'starfield'
+                  activeTheme.id === 'starfield' ||
+                  activeTheme.id === 'startrails' ||
+                  activeTheme.id === 'dna'
                 ? { paused: !isBackgroundActive || ui.showPlayer || ui.reduceMotion }
                 : {}
           "
@@ -162,6 +164,8 @@ onBeforeUnmount(() => {
           'app-background-scrim--sunset': ui.systemBackground === 'sunset',
           'app-background-scrim--aurora': ui.systemBackground === 'aurora',
           'app-background-scrim--rainy': ui.systemBackground === 'rainy',
+          'app-background-scrim--startrails': ui.systemBackground === 'startrails',
+          'app-background-scrim--dna': ui.systemBackground === 'dna',
           'app-background-scrim--starfield': ui.systemBackground === 'starfield'
         }"
       />
@@ -234,6 +238,19 @@ onBeforeUnmount(() => {
 
 .app-background-scrim--starfield {
   background: color-mix(in srgb, var(--color-bg) 22%, transparent);
+}
+
+.app-background-scrim--startrails {
+  background: rgb(7 14 24 / 12%);
+}
+
+.app-background-scrim--dna {
+  background: linear-gradient(
+    90deg,
+    rgb(8 18 26 / 24%),
+    rgb(8 18 26 / 18%) 50%,
+    rgb(8 18 26 / 24%)
+  );
 }
 
 .app-background-host--paused :deep(*) {

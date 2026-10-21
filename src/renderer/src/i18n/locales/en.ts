@@ -656,6 +656,8 @@ export default {
     systemBackgroundMatrix: 'Matrix',
     systemBackgroundBlackHole: 'Black Hole',
     systemBackgroundRainy: 'Rainy Evening',
+    systemBackgroundStarTrails: 'Star Trails',
+    systemBackgroundDna: 'DNA Helix',
     systemBackgroundStarfield: 'Starfield',
     themeColor: 'Theme Color',
     themeColorDescription: 'Used for progress, selection states, and primary actions.',

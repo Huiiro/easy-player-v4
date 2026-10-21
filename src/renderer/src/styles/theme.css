@@ -249,6 +249,7 @@
   --scrollbar-thumb-hover: rgb(159 202 225 / 0.66);
 }
 
+:root[data-system-theme='startrails'],
 :root[data-system-theme='starfield'] {
   --color-bg: rgb(9 14 31);
   --color-bg-l: rgb(20 29 56);
@@ -341,4 +342,19 @@
   --color-icon-l: rgb(140 181 154);
   --scrollbar-thumb: rgb(99 160 120 / 0.4);
   --scrollbar-thumb-hover: rgb(156 212 177 / 0.62);
+}
+
+:root[data-system-theme='dna'] {
+  --color-bg: rgb(8 18 26);
+  --color-bg-l: rgb(17 32 40);
+  --color-bg-l2: rgb(26 44 52);
+  --color-bg-d: rgb(5 12 19);
+  --color-border: rgb(132 188 187 / 0.28);
+  --color-border-l: rgb(173 218 212 / 0.44);
+  --color-hover: rgb(140 216 205 / 0.09);
+  --color-hover-bg: rgb(100 180 173 / 0.17);
+  --color-icon: rgb(218 239 236);
+  --color-icon-l: rgb(148 187 187);
+  --scrollbar-thumb: rgb(112 171 168 / 0.44);
+  --scrollbar-thumb-hover: rgb(158 208 202 / 0.66);
 }

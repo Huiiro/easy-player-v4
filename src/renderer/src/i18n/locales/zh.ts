@@ -640,6 +640,8 @@ export default {
     systemBackgroundMatrix: '矩阵',
     systemBackgroundBlackHole: '黑洞',
     systemBackgroundRainy: '雨夜街景',
+    systemBackgroundStarTrails: '星轨',
+    systemBackgroundDna: 'DNA 双螺旋',
     systemBackgroundStarfield: '星空',
     themeColor: '主题色',
     themeColorDescription: '用于进度、选中状态和主要操作。',

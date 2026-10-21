@@ -7,6 +7,8 @@ const OceanBackground = defineAsyncComponent(() => import('./themes/OceanBackgro
 const RainyBackground = defineAsyncComponent(() => import('./themes/RainyBackground.vue'))
 const StarfieldBackground = defineAsyncComponent(() => import('./themes/StarfieldBackground.vue'))
 const SunsetBackground = defineAsyncComponent(() => import('./themes/SunsetBackground.vue'))
+const StarTrailsBackground = defineAsyncComponent(() => import('./themes/StarTrailsBackground.vue'))
+const DnaBackground = defineAsyncComponent(() => import('./themes/DnaBackground.vue'))
 const SolidBackground = defineAsyncComponent(() => import('./SolidBackground.vue'))
 
 export type SystemBackground =
@@ -19,6 +21,8 @@ export type SystemBackground =
   | 'blackhole'
   | 'rainy'
   | 'starfield'
+  | 'startrails'
+  | 'dna'
   | 'solid'
 
 export interface SystemBackgroundTheme {
@@ -121,6 +125,26 @@ export const systemBackgroundThemes: readonly SystemBackgroundTheme[] = [
     footerBackground: 'rgb(14 20 45 / 0.87)',
     chromeBorder: 'rgb(153 181 255 / 0.24)',
     component: StarfieldBackground
+  },
+  {
+    id: 'startrails',
+    labelKey: 'settings.systemBackgroundStarTrails',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.76 0.08 245)',
+    headerBackground: 'rgb(9 18 31 / 0.88)',
+    footerBackground: 'rgb(10 20 32 / 0.92)',
+    chromeBorder: 'rgb(146 174 207 / 0.22)',
+    component: StarTrailsBackground
+  },
+  {
+    id: 'dna',
+    labelKey: 'settings.systemBackgroundDna',
+    colorMode: 'dark',
+    accentColor: 'oklch(0.76 0.10 184)',
+    headerBackground: 'rgb(9 22 29 / 0.88)',
+    footerBackground: 'rgb(9 22 29 / 0.92)',
+    chromeBorder: 'rgb(135 204 198 / 0.20)',
+    component: DnaBackground
   },
   {
     id: 'blackhole',
