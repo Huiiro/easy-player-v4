@@ -59,7 +59,7 @@ struct AudioAnalysisSnapshot {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.4";
+    static constexpr const char* kVersion = "1.0.5";
     explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }
@@ -69,6 +69,8 @@ public:
     bool play();
     bool pause();
     bool stop();
+    // Periodically called on the host control thread, including while UI is hidden.
+    void service_backend_events();
 
     // ── Seek ──
     bool seek(double position_ms);
@@ -186,6 +188,8 @@ private:
     void update_replay_gain_for_track();
     void analysis_thread_func();
     void stop_analysis_thread();
+    void close_output();
+    bool reopen_output(bool resume);
     bool prepare_next_decoder_locked();
     void refresh_auto_fade_plan();
     bool switch_to_next_decoder_locked();

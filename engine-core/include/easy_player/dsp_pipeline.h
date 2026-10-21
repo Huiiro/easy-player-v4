@@ -161,6 +161,10 @@ public:
         phaser_phase_ = 0.0f; phaser_feedback_.fill(0.0f);
         for (auto& stage : phaser_states_) stage.fill(0.0f);
         time_stretch_.clear();
+        time_stretch_flushed_ = false;
+        time_stretch_expected_frames_ = 0;
+        time_stretch_delivered_frames_ = 0;
+        time_stretch_tail_blocks_ = 0;
         crossfeed_processor_.reset();
         // Settings are restored before the first track is opened. Keep the
         // audio-thread gain state in sync here so the first callback does not
@@ -431,11 +435,38 @@ public:
 
         if (stretch_enabled) {
             if (matrix_frames > 0) {
+                time_stretch_flushed_ = false;
                 apply_channel_matrix(matrix_input, input_channels, time_stretch_buffer_.data(), output_channels, matrix_frames);
                 time_stretch_.setTempo(speed->speed);
+                time_stretch_expected_frames_ += matrix_frames * time_stretch_.getInputOutputSampleRatio();
                 time_stretch_.putSamples(time_stretch_buffer_.data(), static_cast<unsigned int>(matrix_frames));
             }
-            result.output_frames_generated = static_cast<int>(time_stretch_.receiveSamples(output, static_cast<unsigned int>(frames)));
+            // Drain SRC first, then push the SoundTouch tail out with preallocated
+            // silence. SoundTouch::flush() allocates a temporary array, so it
+            // cannot be used on this real-time path. Match its 128-frame padding
+            // and 200-block bound, capping output to the real input duration.
+            const bool upstream_drained = result.stream_drained;
+            int receive_frames = frames;
+            if (upstream_drained) {
+                const int64_t remaining = std::max<int64_t>(0,
+                    static_cast<int64_t>(time_stretch_expected_frames_ + 0.5) - time_stretch_delivered_frames_);
+                receive_frames = static_cast<int>(std::min<int64_t>(frames, remaining));
+                while (time_stretch_.numSamples() < static_cast<unsigned int>(receive_frames) &&
+                       time_stretch_tail_blocks_ < 200) {
+                    time_stretch_.putSamples(time_stretch_tail_silence_.data(), 128);
+                    ++time_stretch_tail_blocks_;
+                }
+                time_stretch_flushed_ = remaining == 0;
+            }
+            result.output_frames_generated = static_cast<int>(time_stretch_.receiveSamples(output, static_cast<unsigned int>(receive_frames)));
+            time_stretch_delivered_frames_ += result.output_frames_generated;
+            if (upstream_drained && (time_stretch_flushed_ ||
+                (time_stretch_tail_blocks_ == 200 && time_stretch_.numSamples() == 0))) {
+                time_stretch_.clear();
+                time_stretch_flushed_ = true;
+            }
+            result.stream_drained = upstream_drained && time_stretch_flushed_ &&
+                result.output_frames_generated == 0 && time_stretch_.numSamples() == 0;
         } else if (matrix_frames > 0) {
             apply_channel_matrix(matrix_input, input_channels, output, output_channels, matrix_frames);
         }
@@ -594,6 +625,10 @@ private:
         resample_buffer_.assign(static_cast<size_t>(max_output_frames * 2 + 128) * source_format_.channels, 0.0f);
     }
     void configure_time_stretch(int max_output_frames) {
+        time_stretch_flushed_ = false;
+        time_stretch_expected_frames_ = 0;
+        time_stretch_delivered_frames_ = 0;
+        time_stretch_tail_blocks_ = 0;
         const int rate = backend_format_.sample_rate > 0 ? backend_format_.sample_rate : 48000;
         const int channels = std::max(1, std::min(backend_format_.channels, kMaxAudioChannels));
         time_stretch_.clear(); time_stretch_.setSampleRate(static_cast<unsigned int>(rate)); time_stretch_.setChannels(static_cast<unsigned int>(channels)); time_stretch_.setTempo(1.0);
@@ -1213,6 +1248,11 @@ private:
     std::atomic<const PlaybackSpeedConfig*> playback_speed_config_{nullptr};
     std::vector<std::unique_ptr<PlaybackSpeedConfig>> playback_speed_retired_configs_;
     soundtouch::SoundTouch time_stretch_;
+    bool time_stretch_flushed_ = false;
+    double time_stretch_expected_frames_ = 0;
+    int64_t time_stretch_delivered_frames_ = 0;
+    int time_stretch_tail_blocks_ = 0;
+    std::array<float, 128 * kMaxAudioChannels> time_stretch_tail_silence_{};
     std::vector<float> time_stretch_buffer_;
     int time_stretch_capacity_frames_ = 0;
 };

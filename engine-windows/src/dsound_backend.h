@@ -20,6 +20,8 @@ public:
     bool stop() override;
     void close() override;
     void flush() override;
+    bool flush_checked() override;
+    unsigned take_events() override;
 
     BackendType type() const override { return BackendType::DIRECTSOUND; }
     AudioFormat current_format() const override { return current_format_; }
@@ -29,6 +31,7 @@ public:
 
     // Allow the audio thread proc to access internal implementation
     friend unsigned __stdcall dsound_thread_proc(void* param);
+    friend struct WindowsBackendTest;
 
 private:
     struct Impl;

@@ -303,6 +303,56 @@ void AudioEngine::stop_analysis_thread() {
     analysis_thread_.reset();
 }
 
+void AudioEngine::close_output() {
+    // Join every reader of backend_ before stopping or destroying the device.
+    if (state_ == EngineState::Playing) state_.store(EngineState::Paused, std::memory_order_release);
+    timer_running_ = false;
+    decoder_running_ = false;
+    if (position_timer_ && position_timer_->joinable()) position_timer_->join();
+    position_timer_.reset();
+    if (decoder_thread_ && decoder_thread_->joinable()) decoder_thread_->join();
+    decoder_thread_.reset();
+    stop_analysis_thread();
+    if (backend_) {
+        backend_->stop();
+        backend_->close();
+        backend_.reset();
+    }
+}
+
+bool AudioEngine::reopen_output(bool resume) {
+    reopen_position_ms_ = position_ms();
+    if (state_ == EngineState::Playing) state_.store(EngineState::Paused, std::memory_order_release);
+    close_output();
+    dop_transport_active_.store(false, std::memory_order_release);
+    dop_ring_buffer_.reset();
+    dop_work_buffer_.clear();
+    if (ring_buffer_) ring_buffer_->reset();
+    source_work_buffer_.clear();
+    source_work_frames_ = 0;
+    return !resume || play();
+}
+
+void AudioEngine::service_backend_events() {
+    if (!backend_) return;
+    const unsigned events = backend_->take_events();
+    if (events & BackendEventFailure) {
+        // Render-thread failures must not leave a silent device marked Playing.
+        stop();
+        set_state(EngineState::Stopped);
+        if (error_cb_) error_cb_(-3, "Audio output failed; restart playback or select another device");
+        return;
+    }
+    if (!(events & (BackendEventReset | BackendEventResync | BackendEventRateChanged))) return;
+    LOG_WARN("Audio device requested recovery: events=" + std::to_string(events));
+    const bool resume = state_ == EngineState::Playing;
+    if (!reopen_output(resume)) {
+        stop();
+        set_state(EngineState::Stopped);
+        if (error_cb_) error_cb_(-3, "Audio device recovery failed; restart playback or select another output");
+    }
+}
+
 bool AudioEngine::prepare_next_decoder_locked() {
     next_decoder_.close();
     if (next_track_path_.empty() || !next_decoder_.open(next_track_path_)) return false;
@@ -480,6 +530,9 @@ bool AudioEngine::open(const std::string& file_path) {
     }
 
     set_state(EngineState::Loading);
+    // A new source must not inherit a device-reopen position captured before
+    // it was opened (for example during startup output-settings restoration).
+    reopen_position_ms_ = -1.0;
 
     if (!decoder_.open(file_path)) {
         LOG_ERROR("Open failed at decoder initialization: path=" + file_path);
@@ -676,6 +729,10 @@ bool AudioEngine::play() {
             LOG_ERROR("Play failed after output format negotiation: backend=" + std::string(backend_name(current_backend_type_)) +
                       ", last_requested=" + format_audio(requested) + ", candidate_rates=" +
                       std::to_string(candidate_rates.size()) + ", path=" + track_info_.file_path);
+            // Leave no half-open output behind: a subsequent play() must retry
+            // negotiation instead of skipping initialization with backend_ set.
+            backend_->close();
+            backend_.reset();
             if (error_cb_) error_cb_(-2, "Failed to open audio device");
             return false;
         }
@@ -822,7 +879,12 @@ bool AudioEngine::pause() {
     const bool dop = dop_transport_active_.load(std::memory_order_acquire);
     pause_fade_pending_.store(!dop && pause_fade_enabled_.load(std::memory_order_acquire) &&
         pause_fade_ms_.load(std::memory_order_acquire) > 0, std::memory_order_release);
-    if (dop && backend_) backend_->stop();
+    if (dop && backend_ && !backend_->stop()) {
+        stop();
+        set_state(EngineState::Stopped);
+        if (error_cb_) error_cb_(-3, "Audio device failed to pause");
+        return false;
+    }
     set_state(EngineState::Paused);
     LOG_DEBUG("Playback paused: path=" + track_info_.file_path + ", position_ms=" + std::to_string(position_ms()));
     return true;
@@ -831,28 +893,7 @@ bool AudioEngine::pause() {
 bool AudioEngine::stop() {
     if (state_ == EngineState::Idle || state_ == EngineState::Loading) return false;
 
-    // Stop threads
-    decoder_running_ = false;
-    timer_running_ = false;
-    analysis_running_ = false;
-
-    if (decoder_thread_ && decoder_thread_->joinable()) {
-        decoder_thread_->join();
-    }
-    decoder_thread_.reset();
-
-    if (position_timer_ && position_timer_->joinable()) {
-        position_timer_->join();
-    }
-    position_timer_.reset();
-    stop_analysis_thread();
-
-    // Stop backend
-    if (backend_) {
-        backend_->stop();
-        backend_->close();
-        backend_.reset();
-    }
+    close_output();
     pause_fade_pending_.store(false, std::memory_order_release);
     pause_fade_live_ = 1.0f;
     pcm_output_sample_rate_.store(0, std::memory_order_release);
@@ -974,9 +1015,19 @@ bool AudioEngine::seek(double position_ms) {
 
     // Flush hardware buffer to clear stale audio from before the seek
     if (backend_) {
-        backend_->flush();
+        if (!backend_->flush_checked()) {
+            pcm_io_resetting_.store(false, std::memory_order_release);
+            LOG_ERROR("Seek failed: audio device could not restart");
+            stop();
+            set_state(EngineState::Stopped);
+            if (error_cb_) error_cb_(-3, "Audio device failed to restart after seek");
+            return false;
+        }
         LOG_DEBUG("Seek: backend flushed");
     }
+    // An explicit seek supersedes any earlier device-reopen snapshot. With no
+    // backend yet, play() must reopen both PCM and DoP at this latest position.
+    if (!backend_) reopen_position_ms_ = position_ms;
     pcm_io_resetting_.store(false, std::memory_order_release);
 
     if (pos_cb_) {
@@ -1021,7 +1072,7 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
     if (force_output_rate_ == force_output_rate && target_sample_rate_ == target_sample_rate &&
         resampler_quality_ == quality) return true;
 
-    const bool reopen_output = force_output_rate_ != force_output_rate ||
+    const bool needs_reopen = force_output_rate_ != force_output_rate ||
         (force_output_rate && target_sample_rate_ != target_sample_rate) ||
         (resampler_quality_ != quality && !dop_transport_active_.load(std::memory_order_acquire));
     force_output_rate_ = force_output_rate;
@@ -1030,7 +1081,7 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
     LOG_DEBUG("Resampler configuration: " + std::string(force_output_rate ? "force " : "automatic ") +
              std::to_string(target_sample_rate) + "Hz, quality=" +
              (quality == 0 ? "best" : quality == 1 ? "medium" : "fast"));
-    if (!reopen_output) {
+    if (!needs_reopen) {
         dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
         return true;
     }
@@ -1038,30 +1089,7 @@ bool AudioEngine::set_resampler_config(bool force_output_rate, int target_sample
     // An opened backend owns its output clock. Recreate it before playback
     // resumes so a target-rate change never reaches the audio callback half-applied.
     const bool resume = state_ == EngineState::Playing;
-    if (backend_) {
-        reopen_position_ms_ = position_ms();
-        stop_analysis_thread();
-        if (resume) state_.store(EngineState::Paused, std::memory_order_release);
-        backend_->stop();
-        backend_->close();
-        backend_.reset();
-        if (decoder_thread_ && decoder_thread_->joinable()) {
-            decoder_running_ = false;
-            decoder_thread_->join();
-            decoder_thread_.reset();
-        }
-        if (position_timer_ && position_timer_->joinable()) {
-            timer_running_ = false;
-            position_timer_->join();
-            position_timer_.reset();
-        }
-        dop_transport_active_.store(false, std::memory_order_release);
-        dop_ring_buffer_.reset();
-        dop_work_buffer_.clear();
-        if (ring_buffer_) ring_buffer_->reset();
-        source_work_buffer_.clear();
-        source_work_frames_ = 0;
-    }
+    if (backend_) reopen_output(false);
     dsp_pipeline_.set_resampler_quality(static_cast<DspPipeline::ResamplerQuality>(quality));
     return !resume || play();
 }
@@ -1100,25 +1128,8 @@ bool AudioEngine::select_output_device(BackendType type, const std::wstring& dev
         state_.store(EngineState::Paused, std::memory_order_release);
     }
 
-    // Stop backend and threads, then restart with new device
-    if (backend_) {
-        stop_analysis_thread();
-        backend_->stop();
-        backend_->close();
-        backend_.reset();
-    }
-
-    // Also stop decoder/timer so play() can recreate them cleanly
-    if (decoder_thread_ && decoder_thread_->joinable()) {
-        decoder_running_ = false;
-        decoder_thread_->join();
-        decoder_thread_.reset();
-    }
-    if (position_timer_ && position_timer_->joinable()) {
-        timer_running_ = false;
-        position_timer_->join();
-        position_timer_.reset();
-    }
+    // Quiesce readers before releasing the device and preserve playback position.
+    reopen_output(false);
 
     current_backend_type_ = type;
     current_device_id_ = device_id;
@@ -1405,7 +1416,7 @@ int AudioEngine::dop_audio_callback(uint8_t* output, int frames, int channels) {
         dop_output_marker_ = marker == 0x05 ? 0xFA : 0x05;
     }
     dop_carrier_frames_.fetch_add(read, std::memory_order_relaxed);
-    if (!decoder_running_ && dop_ring_buffer_->readable_frames() == 0 &&
+    if (state_ != EngineState::Ready && !decoder_running_ && dop_ring_buffer_->readable_frames() == 0 &&
         !track_ended_fired_.exchange(true, std::memory_order_acq_rel)) {
         mark_track_ended_pending();
     }

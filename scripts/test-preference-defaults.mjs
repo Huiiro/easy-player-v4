@@ -27,6 +27,7 @@ function load(file, mocks = {}, globals = {}) {
 const defaults = load('src/renderer/src/utils/preferenceDefaults.ts', { vue: Vue })
 const footer = load('src/renderer/src/utils/footerLayout.ts')
 const shortcuts = load('src/shared/shortcuts.ts')
+const themePreview = load('src/renderer/src/services/themePreview.ts')
 const uiModule = load(
   'src/renderer/src/stores/ui/uiStore.ts',
   {
@@ -36,6 +37,7 @@ const uiModule = load(
     '@/utils/footerLayout': footer,
     '../../../../shared/shortcuts': shortcuts,
     '@/services/customTheme': {},
+    '@/services/themePreview': themePreview,
     '@/components/background/songThemeColors': {},
     '@/stores/persistence': {},
     '@/components/background/systemBackgroundRegistry': {},

@@ -108,6 +108,7 @@ onPlaybackModeChanged((enabled) => {
   desktopLyricsWindow?.destroy()
 })
 let audioEngine: AudioEngineManager | null = null
+let flushPlaybackCheckpoint: (() => void) | undefined
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let trayTrack = { title: '', artist: '', isPlaying: false }
@@ -163,6 +164,7 @@ function showMainWindow(): void {
 function quitApplication(): void {
   Logger.info('[Main] quit requested', { audioLoaded: audioEngine?.loaded === true })
   isQuitting = true
+  flushPlaybackCheckpoint?.()
   audioEngine?.stop()
   audioEngine?.flushDspSettings()
   saveDesktopLyricsWindowState()
@@ -1197,7 +1199,7 @@ app.whenReady().then(() =>
       // Initialize audio engine after window is created
       audioEngine = new AudioEngineManager()
       if (mainWindow && audioEngine.loaded) {
-        registerIpcHandlers(audioEngine, () => mainWindow)
+        flushPlaybackCheckpoint = registerIpcHandlers(audioEngine, () => mainWindow)
         Logger.debug('[Main] audio IPC handlers registered')
       } else if (mainWindow) {
         Logger.warn('[Main] Audio engine failed to load — running without audio')
@@ -1225,6 +1227,7 @@ app.whenReady().then(() =>
 // If it is disabled, closing the final window must terminate the app on every
 // platform; otherwise macOS would leave a background/tray process behind.
 app.on('window-all-closed', () => {
+  flushPlaybackCheckpoint?.()
   if (audioEngine) {
     audioEngine.stop()
   }
@@ -1234,6 +1237,7 @@ app.on('window-all-closed', () => {
 app.on('will-quit', () => {
   Logger.debug('[Main] will quit; flushing settings and closing database')
   isQuitting = true
+  flushPlaybackCheckpoint?.()
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()
   searchIndexService?.stop()

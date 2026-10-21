@@ -13,6 +13,15 @@ enum class BackendType {
     DIRECTSOUND
 };
 
+enum BackendEvent : unsigned {
+    BackendEventNone = 0,
+    BackendEventReset = 1,
+    BackendEventResync = 2,
+    BackendEventRateChanged = 4,
+    BackendEventLatenciesChanged = 8,
+    BackendEventFailure = 16
+};
+
 struct DeviceInfo {
     std::wstring id;
     std::wstring name;
@@ -69,4 +78,8 @@ public:
     // Discard buffered audio and reset the playback buffer.
     // Called after seek to prevent old audio from playing.
     virtual void flush() = 0;
+    // Checked variant for backends whose flush can stop/restart a device.
+    virtual bool flush_checked() { flush(); return true; }
+    // Consumed from the host control thread, never from an audio callback.
+    virtual unsigned take_events() { return BackendEventNone; }
 };

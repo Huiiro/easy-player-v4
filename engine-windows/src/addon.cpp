@@ -205,6 +205,7 @@ public:
             InstanceMethod("selectOutputDevice", &AudioEngineWrapper::SelectOutputDevice),
             InstanceMethod("getVersion", &AudioEngineWrapper::GetVersion),
             InstanceMethod("getStatus", &AudioEngineWrapper::GetStatus),
+            InstanceMethod("serviceBackendEvents", &AudioEngineWrapper::ServiceBackendEvents),
             InstanceMethod("getAudioChain", &AudioEngineWrapper::GetAudioChain),
             InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
             InstanceMethod("setLoudnessAnalysisEnabled", &AudioEngineWrapper::SetLoudnessAnalysisEnabled),
@@ -965,6 +966,12 @@ private:
 
     Napi::Value GetVersion(const Napi::CallbackInfo& info) {
         return Napi::String::New(info.Env(), engine_->version());
+    }
+
+    Napi::Value ServiceBackendEvents(const Napi::CallbackInfo& info) {
+        std::lock_guard<std::mutex> lock(operation_mutex_);
+        engine_->service_backend_events();
+        return info.Env().Undefined();
     }
 
     Napi::Value GetStatus(const Napi::CallbackInfo& info) {

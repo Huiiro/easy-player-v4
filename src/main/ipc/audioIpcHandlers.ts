@@ -25,7 +25,7 @@ const playbackStateNames: Record<EngineState, string> = {
 export function registerIpcHandlers(
   engine: AudioEngineManager,
   mainWindow: () => BrowserWindow | null
-): void {
+): () => void {
   let readyRendererId = 0
   const pendingEnds: Array<{ reason: string; filePath: string; nextFilePath?: string }> = []
   let reclaimTimer: ReturnType<typeof setTimeout> | undefined
@@ -433,6 +433,24 @@ export function registerIpcHandlers(
     sendEvent(mainWindow, 'error', { code, message: msg, recoverable: true })
     Logger.write('error', 'native', `[${code}] ${msg}`)
   })
+
+  // The caller invokes this before stopping the engine or closing the database.
+  // A second call after stop must preserve the saved position, not replace it
+  // with the idle engine's zero. Idle also includes a deferred startup restore.
+  return (): void => {
+    const status = engine.getStatus()
+    if (
+      status?.trackInfo?.filePath &&
+      [EngineState.Ready, EngineState.Playing, EngineState.Paused].includes(status.state) &&
+      Number.isFinite(status.positionMs)
+    ) {
+      saveCheckpoint({
+        currentFile: status.trackInfo.filePath,
+        positionMs: Math.max(0, status.positionMs),
+        wasPlaying: status.state === EngineState.Playing
+      })
+    } else saveCheckpoint({})
+  }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

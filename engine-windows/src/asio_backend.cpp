@@ -1,5 +1,9 @@
 #include "asio_backend.h"
 #include "logger.h"
+#include "asio_control_thread.h"
+#include <algorithm>
+#include <cmath>
+#include <limits>
 
 #include <atomic>
 #include <cstring>
@@ -90,13 +94,21 @@ static void vt_from_obj(IUnknown* obj, AsioVTable* vt) {
 }
 
 // ── COM guard ─────────────────────────────────────────────
-struct ComGuard { bool u = false;
-    ComGuard() { HRESULT h = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-        if (SUCCEEDED(h)) u = true; }
-    ~ComGuard() { if (u) CoUninitialize(); } };
+struct ComGuard {
+    // ASIO4ALL registers ThreadingModel=Apartment and exposes an IASIO IID
+    // without a proxy/stub. Activating it from MTA requires marshaling that
+    // cannot succeed (E_NOINTERFACE). Keep it on our message-pumping STA.
+    HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    ~ComGuard() { if (SUCCEEDED(result)) CoUninitialize(); }
+};
 
 // ── Impl ──────────────────────────────────────────────────
 struct AsioBackend::Impl {
+    AsioControlThread control;
+    std::unique_ptr<ComGuard> com;
+    ASIOCallbacks callbacks{};
+    std::atomic<unsigned> events{BackendEventNone};
+    std::atomic<double> expected_rate{0};
     IUnknown* obj = nullptr; AsioVTable vt = {};
     std::string driver_name; long buffer_size = 0;
     int output_channels = 0, input_channels = 0; double sample_rate = 0;
@@ -105,6 +117,7 @@ struct AsioBackend::Impl {
     std::vector<int> channel_types; std::vector<float> interleaved_buf;
     std::vector<uint8_t> raw_interleaved_buf;
     AudioCallback callback; RawAudioCallback raw_callback; bool raw_transport = false;
+    uint8_t dop_marker = 0x05;
     std::atomic<bool> running{false};
     bool buffers_created = false;
 };
@@ -163,15 +176,24 @@ static int tp_valid_bits(int t) {
 // ── ASIO callbacks ────────────────────────────────────────
 static void buf_switch(long idx, ASIOBool /*direct_process*/) {
     auto* im = (AsioBackend::Impl*)g_impl.load(std::memory_order_acquire);
-    if(!im||!im->running.load(std::memory_order_acquire))return;
+    if(!im||!im->running.load(std::memory_order_acquire)||idx<0||idx>1)return;
     int ch=im->output_channels, n=(int)im->buffer_size;
     if (im->raw_transport) {
-        const int rendered = im->raw_callback ? im->raw_callback(im->raw_interleaved_buf.data(), n, ch) : 0;
+        const int rendered = im->raw_callback ? std::clamp(im->raw_callback(im->raw_interleaved_buf.data(), n, ch), 0, n) : 0;
+        // The transport owns marker phase, including startup/pause silence.
+        for (int frame = 0; frame < n; ++frame) {
+            for (int ci = 0; ci < ch; ++ci) {
+                auto* sample = im->raw_interleaved_buf.data() + (static_cast<size_t>(frame) * ch + ci) * 3;
+                if (frame >= rendered) sample[0] = sample[1] = 0x69;
+                sample[2] = im->dop_marker;
+            }
+            im->dop_marker = im->dop_marker == 0x05 ? 0xFA : 0x05;
+        }
         for(int ci=0;ci<ch;++ci) {
             auto* d = static_cast<uint8_t*>(im->buffer_infos[ci].buffers[idx]);
             for(int frame=0;frame<n;++frame) {
                 const size_t offset = static_cast<size_t>(frame * ch + ci) * 3;
-                const uint8_t* source = frame < rendered ? im->raw_interleaved_buf.data() + offset : nullptr;
+                const uint8_t* source = im->raw_interleaved_buf.data() + offset;
                 if (im->channel_types[ci] == ASIOSTInt24LSB) {
                     if (source) std::memcpy(d + frame * 3, source, 3);
                     else std::memset(d + frame * 3, 0, 3);
@@ -188,7 +210,9 @@ static void buf_switch(long idx, ASIOBool /*direct_process*/) {
             }
         }
     } else {
-        im->callback(im->interleaved_buf.data(),n,ch);
+        const int rendered = std::clamp(im->callback(im->interleaved_buf.data(),n,ch), 0, n);
+        std::fill(im->interleaved_buf.begin() + static_cast<size_t>(rendered) * ch,
+                  im->interleaved_buf.end(), 0.0f);
         for(int ci=0;ci<ch;++ci){void*d=im->buffer_infos[ci].buffers[idx];
         DF f=get_df(im->channel_types[ci]);if(f)f(im->interleaved_buf.data(),d,n,ch,ci);
         else memset(d,0,n*4);}
@@ -205,18 +229,29 @@ static void* buf_switch_time(void* params, long idx, ASIOBool direct_process) {
     buf_switch(idx, direct_process);
     return params;
 }
-static void sr_change(ASIOSampleRate){}
+static void sr_change(ASIOSampleRate rate) {
+    auto* im = static_cast<AsioBackend::Impl*>(g_impl.load(std::memory_order_acquire));
+    if (im && rate != im->expected_rate.load(std::memory_order_acquire))
+        im->events.fetch_or(BackendEventRateChanged, std::memory_order_release);
+}
 static long asio_msg(long selector, long value, void*, double*) {
-    // kAsioSelectorSupported asks whether the selector in `value` is handled.
-    // kAsioSupportsTimeInfo is 7 in the ASIO 2.x SDK.
-    constexpr long kAsioSelectorSupported = 1;
-    constexpr long kAsioEngineVersion = 2;
-    constexpr long kAsioSupportsTimeInfo = 7;
-    if (selector == kAsioSelectorSupported &&
-        (value == kAsioEngineVersion || value == kAsioSupportsTimeInfo)) return 1;
-    if (selector == kAsioEngineVersion) return 2;
-    if (selector == kAsioSupportsTimeInfo) return 1;
-    return 0;
+    constexpr long supported=1, version=2, reset=3, buffer_change=4;
+    constexpr long resync=5, latencies=6, time_info=7;
+    if (selector == supported)
+        return value == version || value == reset || value == buffer_change ||
+               value == resync || value == latencies || value == time_info;
+    if (selector == version) return 2;
+    if (selector == time_info) return 1;
+    auto* im = static_cast<AsioBackend::Impl*>(g_impl.load(std::memory_order_acquire));
+    if (!im) return 0;
+    unsigned event = BackendEventNone;
+    if (selector == reset || selector == buffer_change) event = BackendEventReset;
+    if (selector == resync) event = BackendEventResync;
+    if (selector == latencies) event = BackendEventLatenciesChanged;
+    if (!event) return 0;
+    // Recovery is deferred to the host control path, never inside a callback.
+    im->events.fetch_or(event, std::memory_order_release);
+    return 1;
 }
 
 // ── Registry ──────────────────────────────────────────────
@@ -256,13 +291,27 @@ std::vector<DeviceInfo> AsioBackend::enumerate_devices() {
 
 AudioFormat AsioBackend::open(const std::wstring& dev_id,
                                const AudioFormat& req, AudioCallback cb) {
+    if (!impl_->control.is_current())
+        return impl_->control.invoke([this, dev_id, req, cb = std::move(cb)]() mutable {
+            return open(dev_id, req, std::move(cb));
+        });
     tr("open start");close();
+    if (!cb || req.channels < 1) return {};
     LOG_DEBUG("ASIO open: device=" + log_wide(dev_id) +
               ", rate=" + std::to_string(req.sample_rate) + ", bits=" + std::to_string(req.bit_depth) +
               ", channels=" + std::to_string(req.channels));
     if (!preparing_dop_open_) { impl_->raw_callback = {}; impl_->raw_transport = false; }
     impl_->callback=std::move(cb);
-    tr("ComGuard");ComGuard com;
+    impl_->com = std::make_unique<ComGuard>();
+    if (FAILED(impl_->com->result)) {
+        LOG_ERROR("ASIO: COM initialization failed: " + log_hex(impl_->com->result));
+        close(); return {};
+    }
+    void* expected = nullptr;
+    if (!g_impl.compare_exchange_strong(expected, impl_.get(), std::memory_order_acq_rel)) {
+        LOG_ERROR("ASIO: only one output instance is supported");
+        close(); return {};
+    }
 
     // ASIO drivers are COM in-proc servers, but IASIO has no shared IID.
     // The ASIO SDK uses the driver's CLSID as both CLSID and RIID. Requesting
@@ -276,8 +325,8 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
         HRESULT hr=CoCreateInstance(cl,nullptr,CLSCTX_INPROC_SERVER,cl,
                                     reinterpret_cast<void**>(&impl_->obj));
         if(SUCCEEDED(hr)){tr("CoCreateInstance OK");}
-        else{LOG_ERROR("ASIO: CoCreateInstance "+log_hex(hr));return{};}}
-    else{LOG_ERROR("ASIO: no CLSID");return{};}
+        else{LOG_ERROR("ASIO: CoCreateInstance "+log_hex(hr));close();return{};}}
+    else{LOG_ERROR("ASIO: no CLSID");close();return{};}
 
     // extract vtable
     tr("extract vtable");vt_from_obj(impl_->obj,&impl_->vt);
@@ -298,16 +347,8 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     tr("getCh");const ASIOError channel_result=impl_->vt.getChannels(impl_->obj,&ni,&no);tr("getCh ok");
     if(channel_result!=ASE_OK) LOG_ERROR("ASIO getChannels failed: code="+std::to_string(channel_result)+", driver="+impl_->driver_name);
     impl_->input_channels=(int)ni;impl_->output_channels=(int)no;
-    if(no<1){LOG_ERROR("ASIO: no output");close();return{};}
+    if(channel_result!=ASE_OK || no<1){LOG_ERROR("ASIO: no output");close();return{};}
     int uc=std::min((int)no, std::max(1, req.channels));
-
-    // buffer size
-    long mn=0,mx=0,pr=0,gr=0;tr("getBufferSize");
-    impl_->vt.getBufferSize(impl_->obj,&mn,&mx,&pr,&gr);
-    impl_->buffer_size=pr>0?pr:512;
-    LOG_DEBUG("ASIO buffers: driver=" + impl_->driver_name + ", min=" + std::to_string(mn) +
-              ", max=" + std::to_string(mx) + ", preferred=" + std::to_string(pr) +
-              ", granularity=" + std::to_string(gr) + ", selected=" + std::to_string(impl_->buffer_size));
 
     // sample rate
     int trate=req.sample_rate>0?req.sample_rate:44100;
@@ -323,7 +364,12 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
         }
     }
     tr("setSampleRate");
-    const ASIOError rate_result = impl_->vt.setSampleRate(impl_->obj,sr);
+    impl_->expected_rate.store(sr, std::memory_order_release);
+    ASIOSampleRate existing_rate = 0;
+    const bool rate_matches = impl_->vt.getSampleRate(impl_->obj, &existing_rate) == ASE_OK && existing_rate == sr;
+    // Avoid unnecessary clock resets, and support externally clocked drivers
+    // that reject setSampleRate even when already running at the desired rate.
+    const ASIOError rate_result = rate_matches ? ASE_OK : impl_->vt.setSampleRate(impl_->obj,sr);
     if (rate_result!=ASE_OK) {
         LOG_WARN("ASIO setSampleRate rejected: code=" + std::to_string(rate_result) +
                  ", rate=" + std::to_string(static_cast<int>(sr)) + "Hz, driver=" + impl_->driver_name);
@@ -331,7 +377,8 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     }
     ASIOSampleRate confirmed_rate = 0;
     const ASIOError confirmed_result = impl_->vt.getSampleRate(impl_->obj,&confirmed_rate);
-    if (confirmed_result!=ASE_OK || confirmed_rate<=0 ||
+    if (confirmed_result!=ASE_OK || !std::isfinite(confirmed_rate) || confirmed_rate<=0 ||
+        confirmed_rate>std::numeric_limits<int>::max() ||
         (impl_->raw_transport && confirmed_rate != static_cast<ASIOSampleRate>(trate))) {
         LOG_WARN("ASIO" + std::string(impl_->raw_transport ? " DoP" : "") +
                  ": rate confirmation failed, code=" + std::to_string(confirmed_result) +
@@ -339,7 +386,24 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
         close(); return {};
     }
     sr=confirmed_rate;impl_->sample_rate=sr;
+    impl_->expected_rate.store(sr, std::memory_order_release);
     LOG_DEBUG("ASIO rate: "+std::to_string((int)sr));
+
+    // A rate change can change the driver's legal buffer sizes.
+    long mn=0,mx=0,pr=0,gr=0;
+    const ASIOError size_result = impl_->vt.getBufferSize(impl_->obj,&mn,&mx,&pr,&gr);
+    const bool legal_size = mn > 0 && mx >= mn && pr >= mn && pr <= mx &&
+        (gr == -1 ? (pr & (pr - 1)) == 0 :
+         gr == 0 ? mn == mx && pr == mn : gr > 0 && (pr - mn) % gr == 0);
+    if (size_result != ASE_OK || !legal_size ||
+        static_cast<size_t>(pr) > static_cast<size_t>(std::numeric_limits<int>::max()) / uc) {
+        LOG_ERROR("ASIO: invalid buffer size negotiation: code=" + std::to_string(size_result) +
+                  ", min=" + std::to_string(mn) + ", max=" + std::to_string(mx) +
+                  ", preferred=" + std::to_string(pr) + ", granularity=" + std::to_string(gr));
+        close(); return {};
+    }
+    impl_->buffer_size=pr;
+    LOG_DEBUG("ASIO buffer selected after rate negotiation: " + std::to_string(pr));
 
     // channel info
     tr("channel info");impl_->channel_infos.resize(uc);impl_->channel_types.resize(uc);
@@ -368,7 +432,8 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     for(long ci=0;ci<uc;++ci){impl_->buffer_infos[ci].isInput=ASIOFalse;
     impl_->buffer_infos[ci].channelNum=ci;impl_->buffer_infos[ci].buffers[0]=nullptr;
     impl_->buffer_infos[ci].buffers[1]=nullptr;}
-    ASIOCallbacks cbs={};cbs.bufferSwitch=buf_switch;
+    auto& cbs = impl_->callbacks;
+    cbs={};cbs.bufferSwitch=buf_switch;
     cbs.sampleRateDidChange=sr_change;cbs.asioMessage=asio_msg;
     cbs.bufferSwitchTimeInfo=buf_switch_time;
     ASIOError ce=impl_->vt.createBuffers(impl_->obj,impl_->buffer_infos.data(),uc,impl_->buffer_size,&cbs);
@@ -384,12 +449,6 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     impl_->interleaved_buf.resize(impl_->buffer_size*uc);
     if (impl_->raw_transport) impl_->raw_interleaved_buf.resize(static_cast<size_t>(impl_->buffer_size) * uc * 3);
     impl_->output_channels=uc;
-    void* expected = nullptr;
-    if (!g_impl.compare_exchange_strong(expected, impl_.get(), std::memory_order_acq_rel)) {
-        LOG_ERROR("ASIO: only one active output instance is supported");
-        close();
-        return {};
-    }
     int valid_bits = impl_->raw_transport ? 24 : tp_valid_bits(impl_->channel_types.front());
     for (const int type : impl_->channel_types) {
         if (tp_valid_bits(type) != valid_bits) { valid_bits = 0; break; }
@@ -404,10 +463,15 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
 AudioFormat AsioBackend::open_dop(const std::wstring& device_id,
                                   const AudioFormat& requested_format,
                                   RawAudioCallback callback) {
+    if (!impl_->control.is_current())
+        return impl_->control.invoke([this, device_id, requested_format, callback = std::move(callback)]() mutable {
+            return open_dop(device_id, requested_format, std::move(callback));
+        });
     if (requested_format.bit_depth != 24 || requested_format.channels < 1 || !callback) {
         LOG_WARN("ASIO DoP requires a PCM24 raw callback");
         return {};
     }
+    close();
     impl_->raw_callback = std::move(callback);
     impl_->raw_transport = true;
     preparing_dop_open_ = true;
@@ -423,31 +487,99 @@ AudioFormat AsioBackend::open_dop(const std::wstring& device_id,
     return actual;
 }
 
-bool AsioBackend::start() {tr("start");
-    if(!impl_->obj||active_)return false;impl_->running.store(true,std::memory_order_release);
-    const ASIOError start_error=impl_->vt.start(impl_->obj);
-    if(start_error!=ASE_OK){impl_->running.store(false);LOG_ERROR("ASIO start failed: code="+std::to_string(start_error)+
-        ", driver="+impl_->driver_name+", rate="+std::to_string(impl_->sample_rate)+", frames="+std::to_string(impl_->buffer_size));return false;}
-    active_=true;LOG_DEBUG("AsioBackend started");return true;}
-
-bool AsioBackend::stop() {tr("stop");
-    if(!active_)return false;impl_->running.store(false);impl_->vt.stop(impl_->obj);
-    active_=false;LOG_DEBUG("AsioBackend stopped");return true;}
-
-void AsioBackend::flush() {
-    // IASIO has no portable buffer-reset primitive.  Restarting the driver is
-    // the only safe way to discard old queued frames after a seek.
-    if (!active_) return;
-    stop();
-    start();
+void AsioBackend::initialize_output_buffers() {
+    // Clear both halves on every start. DoP uses valid encoded silence.
+    for (int ci = 0; ci < impl_->output_channels; ++ci) {
+        const int bytes = impl_->channel_types[ci] == ASIOSTInt16LSB ? 2 :
+                          impl_->channel_types[ci] == ASIOSTInt24LSB ? 3 : 4;
+        for (int half = 0; half < 2; ++half) {
+            auto* output = static_cast<uint8_t*>(impl_->buffer_infos[ci].buffers[half]);
+            std::memset(output, 0, static_cast<size_t>(impl_->buffer_size) * bytes);
+            if (impl_->raw_transport) {
+                for (long frame = 0; frame < impl_->buffer_size; ++frame) {
+                    output[frame * bytes] = 0x69;
+                    output[frame * bytes + 1] = 0x69;
+                    output[frame * bytes + 2] = frame % 2 ? 0xFA : 0x05;
+                }
+            }
+        }
+    }
 }
 
-void AsioBackend::close() {tr("close");
-    if(active_)stop();
+bool AsioBackend::start() {
+    if (!impl_->control.is_current()) return impl_->control.invoke([this] { return start(); });
+    if (!impl_->obj || !impl_->buffers_created || active_) return false;
+    initialize_output_buffers();
+    impl_->dop_marker = 0x05;
+    impl_->running.store(true, std::memory_order_release);
+    // ASIO begins by playing half 1, then requests half 0. Prime the real
+    // driver buffer rather than only the engine's software ring.
+    buf_switch(1, ASIOTrue);
+    const ASIOError result = impl_->vt.start(impl_->obj);
+    if (result != ASE_OK) {
+        impl_->running.store(false, std::memory_order_release);
+        // A failed start may have partially started the hardware.
+        active_ = true;
+        stop();
+        LOG_ERROR("ASIO start failed: code=" + std::to_string(result));
+        return false;
+    }
+    active_ = true;
+    return true;
+}
+
+bool AsioBackend::stop() {
+    if (!impl_->control.is_current()) return impl_->control.invoke([this] { return stop(); });
+    if (!impl_->obj || !active_) return true;
+    impl_->running.store(false, std::memory_order_release);
+    const ASIOError result = impl_->vt.stop(impl_->obj);
+    if (result != ASE_OK) {
+        LOG_ERROR("ASIO stop failed: code=" + std::to_string(result));
+        // Retain active_ so close() retries before disposing the buffers.
+        return false;
+    }
+    active_ = false;
+    return true;
+}
+
+void AsioBackend::flush() { (void)flush_checked(); }
+
+bool AsioBackend::flush_checked() {
+    if (!impl_->control.is_current()) return impl_->control.invoke([this] { return flush_checked(); });
+    if (!impl_->obj) return false;
+    if (!active_) { initialize_output_buffers(); return true; }
+    return stop() && start();
+}
+
+unsigned AsioBackend::take_events() {
+    if (!impl_->control.is_current()) return impl_->control.invoke([this] { return take_events(); });
+    const unsigned events = impl_->events.exchange(BackendEventNone, std::memory_order_acq_rel);
+    if ((events & BackendEventLatenciesChanged) && impl_->obj) {
+        long input = 0, output = 0;
+        if (impl_->vt.getLatencies(impl_->obj, &input, &output) == ASE_OK)
+            latency_ms_ = output * 1000.0 / impl_->sample_rate;
+    }
+    return events;
+}
+
+void AsioBackend::close() {
+    if (!impl_->control.is_current()) { impl_->control.invoke([this] { close(); }); return; }
+    if (active_) stop();
+    impl_->running.store(false, std::memory_order_release);
+    // Keep callback routing alive through disposal, with rendering disabled.
+    if (impl_->obj) {
+        if (impl_->buffers_created) impl_->vt.disposeBuffers(impl_->obj);
+        impl_->vt.Release(impl_->obj);
+        impl_->obj = nullptr;
+    }
     void* expected = impl_.get();
     g_impl.compare_exchange_strong(expected, nullptr, std::memory_order_acq_rel);
-    if(impl_->obj){if(impl_->buffers_created)impl_->vt.disposeBuffers(impl_->obj);
-    impl_->vt.Release(impl_->obj);impl_->obj=nullptr;}
-    impl_->vt={};impl_->buffers_created=false;
-    impl_->buffer_infos.clear();impl_->channel_infos.clear();impl_->channel_types.clear();
-    impl_->interleaved_buf.clear();impl_->raw_interleaved_buf.clear();LOG_DEBUG("AsioBackend closed");}
+    impl_->vt = {}; impl_->buffers_created = false; active_ = false;
+    impl_->buffer_infos.clear(); impl_->channel_infos.clear(); impl_->channel_types.clear();
+    impl_->interleaved_buf.clear(); impl_->raw_interleaved_buf.clear();
+    impl_->callback = {};
+    if (!preparing_dop_open_) { impl_->raw_callback = {}; impl_->raw_transport = false; }
+    impl_->events.store(BackendEventNone, std::memory_order_release);
+    impl_->com.reset(); // IASIO released before COM, on the creating thread.
+    current_format_ = {}; buffer_frames_ = 0; latency_ms_ = 0;
+}

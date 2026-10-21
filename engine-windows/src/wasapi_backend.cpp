@@ -91,6 +91,7 @@ struct WasapiBackend::Impl {
     // Thread
     HANDLE event_handle  = nullptr;
     HANDLE thread_handle = nullptr;
+    HANDLE startup_event = nullptr;
     std::atomic<bool> running{false};
     // The render thread must not emit IPC-backed logs.  It records the first
     // fatal HRESULT here and the control thread reports it after joining.
@@ -140,6 +141,7 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
     if (FAILED(com_hr) && com_hr != RPC_E_CHANGED_MODE) {
         impl->thread_error.store(com_hr, std::memory_order_release);
         impl->running.store(false, std::memory_order_release);
+        SetEvent(impl->startup_event);
         if (mmcssHandle && pAvRevertMmThread) pAvRevertMmThread(mmcssHandle);
         return 0;
     }
@@ -152,6 +154,7 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         impl->thread_error.store(hr, std::memory_order_release);
         impl->running.store(false, std::memory_order_release);
     }
+    SetEvent(impl->startup_event);
 
     while (impl->running.load(std::memory_order_acquire)) {
         DWORD result = WaitForSingleObject(impl->event_handle, INFINITE);
@@ -673,6 +676,9 @@ AudioFormat WasapiBackend::open_dop(
 bool WasapiBackend::start() {
     if (!impl_->audio_client || active_) return false;
 
+    impl_->startup_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!impl_->startup_event) return false;
+
     impl_->thread_error.store(S_OK, std::memory_order_release);
     impl_->running.store(true, std::memory_order_release);
     impl_->thread_handle = (HANDLE)_beginthreadex(
@@ -680,12 +686,24 @@ bool WasapiBackend::start() {
 
     if (!impl_->thread_handle) {
         impl_->running.store(false, std::memory_order_release);
+        CloseHandle(impl_->startup_event);
+        impl_->startup_event = nullptr;
         LOG_ERROR("WASAPI render thread creation failed: errno=" + std::to_string(errno) +
                   ", buffer_frames=" + std::to_string(impl_->buffer_frames));
         return false;
     }
 
     active_ = true;
+    // Wait for the actual IAudioClient::Start result, not just thread creation.
+    HANDLE startup[] = {impl_->startup_event, impl_->thread_handle};
+    const DWORD ready = WaitForMultipleObjects(2, startup, FALSE, INFINITE);
+    const bool started = ready == WAIT_OBJECT_0 &&
+        SUCCEEDED(impl_->thread_error.load(std::memory_order_acquire)) &&
+        impl_->running.load(std::memory_order_acquire);
+    if (!started) stop();
+    CloseHandle(impl_->startup_event);
+    impl_->startup_event = nullptr;
+    if (!started) return false;
     LOG_DEBUG("WasapiBackend started");
     return true;
 }
@@ -693,7 +711,7 @@ bool WasapiBackend::start() {
 // ── stop ──────────────────────────────────────────────────
 
 bool WasapiBackend::stop() {
-    if (!active_) return false;
+    if (!active_) return true;
 
     impl_->running.store(false, std::memory_order_release);
 
@@ -713,28 +731,39 @@ bool WasapiBackend::stop() {
 
     active_ = false;
     LOG_DEBUG("WasapiBackend stopped");
-    return true;
+    return SUCCEEDED(thread_error);
+}
+
+unsigned WasapiBackend::take_events() {
+    return FAILED(impl_->thread_error.load(std::memory_order_acquire))
+        ? BackendEventFailure : BackendEventNone;
 }
 
 // ── flush ─────────────────────────────────────────────────
 
-void WasapiBackend::flush() {
+void WasapiBackend::flush() { (void)flush_checked(); }
+
+bool WasapiBackend::flush_checked() {
     if (!impl_->audio_client)
-        return;
+        return false;
 
     // Resetting IAudioClient while its event thread owns a render buffer is
     // racy. Stop/join first, then reset and start a fresh render thread.
     const bool restart = active_;
-    if (restart) stop();
+    if (restart && !stop()) return false;
     HRESULT hr = impl_->audio_client->Stop();
-    if (FAILED(hr)) LOG_WARN("WasapiBackend flush Stop failed: hr=" + log_hex(hr));
+    if (FAILED(hr)) {
+        LOG_ERROR("WasapiBackend flush Stop failed: hr=" + log_hex(hr));
+        return false;
+    }
     hr = impl_->audio_client->Reset();
     if (FAILED(hr)) {
         LOG_ERROR("WasapiBackend flush Reset failed: hr=" + log_hex(hr));
-        return;
+        return false;
     }
-    if (restart) start();
+    if (restart && !start()) return false;
     LOG_DEBUG("WasapiBackend flushed");
+    return true;
 }
 
 // ── close ─────────────────────────────────────────────────

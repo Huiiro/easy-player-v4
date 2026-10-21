@@ -27,6 +27,7 @@ struct DSoundBackend::Impl {
     IDirectSoundNotify8* notify = nullptr;
     HANDLE notify_events[2] = {nullptr, nullptr};
     HANDLE thread_handle = nullptr;
+    HANDLE startup_event = nullptr;
     std::atomic<bool> running{false};
     std::atomic<HRESULT> thread_error{S_OK};
     std::mutex buffer_mutex;
@@ -52,8 +53,10 @@ unsigned __stdcall dsound_thread_proc(void* param) {
     if (FAILED(hr)) {
         impl->thread_error.store(hr, std::memory_order_release);
         impl->running.store(false, std::memory_order_release);
+        SetEvent(impl->startup_event);
         return 0;
     }
+    SetEvent(impl->startup_event);
 
     while (impl->running.load(std::memory_order_acquire)) {
         DWORD result = WaitForMultipleObjects(2, impl->notify_events, FALSE, INFINITE);
@@ -345,6 +348,8 @@ bool DSoundBackend::start() {
         return false;
     }
 
+    impl_->startup_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+    if (!impl_->startup_event) return false;
     impl_->thread_error.store(S_OK, std::memory_order_release);
     impl_->running.store(true, std::memory_order_release);
     impl_->thread_handle = (HANDLE)_beginthreadex(
@@ -352,18 +357,29 @@ bool DSoundBackend::start() {
 
     if (!impl_->thread_handle) {
         impl_->running.store(false, std::memory_order_release);
+        CloseHandle(impl_->startup_event);
+        impl_->startup_event = nullptr;
         LOG_ERROR("DirectSound render thread creation failed: errno=" + std::to_string(errno) +
                   ", buffer_bytes=" + std::to_string(impl_->buffer_bytes));
         return false;
     }
 
     active_ = true;
+    HANDLE startup[] = {impl_->startup_event, impl_->thread_handle};
+    const DWORD ready = WaitForMultipleObjects(2, startup, FALSE, INFINITE);
+    const bool started = ready == WAIT_OBJECT_0 &&
+        SUCCEEDED(impl_->thread_error.load(std::memory_order_acquire)) &&
+        impl_->running.load(std::memory_order_acquire);
+    if (!started) stop();
+    CloseHandle(impl_->startup_event);
+    impl_->startup_event = nullptr;
+    if (!started) return false;
     LOG_DEBUG("DSoundBackend started (" + std::to_string(impl_->buffer_bytes) + " bytes buffer)");
     return true;
 }
 
 bool DSoundBackend::stop() {
-    if (!active_) return false;
+    if (!active_) return true;
 
     impl_->running.store(false, std::memory_order_release);
 
@@ -383,28 +399,37 @@ bool DSoundBackend::stop() {
 
     active_ = false;
     LOG_DEBUG("DSoundBackend stopped");
-    return true;
+    return SUCCEEDED(thread_error);
 }
 
-void DSoundBackend::flush() {
-    if (!impl_->secondary || !impl_->running.load(std::memory_order_acquire)) return;
+unsigned DSoundBackend::take_events() {
+    return FAILED(impl_->thread_error.load(std::memory_order_acquire))
+        ? BackendEventFailure : BackendEventNone;
+}
+
+void DSoundBackend::flush() { (void)flush_checked(); }
+
+bool DSoundBackend::flush_checked() {
+    if (!impl_->secondary || !impl_->running.load(std::memory_order_acquire)) return false;
 
     std::lock_guard<std::mutex> guard(impl_->buffer_mutex);
 
-    impl_->secondary->Stop();
-    impl_->secondary->SetCurrentPosition(0);
+    HRESULT hr = impl_->secondary->Stop();
+    if (FAILED(hr)) { LOG_ERROR("DirectSound flush Stop failed: " + log_hex(hr)); return false; }
+    hr = impl_->secondary->SetCurrentPosition(0);
+    if (FAILED(hr)) { LOG_ERROR("DirectSound flush SetCurrentPosition failed: " + log_hex(hr)); return false; }
 
     void* ptr1 = nullptr;
     DWORD bytes1 = 0;
     void* ptr2 = nullptr;
     DWORD bytes2 = 0;
 
-    HRESULT hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
+    hr = impl_->secondary->Lock(0, impl_->buffer_bytes, &ptr1, &bytes1, &ptr2, &bytes2, 0);
     if (SUCCEEDED(hr)) {
         int channels = impl_->wave_format.nChannels;
         int frames = impl_->buffer_bytes / (channels * sizeof(short));
         float* f32_output = impl_->scratch.data();
-        int rendered = impl_->callback(f32_output, frames, channels);
+        int rendered = std::clamp(impl_->callback(f32_output, frames, channels), 0, frames);
         int total_samples = rendered * channels;
 
         short* s16_ptr1 = static_cast<short*>(ptr1);
@@ -433,14 +458,20 @@ void DSoundBackend::flush() {
             }
         }
 
-        impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        hr = impl_->secondary->Unlock(ptr1, bytes1, ptr2, bytes2);
+        if (FAILED(hr)) { LOG_ERROR("DirectSound flush Unlock failed: " + log_hex(hr)); return false; }
+    } else {
+        LOG_ERROR("DirectSound flush Lock failed: " + log_hex(hr));
+        return false;
     }
 
-    impl_->secondary->Play(0, 0, DSBPLAY_LOOPING);
+    hr = impl_->secondary->Play(0, 0, DSBPLAY_LOOPING);
+    if (FAILED(hr)) { LOG_ERROR("DirectSound flush Play failed: " + log_hex(hr)); return false; }
 
     // Wake the audio thread so normal half-buffer refills resume promptly.
     if (impl_->notify_events[0]) SetEvent(impl_->notify_events[0]);
     LOG_DEBUG("DSoundBackend flushed");
+    return true;
 }
 
 void DSoundBackend::close() {

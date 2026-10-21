@@ -74,6 +74,18 @@ export class AudioEngineManager {
         Logger.write(levels[level] ?? 'info', 'native', message)
       })
       this.restoreDspSettings()
+      if (process.platform === 'win32') {
+        // Process driver notifications even with the renderer closed/minimized.
+        const deviceEvents = setInterval(() => {
+          try {
+            this.engine?.serviceBackendEvents?.()
+          } catch (error) {
+            Logger.error('[AudioEngineManager] device event recovery failed', error)
+          }
+        }, 100)
+        deviceEvents.unref()
+        app.once('before-quit', () => clearInterval(deviceEvents))
+      }
       Logger.info(
         `[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
       )
