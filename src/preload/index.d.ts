@@ -474,6 +474,15 @@ declare global {
           success: boolean
           data?: { available: boolean; enabled: boolean }
         }>
+        getWindowMaterialState(): Promise<{
+          success: boolean
+          data?: import('../shared/windowMaterial').WindowMaterialState
+        }>
+        setWindowMaterial(material: import('../shared/windowMaterial').WindowMaterial): Promise<{
+          success: boolean
+          error?: string
+          data?: import('../shared/windowMaterial').WindowMaterialState
+        }>
         setMicaEnabled(enabled: boolean): Promise<{
           success: boolean
           data?: { available: boolean; enabled: boolean }

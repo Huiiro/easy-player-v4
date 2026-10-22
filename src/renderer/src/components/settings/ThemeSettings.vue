@@ -4,6 +4,9 @@ import CustomThemeSettings from './CustomThemeSettings.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
+import { useMessage } from '@/components/ui/useMessage'
+import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { presetColors } from '@/consts/color'
 import {
   systemBackgroundThemes,
@@ -13,6 +16,22 @@ import { useUIStore } from '@/stores/ui/uiStore'
 
 const ui = useUIStore()
 const { t } = useI18n()
+const { error } = useMessage()
+const windowMaterialOptions = computed(() =>
+  ui.availableWindowMaterials.map((material) => ({
+    value: material,
+    label: t(`settings.windowMaterial_${material}`)
+  }))
+)
+async function selectWindowMaterial(value: unknown): Promise<void> {
+  if (typeof value !== 'string' || !ui.availableWindowMaterials.includes(value as WindowMaterial))
+    return
+  try {
+    await ui.setNativeWindowMaterial(value as WindowMaterial)
+  } catch {
+    error(t('settings.windowMaterialFailed'))
+  }
+}
 const emit = defineEmits<{ navigate: [sectionId: string] }>()
 type ThemeBackgroundChoice = SystemBackground | 'light' | 'dark' | 'custom'
 const themeBackgroundOptions = computed(() => [
@@ -38,18 +57,23 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
 
 <template>
   <div class="settings-card">
-    <div :class="{ 'opacity-[0.58]': ui.followSystemTheme || ui.useMica }">
-      <div v-if="ui.micaAvailable" class="setting-row">
-        <div>
-          <h3>{{ t('settings.micaEffect') }}</h3>
-          <p>{{ t('settings.micaEffectDescription') }}</p>
-        </div>
-        <BaseSwitch
-          :model-value="ui.useMica"
-          @update:model-value="ui.setMicaEnabled(Boolean($event))"
-        />
+    <div v-if="ui.availableWindowMaterials.length > 1" class="setting-row">
+      <div>
+        <h3>{{ t('settings.windowMaterial') }}</h3>
+        <p>{{ t('settings.windowMaterialDescription') }}</p>
       </div>
-      <div class="setting-row">
+      <BaseSelect
+        :model-value="ui.nativeWindowMaterial"
+        :options="windowMaterialOptions"
+        :disabled="ui.windowMaterialPending"
+        :aria-label="t('settings.windowMaterial')"
+        class="w-56"
+        teleport
+        @update:model-value="selectWindowMaterial"
+      />
+    </div>
+    <div>
+      <div class="setting-row" :class="{ 'opacity-55': ui.useMica }">
         <div>
           <h3>{{ t('settings.followSystemTheme') }}</h3>
           <p>{{ t('settings.followSystemThemeDescription') }}</p>
@@ -60,7 +84,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           @update:model-value="ui.setFollowSystemTheme(Boolean($event))"
         />
       </div>
-      <div class="setting-row" :class="{ 'pointer-events-none opacity-55': ui.useMica }">
+      <div class="setting-row">
         <div>
           <h3>{{ t('settings.themeColor') }}</h3>
           <p>{{ t('settings.themeColorDescription') }}</p>
@@ -71,7 +95,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
       </div>
       <div
         class="setting-row theme-background-row"
-        :class="{ 'pointer-events-none': ui.followSystemTheme || ui.useMica }"
+        :class="{ 'pointer-events-none opacity-55': ui.followSystemTheme || ui.useMica }"
       >
         <div>
           <h3>{{ t('settings.themeBackground') }}</h3>
@@ -86,6 +110,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
             v-for="background in themeBackgroundOptions"
             :key="background.id"
             type="button"
+            :disabled="ui.followSystemTheme || ui.useMica"
             class="theme-option system-background-preview"
             :class="[
               background.id === 'light'

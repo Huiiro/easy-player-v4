@@ -7,6 +7,11 @@
   border-color: var(--app-chrome-border, color-mix(in srgb, var(--color-text) 10%, transparent));
   background: var(--app-footer-bg, color-mix(in srgb, var(--color-bg) 78%, transparent));
 }
+/* Let translucent materials supply their own blur; preserve Mica's original surface. */
+html.mica-enabled[data-window-material='acrylic'] .ep-footer,
+html.mica-enabled[data-window-material='vibrancy'] .ep-footer {
+  backdrop-filter: none;
+}
 .ep-footer.app-footer--expanded {
   position: relative;
   width: 100%;
@@ -230,6 +235,15 @@
 }
 .ep-overlay {
   background: var(--ep-overlay-bg);
+}
+/* Mica belongs to the native window, outside Chromium's backdrop texture.
+ * Blur the app content instead; Headless UI portals keep dialog panels outside
+ * #app, so the active modal remains sharp and its dimming layer stays stable. */
+html.mica-enabled .ep-dialog .ep-overlay--blur {
+  backdrop-filter: none;
+}
+html.mica-enabled:has(.ep-dialog .ep-overlay--blur) #app {
+  filter: blur(var(--blur-sm, 8px));
 }
 .ep-progress-track {
   background: var(--ep-progress-track);

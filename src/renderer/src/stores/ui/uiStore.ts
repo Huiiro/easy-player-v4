@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import type { InstalledThemePackage } from '../../../../shared/themePackage'
+import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
@@ -249,6 +250,11 @@ export const useUIStore = defineStore(
     const useDarkMode = ref(true)
     const followSystemTheme = ref(false)
     const micaAvailable = ref(false)
+    const availableWindowMaterials = ref<WindowMaterial[]>(['none'])
+    const nativeWindowMaterial = ref<WindowMaterial>('none')
+    const windowMaterialPending = ref(false)
+    // Retain the persisted legacy name for existing window/theme consumers.
+    // It now means that any native window material is active.
     const useMica = ref(false)
     const themeBeforeMica = ref<{
       useDarkMode: boolean
@@ -452,6 +458,7 @@ export const useUIStore = defineStore(
       root.classList.toggle('dark', useDarkMode.value)
       root.classList.toggle('reduce-motion', reduceMotion.value)
       root.classList.toggle('mica-enabled', useMica.value)
+      root.dataset.windowMaterial = nativeWindowMaterial.value
       document.body.classList.toggle('mica-enabled', useMica.value)
       root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
       if (activeThemeColor.value) root.style.setProperty('--color-primary', activeThemeColor.value)
@@ -561,6 +568,9 @@ export const useUIStore = defineStore(
         systemBackground.value = 'none'
       }
       const overridesBackground = customThemeOverridesBackground.value
+      const useTranslucentChrome =
+        useMica.value &&
+        (nativeWindowMaterial.value === 'acrylic' || nativeWindowMaterial.value === 'vibrancy')
       const theme = getSystemBackgroundTheme(
         useCustomBg.value || overridesBackground ? 'none' : systemBackground.value
       )
@@ -575,19 +585,27 @@ export const useUIStore = defineStore(
           : systemBackground.value
       root.style.setProperty(
         '--app-header-bg',
-        useCustomBg.value && !overridesBackground
-          ? customBg.headerBackground
-          : theme.headerBackground
+        useMica.value
+          ? 'transparent'
+          : useCustomBg.value && !overridesBackground
+            ? customBg.headerBackground
+            : theme.headerBackground
       )
       root.style.setProperty(
         '--app-footer-bg',
-        useCustomBg.value && !overridesBackground
-          ? customBg.footerBackground
-          : theme.footerBackground
+        useTranslucentChrome
+          ? 'color-mix(in srgb, var(--color-primary) 8%, color-mix(in srgb, var(--color-bg) 24%, transparent))'
+          : useCustomBg.value && !overridesBackground
+            ? customBg.footerBackground
+            : theme.footerBackground
       )
       root.style.setProperty(
         '--app-chrome-border',
-        useCustomBg.value && !overridesBackground ? customBg.chromeBorder : theme.chromeBorder
+        useTranslucentChrome
+          ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)'
+          : useCustomBg.value && !overridesBackground
+            ? customBg.chromeBorder
+            : theme.chromeBorder
       )
       if (useCustomBg.value && !overridesBackground) {
         root.style.setProperty('--color-border', customBg.chromeBorder)
@@ -646,13 +664,22 @@ export const useUIStore = defineStore(
       }
       delete (customBg as typeof customBg & { shaderSource?: string }).shaderSource
       try {
-        const mica = await window.api.system.getMicaState()
-        if (mica.success && mica.data) {
-          micaAvailable.value = mica.data.available
-          useMica.value = mica.data.enabled
+        const material = await window.api.system.getWindowMaterialState()
+        if (material.success && material.data) {
+          availableWindowMaterials.value = material.data.available
+          nativeWindowMaterial.value = material.data.material
+          micaAvailable.value = material.data.available.includes('mica')
+          useMica.value = material.data.enabled
         }
       } catch {
-        // Native material is an optional Windows-only enhancement.
+        // Native materials are optional; an older preload may only expose Mica.
+        const mica = await window.api.system.getMicaState().catch(() => null)
+        if (mica?.success && mica.data) {
+          micaAvailable.value = mica.data.available
+          availableWindowMaterials.value = mica.data.available ? ['none', 'mica'] : ['none']
+          nativeWindowMaterial.value = mica.data.enabled ? 'mica' : 'none'
+          useMica.value = mica.data.enabled
+        }
       }
       // New installations are hydrated synchronously by the Pinia persistence
       // plugin. Keep this one-time reader solely for migration from the former
@@ -754,9 +781,20 @@ export const useUIStore = defineStore(
       playerCoverStyle.value = resolvePlayerCoverStyle(value)
     }
     async function setMicaEnabled(enabled: boolean): Promise<void> {
-      if (!micaAvailable.value) return
-      const response = await window.api.system.setMicaEnabled(enabled)
-      if (!response.success || !response.data) return
+      await setNativeWindowMaterial(enabled ? 'mica' : 'none')
+    }
+    async function setNativeWindowMaterial(material: WindowMaterial): Promise<void> {
+      if (windowMaterialPending.value || !availableWindowMaterials.value.includes(material)) return
+      windowMaterialPending.value = true
+      let response: Awaited<ReturnType<typeof window.api.system.setWindowMaterial>>
+      try {
+        response = await window.api.system.setWindowMaterial(material)
+        if (!response.success || !response.data)
+          throw new Error(response.error || 'Window material update failed')
+      } finally {
+        windowMaterialPending.value = false
+      }
+      nativeWindowMaterial.value = response.data.material
       if (response.data.enabled) {
         if (!useMica.value) {
           themeBeforeMica.value = {
@@ -849,6 +887,7 @@ export const useUIStore = defineStore(
       [
         useDarkMode,
         useMica,
+        nativeWindowMaterial,
         customThemeColor,
         useCustomBg,
         systemBackground,
@@ -912,6 +951,10 @@ export const useUIStore = defineStore(
       useDarkMode,
       followSystemTheme,
       micaAvailable,
+      availableWindowMaterials,
+      nativeWindowMaterial,
+      windowMaterialPending,
+      setNativeWindowMaterial,
       useMica,
       themeBeforeMica,
       themeBeforeFollowingSystem,

@@ -595,8 +595,7 @@ export default {
     fontsDescription: '设置全局字体样式，支持自定义字体。',
     interfaceFont: '界面字体',
     playerLyricsFont: '播放器歌词字体',
-    playerLyricsFontDescription:
-      '单独选择系统字体或已导入字体，应用于原文、翻译和罗马音。',
+    playerLyricsFontDescription: '单独选择系统字体或已导入字体，应用于原文、翻译和罗马音。',
     playerLyricsFontInherit: '跟随界面字体',
     interfaceFontDescription: '选择系统字体或已导入的自定义字体。',
     fontSystemDefault: '系统默认',
@@ -623,6 +622,14 @@ export default {
     followSystemTheme: '跟随系统主题',
     followSystemThemeDescription: '自动使用系统的浅色/深色外观，并禁用其他主题效果。',
     micaEffect: 'Windows 云母效果',
+    windowMaterial: '原生窗口材质',
+    windowMaterialDescription:
+      '使用系统原生材质，自动跟随系统外观并停用其他背景效果；关闭后恢复之前的外观。',
+    windowMaterial_none: '关闭',
+    windowMaterial_mica: 'Windows 11 Mica（云母）',
+    windowMaterial_acrylic: 'Windows 11 Acrylic（亚克力）',
+    windowMaterial_vibrancy: 'macOS Vibrancy',
+    windowMaterialFailed: '无法切换原生窗口材质，已保留原设置。',
     micaEffectDescription: '使用 Windows 11 原生云母材质；会自动跟随系统并停用其他主题效果。',
     restoreDefault: '恢复默认',
     confirmResetTheme:

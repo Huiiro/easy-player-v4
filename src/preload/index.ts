@@ -583,6 +583,9 @@ const systemAPI = {
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),
   getMicaState: () => ipcRenderer.invoke('system:get-mica-state'),
+  getWindowMaterialState: () => ipcRenderer.invoke('system:get-window-material'),
+  setWindowMaterial: (material: import('../shared/windowMaterial').WindowMaterial) =>
+    ipcRenderer.invoke('system:set-window-material', material),
   setMicaEnabled: (enabled: boolean) => ipcRenderer.invoke('system:set-mica-enabled', enabled),
   updateTray: (data: { title: string; artist: string; isPlaying: boolean }) =>
     ipcRenderer.send('tray:update', data),

@@ -637,6 +637,14 @@ export default {
     followSystemThemeDescription:
       'Automatically follows the system light/dark appearance and disables other theme effects.',
     micaEffect: 'Windows Mica effect',
+    windowMaterial: 'Native window material',
+    windowMaterialDescription:
+      'Use the native system material and follow the system appearance. Other backgrounds are disabled; turning this off restores the previous appearance.',
+    windowMaterial_none: 'Off',
+    windowMaterial_mica: 'Windows 11 Mica',
+    windowMaterial_acrylic: 'Windows 11 Acrylic',
+    windowMaterial_vibrancy: 'macOS Vibrancy',
+    windowMaterialFailed: 'Could not change the window material. Your previous setting was kept.',
     micaEffectDescription:
       'Uses native Windows 11 Mica, follows the system automatically, and disables other theme effects.',
     restoreDefault: 'Restore defaults',

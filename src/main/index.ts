@@ -48,6 +48,7 @@ import {
   quitAndInstallUpdate
 } from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
+import { createWindowMaterialManager } from './service/windowMaterialService'
 import { createDir } from './utils/pathUtils'
 import { Logger } from './service/loggerService'
 import sharp from 'sharp'
@@ -117,19 +118,13 @@ let trafficLightPositionTimer: ReturnType<typeof setTimeout> | undefined
 
 const TRAFFIC_LIGHT_POSITION = { x: 16, y: 14 }
 
-function supportsWindowsMica(): boolean {
-  if (process.platform !== 'win32') return false
-  const build = Number(osRelease().split('.')[2])
-  // Electron exposes system backdrop materials from Windows 11 22H2 onward.
-  return Number.isFinite(build) && build >= 22621
-}
-
-function setWindowsMica(enabled: boolean, backgroundColor = '#111614'): boolean {
-  if (!mainWindow || mainWindow.isDestroyed() || !supportsWindowsMica()) return false
-  mainWindow.setBackgroundColor(backgroundColor)
-  mainWindow.setBackgroundMaterial(enabled ? 'mica' : 'none')
-  return enabled
-}
+const windowMaterials = createWindowMaterialManager({
+  platform: process.platform,
+  release: osRelease(),
+  read: getAppSetting,
+  write: setAppSetting,
+  window: () => mainWindow
+})
 
 function setPlayerWindowControlsVisible(visible: boolean): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -548,8 +543,6 @@ function createWindow(
   restoredState = loadWindowState(),
   onShown?: () => void
 ): void {
-  const supportsMica = supportsWindowsMica()
-  const micaEnabled = supportsMica && getAppSetting('window.mica-enabled') === true
   // Create the browser window.
   mainWindow = new BrowserWindow({
     x: restoredState.x,
@@ -573,7 +566,7 @@ function createWindow(
         }
       : {}),
     backgroundColor: extremeView ? '#151515' : '#111614',
-    ...(!extremeView && micaEnabled ? { backgroundMaterial: 'mica' as const } : {}),
+    ...windowMaterials.creationOptions(extremeView),
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -589,8 +582,8 @@ function createWindow(
   mainWindow.webContents.on('did-start-navigation', (details) => {
     resetAudioFileDelivery(details.isSameDocument, details.isMainFrame)
   })
-  setWindowsMica(
-    !extremeView && getAppSetting('window.mica-enabled') === true,
+  windowMaterials.apply(
+    extremeView ? 'none' : windowMaterials.state().material,
     extremeView ? '#151515' : '#111614'
   )
 
@@ -860,18 +853,31 @@ app.whenReady().then(() =>
         })
       })
       ipcMain.handle('system:get-mica-state', () => {
-        const available = supportsWindowsMica()
+        const state = windowMaterials.state()
         return {
           success: true,
-          data: { available, enabled: available && getAppSetting('window.mica-enabled') === true }
+          data: { available: state.available.includes('mica'), enabled: state.enabled }
         }
       })
       ipcMain.handle('system:set-mica-enabled', (_event, enabled: boolean) => {
         return logOperation('[IPC] system:set-mica-enabled', { enabled }, () => {
-          const active = setWindowsMica(enabled === true)
-          if (supportsWindowsMica()) setAppSetting('window.mica-enabled', active)
-          return { success: true, data: { available: supportsWindowsMica(), enabled: active } }
+          const state = windowMaterials.select(enabled === true ? 'mica' : 'none')
+          return {
+            success: true,
+            data: { available: state.available.includes('mica'), enabled: state.enabled }
+          }
         })
+      })
+      ipcMain.handle('system:get-window-material', () => ({
+        success: true,
+        data: windowMaterials.state()
+      }))
+      ipcMain.handle('system:set-window-material', (_event, material: unknown) => {
+        try {
+          return { success: true, data: windowMaterials.select(material) }
+        } catch (error) {
+          return { success: false, error: logError(error) }
+        }
       })
       ipcMain.on(
         'tray:update',

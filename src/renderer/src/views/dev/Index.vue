@@ -123,7 +123,8 @@ onMounted(async () => {
     visualActivity.value += (target - visualActivity.value) * easing
     if (Math.abs(visualActivity.value) < 0.001 && target === 0) visualActivity.value = 0
   }, 33)
-  player.subscribeToEvents()
+  // The outer playback lifecycle owns shared events. Evicting this page from
+  // KeepAlive must not unsubscribe the rest of the player.
   await player.logEngineInfo()
   await player.loadOutputDeviceSettings()
   await player.refreshDevices()
@@ -153,7 +154,6 @@ onUnmounted(() => {
   if (eqCommitTimer) clearTimeout(eqCommitTimer)
   if (beatPulseTimer) clearTimeout(beatPulseTimer)
   if (visualDecayTimer) clearInterval(visualDecayTimer)
-  player.unsubscribe()
 })
 
 // ── Event handlers ──

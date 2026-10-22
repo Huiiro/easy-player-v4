@@ -73,7 +73,10 @@ const footerClass = computed(() => {
         leave-from="opacity-100"
         leave-to="opacity-0"
       >
-        <div class="ep-overlay fixed inset-0" :class="blur ? 'backdrop-blur-sm' : ''" />
+        <div
+          class="ep-overlay fixed inset-0"
+          :class="blur ? 'ep-overlay--blur backdrop-blur-sm' : ''"
+        />
       </TransitionChild>
 
       <!-- container -->
