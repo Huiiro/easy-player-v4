@@ -811,6 +811,11 @@ export default {
     shortcutActionFailed: 'Shortcut action failed. Please try again.',
     desktopLyricsLightweight: 'Exit lightweight mode to enable desktop lyrics.',
     autoPlayOnRestore: 'Autoplay on startup',
+    playQueuePosition: 'Play queue position',
+    playQueuePositionDescription:
+      'Choose whether the play queue opens from the left or right side of the window.',
+    playQueueLeft: 'Left',
+    playQueueRight: 'Right',
     songPlayTrigger: 'Song activation',
     songPlayTriggerDescription:
       'Choose a single or double click to play songs in song lists, home rankings, the queue and search results.',

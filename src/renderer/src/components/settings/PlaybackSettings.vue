@@ -18,6 +18,11 @@ const songPlayTriggerOptions = computed(() => [
   { label: t('settings.songPlaySingleClick'), value: 'single' }
 ])
 
+const playQueuePositionOptions = computed(() => [
+  { label: t('settings.playQueueRight'), value: 'right' },
+  { label: t('settings.playQueueLeft'), value: 'left' }
+])
+
 function openAudioControls(): void {
   eventBus.emit('openAudioControls')
 }
@@ -47,6 +52,18 @@ function setSmartShuffle(value: boolean | string | number): void {
         class="w-48"
         :options="songPlayTriggerOptions"
         :aria-label="t('settings.songPlayTrigger')"
+        teleport
+      />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.playQueuePosition')"
+      :description="t('settings.playQueuePositionDescription')"
+    >
+      <BaseSelect
+        v-model="ui.playQueuePosition"
+        class="w-48"
+        :options="playQueuePositionOptions"
+        :aria-label="t('settings.playQueuePosition')"
         teleport
       />
     </SettingRow>

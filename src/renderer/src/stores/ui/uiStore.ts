@@ -75,6 +75,7 @@ export const UI_PREFERENCE_KEYS = [
   'extremePlayback',
   'autoPlayOnRestore',
   'songPlayTrigger',
+  'playQueuePosition',
   'closeToTray',
   'autoStart',
   'showWelcomeText',
@@ -288,6 +289,7 @@ export const useUIStore = defineStore(
     const extremePlayback = ref(false)
     const autoPlayOnRestore = ref(false)
     const songPlayTrigger = ref<'single' | 'double'>('double')
+    const playQueuePosition = ref<'left' | 'right'>('right')
     const closeToTray = ref(false)
     const autoStart = ref(false)
     const showWelcomeText = ref(true)
@@ -902,6 +904,7 @@ export const useUIStore = defineStore(
       extremePlayback,
       autoPlayOnRestore,
       songPlayTrigger,
+      playQueuePosition,
       closeToTray,
       autoStart,
       useLocalFileName,

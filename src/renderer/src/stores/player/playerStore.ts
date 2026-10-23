@@ -420,7 +420,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Actions ──
   async function openFile(filePath: string): Promise<boolean> {
-    playbackEpoch++
+    const epoch = ++playbackEpoch
     deferredRestore = null
     nextTrackRevision++
     preparedNextIndex = -1
@@ -429,8 +429,10 @@ export const usePlayerStore = defineStore('player', () => {
     nextTrackRequest = null
     currentFile.value = filePath
     const ok = await audioBridge.open(filePath)
+    if (epoch !== playbackEpoch) return false
     if (ok) {
       const status = await audioBridge.getStatus()
+      if (epoch !== playbackEpoch) return false
       if (status) {
         trackInfo.value = status.trackInfo
         durationMs.value = status.durationMs
@@ -438,8 +440,10 @@ export const usePlayerStore = defineStore('player', () => {
       // ReplayGain is resolved from the newly opened track's metadata by the
       // native decoder, so the startup snapshot is no longer authoritative.
       await loadReplayGain()
+      if (epoch !== playbackEpoch) return false
       await refreshAudioChain()
-      await savePlaybackSession()
+      if (epoch !== playbackEpoch) return false
+      schedulePlaybackSessionSave()
     }
     return ok
   }
@@ -453,7 +457,10 @@ export const usePlayerStore = defineStore('player', () => {
       if (!(await openFile(restore.filePath))) return false
       if (restore.positionMs > 0 && !(await seek(restore.positionMs))) return false
     }
+    if (!currentFile.value) return false
+    const epoch = playbackEpoch
     const result = await audioBridge.play()
+    if (epoch !== playbackEpoch) return false
     if (result && currentQueueSong.value) beginHistory(currentQueueSong.value, startOrigin)
     if (result && preparedNextIndex < 0) void syncNextTrack()
     return result
@@ -541,7 +548,7 @@ export const usePlayerStore = defineStore('player', () => {
       return false
     }
     currentQueueIndex.value = index
-    savePlaybackSessionSync()
+    schedulePlaybackSessionSave()
     let remoteFile: { success: boolean; data?: string; error?: string } | null = null
     try {
       remoteFile = song.sourceId ? await window.api.remoteSource.cacheSong(song.id) : null
@@ -631,7 +638,7 @@ export const usePlayerStore = defineStore('player', () => {
               shuffleHistoryIndex = shuffleHistory.length - 1
             }
             shuffleNavigationRevision.value++
-            savePlaybackSessionSync()
+            schedulePlaybackSessionSave()
           }
           return true
         }
@@ -729,8 +736,19 @@ export const usePlayerStore = defineStore('player', () => {
     await playQueueItem(playMode.value === PlayMode.Random ? nextIndex() : currentQueueIndex.value)
   }
 
-  function clearQueue(): void {
-    queueRevision++
+  async function clearQueue(): Promise<void> {
+    // Finalize listening time before resetting the track duration. Stop also
+    // invalidates pending opens and prepared gapless transitions immediately.
+    flushHistory(true, 'stopped')
+    const stopped = stop()
+    deferredRestore = null
+    currentFile.value = null
+    trackInfo.value = null
+    positionMs.value = 0
+    durationMs.value = 0
+    state.value = 'stopped'
+    stopAfterCurrent.value = false
+    stopAudioAnalysisPolling()
     unavailableSongIds.clear()
     resolvedQueuePaths.clear()
     queue.value = []
@@ -743,8 +761,8 @@ export const usePlayerStore = defineStore('player', () => {
     shuffleHistoryIndex = -1
     shuffleReservation = null
     shuffleNavigationRevision.value++
-    schedulePlaybackSessionSave()
-    void syncNextTrack()
+    savePlaybackSessionSync()
+    await stopped
   }
 
   // Previews and gapless preparation share a reservation. Only playback
@@ -994,6 +1012,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function pause(): Promise<boolean> {
+    if (!currentFile.value) return false
     const result = await audioBridge.pause()
     if (result) pauseHistory()
     return result
@@ -1020,6 +1039,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function seek(ms: number): Promise<boolean> {
+    if (!currentFile.value) return false
     const targetMs = Math.max(0, durationMs.value > 0 ? Math.min(ms, durationMs.value) : ms)
     positionMs.value = targetMs
     return audioBridge.seek(targetMs)
@@ -1104,28 +1124,49 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function savePlaybackSession(): Promise<void> {
-    savePlaybackSessionSync()
+    try {
+      const result = await window.api.database.command('setSetting', {
+        key: 'player.playback-session',
+        value: capturePlaybackSession()
+      })
+      if (!result.success)
+        console.warn('[Player] Failed to persist playback session:', result.error)
+    } catch (error) {
+      console.warn('[Player] Failed to serialize playback session:', error)
+    }
   }
 
-  function savePlaybackSessionSync(): void {
-    const session: PlaybackSession = {
+  // Track changes only move the queue cursor. Reuse its serialized rows until
+  // queue contents or one of the persisted song fields actually changes.
+  const persistedQueueSongs = computed(() => queue.value.map(serializeQueueSong))
+
+  function capturePlaybackSession(): PlaybackSession {
+    return {
       durationMs: durationMs.value,
       trackInfo: toPlainData(trackInfo.value),
-      queue: queue.value.map(serializeQueueSong),
+      queue: persistedQueueSongs.value,
       queuePlaylistId: queuePlaylistId.value,
       currentQueueIndex: currentQueueIndex.value,
       playMode: playMode.value,
-      shuffleHistory: shuffleHistory,
+      shuffleHistory: [...shuffleHistory],
       shuffleHistoryIndex,
       stopAfterCurrent: stopAfterCurrent.value,
       shufflePlayedSongIds: [...shufflePlayedSongIds],
-      normalShuffleOrder,
+      normalShuffleOrder: normalShuffleOrder ? [...normalShuffleOrder] : null,
       normalShuffleStartsRound,
-      shuffleReservation,
+      shuffleReservation: shuffleReservation ? { ...shuffleReservation } : null,
       resolvedQueuePaths: [...resolvedQueuePaths]
     }
+  }
+
+  function savePlaybackSessionSync(): void {
+    if (playbackSessionTimer) clearTimeout(playbackSessionTimer)
+    playbackSessionTimer = undefined
     try {
-      const result = window.api.database.saveSync('player.playback-session', session)
+      const result = window.api.database.saveSync(
+        'player.playback-session',
+        capturePlaybackSession()
+      )
       if (!result.success) {
         console.warn('[Player] Failed to persist playback session:', result.error)
       }
@@ -1163,6 +1204,8 @@ export const usePlayerStore = defineStore('player', () => {
           return true
         })
       }
+      // An empty queue must not revive a decoder from an older checkpoint.
+      if (!queue.value.length) return
       if (Array.isArray(session.resolvedQueuePaths)) {
         const queueIds = new Set(queue.value.map((song) => song.id))
         for (const entry of session.resolvedQueuePaths) {
@@ -1837,7 +1880,7 @@ export const usePlayerStore = defineStore('player', () => {
     // `trackEnded` crosses the native, main and renderer event queues. If a
     // user selects the next track just as the old one ends, its late event
     // must not advance the newly selected track a second time.
-    if (filePath && filePath !== currentFile.value) return
+    if (!currentFile.value || (filePath && filePath !== currentFile.value)) return
     if (queuePlaybackInProgress) return
     if (reason === 'transition') {
       const epoch = ++playbackEpoch
@@ -1898,7 +1941,7 @@ export const usePlayerStore = defineStore('player', () => {
           durationMs.value = status.durationMs
         }
         beginHistory(song)
-        savePlaybackSessionSync()
+        schedulePlaybackSessionSave()
         void syncNextTrack()
       }
       return
@@ -1981,6 +2024,7 @@ export const usePlayerStore = defineStore('player', () => {
     startAudioAnalysisPolling()
     unsubs.push(
       audioBridge.onStateChanged((data) => {
+        if (!currentFile.value) return
         state.value = data.state as PlaybackState
         if (data.state === 'playing') {
           resumeHistory()
@@ -2005,6 +2049,7 @@ export const usePlayerStore = defineStore('player', () => {
     )
     unsubs.push(
       audioBridge.onPositionChanged((data) => {
+        if (!currentFile.value) return
         positionMs.value = data.positionMs
         durationMs.value = data.durationMs
       })

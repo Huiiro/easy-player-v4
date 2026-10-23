@@ -42,6 +42,7 @@
     "test:download-audio": "node scripts/test-download-audio.mjs",
     "perf:song-search": "node scripts/benchmark-song-search.mjs",
     "perf:playback": "node scripts/check-playback-performance.cjs",
+    "test:track-switch": "electron scripts/check-track-switch.cjs && electron scripts/check-player-panel-switch.cjs",
     "perf:app": "electron scripts/check-player-app.cjs"
   },
   "dependencies": {

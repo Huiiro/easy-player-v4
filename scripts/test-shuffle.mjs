@@ -28,6 +28,9 @@ const smart = load('src/renderer/src/stores/player/smartShuffle.ts', {}, { Math:
 let saved
 let prepared = ''
 let ended
+let stateChanged
+let positionChanged
+const transportCalls = []
 let restoreSession
 let restoreCheckpoint = null
 let nativeDecoderPath = ''
@@ -43,6 +46,31 @@ const openedPaths = []
 const broken = new Set()
 const bridge = new Proxy(
   {
+    stop: async () => {
+      transportCalls.push('stop')
+      prepared = ''
+      return true
+    },
+    play: async () => {
+      transportCalls.push('play')
+      return true
+    },
+    pause: async () => {
+      transportCalls.push('pause')
+      return true
+    },
+    seek: async () => {
+      transportCalls.push('seek')
+      return true
+    },
+    onStateChanged: (callback) => {
+      stateChanged = callback
+      return () => {}
+    },
+    onPositionChanged: (callback) => {
+      positionChanged = callback
+      return () => {}
+    },
     open: async (path) => {
       openedPaths.push(path)
       return !broken.has(path)
@@ -102,7 +130,13 @@ const module = load(
     '@/services/audioBridge': { audioBridge: bridge },
     './smartShuffle': smart,
     '@/stores/log/logStore': { useLogStore: () => ({ addEntry() {} }) },
-    '@/stores/ui/uiStore': { useUIStore: () => ({ extremePlayback: false, customBg: {} }) },
+    '@/stores/ui/uiStore': {
+      useUIStore: () => ({
+        extremePlayback: false,
+        customBg: {},
+        resolvedAppearance: { dark: false, chrome: {} }
+      })
+    },
     '@/stores/statistics/statisticsStore': {
       useStatisticsStore: () => ({ enabled: true, generation: 'test', ready: true })
     },
@@ -324,6 +358,75 @@ assert.equal(
   0,
   'a late remote response cannot resurrect a cleared queue'
 )
+
+// Clearing must stop the decoder as well as removing the queue metadata.
+for (const initialState of ['playing', 'paused']) {
+  const cleared = player()
+  cleared.subscribeToEvents()
+  await cleared.playCollection(songs, songs[0].id)
+  await settle()
+  cleared.state = initialState
+  cleared.positionMs = 12000
+  cleared.trackInfo = { filePath: songs[0].audio }
+  cleared.setStopAfterCurrent(true)
+  const stopsBefore = transportCalls.filter((call) => call === 'stop').length
+  await cleared.clearQueue()
+  await settle()
+  assert.equal(transportCalls.filter((call) => call === 'stop').length, stopsBefore + 1)
+  assert.equal(prepared, '', 'clearing cancels the prepared native transition')
+  assert.equal(cleared.queue.length, 0)
+  assert.equal(cleared.currentQueueIndex, -1)
+  assert.equal(cleared.currentQueueSong, null)
+  assert.equal(cleared.currentFile, null)
+  assert.equal(cleared.trackInfo, null)
+  assert.equal(cleared.state, 'stopped')
+  assert.equal(cleared.positionMs, 0)
+  assert.equal(cleared.durationMs, 0)
+  assert.equal(cleared.stopAfterCurrent, false)
+  assert.equal(saved.queue.length, 0, 'the empty session is persisted immediately')
+  assert.equal(saved.trackInfo, null)
+  assert.equal(saved.durationMs, 0)
+  const callsBefore = transportCalls.length
+  assert.equal(await cleared.play(), false)
+  assert.equal(await cleared.pause(), false)
+  assert.equal(await cleared.seek(9000), false)
+  assert.equal(transportCalls.length, callsBefore, 'empty controls cannot reach the old decoder')
+  stateChanged({ state: 'playing', trackInfo: { filePath: songs[0].audio } })
+  positionChanged({ positionMs: 15000, durationMs: 180000 })
+  ended({ reason: 'transition', nextFilePath: songs[1].audio })
+  await settle()
+  assert.equal(cleared.state, 'stopped', 'late native events cannot revive the cleared track')
+  assert.equal(cleared.trackInfo, null)
+  assert.equal(cleared.currentFile, null)
+  assert.equal(cleared.positionMs, 0)
+  assert.equal(cleared.durationMs, 0)
+  assert.equal(await cleared.playCollection(songs, songs[1].id), true)
+  assert.equal(cleared.currentQueueSong.id, songs[1].id, 'new playback still works after clearing')
+}
+
+const clearingOpen = player()
+holdStatus = true
+const opening = clearingOpen.playCollection(songs, songs[0].id)
+await settle()
+await clearingOpen.clearQueue()
+holdStatus = false
+statusResolver({ trackInfo: { filePath: songs[0].audio }, durationMs: 180000 })
+assert.equal(await opening, false)
+assert.equal(clearingOpen.trackInfo, null, 'a late open response cannot restore metadata')
+assert.equal(clearingOpen.durationMs, 0)
+assert.equal(clearingOpen.currentFile, null)
+
+restoreSession = { queue: [], currentQueueIndex: -1, durationMs: 0, trackInfo: null }
+restoreCheckpoint = { currentFile: songs[0].audio, positionMs: 12000, wasPlaying: true }
+const emptyRestore = player()
+const callsBeforeRestore = transportCalls.length
+await emptyRestore.restorePlaybackSession(true)
+assert.equal(emptyRestore.currentFile, null, 'an old checkpoint cannot revive an empty queue')
+assert.equal(emptyRestore.positionMs, 0)
+assert.equal(await emptyRestore.play(), false)
+assert.equal(transportCalls.length, callsBeforeRestore)
+restoreSession = undefined
+restoreCheckpoint = null
 
 for (const weighted of [false, true]) {
   const p = player()

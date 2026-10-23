@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import BaseDrawer from '@/components/ui/BaseDrawer.vue'
 import PlayQueue from '@/components/player/PlayQueue.vue'
 
@@ -10,6 +11,7 @@ defineEmits<{ (e: 'update:modelValue', val: boolean): void }>()
 
 const { t } = useI18n()
 const player = usePlayerStore()
+const ui = useUIStore()
 const queue = ref<{ scrollToCurrent: () => Promise<void> } | null>(null)
 
 watch(
@@ -25,8 +27,8 @@ watch(
 <template>
   <BaseDrawer
     :model-value="modelValue"
-    direction="right"
-    width="26rem"
+    :direction="ui.playQueuePosition"
+    width="28rem"
     @update:model-value="(val) => $emit('update:modelValue', val)"
   >
     <template #header>

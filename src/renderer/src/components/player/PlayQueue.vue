@@ -47,7 +47,7 @@ defineExpose({ scrollToCurrent })
     key-field="key"
   >
     <div
-      class="flex h-[52px] items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-hover select-none"
+      class="group/queue-row flex h-[52px] items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-hover select-none"
       :class="
         item.index === player.currentQueueIndex
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
@@ -70,7 +70,7 @@ defineExpose({ scrollToCurrent })
       </span>
       <span class="min-w-0 flex-1 truncate">{{ item.song.title }}</span>
       <button
-        class="btn-hover text-xs"
+        class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none"
         :disabled="item.index === 0"
         @click="player.moveQueueItem(item.index, item.index - 1)"
         @dblclick.stop
@@ -78,14 +78,18 @@ defineExpose({ scrollToCurrent })
         ↑
       </button>
       <button
-        class="btn-hover text-xs"
+        class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none"
         :disabled="item.index === player.queue.length - 1"
         @click="player.moveQueueItem(item.index, item.index + 1)"
         @dblclick.stop
       >
         ↓
       </button>
-      <button class="btn-hover text-xs text-red-400" @click="removeAt(item.index)" @dblclick.stop>
+      <button
+        class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none text-red-400"
+        @click="removeAt(item.index)"
+        @dblclick.stop
+      >
         ×
       </button>
     </div>

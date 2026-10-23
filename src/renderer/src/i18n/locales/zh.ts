@@ -780,6 +780,10 @@ export default {
     shortcutActionFailed: '快捷键操作失败，请重试。',
     desktopLyricsLightweight: '请退出轻量模式后开启桌面歌词。',
     autoPlayOnRestore: '启动后自动播放',
+    playQueuePosition: '播放队列打开位置',
+    playQueuePositionDescription: '选择播放队列从窗口左侧或右侧打开。',
+    playQueueLeft: '左侧',
+    playQueueRight: '右侧',
     songPlayTrigger: '歌曲播放方式',
     songPlayTriggerDescription:
       '选择单击或双击歌曲行开始播放，适用于歌曲列表、首页排行、播放队列和搜索结果。',
