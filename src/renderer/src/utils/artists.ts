@@ -1,13 +1,6 @@
-export function splitArtists(artist: string | null | undefined, separators: string): string[] {
-  const value = artist?.trim()
-  if (!value) return []
-  if (!separators) return [value]
-  const parts = [...new Set(separators)].reduce(
-    (values, separator) => values.flatMap((part) => part.split(separator)),
-    [value]
-  )
-  return [...new Set(parts.map((part) => part.trim()).filter(Boolean))]
-}
+import { NORMALIZED_METADATA_SEPARATOR, splitMetadataValues } from '../../../shared/metadataValues'
+
+export const splitArtists = splitMetadataValues
 
 export function formatArtists(
   artist: string | null | undefined,
@@ -15,7 +8,7 @@ export function formatArtists(
   normalizeSeparator: boolean
 ): string {
   if (!normalizeSeparator) return artist?.trim() ?? ''
-  return splitArtists(artist, separators).join(' / ')
+  return splitArtists(artist, separators).join(NORMALIZED_METADATA_SEPARATOR)
 }
 
 export type ArtistDisplayToken =
@@ -30,11 +23,17 @@ export function artistDisplayTokens(
   if (!value) return []
   const separatorSet = new Set(separators)
   const tokens: ArtistDisplayToken[] = []
+  if (normalizeSeparator) {
+    for (const name of splitArtists(value, separators)) {
+      if (tokens.length) tokens.push({ type: 'separator', text: NORMALIZED_METADATA_SEPARATOR })
+      tokens.push({ type: 'artist', text: name, artist: name })
+    }
+    return tokens
+  }
   let current = ''
   const pushArtist = (): void => {
     const name = current.trim()
-    if (name)
-      tokens.push({ type: 'artist', text: normalizeSeparator ? name : current, artist: name })
+    if (name) tokens.push({ type: 'artist', text: current, artist: name })
     current = ''
   }
   for (const character of value) {
@@ -43,7 +42,7 @@ export function artistDisplayTokens(
       continue
     }
     pushArtist()
-    tokens.push({ type: 'separator', text: normalizeSeparator ? ' / ' : character })
+    tokens.push({ type: 'separator', text: character })
   }
   pushArtist()
   return tokens

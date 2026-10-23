@@ -109,7 +109,7 @@ const trackTitle = computed(
 const trackArtist = computed(() => {
   const artist = player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist
   return (
-    formatArtists(artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
+    formatArtists(artist, ui.artistSeparator, ui.normalizeMetadataSeparator) ||
     t('footer.defaultArtist')
   )
 })
@@ -368,7 +368,13 @@ onBeforeUnmount(() => {
                 {{ card.song?.title || t('footer.noTrack') }}
               </p>
               <p class="truncate text-xs text-text-l">
-                {{ card.song?.artist || t('footer.defaultArtist') }}
+                {{
+                  formatArtists(
+                    card.song?.artist,
+                    ui.artistSeparator,
+                    ui.normalizeMetadataSeparator
+                  ) || t('footer.defaultArtist')
+                }}
               </p>
               <p class="truncate text-[10px] text-text-l">
                 {{ card.slot === 'current' ? audioSummary || '-' : '-' }}

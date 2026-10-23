@@ -15,7 +15,7 @@ export async function writeMp3Metadata(filePath: string, input: SongMetadata): P
   if (input.artist) tags.artist = input.artist
   if (input.album) tags.album = input.album
   if (input.year) tags.year = input.year.toString()
-  if (input.genre) tags.genre = Array.isArray(input.genre) ? input.genre.join('; ') : input.genre
+  if (input.genre !== undefined) tags.genre = input.genre.trim()
 
   if (input.trackNumber) tags.trackNumber = input.trackNumber.toString()
 
@@ -48,9 +48,29 @@ export async function writeMp3Metadata(filePath: string, input: SongMetadata): P
     }
   }
 
-  NodeID3.update(tags, filePath)
+  const result = NodeID3.update(tags, filePath)
+  if (result instanceof Error) throw result
+  if (result === true && input.genre !== undefined && !input.genre.trim()) {
+    await clearLegacyGenre(filePath)
+  }
+  return result === true
+}
 
-  return true
+async function clearLegacyGenre(filePath: string): Promise<void> {
+  // music-metadata falls back to ID3v1 when the ID3v2 genre is removed.
+  const file = await fs.promises.open(filePath, 'r+')
+  try {
+    const { size } = await file.stat()
+    if (size < 128) return
+    const header = Buffer.alloc(3)
+    await file.read(header, 0, 3, size - 128)
+    if (header.toString('ascii') === 'TAG') {
+      // 255 means unspecified; retain the title, artist and other ID3v1 fields.
+      await file.write(Buffer.from([255]), 0, 1, size - 1)
+    }
+  } finally {
+    await file.close()
+  }
 }
 
 async function normalizeCoverToBuffer(coverPath: string): Promise<Buffer> {

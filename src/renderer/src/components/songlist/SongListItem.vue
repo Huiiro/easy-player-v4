@@ -45,7 +45,7 @@ const displayedTitle = computed(() =>
 )
 const highlightedTitle = computed(() => getHighlightParts(displayedTitle.value, props.keyword))
 const artistTokens = computed(() =>
-  artistDisplayTokens(props.song.artist, ui.artistSeparator, ui.normalizeArtistSeparator)
+  artistDisplayTokens(props.song.artist, ui.artistSeparator, ui.normalizeMetadataSeparator)
 )
 const highlightedAlbum = computed(() =>
   getHighlightParts(props.song.album || t('songList.unknownAlbum'), props.keyword)

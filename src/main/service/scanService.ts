@@ -9,6 +9,7 @@ import { getDatabase } from '../database'
 import { getDataPath } from '../utils/pathUtils'
 import { Logger } from './loggerService'
 import { refreshNewestSongs } from '../database/newestSongs'
+import { joinMetadataValues } from '../../shared/metadataValues'
 
 export interface ScanCallback {
   (current: number, total: number, added: number, duplicates: number): void
@@ -177,7 +178,7 @@ export async function scanMusicDirectory(
             audio: fullPath,
             lrc: null,
             year: common.year || null,
-            genre: common.genre?.join(', ') || null,
+            genre: joinMetadataValues(common.genre) || null,
             bitrate: format.bitrate ? Math.round(format.bitrate / 1000) : null,
             sampleRate: format.sampleRate || null,
             bitDepth: format.bitsPerSample || null,

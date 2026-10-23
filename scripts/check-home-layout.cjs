@@ -130,7 +130,7 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript(`(async()=>{
       const {Vue,createI18n,createRouter,createMemoryHistory,Home,zh}=HomePreview;
       const {reactive,createApp,h,nextTick}=Vue;
-      window.homeUi=reactive({homeSectionOrder:['welcome','overview','playlists','recommendations','heatmap','topPlayed','topDuration','navigation','clock'],hiddenHomeSections:['navigation'],showWelcomeText:true,homeClockEnabled:false,homeWelcomeText:'晚上好，Huiiro',customThemeText:{},userName:'Huiiro',locale:'zh',artistSeparator:' / ',normalizeArtistSeparator:true,reduceMotion:true,homeLayoutOpen:false});
+      window.homeUi=reactive({homeSectionOrder:['welcome','overview','playlists','recommendations','heatmap','topPlayed','topDuration','navigation','clock'],hiddenHomeSections:['navigation'],showWelcomeText:true,homeClockEnabled:false,homeWelcomeText:'晚上好，Huiiro',customThemeText:{},userName:'Huiiro',locale:'zh',artistSeparator:' / ',normalizeMetadataSeparator:true,reduceMotion:true,homeLayoutOpen:false});
       window.homeStatistics=reactive({enabled:true,generation:'preview'});
       window.homePlayer=reactive({queue:[],currentQueueSong:null,isPlaying:false,isPaused:false});
       const songs=['夜曲','晴天','花海','慢慢喜欢你','世界赠予我的','一路向北'].map((title,index)=>({id:index+1,title,artist:['周杰伦','莫文蔚','王菲'][index%3],album:'精选',cover:String(index),songStatus:1,value:60-index*7}));

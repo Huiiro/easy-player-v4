@@ -15,6 +15,7 @@ using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
 #include <string>
 #include <filesystem>
 #include <map>
+#include <vector>
 #include <exception>
 #include <system_error>
 #include <chrono>
@@ -24,6 +25,7 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/dict.h>
+#include <libavutil/error.h>
 }
 
 static const char* state_name(EngineState state) {
@@ -84,32 +86,85 @@ static bool rewrite_metadata(const std::string& source, const std::map<std::stri
     AVFormatContext* cover = nullptr;
     int cover_stream = -1;
     int cover_output_stream = -1;
+    std::vector<int> stream_mapping;
     std::error_code rename_error;
-    const std::filesystem::path source_path(source);
-    const auto temporary = (source_path.parent_path() / (source_path.stem().string() + ".easy-player-meta-tmp" + source_path.extension().string())).string();
+    const auto source_path = std::filesystem::u8path(source);
+    const auto temporary_path = source_path.parent_path() / std::filesystem::u8path(
+        source_path.stem().u8string() + ".easy-player-meta-tmp" + source_path.extension().u8string());
+    const auto temporary = temporary_path.u8string();
     if (avformat_open_input(&input, source.c_str(), nullptr, nullptr) < 0 || avformat_find_stream_info(input, nullptr) < 0) { error = "Unable to open media file"; goto done; }
     if (!cover_path.empty()) { if (avformat_open_input(&cover, cover_path.c_str(), nullptr, nullptr) < 0 || avformat_find_stream_info(cover, nullptr) < 0) { error = "Unable to open cover image"; goto done; } cover_stream = av_find_best_stream(cover, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0); if (cover_stream < 0) { error = "Cover image has no video stream"; goto done; } }
     if (avformat_alloc_output_context2(&output, nullptr, nullptr, temporary.c_str()) < 0 || !output) { error = "Unable to create output container"; goto done; }
     av_dict_copy(&output->metadata, input->metadata, 0);
     for (const auto& [key, value] : tags) { if (value.empty()) av_dict_set(&output->metadata, key.c_str(), nullptr, 0); else av_dict_set(&output->metadata, key.c_str(), value.c_str(), 0); }
-    for (unsigned i = 0; i < input->nb_streams; ++i) { AVStream* in = input->streams[i]; if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) continue; AVStream* out = avformat_new_stream(output, nullptr); if (!out || avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) { error = "Unable to copy media stream"; goto done; } out->time_base = in->time_base; av_dict_copy(&out->metadata, in->metadata, 0); }
+    stream_mapping.assign(input->nb_streams, -1);
+    for (unsigned i = 0; i < input->nb_streams; ++i) {
+        AVStream* in = input->streams[i];
+        if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO &&
+            (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) continue;
+        AVStream* out = avformat_new_stream(output, nullptr);
+        if (!out || avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) {
+            error = "Unable to copy media stream";
+            goto done;
+        }
+        stream_mapping[i] = out->index;
+        out->time_base = in->time_base;
+        // M4A permits an embedded image only when it remains an attached picture.
+        out->disposition = in->disposition;
+        av_dict_copy(&out->metadata, in->metadata, 0);
+    }
     if (cover_stream >= 0) { AVStream* in = cover->streams[cover_stream]; AVStream* out = avformat_new_stream(output, nullptr); if (!out || avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) { error = "Unable to copy cover stream"; goto done; } out->time_base = in->time_base; out->disposition |= AV_DISPOSITION_ATTACHED_PIC; cover_output_stream = out->index; }
     if (!(output->oformat->flags & AVFMT_NOFILE) && avio_open(&output->pb, temporary.c_str(), AVIO_FLAG_WRITE) < 0) { error = "Unable to create temporary file"; goto done; }
-    if (avformat_write_header(output, nullptr) < 0) { error = "Unable to write metadata header"; goto done; }
+    {
+        const int result = avformat_write_header(output, nullptr);
+        if (result < 0) {
+            char detail[AV_ERROR_MAX_STRING_SIZE];
+            av_strerror(result, detail, sizeof(detail));
+            error = std::string("Unable to write metadata header: ") + detail;
+            goto done;
+        }
+    }
     if (cover_stream >= 0) { AVPacket packet; av_init_packet(&packet); while (av_read_frame(cover, &packet) >= 0) { if (packet.stream_index == cover_stream) { AVStream* in = cover->streams[cover_stream]; AVStream* out = output->streams[cover_output_stream]; packet.stream_index = cover_output_stream; av_packet_rescale_ts(&packet, in->time_base, out->time_base); const int result = av_interleaved_write_frame(output, &packet); av_packet_unref(&packet); if (result < 0) { error = "Unable to write cover image"; goto done; } break; } av_packet_unref(&packet); } }
-    { AVPacket packet; av_init_packet(&packet); while (av_read_frame(input, &packet) >= 0) { AVStream* in = input->streams[packet.stream_index]; if (!cover_path.empty() && in->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && (in->disposition & AV_DISPOSITION_ATTACHED_PIC)) { av_packet_unref(&packet); continue; } AVStream* out = output->streams[packet.stream_index]; av_packet_rescale_ts(&packet, in->time_base, out->time_base); int result = av_interleaved_write_frame(output, &packet); av_packet_unref(&packet); if (result < 0) { error = "Unable to write media packet"; goto done; } } }
-    av_write_trailer(output);
+    {
+        AVPacket packet;
+        av_init_packet(&packet);
+        int read_result;
+        while ((read_result = av_read_frame(input, &packet)) >= 0) {
+            const int input_index = packet.stream_index;
+            const int output_index = stream_mapping[input_index];
+            if (output_index < 0) {
+                av_packet_unref(&packet);
+                continue;
+            }
+            AVStream* in = input->streams[input_index];
+            AVStream* out = output->streams[output_index];
+            packet.stream_index = output_index;
+            av_packet_rescale_ts(&packet, in->time_base, out->time_base);
+            packet.pos = -1;
+            const int result = av_interleaved_write_frame(output, &packet);
+            av_packet_unref(&packet);
+            if (result < 0) {
+                error = "Unable to write media packet";
+                goto done;
+            }
+        }
+        if (read_result != AVERROR_EOF) {
+            error = "Unable to read complete media file";
+            goto done;
+        }
+    }
+    if (av_write_trailer(output) < 0) { error = "Unable to finish metadata output"; goto done; }
     avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); output = nullptr;
-    std::filesystem::rename(temporary, source_path, rename_error);
+    std::filesystem::rename(temporary_path, source_path, rename_error);
     if (rename_error) {
         error = "Unable to replace media file: " + rename_error.message();
         std::error_code cleanup_error;
-        std::filesystem::remove(temporary, cleanup_error);
+        std::filesystem::remove(temporary_path, cleanup_error);
         return false;
     }
     return true;
 done:
-    if (input) avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (output) { if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); } std::error_code ec; std::filesystem::remove(temporary, ec); return false;
+    if (input) avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (output) { if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); } std::error_code ec; std::filesystem::remove(temporary_path, ec); return false;
 }
 
 static Napi::Value WriteMetadata(const Napi::CallbackInfo& info) {

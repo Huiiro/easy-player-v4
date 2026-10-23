@@ -96,7 +96,7 @@ const trackTitle = computed(
 const trackArtist = computed(() => {
   const artist = player.trackInfo?.metadata?.artist || player.currentQueueSong?.artist
   return (
-    formatArtists(artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
+    formatArtists(artist, ui.artistSeparator, ui.normalizeMetadataSeparator) ||
     t('playerPanel.defaultArtist')
   )
 })

@@ -538,8 +538,11 @@ onBeforeUnmount(() => {
             </p>
             <p class="mt-1 truncate text-sm text-text-l">
               {{
-                formatArtists(item.song.artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
-                t('playerPanel.defaultArtist')
+                formatArtists(
+                  item.song.artist,
+                  ui.artistSeparator,
+                  ui.normalizeMetadataSeparator
+                ) || t('playerPanel.defaultArtist')
               }}
             </p>
           </div>

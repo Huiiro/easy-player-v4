@@ -31,6 +31,8 @@
     "test:global-search": "electron scripts/check-global-search.cjs",
     "test:appearance": "node scripts/test-appearance.mjs && electron scripts/check-appearance.cjs",
     "test:card-motion": "electron scripts/check-card-motion.cjs",
+    "test:genres": "node scripts/test-genres.mjs",
+    "test:native-metadata": "node scripts/test-native-metadata.mjs",
     "test:playback-mode": "node scripts/test-playback-mode.mjs",
     "test:shuffle": "node scripts/test-shuffle.mjs",
     "migrate:legacy": "node scripts/migrate-legacy-library.mjs",

@@ -18,6 +18,7 @@ import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { getDatabase } from '../database'
 import { refreshNewestSongs } from '../database/newestSongs'
+import { joinMetadataValues } from '../../shared/metadataValues'
 import {
   getAppSetting,
   getSong,
@@ -377,7 +378,7 @@ const jellyfinProvider: RemoteProvider = {
           duration: item.RunTimeTicks ? Math.round(item.RunTimeTicks / 10_000_000) : undefined,
           coverId: item.ImageTags?.Primary ? item.Id : item.AlbumId,
           year: item.ProductionYear,
-          genre: item.Genres?.join(', '),
+          genre: joinMetadataValues(item.Genres),
           bitrate: audio?.BitRate ? Math.round(audio.BitRate / 1000) : undefined,
           sampleRate: audio?.SampleRate,
           bitDepth: audio?.BitDepth,

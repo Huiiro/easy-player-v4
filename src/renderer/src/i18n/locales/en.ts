@@ -899,12 +899,18 @@ export default {
     ignoreShortSongs: 'Ignore songs shorter than 5 seconds',
     ignoreShortSongsDescription:
       'Skip audio shorter than 5 seconds when importing folders or songs.',
-    normalizeArtistSeparator: 'Normalize separators',
-    normalizeArtistSeparatorDescription:
-      'When enabled, separators will be uniformly replaced with / .',
+    normalizeMetadataSeparator: 'Normalize separators',
+    normalizeMetadataSeparatorDescription:
+      'Display / between artists and genres without changing the original tags.',
     artistSeparator: 'Artist separator',
     artistSeparatorDescription: 'Multiple separators supported, format: -/:;&.',
     artistSeparatorPlaceholder: 'For example /;',
+    genreSeparator: 'Genre separators',
+    genreSeparatorDescription:
+      'Each character separates genres. Leave empty to keep them together. Changes apply immediately without changing audio tags.',
+    genreSeparatorPlaceholder: 'For example /;、,',
+    genreEditHint: 'Separate multiple genres with these characters: {separators}',
+    genreSeparatorDisabled: 'Genre splitting is currently disabled',
     cacheManagement: 'Cache Management',
     cacheManagementDescription: 'Manage the remote music cache location and storage limit.',
     libraryBackup: 'Library Backup',

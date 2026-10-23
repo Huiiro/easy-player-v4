@@ -5,6 +5,7 @@ import vm from 'node:vm'
 import ts from 'typescript'
 import * as Vue from 'vue'
 import * as Pinia from 'pinia'
+import persisted from 'pinia-plugin-persistedstate'
 
 function load(file, mocks = {}, globals = {}) {
   const exports = {}
@@ -35,6 +36,14 @@ const appearance = load('src/renderer/src/services/appearance.ts', {
 const controller = load('src/renderer/src/services/appearanceController.ts', {
   '@/components/background/songThemeColors': colors
 })
+const uiPreferenceMigration = load('src/renderer/src/stores/ui/uiPreferences.ts')
+let savedUiPreferences = null
+const uiPreferenceStorage = {
+  getItem: () => savedUiPreferences,
+  setItem: (_key, value) => {
+    savedUiPreferences = value
+  }
+}
 const uiModule = load(
   'src/renderer/src/stores/ui/uiStore.ts',
   {
@@ -43,11 +52,13 @@ const uiModule = load(
     '@/utils/preferenceDefaults': defaults,
     '@/utils/footerLayout': footer,
     '../../../../shared/shortcuts': shortcuts,
+    '../../../../shared/metadataValues': load('src/shared/metadataValues.ts'),
+    './uiPreferences': uiPreferenceMigration,
     '@/services/customTheme': {},
     '@/services/themePreview': themePreview,
     '@/services/appearance': appearance,
     '@/services/appearanceController': controller,
-    '@/stores/persistence': {},
+    '@/stores/persistence': { playerDataStorage: uiPreferenceStorage },
     '@/components/background/systemBackgroundRegistry': {
       getSystemBackgroundTheme: () => ({ accentColor: '#00ff00' })
     },
@@ -62,13 +73,19 @@ const uiModule = load(
   },
   {
     window: {
-      matchMedia: () => ({ addEventListener() {} }),
+      matchMedia: () => ({ addEventListener() {}, removeEventListener() {} }),
       api: { fonts: { list: async () => ({ success: true, data: [] }) } }
     }
   }
 )
 Pinia.setActivePinia(Pinia.createPinia())
 const ui = uiModule.useUIStore()
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('genreSeparator'))
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('normalizeMetadataSeparator'))
+assert.ok(!uiModule.UI_PREFERENCE_KEYS.includes('normalizeGenreSeparator'))
+assert.ok(!uiModule.UI_PREFERENCE_KEYS.includes('normalizeArtistSeparator'))
+assert.equal(ui.genreSeparator, '/；;、,，')
+assert.equal(ui.normalizeMetadataSeparator, false)
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
@@ -181,6 +198,51 @@ assert.ok(
   'reset must only persist configuration, never clear library/history/statistics tables'
 )
 assert.equal(ui.customThemes[0].name, 'Keep theme')
+for (const [preferences, expectedNormalization] of [
+  [{ normalizeArtistSeparator: true, normalizeGenreSeparator: false }, true],
+  [{ normalizeArtistSeparator: false, normalizeGenreSeparator: true }, true],
+  [{ normalizeArtistSeparator: false, normalizeGenreSeparator: false }, false],
+  [{}, false],
+  [
+    {
+      normalizeMetadataSeparator: false,
+      normalizeArtistSeparator: true,
+      normalizeGenreSeparator: true
+    },
+    false
+  ],
+  [{ normalizeMetadataSeparator: true, normalizeArtistSeparator: false }, true]
+]) {
+  savedUiPreferences = JSON.stringify({ ...preferences, artistSeparator: ';', genreSeparator: ',' })
+  const pinia = Pinia.createPinia().use(persisted)
+  const app = Vue.createSSRApp({ render: () => null })
+  app.use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  assert.equal(
+    hydrated.normalizeMetadataSeparator,
+    expectedNormalization,
+    'legacy switches migrate before picked-state hydration'
+  )
+  assert.equal(hydrated.artistSeparator, ';')
+  assert.equal(hydrated.genreSeparator, ',')
+  hydrated.$persist()
+  const saved = JSON.parse(savedUiPreferences)
+  assert.equal(saved.normalizeMetadataSeparator, expectedNormalization)
+  assert.ok(
+    !('normalizeArtistSeparator' in saved) && !('normalizeGenreSeparator' in saved),
+    'only the shared normalization preference is persisted'
+  )
+  hydrated.resetPreferences()
+  assert.equal(
+    hydrated.normalizeMetadataSeparator,
+    false,
+    'migrated preferences reset to the original default'
+  )
+  Pinia.disposePinia(pinia)
+}
+console.log(
+  'Shared separator preference: legacy hydration, explicit value precedence, persistence and reset passed'
+)
 console.log(
   'Initial preference defaults, repeat resets, resource preservation and configuration-only persistence passed'
 )

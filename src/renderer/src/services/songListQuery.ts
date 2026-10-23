@@ -16,9 +16,18 @@ export async function querySongList(options: {
   tags: number[]
   sourceFilter: string
   artistSeparator: string
+  genreSeparator: string
   statistics: { enabled: boolean; generation: string }
 }): Promise<LibrarySong[]> {
-  const { source, search: appliedSearch, tags, sourceFilter, artistSeparator, statistics } = options
+  const {
+    source,
+    search: appliedSearch,
+    tags,
+    sourceFilter,
+    artistSeparator,
+    genreSeparator,
+    statistics
+  } = options
   const { type } = source
   const requiresStatistics = type === 'history' || type === 'recommendation'
   if (requiresStatistics && !statistics.enabled) return []
@@ -65,7 +74,7 @@ export async function querySongList(options: {
       case 'genre':
         return {
           name: 'getSongsByGenre',
-          params: { genre: source.genre, search: appliedSearch }
+          params: { genre: source.genre, search: appliedSearch, separator: genreSeparator }
         }
       case 'history':
         return {

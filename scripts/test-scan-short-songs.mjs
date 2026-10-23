@@ -12,8 +12,12 @@ const root = path.resolve('test-music')
 const durations = [0, 4.999, 5, 5.001, undefined]
 const files = durations.map((_, index) => path.join(root, `${index}.mp3`))
 let imported = []
+const importedGenres = []
 let covers = 0
 const mocks = {
+  '../../shared/metadataValues': {
+    joinMetadataValues: (values) => values?.join(', ')
+  },
   '../i18n': { t: (key) => key },
   './playbackMode': { waitForBackgroundWork: async () => {} },
   './operationLogger': { logOperation: (_name, _context, action) => action(), logError: String },
@@ -26,6 +30,7 @@ const mocks = {
         get: () => (sql.includes('FROM folder') ? { id: 1 } : undefined),
         run: (song) => {
           assert.ok(sql.includes('INSERT OR IGNORE INTO song'))
+          importedGenres.push(song.genre)
           imported.push(song.audio)
           return { changes: 1 }
         }
@@ -49,7 +54,12 @@ const mocks = {
   },
   './audioMetadataService': {
     parseAudioFile: async (file) => ({
-      common: { track: {}, disk: {}, picture: [{ data: new Uint8Array() }] },
+      common: {
+        genre: ['Pop', 'Jazz'],
+        track: {},
+        disk: {},
+        picture: [{ data: new Uint8Array() }]
+      },
       format: { duration: durations[files.indexOf(file)] }
     })
   }
@@ -68,6 +78,11 @@ vm.runInNewContext(
 const progress = []
 const result = await exports.scanMusicDirectory(root, (...args) => progress.push(args))
 assert.deepEqual(imported, files.slice(2), 'Default scan retains 5s, longer and unknown durations')
+assert.deepEqual(
+  importedGenres,
+  ['Pop, Jazz', 'Pop, Jazz', 'Pop, Jazz'],
+  'scans retain every genre'
+)
 assert.equal(covers, 3, 'Skipped songs must not create cover files')
 assert.equal(result.added, 3)
 assert.equal(result.duplicates, 0)

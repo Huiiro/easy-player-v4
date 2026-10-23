@@ -31,7 +31,9 @@ app.whenReady().then(async () => {
           import DspEffectEditor from './src/renderer/src/components/player/DspEffectEditor.vue';
           import AudioOutputSettings from './src/renderer/src/components/player/AudioOutputSettings.vue';
           import ImpulseResponseEditor from './src/renderer/src/components/player/ImpulseResponseEditor.vue';
-          export { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor };`,
+          import LibrarySettings from './src/renderer/src/components/settings/LibrarySettings.vue';
+          import SongDetailsDialog from './src/renderer/src/components/songlist/SongDetailsDialog.vue';
+          export { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -106,7 +108,7 @@ app.whenReady().then(async () => {
       `const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)}; document.head.append(style);`
     )
     const results = await window.webContents.executeJavaScript(`(async () => {
-      const { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor } = Checks;
+      const { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog } = Checks;
       const { createApp, h, reactive, nextTick, onMounted, onActivated } = Vue;
       const results = [];
       function check(value, message) { if (!value) throw new Error(message); results.push(message); }
@@ -332,6 +334,23 @@ app.whenReady().then(async () => {
       state.open=true;await wait(70);state.open=false;await wait(70);
       check(panelDisposals===3 && !document.querySelector('[data-player-canvas]') && hiddenAtDisposal.every(Boolean),'reduced motion closes immediately without clearing a visible canvas');
       document.documentElement.classList.remove('reduce-motion');
+      const metadataFixture={id:1,title:'Metadata fixture',artist:'Singer A;Singer B',album:'Album',genre:'POP,rock',duration:10,fileSize:100,year:null,trackNo:null,diskNo:null};
+      window.__activationUi=reactive({normalizeMetadataSeparator:false,artistSeparator:';',genreSeparator:',',ignoreShortSongs:true});
+      window.api.files={onImportProgress:()=>()=>{}};
+      window.api.database={command:async()=>({success:true,data:metadataFixture})};
+      const detailsState=reactive({open:false});
+      await mount({render:()=>[h(LibrarySettings),h(SongDetailsDialog,{modelValue:detailsState.open,songId:1,'onUpdate:modelValue':value=>detailsState.open=value})]});
+      const normalizationRows=[...document.querySelectorAll('.setting-row')].filter(row=>row.querySelector('h3')?.textContent==='settings.normalizeMetadataSeparator');
+      check(normalizationRows.length===1,'library settings expose one shared separator normalization switch');
+      normalizationRows[0].querySelector('[role=switch]').click();await wait();
+      check(window.__activationUi.normalizeMetadataSeparator===true,'shared separator switch updates the single UI preference');
+      detailsState.open=true;await wait();
+      check(document.body.textContent.includes('Singer A / Singer B') && document.body.textContent.includes('POP / rock'),'shared switch normalizes both artist and genre in real song details');
+      detailsState.open=false;await wait();
+      normalizationRows[0].querySelector('[role=switch]').click();await wait();
+      detailsState.open=true;await wait();
+      check(document.body.textContent.includes('Singer A;Singer B') && document.body.textContent.includes('POP,rock'),'disabling the shared switch restores both original separator styles');
+      check(metadataFixture.artist==='Singer A;Singer B' && metadataFixture.genre==='POP,rock','display normalization preserves original song metadata');
       activeApp.unmount(); messages.clear(); return results;
     })()`)
     assert.ok(results.length >= 20)

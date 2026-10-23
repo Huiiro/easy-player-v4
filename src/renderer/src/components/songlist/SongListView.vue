@@ -177,6 +177,7 @@ const getSongs = (): Promise<LibrarySong[]> =>
     tags: [...selectedTagIds.value],
     sourceFilter: sourceFilter.value,
     artistSeparator: uiStore.artistSeparator,
+    genreSeparator: uiStore.genreSeparator,
     statistics
   })
 
@@ -311,6 +312,15 @@ watch(
 )
 watch(selectedTagIds, () => canFilterByTags.value && void load())
 watch(sourceFilter, () => canFilterBySource.value && void load())
+watch(
+  () =>
+    props.source.type === 'genre'
+      ? uiStore.genreSeparator
+      : props.source.type === 'artist'
+        ? uiStore.artistSeparator
+        : undefined,
+  () => void load()
+)
 watch([keyword, composing], () => {
   ++loadRevision
   if (searchTimer) clearTimeout(searchTimer)

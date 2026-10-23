@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -15,6 +15,7 @@ const { t } = useI18n()
 const router = useRouter()
 const ui = useUIStore()
 const keyword = ref('')
+const separator = computed(() => (props.kind === 'genre' ? ui.genreSeparator : ui.artistSeparator))
 const order = computed<SortOrder>({
   get: () => (ui.librarySortOrder[props.kind] === 'desc' ? 'desc' : 'asc'),
   set: (value) => {
@@ -36,6 +37,7 @@ const items = ref<GridItem[]>([])
 const visibleCoverKeys = ref(new Set<string>())
 const scrollContainer = ref<HTMLElement | null>(null)
 let coverObserver: IntersectionObserver | null = null
+let activated = false
 
 const title = computed(() => t(`library.${props.kind}s`))
 const icon = computed(() =>
@@ -84,7 +86,7 @@ async function load(restoreScroll = false): Promise<void> {
       props.kind,
       order.value,
       keyword.value,
-      ui.artistSeparator,
+      separator.value,
       t('library.unknown')
     )
     if (revision === loadRevision) items.value = result
@@ -113,7 +115,7 @@ function refresh(): void {
   void load(true)
 }
 
-watch([keyword, order, () => ui.artistSeparator], () => {
+watch([keyword, order, separator], () => {
   visibleCoverKeys.value = new Set()
   clearSavedScrollPosition()
   void load()
@@ -140,6 +142,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   loadRevision++
   coverObserver?.disconnect()
+})
+onActivated(() => {
+  if (activated) void load(true)
+  activated = true
 })
 </script>
 

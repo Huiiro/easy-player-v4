@@ -44,7 +44,7 @@ export async function queryLibraryItems(
   const response = await window.api.database.command(action, {
     sort: order,
     search: search,
-    separator: kind === 'artist' ? separator : undefined
+    separator: kind === 'album' ? undefined : separator
   })
   if (!response.success) {
     return []
@@ -67,8 +67,8 @@ export async function queryLibraryItems(
     }))
   } else {
     return (response.data as GenreRow[]).map((item) => ({
-      name: item.name === 'unknown_genre' ? unknownLabel : item.name,
-      value: item.name === 'unknown_genre' ? '__easy_player_unknown_genre__' : item.name,
+      name: item.name === '__easy_player_unknown_genre__' ? unknownLabel : item.name,
+      value: item.name,
       count: item.count,
       cover: null
     }))

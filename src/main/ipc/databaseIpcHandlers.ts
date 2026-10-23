@@ -45,8 +45,15 @@ const handlers = {
     artist?: string
     search?: string
   }) => library.getSongsByAlbum(album, artist, search),
-  getSongsByGenre: ({ genre, search }: { genre: string; search?: string }) =>
-    library.getSongsByGenre(genre, search),
+  getSongsByGenre: ({
+    genre,
+    search,
+    separator
+  }: {
+    genre: string
+    search?: string
+    separator?: string
+  }) => library.getSongsByGenre(genre, search, separator),
   getSongsByArtist: ({
     artist,
     separator,
@@ -64,8 +71,12 @@ const handlers = {
     separator
   }: { sort?: 'asc' | 'desc'; search?: string; separator?: string } = {}) =>
     library.queryArtists(sort, search, separator),
-  queryGenres: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
-    library.queryGenres(sort, search),
+  queryGenres: ({
+    sort,
+    search,
+    separator
+  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string } = {}) =>
+    library.queryGenres(sort, search, separator),
   countSongsByAlbum: ({ album, artist }: { album: string; artist: string | null }) =>
     library.countSongsByAlbum(album, artist),
   countSongsByArtist: ({ artist }: { artist: string | null }) => library.countSongsByArtist(artist),

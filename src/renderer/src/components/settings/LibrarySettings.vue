@@ -129,6 +129,20 @@ onBeforeUnmount(() => offProgress?.())
     <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
   </SettingRow>
   <hr class="mx-5 my-4 border-0 border-t border-border" />
+  <SettingRow
+    :label="t('settings.genreSeparator')"
+    :description="t('settings.genreSeparatorDescription')"
+  >
+    <div class="w-64">
+      <input
+        v-model="ui.genreSeparator"
+        class="input-base text-center"
+        :aria-label="t('settings.genreSeparator')"
+        :placeholder="t('settings.genreSeparatorPlaceholder')"
+        maxlength="8"
+      />
+    </div>
+  </SettingRow>
   <div class="setting-row text-nowrap">
     <div>
       <h3>{{ t('settings.artistSeparator') }}</h3>
@@ -144,10 +158,10 @@ onBeforeUnmount(() => offProgress?.())
     </div>
   </div>
   <SettingRow
-    :label="t('settings.normalizeArtistSeparator')"
-    :description="t('settings.normalizeArtistSeparatorDescription')"
+    :label="t('settings.normalizeMetadataSeparator')"
+    :description="t('settings.normalizeMetadataSeparatorDescription')"
   >
-    <BaseSwitch v-model="ui.normalizeArtistSeparator" size="md" />
+    <BaseSwitch v-model="ui.normalizeMetadataSeparator" size="md" />
   </SettingRow>
   <hr class="mx-5 my-4 border-0 border-t border-border" />
   <SettingRow

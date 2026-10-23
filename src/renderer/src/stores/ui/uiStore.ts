@@ -1,11 +1,13 @@
 import { defineStore } from 'pinia'
 import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
-import type { InstalledThemePackage } from '../../../../shared/themePackage'
-import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
+import type { InstalledThemePackage } from '../../../../shared/themePackage'
+import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
+import { DEFAULT_GENRE_SEPARATOR } from '../../../../shared/metadataValues'
+import { deserializeUIPreferences } from './uiPreferences'
 import {
   resolveAppearance,
   DEFAULT_ACCENT_COLOR,
@@ -117,9 +119,10 @@ export const UI_PREFERENCE_KEYS = [
   'tagStyle',
   'musicSource',
   'musicSourceId',
-  'normalizeArtistSeparator',
+  'normalizeMetadataSeparator',
   'ignoreShortSongs',
   'artistSeparator',
+  'genreSeparator',
   'librarySortOrder',
   'libraryCardSize',
   'useDesktopLyrics',
@@ -420,9 +423,10 @@ export const useUIStore = defineStore(
     const tagSelected = ref<number[]>([])
     const musicSource = ref<'all' | 'local' | 'remote'>('all')
     const musicSourceId = ref(0)
-    const normalizeArtistSeparator = ref(false)
+    const normalizeMetadataSeparator = ref(false)
     const ignoreShortSongs = ref(true)
     const artistSeparator = ref('/；;、')
+    const genreSeparator = ref(DEFAULT_GENRE_SEPARATOR)
     const librarySortOrder = reactive<Record<'album' | 'artist' | 'genre', 'asc' | 'desc'>>({
       album: 'asc',
       artist: 'asc',
@@ -958,9 +962,10 @@ export const useUIStore = defineStore(
       tagSelected,
       musicSource,
       musicSourceId,
-      normalizeArtistSeparator,
+      normalizeMetadataSeparator,
       ignoreShortSongs,
       artistSeparator,
+      genreSeparator,
       librarySortOrder,
       libraryCardSize,
       useDesktopLyrics,
@@ -1000,6 +1005,7 @@ export const useUIStore = defineStore(
     persist: {
       key: 'ui.preferences.v1',
       storage: playerDataStorage,
+      serializer: { serialize: JSON.stringify, deserialize: deserializeUIPreferences },
       pick: [...UI_PREFERENCE_KEYS]
     }
   }

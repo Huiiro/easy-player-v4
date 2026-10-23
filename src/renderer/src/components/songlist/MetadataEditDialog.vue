@@ -8,6 +8,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import CropperDialog from '@/components/cropper/CropperDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { useUIStore } from '@/stores/ui/uiStore'
 
 export interface SongMetadata {
   title?: string
@@ -44,6 +45,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
 const { t } = useI18n()
+const ui = useUIStore()
 const { success: showSuccess, error: showError } = useMessage()
 
 const loading = ref(false)
@@ -343,6 +345,13 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
             <div>
               <div :class="inputLabelClass">{{ t('metadataEdit.genre') }}</div>
               <BaseInput v-model="metadata.genre" :clearable="false" />
+              <p class="mt-1 text-xs text-text-l">
+                {{
+                  t('settings.genreEditHint', {
+                    separators: ui.genreSeparator || t('settings.genreSeparatorDisabled')
+                  })
+                }}
+              </p>
             </div>
             <div>
               <div :class="inputLabelClass">{{ t('metadataEdit.discNumber') }}</div>

@@ -4,6 +4,7 @@ import { parseAudioFile } from './audioMetadataService'
 import { writeMp3Metadata } from './mp3MetadataService'
 import { Logger } from './loggerService'
 import { writeNativeMetadata } from '../audioEngine'
+import { joinMetadataValues } from '../../shared/metadataValues'
 
 export interface SongMetadata {
   // 基础信息
@@ -56,7 +57,7 @@ export async function writeMetadata(
     '[Metadata] writeMetadata',
     { filePath, fileType, fields: Object.keys(input) },
     async () => {
-      if (fileType in ['MPEG', 'FLAC', 'M4A', 'AAC', 'UNKNOWN']) {
+      if (['MPEG', 'FLAC', 'M4A', 'AAC'].includes(fileType)) {
         return dispatchMetadata(filePath, fileType, input)
       }
       const metadata = await parseAudioFile(filePath).catch((error) => {
@@ -95,7 +96,7 @@ export async function readMetadata(filePath: string): Promise<SongMetadata> {
         discNumber: metadata.common.disk?.no,
         discTotal: metadata.common.disk?.of,
 
-        genre: metadata.common.genre?.[0],
+        genre: joinMetadataValues(metadata.common.genre),
         year: metadata.common.year,
 
         composer: metadata.common.composer?.[0],
@@ -157,6 +158,13 @@ async function dispatchMetadata(
   input: SongMetadata
 ): Promise<boolean> {
   try {
+    // Raw ADTS AAC has no container tags; remuxing succeeds but drops the genre.
+    if (path.extname(filePath).toLowerCase() === '.aac' && input.genre !== undefined) {
+      Logger.warn('[Metadata] genre write rejected: raw AAC has no supported tag container', {
+        filePath
+      })
+      return false
+    }
     if (format === 'FLAC' || format === 'M4A' || format === 'AAC') {
       return writeNativeMetadata(filePath, input)
     }

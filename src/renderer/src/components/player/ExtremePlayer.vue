@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useSeekProgress } from './useSeekProgress'
+import { formatArtists } from '@/utils/artists'
 const player = usePlayerStore()
 const { displayPositionMs, previewSeek, commitSeek, cancelSeek } = useSeekProgress(player)
 const ui = useUIStore()
@@ -13,7 +14,11 @@ const title = computed(
 )
 const subtitle = computed(() =>
   [
-    player.currentQueueSong?.artist || player.trackInfo?.metadata?.artist,
+    formatArtists(
+      player.currentQueueSong?.artist || player.trackInfo?.metadata?.artist,
+      ui.artistSeparator,
+      ui.normalizeMetadataSeparator
+    ),
     player.currentQueueSong?.album || player.trackInfo?.metadata?.album
   ]
     .filter(Boolean)

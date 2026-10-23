@@ -57,7 +57,7 @@ function formatDuration(seconds: number): string {
               formatArtists(
                 song.artist,
                 uiStore.artistSeparator,
-                uiStore.normalizeArtistSeparator
+                uiStore.normalizeMetadataSeparator
               ) || t('songList.unknownArtist')
             }}</span>
           </span>

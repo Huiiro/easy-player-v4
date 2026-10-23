@@ -126,7 +126,7 @@ app.whenReady().then(async () => {
       const {createApp,h,reactive,nextTick,watch}=Vue;
       const checks=[];const check=(ok,message)=>{if(!ok)throw new Error(message);checks.push(message)};
       const wait=async(ms=30)=>{await nextTick();await new Promise(resolve=>setTimeout(resolve,ms))};
-      window.cardUi=reactive({useCardView:false,reduceMotion:false,artistSeparator:' / ',normalizeArtistSeparator:true});
+      window.cardUi=reactive({useCardView:false,reduceMotion:false,artistSeparator:' / ',normalizeMetadataSeparator:true});
       watch(()=>window.cardUi.reduceMotion,value=>document.documentElement.classList.toggle('reduce-motion',value));
       const songs=(offset,label)=>Array.from({length:8},(_,i)=>({id:offset+i,title:label+' '+(i+1),artist:'Studio sessions',cover:String(offset+i),songStatus:1}));
       const all=songs(1,'Library'),evening=songs(101,'Evening'),quiet=songs(201,'Quiet');

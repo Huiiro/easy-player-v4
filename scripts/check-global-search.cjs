@@ -158,7 +158,7 @@ app.whenReady().then(async () => {
       const {h,createApp,reactive,nextTick}=Vue;
       const checks=[];const check=(value,message)=>{if(!value)throw new Error(message);checks.push(message)};
       const wait=async(ms=100)=>{await nextTick();await new Promise(resolve=>setTimeout(resolve,ms))};
-      window.searchUi=reactive({shortcutKeys:{...DEFAULT_LOCAL_SHORTCUTS},globalShortcutKeys:{...DEFAULT_GLOBAL_SHORTCUTS},useGlobalShortcutKeys:false,useMica:false,useCardView:false,sidebarExpanded:true,customThemeText:{},logoText:'Easy Player',musicSource:'local',musicSourceId:0,artistSeparator:' / ',normalizeArtistSeparator:true,compactSongList:false});
+      window.searchUi=reactive({shortcutKeys:{...DEFAULT_LOCAL_SHORTCUTS},globalShortcutKeys:{...DEFAULT_GLOBAL_SHORTCUTS},useGlobalShortcutKeys:false,useMica:false,useCardView:false,sidebarExpanded:true,customThemeText:{},logoText:'Easy Player',musicSource:'local',musicSourceId:0,artistSeparator:' / ',normalizeMetadataSeparator:true,compactSongList:false});
       const songs=[{id:1,title:'稻香',artist:'周杰伦',album:'魔杰座',audio:'one.wav',songStatus:1,sourceId:null,duration:220,searchScore:900},{id:2,title:'稻香现场',artist:'周杰伦',album:'演唱会',audio:'two.wav',songStatus:1,sourceId:null,duration:240,searchScore:100},{id:3,title:'Remote song',artist:'Artist',album:'Album',audio:'remote.wav',songStatus:1,sourceId:7,duration:200,searchScore:50}];
       const original={id:99,title:'Current song',audio:'current.wav',songStatus:1};
       const playback=[];const requests=[];let indexListeners=0;

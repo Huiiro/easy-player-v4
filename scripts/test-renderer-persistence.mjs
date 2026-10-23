@@ -55,6 +55,8 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
 })
 const stored = JSON.stringify({
   songPlayTrigger: 'single',
+  genreSeparator: ';，',
+  normalizeMetadataSeparator: true,
   extremePlayback: true,
   playerLyricsFontFamily: 'Noto Sans SC',
   playlistHeaderCollapsed: true,
@@ -88,6 +90,12 @@ assert.equal(
   'Separate lyrics font survives a renderer restart'
 )
 const restoredHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(restoredHeaders.genreSeparator, ';，', 'genre separators survive a renderer restart')
+assert.equal(
+  restoredHeaders.normalizeMetadataSeparator,
+  true,
+  'genre display preference survives a restart'
+)
 assert.equal(
   restoredHeaders.songPlayTrigger,
   'single',

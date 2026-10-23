@@ -317,9 +317,9 @@ export function registerMetadataIpcHandlers(): void {
             updates.push('year = ?')
             values.push(updatedMeta.year)
           }
-          if (updatedMeta.genre && updatedMeta.genre !== song.genre) {
+          if ((updatedMeta.genre || null) !== song.genre) {
             updates.push('genre = ?')
-            values.push(updatedMeta.genre)
+            values.push(updatedMeta.genre || null)
           }
 
           // Handle cover art: if metadata was written with a cover, re-read and extract it

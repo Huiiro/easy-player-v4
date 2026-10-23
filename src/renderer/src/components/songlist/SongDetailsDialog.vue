@@ -3,10 +3,14 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import type { SongDetails } from '@/types/library'
+import { useUIStore } from '@/stores/ui/uiStore'
+import { formatGenres } from '@/utils/genres'
+import { formatArtists } from '@/utils/artists'
 
 const props = defineProps<{ modelValue: boolean; songId: number | null }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const { t } = useI18n()
+const ui = useUIStore()
 const loading = ref(false)
 const song = ref<SongDetails | null>(null)
 
@@ -56,7 +60,9 @@ watch(
         <div class="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-3">
           <p>
             <span class="detail-label">{{ t('songDetails.artist') }}</span>
-            {{ song.artist || '—' }}
+            {{
+              formatArtists(song.artist, ui.artistSeparator, ui.normalizeMetadataSeparator) || '—'
+            }}
           </p>
           <p>
             <span class="detail-label">{{ t('songDetails.album') }}</span>
@@ -64,7 +70,7 @@ watch(
           </p>
           <p>
             <span class="detail-label">{{ t('songDetails.genre') }}</span>
-            {{ song.genre || '—' }}
+            {{ formatGenres(song.genre, ui.genreSeparator, ui.normalizeMetadataSeparator) || '—' }}
           </p>
           <p>
             <span class="detail-label">{{ t('songDetails.year') }}</span>

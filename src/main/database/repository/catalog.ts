@@ -2,6 +2,7 @@ import { getDatabase } from '../index'
 import { buildSongSearchFilter } from '../../search/searchQuery'
 import type { Album, Artist, Genre, Song } from '../types'
 import { songColumns, relevanceOrder, attachTags, mapSong, type SongRow } from './songHelpers'
+import { genreMatchKey, splitGenres, splitMetadataValues } from '../../../shared/metadataValues'
 
 function queryScopedSongs(
   scope: string,
@@ -35,22 +36,16 @@ export function getSongsByAlbum(album: string, artist?: string, search = ''): So
   return queryScopedSongs(where.join(' AND '), params, search)
 }
 
-export function getSongsByGenre(genre: string, search = ''): Song[] {
-  return genre === '__easy_player_unknown_genre__'
-    ? queryScopedSongs("genre IS NULL OR TRIM(genre) = ''", {}, search)
-    : queryScopedSongs('genre = @genre', { genre }, search)
+export function getSongsByGenre(genre: string, search = '', separator = ''): Song[] {
+  const key = genreMatchKey(genre)
+  const unknown = key === '__easy_player_unknown_genre__'
+  return queryScopedSongs('1=1', {}, search, (song) => {
+    const names = splitGenres(song.genre, separator)
+    return unknown ? !names.length : names.some((name) => genreMatchKey(name) === key)
+  })
 }
 
-function splitArtistNames(value: string | null, separators = ''): string[] {
-  const artist = value?.trim()
-  if (!artist) return []
-  if (!separators) return [artist]
-  const parts = [...new Set(separators)].reduce(
-    (values, separator) => values.flatMap((part) => part.split(separator)),
-    [artist]
-  )
-  return [...new Set(parts.map((part) => part.trim()).filter(Boolean))]
-}
+const splitArtistNames = splitMetadataValues
 
 export function getSongsByArtist(artist: string, separator = '', search = ''): Song[] {
   if (artist === '__easy_player_unknown_artist__') {
@@ -123,14 +118,36 @@ export function queryArtists(sort: 'asc' | 'desc' = 'asc', search = '', separato
     .all(keyword ? { search: `%${keyword}%` } : {}) as Artist[]
 }
 
-export function queryGenres(sort: 'asc' | 'desc' = 'asc', search = ''): Genre[] {
-  const direction = sort === 'desc' ? 'DESC' : 'ASC'
-  const keyword = search.trim()
-  return getDatabase()
-    .prepare(
-      `SELECT CASE WHEN genre IS NULL OR TRIM(genre) = '' THEN 'unknown_genre' ELSE genre END AS name, COUNT(*) AS count FROM song ${keyword ? 'WHERE genre LIKE @search' : ''} GROUP BY genre ORDER BY name COLLATE NOCASE ${direction}`
+export function queryGenres(sort: 'asc' | 'desc' = 'asc', search = '', separator = ''): Genre[] {
+  const rows = getDatabase().prepare('SELECT genre FROM song ORDER BY id').all() as Array<{
+    genre: string | null
+  }>
+  const genres = new Map<string, Genre>()
+  for (const row of rows) {
+    const names = splitGenres(row.genre, separator)
+    for (const name of names.length ? names : ['__easy_player_unknown_genre__']) {
+      const key = genreMatchKey(name)
+      const current = genres.get(key)
+      if (current) current.count += 1
+      else genres.set(key, { name, count: 1 })
+    }
+  }
+  const keyword = genreMatchKey(search)
+  const direction = sort === 'desc' ? -1 : 1
+  return [...genres.values()]
+    .filter(
+      (item) =>
+        !keyword ||
+        (item.name !== '__easy_player_unknown_genre__' &&
+          genreMatchKey(item.name).includes(keyword))
     )
-    .all(keyword ? { search: `%${keyword}%` } : {}) as Genre[]
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name, undefined, {
+          sensitivity: 'base',
+          numeric: true
+        }) * direction
+    )
 }
 
 export function countSongsByAlbum(album: string, artist: string | null): number {

@@ -59,6 +59,7 @@ async function search(): Promise<void> {
       tags: [],
       sourceFilter: 'all',
       artistSeparator: ui.artistSeparator,
+      genreSeparator: ui.genreSeparator,
       statistics
     })
     if (request !== revision || !props.modelValue) return
@@ -208,7 +209,7 @@ defineExpose({ focusSearch })
               <span class="block truncate text-sm font-medium">{{ song.title }}</span>
               <span class="mt-1 block truncate text-xs text-text-l">
                 {{
-                  formatArtists(song.artist, ui.artistSeparator, ui.normalizeArtistSeparator) ||
+                  formatArtists(song.artist, ui.artistSeparator, ui.normalizeMetadataSeparator) ||
                   t('songList.unknownArtist')
                 }}
                 <template v-if="song.album"> · {{ song.album }}</template>
