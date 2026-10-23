@@ -433,6 +433,7 @@ export default {
     cardSizeLarge: '大',
     songCount: '{count} 首',
     loading: '正在加载…',
+    loadFailed: '加载歌曲失败，请重试。',
     empty: '没有可显示的内容',
     back: '返回'
   },

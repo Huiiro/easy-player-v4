@@ -5,6 +5,7 @@ import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
 import AppPageOutlet from '@/components/layout/AppPageOutlet.vue'
 import PlayerPanelTransition from '@/components/layout/PlayerPanelTransition.vue'
+import LayoutModeTransition from '@/components/layout/LayoutModeTransition.vue'
 
 const FootBar = defineAsyncComponent(() => import('@/views/layout/footbar/Index.vue'))
 
@@ -42,10 +43,10 @@ const { ui } = usePlaybackLifecycle()
       <!-- 内容区域 -->
       <section class="flex-1 min-h-0 flex overflow-hidden">
         <!-- 卡片模式 -->
-        <CardView v-if="ui.useCardView" class="flex-1 min-h-0 overflow-auto" />
+        <LayoutModeTransition :card="ui.useCardView" :reduce-motion="ui.reduceMotion">
+          <template #card><CardView class="flex-1 min-h-0 overflow-auto" /></template>
 
-        <!-- 普通模式 -->
-        <template v-else>
+          <!-- 普通模式 -->
           <aside class="shrink-0 z-10">
             <Sidebar />
           </aside>
@@ -53,7 +54,7 @@ const { ui } = usePlaybackLifecycle()
           <main class="flex-1 min-w-0 min-h-0 overflow-hidden z-10">
             <AppPageOutlet />
           </main>
-        </template>
+        </LayoutModeTransition>
       </section>
 
       <!-- 底栏 -->

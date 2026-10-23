@@ -8,10 +8,13 @@ import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { formatArtists } from '@/utils/artists'
 import { useCardLibrary } from '@/components/library/useCardLibrary'
+import { useCardTransition } from '@/components/library/useCardTransition'
+import { useMessage } from '@/components/ui/useMessage'
 
 const { t } = useI18n()
 const player = usePlayerStore()
 const ui = useUIStore()
+const { error: showError } = useMessage()
 const cardViewRef = ref<HTMLElement | null>(null)
 const playlistsVisible = ref(true)
 let playlistsHideTimer: ReturnType<typeof setTimeout> | undefined
@@ -28,6 +31,8 @@ function revealPlaylistsNearTop(event: MouseEvent): void {
   if (top !== undefined && event.clientY - top <= 120) showPlaylists()
 }
 const centerIndex = ref(0)
+const carouselRef = ref<HTMLElement | null>(null)
+const carouselMotion = useCardTransition(carouselRef, () => ui.reduceMotion)
 const {
   songs,
   playlists,
@@ -41,24 +46,32 @@ const {
   beforeLoad: () => {
     stopInertia()
     stopMotion()
+    isDragging = false
+    carouselMotion.restore()
+  },
+  beforeSongsReplace: async () => {
+    if (mounted.value && songs.value.length) await carouselMotion.leave()
   },
   onSongsLoaded: async () => {
     centerIndex.value = 0
     await nextTick()
     centerOnSong(player.currentQueueSong?.id)
+    if (mounted.value) {
+      await nextTick()
+      await carouselMotion.enter()
+    }
   },
   onPlaylistsLoaded: async () => {
     await nextTick()
     updatePlaylistScrollState()
-  },
-  reduceMotion: () => ui.reduceMotion
+  }
 })
-const carouselRef = ref<HTMLElement | null>(null)
 const playlistStripRef = ref<HTMLElement | null>(null)
 const canScrollPlaylistsLeft = ref(false)
 const canScrollPlaylistsRight = ref(false)
 const cardWidth = ref(220)
 const mounted = ref(false)
+let entranceFrame = 0
 
 let isDragging = false
 let pointerStartX = 0
@@ -197,7 +210,7 @@ function startInertia(): void {
   inertiaFrame = requestAnimationFrame(step)
 }
 function onPointerDown(event: PointerEvent): void {
-  if (event.button !== 0) return
+  if (event.button !== 0 || isLoading.value) return
   stopInertia()
   stopMotion()
   isDragging = true
@@ -251,6 +264,7 @@ function horizontalWheelDelta(event: WheelEvent): number {
   return rawDelta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1)
 }
 function onWheel(event: WheelEvent): void {
+  if (isLoading.value) return
   const delta = horizontalWheelDelta(event)
   if (!delta) return
   event.preventDefault()
@@ -294,22 +308,28 @@ function updatePlaylistScrollState(): void {
 function scrollPlaylists(direction: -1 | 1): void {
   const strip = playlistStripRef.value
   if (!strip) return
-  strip.scrollBy({ left: direction * Math.max(160, strip.clientWidth * 0.65), behavior: 'smooth' })
+  strip.scrollBy({
+    left: direction * Math.max(160, strip.clientWidth * 0.65),
+    behavior: ui.reduceMotion ? 'auto' : 'smooth'
+  })
 }
 function handlePlaylistSelect(id: number | null): void {
   if (suppressPlaylistClick) return
-  void selectPlaylist(id)
+  void selectPlaylist(id).catch(() => {
+    carouselMotion.restore()
+    showError(t('library.loadFailed'))
+  })
 }
 function onCoverPointerDown(event: PointerEvent): void {
   onPointerDown(event)
 }
 function handleCardClick(event: MouseEvent, virtualIndex: number): void {
-  if (event.detail !== 0 || suppressCardClick) return
+  if (event.detail !== 0 || suppressCardClick || isLoading.value) return
   stopMotion()
   moveTo(virtualIndex)
 }
 function handlePlayClick(song: LibrarySong, virtualIndex: number): void {
-  if (suppressCardClick) return
+  if (suppressCardClick || isLoading.value) return
   stopMotion()
   moveTo(virtualIndex)
   void playSong(song)
@@ -334,9 +354,8 @@ watch(
   }
 )
 
-onMounted(async () => {
+onMounted(() => {
   showPlaylists()
-  await Promise.all([loadPlaylists(), loadSongs()])
   resizeObserver = new ResizeObserver(() => {
     updateCardWidth()
     updatePlaylistScrollState()
@@ -345,11 +364,15 @@ onMounted(async () => {
   if (playlistStripRef.value) resizeObserver.observe(playlistStripRef.value)
   updateCardWidth()
   updatePlaylistScrollState()
-  requestAnimationFrame(() => (mounted.value = true))
+  entranceFrame = requestAnimationFrame(() => {
+    mounted.value = true
+  })
   eventBus.on('playlistsChanged', loadPlaylists)
   eventBus.on('locateCurrentSong', locateCurrentSong)
+  void Promise.all([loadPlaylists(), loadSongs()]).catch(() => showError(t('library.loadFailed')))
 })
 onBeforeUnmount(() => {
+  cancelAnimationFrame(entranceFrame)
   if (playlistsHideTimer) clearTimeout(playlistsHideTimer)
   resizeObserver?.disconnect()
   stopInertia()
@@ -363,6 +386,7 @@ onBeforeUnmount(() => {
   <main
     ref="cardViewRef"
     class="card-view flex h-full min-h-0 flex-col overflow-hidden pb-30 text-text"
+    :class="{ 'is-ready': mounted }"
     @mousemove="revealPlaylistsNearTop"
     @focusin="showPlaylists"
   >
@@ -428,11 +452,13 @@ onBeforeUnmount(() => {
 
     <section
       class="card-stage relative min-h-0 flex-1"
-      :class="[mounted && 'is-ready', isSwitchingPlaylist && 'is-switching']"
+      :class="mounted && 'is-ready'"
+      :aria-busy="isLoading"
     >
       <div
         ref="carouselRef"
         class="card-carousel absolute inset-0"
+        :inert="isSwitchingPlaylist"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
@@ -518,7 +544,10 @@ onBeforeUnmount(() => {
             </p>
           </div>
         </article>
-        <p v-if="isLoading" class="absolute left-1/2 top-1/2 -translate-x-1/2 text-sm text-text-l">
+        <p
+          v-if="isLoading && !songs.length"
+          class="absolute left-1/2 top-1/2 -translate-x-1/2 text-sm text-text-l"
+        >
           {{ t('library.loading') }}
         </p>
         <p
@@ -544,22 +573,18 @@ onBeforeUnmount(() => {
 }
 .card-stage {
   opacity: 0;
-  transition: opacity var(--motion-duration-emphasized) var(--motion-ease-standard);
+  transform: translateY(10px) scale(0.992);
+  transition:
+    opacity var(--motion-duration-emphasized) var(--motion-ease-enter),
+    transform var(--motion-duration-emphasized) cubic-bezier(0.22, 1, 0.36, 1);
 }
 .card-stage.is-ready {
   opacity: 1;
+  transform: none;
 }
 .card-carousel {
   user-select: none;
   touch-action: pan-y;
-  transition:
-    opacity var(--motion-duration-fast) var(--motion-ease-standard),
-    transform var(--motion-duration-fast) var(--motion-ease-standard);
-}
-.card-stage.is-switching .card-carousel {
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(0.985);
 }
 .card-item {
   transform-origin: center;
@@ -606,6 +631,10 @@ onBeforeUnmount(() => {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-0.75rem);
+}
+.card-view:not(.is-ready) .card-playlists {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 .playlist-strip {
   display: flex;
@@ -689,6 +718,7 @@ onBeforeUnmount(() => {
 }
 @media (prefers-reduced-motion: reduce) {
   .card-stage,
+  .card-playlists,
   .card-item,
   .card-play-overlay,
   .playlist-pill {

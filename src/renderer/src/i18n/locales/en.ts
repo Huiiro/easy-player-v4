@@ -443,6 +443,7 @@ export default {
     cardSizeLarge: 'Large',
     songCount: '{count} songs',
     loading: 'Loading…',
+    loadFailed: 'Unable to load songs. Please try again.',
     empty: 'Nothing to display',
     back: 'Back'
   },
