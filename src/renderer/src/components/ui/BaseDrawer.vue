@@ -2,6 +2,9 @@
 import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useModalClose } from './useModalClose'
+import { cssSize } from './types'
 
 defineOptions({
   name: 'BaseDrawer'
@@ -17,9 +20,13 @@ const props = withDefaults(
 
     direction?: Direction
 
-    width?: string
-    height?: string
+    width?: string | number
+    height?: string | number
 
+    closeOnEsc?: boolean
+    panelClass?: string
+    bodyClass?: string
+    headerClass?: string
     closeOnOverlay?: boolean
 
     showClose?: boolean
@@ -31,6 +38,7 @@ const props = withDefaults(
     height: '30%',
 
     closeOnOverlay: true,
+    closeOnEsc: true,
 
     showClose: true
   }
@@ -39,20 +47,12 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'close'): void
+  (e: 'afterEnter'): void
+  (e: 'afterLeave'): void
 }>()
 
-function close(): void {
-  emit('update:modelValue', false)
-
-  emit('close')
-}
-
-function handleClose(): void {
-  if (props.closeOnOverlay) {
-    close()
-  }
-}
-
+const { t } = useI18n()
+const { close, onOverlayClose, onKeydown } = useModalClose(props, emit)
 // =======================
 // layout
 // =======================
@@ -108,12 +108,14 @@ const panelClasses = computed(() => {
 const panelStyle = computed(() => {
   if (isHorizontal.value) {
     return {
-      width: props.width
+      width: cssSize(props.width),
+      maxWidth: '100vw'
     }
   }
 
   return {
-    height: props.height
+    height: cssSize(props.height),
+    maxHeight: '100vh'
   }
 })
 
@@ -151,11 +153,17 @@ const leaveTo = computed(() => {
 </script>
 
 <template>
-  <TransitionRoot :show="modelValue" as="template">
+  <TransitionRoot
+    :show="modelValue"
+    as="template"
+    @after-enter="emit('afterEnter')"
+    @after-leave="emit('afterLeave')"
+  >
     <Dialog
       as="div"
       class="ep-drawer pointer-events-auto fixed inset-0 z-50 text-text"
-      @close="handleClose"
+      @close="onOverlayClose"
+      @keydown="onKeydown"
     >
       <!-- overlay -->
 
@@ -196,11 +204,13 @@ const leaveTo = computed(() => {
   "
         :leave-to="leaveTo"
       >
-        <DialogPanel :class="panelClasses" :style="panelStyle">
+        <DialogPanel :class="[panelClasses, panelClass]" :style="panelStyle">
           <!-- floating close -->
 
           <button
             v-if="showClose && !hasHeader && !$slots.header"
+            type="button"
+            :aria-label="t('common.close')"
             class="absolute top-4 right-4 z-20 p-1.5 rounded-md hover:bg-hover-bg transition-colors"
             @click="close"
           >
@@ -220,6 +230,7 @@ const leaveTo = computed(() => {
           <div
             v-if="hasHeader || $slots.header"
             class="ep-drawer-header px-5 py-4 flex items-center justify-between border-b border-border shrink-0"
+            :class="headerClass"
           >
             <slot name="header">
               <div class="flex items-center min-w-0">
@@ -231,6 +242,8 @@ const leaveTo = computed(() => {
                 <slot name="close">
                   <button
                     v-if="showClose"
+                    type="button"
+                    :aria-label="t('common.close')"
                     class="p-1.5 rounded-md hover:bg-hover-bg transition-colors"
                     @click="close"
                   >
@@ -257,11 +270,9 @@ const leaveTo = computed(() => {
 
           <div
             class="ep-drawer-body flex-1 overflow-y-auto custom-scrollbar p-5"
-            :class="{
-              'pt-12': showClose && !hasHeader && !$slots.header
-            }"
+            :class="[bodyClass, { 'pt-12': showClose && !hasHeader && !$slots.header }]"
           >
-            <slot />
+            <slot :close="close" />
           </div>
 
           <!-- footer -->
@@ -270,7 +281,7 @@ const leaveTo = computed(() => {
             v-if="$slots.footer"
             class="ep-drawer-footer px-5 py-4 border-t border-border shrink-0"
           >
-            <slot name="footer" />
+            <slot name="footer" :close="close" />
           </div>
         </DialogPanel>
       </TransitionChild>

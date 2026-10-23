@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { ControlSize } from './types'
 
 defineOptions({
   name: 'BaseSwitch'
@@ -9,7 +10,7 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean | string | number
     disabled?: boolean
-    size?: 'sm' | 'md' | 'lg'
+    size?: ControlSize
     activeText?: string
     inactiveText?: string
     activeValue?: boolean | string | number
@@ -42,6 +43,7 @@ interface SizeConfig {
 }
 
 const sizeMap: Record<string, SizeConfig> = {
+  xs: { trackWidth: 24, trackHeight: 12, knobSize: 8, knobTranslate: 12 },
   sm: { trackWidth: 28, trackHeight: 14, knobSize: 10, knobTranslate: 14 },
   md: { trackWidth: 40, trackHeight: 20, knobSize: 16, knobTranslate: 20 },
   lg: { trackWidth: 52, trackHeight: 24, knobSize: 20, knobTranslate: 28 }
@@ -99,7 +101,7 @@ function toggle(): void {
     :aria-checked="isChecked"
     :disabled="disabled"
     :class="[
-      'ep-switch inline-flex items-center gap-2',
+      'ep-switch ep-focusable inline-flex items-center gap-2',
       disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
     ]"
     @click="toggle"
@@ -107,7 +109,7 @@ function toggle(): void {
     <!-- 轨道 + 滑块 -->
     <span :class="trackClass" :style="trackStyle">
       <span
-        class="ep-switch-thumb absolute rounded-full bg-white shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
+        class="ep-switch-thumb absolute rounded-full shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
         :style="knobStyle"
       />
     </span>

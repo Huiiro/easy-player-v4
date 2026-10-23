@@ -11,6 +11,9 @@ import BaseMessage from './BaseMessage.vue'
 import BaseSelect from './BaseSelect.vue'
 import BaseColorPicker from './BaseColorPicker.vue'
 import BaseSkeleton from './BaseSkeleton.vue'
+import BasePopover from './BasePopover.vue'
+import BaseRange from './BaseRange.vue'
+import BaseConfirmDialog from './BaseConfirmDialog.vue'
 
 // 统一管理
 const components = [
@@ -24,7 +27,10 @@ const components = [
   BaseMessage,
   BaseSelect,
   BaseColorPicker,
-  BaseSkeleton
+  BaseSkeleton,
+  BasePopover,
+  BaseRange,
+  BaseConfirmDialog
 ]
 
 /**
@@ -41,3 +47,22 @@ export default {
     })
   }
 }
+
+export {
+  BaseButton,
+  BaseInput,
+  BaseMenu,
+  BaseDialog,
+  BaseSlider,
+  BaseDrawer,
+  BaseSwitch,
+  BaseMessage,
+  BaseSelect,
+  BaseColorPicker,
+  BaseSkeleton
+}
+export { default as BasePopover } from './BasePopover.vue'
+export { default as BaseRange } from './BaseRange.vue'
+export { default as BaseConfirmDialog } from './BaseConfirmDialog.vue'
+export { useMessage } from './useMessage'
+export type { ControlSize, FloatingSide, FloatingAlign, PageTransition } from './types'

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -127,25 +128,16 @@ watch(
       {{ t('settings.configureFileAssociation') }}
     </button>
   </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.closeToTray') }}</h3>
-      <p>{{ t('settings.closeToTrayDescription') }}</p>
-    </div>
+  <SettingRow
+    :label="t('settings.closeToTray')"
+    :description="t('settings.closeToTrayDescription')"
+  >
     <BaseSwitch v-model="ui.closeToTray" size="md" />
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.autoStart') }}</h3>
-      <p>{{ t('settings.autoStartDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow :label="t('settings.autoStart')" :description="t('settings.autoStartDescription')">
     <BaseSwitch v-model="ui.autoStart" size="md" />
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.logLevel') }}</h3>
-      <p>{{ t('settings.logLevelDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow :label="t('settings.logLevel')" :description="t('settings.logLevelDescription')">
     <BaseSelect
       :model-value="logLevel"
       :options="logLevelOptions"
@@ -155,7 +147,7 @@ watch(
       class="w-48 shrink-0"
       @update:model-value="changeLogLevel"
     />
-  </div>
+  </SettingRow>
   <div class="setting-row">
     <div>
       <h3>{{ t('settings.appUpdate') }}</h3>
@@ -200,11 +192,7 @@ watch(
       {{ t('settings.checkForUpdates') }}
     </button>
   </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.changelog') }}</h3>
-      <p>{{ t('settings.changelogDescription') }}</p>
-    </div>
+  <SettingRow :label="t('settings.changelog')" :description="t('settings.changelogDescription')">
     <button
       class="btn-hover-base text-sm text-nowrap"
       type="button"
@@ -214,7 +202,7 @@ watch(
     >
       {{ t('settings.viewChangelog') }}
     </button>
-  </div>
+  </SettingRow>
   <ChangelogDialog v-model="changelogOpen" />
 </template>
 

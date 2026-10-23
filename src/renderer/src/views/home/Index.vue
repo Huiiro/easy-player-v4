@@ -12,7 +12,7 @@ import {
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
-import HomeClock from '@/components/home/HomeClock.vue'
+import HomeClock from '@/views/home/HomeClock.vue'
 import HomeHeatmap from './HomeHeatmap.vue'
 import HomeOverview from './HomeOverview.vue'
 import HomePlaylists from './HomePlaylists.vue'
@@ -34,7 +34,7 @@ import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 import type { OverviewStats, HistoryDay, RankedSong, Playlist, RecommendationCard } from './types'
-import './home.css'
+import '../../styles/home.css'
 
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
@@ -174,12 +174,14 @@ const topPlayed = ref<RankedSong[]>([])
 const topDuration = ref<RankedSong[]>([])
 const userPlaylists = ref<Playlist[]>([])
 const likedCover = ref<string | null>(null)
+const likedSongCount = ref(0)
 const playlists = computed<Playlist[]>(() => [
   {
     id: LIKED_PLAYLIST_ID,
     name: t('playlist.likedSongs'),
     cover: likedCover.value,
-    description: ''
+    description: '',
+    songCount: likedSongCount.value
   },
   ...userPlaylists.value
 ])
@@ -259,8 +261,11 @@ async function loadPlaylists(): Promise<void> {
     window.api.database.command('getLikedPlaylistCover')
   ])
   if (playlistsResponse.success) userPlaylists.value = playlistsResponse.data as Playlist[]
-  if (coverResponse.success)
-    likedCover.value = (coverResponse.data as { cover: string | null }).cover
+  if (coverResponse.success) {
+    const liked = coverResponse.data as { cover: string | null; songCount: number }
+    likedCover.value = liked.cover
+    likedSongCount.value = liked.songCount
+  }
 }
 async function playPlaylist(playlist: Playlist): Promise<void> {
   if (playingPlaylistId.value !== null || pendingRecommendationCard.value !== null) return
@@ -408,29 +413,31 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main
-    class="ep-home home-page custom-scrollbar select-none h-full overflow-y-auto px-7 py-6 text-text"
-  >
-    <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+  <main class="ep-home home-page custom-scrollbar select-none h-full overflow-y-auto text-text">
+    <div class="home-content">
       <template v-for="section in visibleSections" :key="section">
-        <section v-if="section === 'welcome'" class="xl:col-span-2">
-          <p class="text-sm text-text-l">{{ t('home.welcome') }}</p>
-          <h1 class="mt-1 whitespace-pre-wrap break-words text-3xl font-semibold tracking-tight">
-            {{ greeting }}
-          </h1>
+        <section v-if="section === 'welcome'" class="home-section home-hero">
+          <div class="home-hero-copy">
+            <p class="home-eyebrow">{{ t('home.welcome') }}</p>
+            <h1 class="home-greeting">{{ greeting }}</h1>
+            <p class="home-intro">{{ t('home.intro') }}</p>
+          </div>
         </section>
-        <HomeClock v-if="section === 'clock'" class="xl:col-span-2" />
-        <section v-if="section === 'navigation'" class="xl:col-span-2">
-          <h2 class="mb-3 text-lg font-semibold">{{ t('home.quickNavigation') }}</h2>
-          <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+        <HomeClock v-if="section === 'clock'" class="home-section" />
+        <section v-if="section === 'navigation'" class="home-section">
+          <div class="home-section-heading">
+            <h2>{{ t('home.quickNavigation') }}</h2>
+          </div>
+          <div class="home-navigation">
             <button
               v-for="item in navigation"
               :key="item.path"
-              class="home-surface home-nav group rounded-xl p-3 text-left transition-colors"
+              type="button"
+              class="home-nav"
               @click="router.push(item.path)"
             >
-              <SvgIcon :name="item.icon" class-name="size-5 text-primary" />
-              <span class="mt-3 truncate text-sm">{{ item.label }}</span>
+              <SvgIcon :name="item.icon" class-name="size-4 text-primary" />
+              <span class="truncate text-sm">{{ item.label }}</span>
             </button>
           </div>
         </section>
@@ -515,7 +522,5 @@ onBeforeUnmount(() => {
         </button>
       </template>
     </BaseDialog>
-
-    <div class="h-20" />
   </main>
 </template>

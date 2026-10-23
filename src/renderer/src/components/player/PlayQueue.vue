@@ -3,9 +3,11 @@ import { computed, nextTick, ref } from 'vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { useSongActivation } from '@/hooks/useSongActivation'
 
 const { t } = useI18n()
 const player = usePlayerStore()
+const activateSong = useSongActivation()
 const scroller = ref<{ scrollToItem: (index: number) => void } | null>(null)
 const queueItems = computed(() =>
   player.queue.map((song, index) => ({
@@ -51,7 +53,8 @@ defineExpose({ scrollToCurrent })
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       "
-      @dblclick="playAt(item.index)"
+      @click="activateSong($event, () => playAt(item.index))"
+      @dblclick="activateSong($event, () => playAt(item.index))"
     >
       <span class="w-5 shrink-0 text-right text-xs text-text-l2 tabular-nums">
         {{ item.index + 1 }}

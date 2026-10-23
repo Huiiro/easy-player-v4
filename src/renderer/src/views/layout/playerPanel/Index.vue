@@ -1,31 +1,31 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseRange from '@/components/ui/BaseRange.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
-import { CoverAnalyzer } from '@/hooks/useImageColors'
-import { PlayerBgType, resolvePlayerBgType } from '@/consts'
+import { usePlayerBackdrop } from '@/components/player/usePlayerBackdrop'
+import { useSeekProgress } from '@/components/player/useSeekProgress'
 import { PlayMode } from '@/consts'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
-import { chooseSpectrumColor } from '@/components/player/spectrumColor'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/LiquidBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
+import { usePlayerRhythm } from '@/components/player/usePlayerRhythm'
 import { formatArtists } from '@/utils/artists'
 import type { SongDetails } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 
-const COVER_ANALYSIS_VERSION = 11
-
 const ui = useUIStore()
 const player = usePlayerStore()
+const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
+  useSeekProgress(player)
 const { t } = useI18n()
 const { error: showError } = useMessage()
 const preferencePending = ref(false)
@@ -119,275 +119,50 @@ const lyricsOffsetLabel = computed(() => {
 /**
  * rhythm
  */
-const rhythmAmount = ref(0)
-const isPanelVisible = ref(!document.hidden && document.hasFocus())
-let lastVisualUpdateAt = 0
-
-function syncPanelVisibility(): void {
-  isPanelVisible.value = !document.hidden && document.hasFocus()
-}
-
-const targetRhythmAmount = computed(() => {
-  if (
-    !player.isPlaying ||
-    !isPanelVisible.value ||
-    !player.rhythmVisualConfig.enabled ||
-    player.rhythmVisualConfig.reducedMotion ||
-    ui.reduceMotion
-  )
-    return 0
-  const { rms, lowEnergy, onsetStrength } = player.audioAnalysis
-  const energy = Math.max(0, Math.min(1, Math.max(rms, lowEnergy, onsetStrength)))
-  return Math.min(1, energy * player.rhythmVisualConfig.intensity * 1.8)
-})
-watch(
-  targetRhythmAmount,
-  (target) => {
-    if (target === 0) {
-      rhythmAmount.value = 0
-      return
-    }
-    const now = performance.now()
-    if (now - lastVisualUpdateAt < 1000 / 30) return
-    lastVisualUpdateAt = now
-    rhythmAmount.value += (target - rhythmAmount.value) * 0.72
-  },
-  { immediate: true }
-)
+const { rhythmAmount, isPanelVisible } = usePlayerRhythm(player, ui)
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
-  document.addEventListener('visibilitychange', syncPanelVisibility)
-  window.addEventListener('focus', syncPanelVisibility)
-  window.addEventListener('blur', syncPanelVisibility)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
-  document.removeEventListener('visibilitychange', syncPanelVisibility)
-  window.removeEventListener('focus', syncPanelVisibility)
-  window.removeEventListener('blur', syncPanelVisibility)
 })
 
 /**
  * liquid
  */
-const liquidUnavailable = ref(false)
-const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
-const defaultLiquidColors = {
-  primary: '77 136 220',
-  secondary: '205 78 165',
-  tertiary: '73 186 165'
-}
-const selectedPlayerBackground = computed(() => resolvePlayerBgType(ui.playerBgType))
-const effectivePlayerBackground = computed(() =>
-  resolvePlayerBgType(selectedPlayerBackground.value, {
-    coverAvailable: Boolean(coverUrl.value && !coverFailed.value),
-    liquidAvailable: !liquidUnavailable.value
-  })
-)
-const useAlbumArtwork = computed(() => effectivePlayerBackground.value === PlayerBgType.ALBUM)
-const useAmbientBackground = computed(
-  () => effectivePlayerBackground.value === PlayerBgType.AMBIENT
-)
-const useLiquidBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.LIQUID)
-const ambientIntensity = computed(() =>
-  selectedPlayerBackground.value === PlayerBgType.AMBIENT ? 1 : 0.68
-)
-const liquidCoverSource = computed(() =>
-  coverColorSource.value === 'failed' ? null : coverUrl.value
-)
-const backgroundSource = computed(() => {
-  if (useAlbumArtwork.value && displayedCoverUrl.value && !coverFailed.value)
-    return displayedCoverUrl.value
-  return null
-})
-watch(selectedPlayerBackground, (background) => {
-  liquidUnavailable.value = false
-  if (background === PlayerBgType.LIQUID)
-    coverColorSource.value = coverUrl.value ? 'loading' : 'idle'
-  else coverColorSource.value = 'idle'
-})
-
-/**
- * colors
- */
-const initialPalette = CoverAnalyzer.getCachedPalette(
-  player.currentQueueSong,
-  COVER_ANALYSIS_VERSION,
-  useLiquidBackground.value
-)
-const coverColors = ref(initialPalette ?? { ...defaultLiquidColors })
-const spectrumBackgroundLuminance = ref(0.1)
-const spectrumColor = computed(() =>
-  chooseSpectrumColor(coverColors.value, spectrumBackgroundLuminance.value)
-)
-const paletteReady = ref(!coverUrl.value || Boolean(initialPalette))
-const useDarkLyrics = ref(false)
-const backgroundImage = ref<HTMLImageElement | null>(null)
-const analyzedBackgrounds = new WeakSet<HTMLImageElement>()
-// Cached images can load before Vue assigns the template ref.
-watch(
+const {
+  liquidUnavailable,
+  useAlbumArtwork,
+  useAmbientBackground,
+  useLiquidBackground,
+  ambientIntensity,
+  liquidCoverSource,
+  backgroundSource,
+  coverColors,
+  spectrumColor,
+  paletteReady,
+  useDarkLyrics,
   backgroundImage,
-  async (image) => {
-    await nextTick()
-    if (image && image === backgroundImage.value && image.complete && image.naturalWidth)
-      analyzeCoverImage(image)
-  },
-  { flush: 'post' }
-)
-const lyricColorStyle = computed(() => {
-  if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
-  return {
-    '--lrc-default': ui.lyricsColors.default,
-    '--lrc-highlight': ui.lyricsColors.highlight,
-    '--lrc-translate': ui.lyricsColors.translation
-  }
-})
-const shouldAnimate = computed(
-  () =>
-    player.isPlaying &&
-    isPanelVisible.value &&
-    player.rhythmVisualConfig.enabled &&
-    !player.rhythmVisualConfig.reducedMotion &&
-    !ui.reduceMotion
-)
-const liquidEnergy = computed(() => {
-  if (!player.rhythmVisualConfig.enabled) return 0
-  const { rms, onsetStrength } = player.audioAnalysis
-  return Math.min(1, Math.max(0, rms * 3.5, onsetStrength * 0.9, rhythmAmount.value * 0.8))
-})
-const liquidBass = computed(() =>
-  player.rhythmVisualConfig.enabled
-    ? Math.min(1, Math.max(0, player.audioAnalysis.lowEnergy) * 3.4)
-    : 0
-)
-const liquidBeat = computed(() =>
-  player.rhythmVisualConfig.enabled
-    ? Math.min(
-        1,
-        Math.max(0, player.audioAnalysis.onsetStrength) * player.rhythmVisualConfig.intensity * 4.2
-      )
-    : 0
-)
-const analysisPollingRate = computed(() => {
-  if (!ui.showPlayer || !isPanelVisible.value) return 0
-  if (ui.showPlayerSpectrum) return 20
-  return shouldAnimate.value ? 12 : 0
-})
-function extractCoverColors(event: Event): void {
-  const image = event.currentTarget as HTMLImageElement
-  if (image) analyzeCoverImage(image)
-}
-function analyzeCoverImage(image: HTMLImageElement): void {
-  const isBackground = image.classList.contains('panel-background-item') && useAlbumArtwork.value
-  if (isBackground && analyzedBackgrounds.has(image)) return
-  const loadedSource = image.getAttribute('src')
-  if (loadedSource && loadedSource !== coverUrl.value) return
-  const result = CoverAnalyzer.analyze({
-    image,
-    song: player.currentQueueSong,
-    isPanelBackground: isBackground,
-    backgroundFilter: getComputedStyle(image).filter,
-    useLiquidBackground: useLiquidBackground.value,
-    coverAnalysisVersion: COVER_ANALYSIS_VERSION,
-    getLyricsRegion: (loadedImage) => {
-      return CoverAnalyzer.getLyricsRegion(loadedImage, {
-        width: window.innerWidth,
-        height: window.innerHeight
-      })
-    },
-    onCacheUpdate: (id, analysis) => {
-      void window.api.database.command('updateSongCoverAnalysis', {
-        id,
-        analysis
-      })
-    }
-  })
-  if ((useLiquidBackground.value || useAmbientBackground.value) && result.source === 'failed') {
-    resetCoverPalette('failed')
-    paletteReady.value = true
-    return
-  }
-  coverColors.value = result.palette
-  paletteReady.value = true
-  // Cover thumbnail load events must never overwrite background contrast.
-  if (isBackground) {
-    analyzedBackgrounds.add(image)
-    useDarkLyrics.value = result.useDarkLyrics
-    spectrumBackgroundLuminance.value =
-      result.result?.averageLuminance ?? (result.useDarkLyrics ? 0.75 : 0.1)
-  }
-  coverColorSource.value = result.source
-}
-function resetCoverPalette(source: 'idle' | 'loading' | 'failed', preserveColors = false): void {
-  if (!preserveColors) coverColors.value = { ...defaultLiquidColors }
-  useDarkLyrics.value = false
-  spectrumBackgroundLuminance.value = 0.1
-  coverColorSource.value = source
-}
-function handleCoverError(event: Event): void {
-  if ((event.currentTarget as HTMLImageElement).getAttribute('src') !== coverUrl.value) return
-  coverFailed.value = true
-  displayedCoverUrl.value = null
-  resetCoverPalette('failed')
-  paletteReady.value = true
-}
-watch(
+  lyricColorStyle,
+  shouldAnimate,
+  liquidEnergy,
+  liquidBass,
+  liquidBeat,
+  analysisPollingRate,
+  extractCoverColors,
+  handleCoverError
+} = usePlayerBackdrop(
+  player,
+  ui,
   coverUrl,
-  (url, _, onCleanup) => {
-    coverFailed.value = false
-    const cached = CoverAnalyzer.getCachedPalette(
-      player.currentQueueSong,
-      COVER_ANALYSIS_VERSION,
-      useLiquidBackground.value
-    )
-    const preserveColors = Boolean(url && paletteReady.value)
-    resetCoverPalette(url ? 'loading' : 'idle', preserveColors)
-    if (cached) {
-      coverColors.value = cached
-      coverColorSource.value = 'cache'
-    }
-    paletteReady.value = !url || preserveColors || Boolean(cached)
-    if (!url) {
-      displayedCoverUrl.value = null
-      return
-    }
-    const image = new Image()
-    let active = true
-    onCleanup(() => {
-      active = false
-      image.onload = null
-      image.onerror = null
-      image.removeAttribute('src')
-    })
-    image.crossOrigin = 'anonymous'
-    image.onload = () => {
-      void image
-        .decode()
-        .catch(() => {})
-        .then(() => {
-          if (!active) return
-          // Palette extraction must not depend on a visible cover's load event.
-          analyzeCoverImage(image)
-          displayedCoverUrl.value = url
-        })
-    }
-    image.onerror = () => {
-      if (!active) return
-      coverFailed.value = true
-      displayedCoverUrl.value = null
-      resetCoverPalette('failed')
-    }
-    image.src = url
-  },
-  { immediate: true }
+  coverFailed,
+  displayedCoverUrl,
+  rhythmAmount,
+  isPanelVisible
 )
-watch(backgroundSource, (source) => {
-  if (!source) {
-    useDarkLyrics.value = false
-    spectrumBackgroundLuminance.value = 0.1
-    if (!coverUrl.value) resetCoverPalette('idle')
-  }
-})
+function setBackgroundImage(element: unknown): void {
+  backgroundImage.value = element instanceof HTMLImageElement ? element : null
+}
 watch(
   analysisPollingRate,
   (rate) => player.setAudioAnalysisPollingRate(rate, ui.showPlayerSpectrum),
@@ -446,7 +221,7 @@ function close(): void {
   ui.showPlayer = false
 }
 function handleKeyDown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape' || event.isComposing) return
+  if (!ui.showPlayer || event.key !== 'Escape' || event.isComposing) return
   event.preventDefault()
   close()
 }
@@ -480,9 +255,6 @@ function playPrevious(): void {
 }
 function playNext(): void {
   void player.playNext()
-}
-function seek(event: Event): void {
-  void player.seek(Number((event.target as HTMLInputElement).value))
 }
 function seekTo(positionMs: number): void {
   void player.seek(positionMs)
@@ -530,7 +302,7 @@ function changeLyricsOffset(event: WheelEvent): void {
       <Transition name="panel-background">
         <img
           v-if="backgroundSource"
-          ref="backgroundImage"
+          :ref="setBackgroundImage"
           :key="backgroundSource"
           :src="backgroundSource"
           :style="{ transform: `scale(${1.1 + rhythmAmount * 0.1})` }"
@@ -903,13 +675,16 @@ function changeLyricsOffset(event: WheelEvent): void {
               :class="progressStyle === 'thin' ? 'h-1' : 'h-2.5'"
               :min="0"
               :max="player.durationMs || 0"
-              :value="player.positionMs"
+              :value="displayPositionMs"
               :disabled="!player.durationMs"
               :aria-label="t('playerPanel.progress')"
-              @input="seek"
+              @input="previewSeek"
+              @change="commitSeek"
+              @pointercancel="cancelSeek"
+              @blur="cancelSeek"
             />
             <div class="panel-secondary-text flex justify-between text-xs tabular-nums">
-              <span>{{ player.positionFormatted }}</span>
+              <span>{{ displayPositionFormatted }}</span>
               <span>{{ player.durationFormatted }}</span>
             </div>
           </div>
@@ -1021,7 +796,7 @@ function changeLyricsOffset(event: WheelEvent): void {
       />
       <!-- play spectrum-->
       <div
-        v-if="ui.showPlayer && ui.showPlayerSpectrum"
+        v-if="ui.showPlayerSpectrum"
         class="pointer-events-none absolute inset-x-0 bottom-0 z-0 px-4 opacity-90"
       >
         <PlayerSpectrum

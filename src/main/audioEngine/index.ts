@@ -1,5 +1,8 @@
 import { logOperation } from '../service/operationLogger'
 import { join } from 'path'
+import { existsSync } from 'node:fs'
+import { AutoMixStemService, type AutoMixStemRequest } from '../service/autoMixStemService'
+import { getDataPath } from '../utils/pathUtils'
 import { app } from 'electron'
 import { isPlaybackOnly, setPlaybackOnly } from '../service/playbackMode'
 import { Logger } from '../service/loggerService'
@@ -61,6 +64,7 @@ export class AudioEngineManager {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private engine: any = null
   private isLoaded = false
+  private stemService?: AutoMixStemService
   private dspSettings: DspSettings
   private dspSettingsSaveTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -74,6 +78,49 @@ export class AudioEngineManager {
         Logger.write(levels[level] ?? 'info', 'native', message)
       })
       this.restoreDspSettings()
+      const projectRoot = join(__dirname, '..', '..')
+      const python =
+        process.env.EASY_PLAYER_STEM_PYTHON ||
+        (app.isPackaged
+          ? join(
+              process.resourcesPath,
+              'tools',
+              'auto-mix-python',
+              process.platform === 'win32' ? 'python.exe' : 'bin/python3'
+            )
+          : join(
+              projectRoot,
+              'build',
+              'stem-runtime',
+              process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3'
+            ))
+      const worker = app.isPackaged
+        ? join(process.resourcesPath, 'resources', 'auto-mix', 'stem_worker.py')
+        : join(projectRoot, 'resources', 'auto-mix', 'stem_worker.py')
+      if (existsSync(python) && existsSync(worker)) {
+        this.stemService = new AutoMixStemService({
+          python,
+          worker,
+          cache: app.isPackaged
+            ? join(getDataPath(), 'cache', 'auto-mix-stems')
+            : join(projectRoot, 'build', 'auto-mix-stems'),
+          ffmpeg: process.env.EASY_PLAYER_STEM_FFMPEG,
+          onReady: (request, outgoing, incoming, cue, outStart) => {
+            const accepted = this.engine?.setAutoMixVocals?.(
+              request.revision,
+              outgoing,
+              incoming,
+              cue,
+              outStart
+            )
+            Logger.debug(
+              `[Auto Mix] vocal protection ${accepted ? 'enabled' : 'discarded after queue/position change'}, incoming entry=${(cue / request.sampleRate).toFixed(2)}s`
+            )
+          },
+          onStatus: (message) => Logger.info(`[Auto Mix] ${message}`)
+        })
+        app.once('before-quit', () => this.stemService?.close())
+      }
       if (process.platform === 'win32') {
         // Process driver notifications even with the renderer closed/minimized.
         const deviceEvents = setInterval(() => {
@@ -156,6 +203,7 @@ export class AudioEngineManager {
       '[AudioEngine] stop',
       { loaded: this.loaded },
       () => {
+        this.stemService?.cancel()
         if (!this.engine) return false
         return this.engine.stop()
       },
@@ -168,6 +216,7 @@ export class AudioEngineManager {
       '[AudioEngine] stopAsync',
       { loaded: this.loaded },
       async () => {
+        this.stemService?.cancel()
         if (!this.engine) return false
         return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
       },
@@ -274,13 +323,20 @@ export class AudioEngineManager {
     return this.engine?.getDopEnabled() === true
   }
   setNextTrack(filePath: string, sourceFile?: string): boolean {
-    return this.engine?.setNextTrack?.(filePath, sourceFile) ?? false
+    const ready = this.engine?.setNextTrack?.(filePath, sourceFile) ?? false
+    const request =
+      ready && !isPlaybackOnly()
+        ? (this.engine?.getAutoMixStemRequest?.() as AutoMixStemRequest | null)
+        : null
+    this.stemService?.request(request ?? null)
+    return ready
   }
   setTransitionConfig(config: {
     gaplessEnabled: boolean
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    crossfadeVocalCue: boolean
     pauseFadeEnabled: boolean
     pauseFadeMs: number
   }): boolean {
@@ -288,6 +344,9 @@ export class AudioEngineManager {
     if (ok) {
       this.dspSettings.transition = config
       this.persistDspSettings()
+      this.stemService?.request(
+        isPlaybackOnly() ? null : (this.engine?.getAutoMixStemRequest?.() ?? null)
+      )
     }
     return ok
   }
@@ -296,6 +355,7 @@ export class AudioEngineManager {
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    crossfadeVocalCue: boolean
     pauseFadeEnabled: boolean
     pauseFadeMs: number
   } | null {
@@ -636,6 +696,7 @@ export class AudioEngineManager {
   setExtremePlayback(enabled: boolean): boolean {
     // An older addon must be rebuilt; do not claim that analysis was stopped.
     if (!this.engine?.setPlaybackOnly || !this.engine?.setAnalysisEnabled) return false
+    if (enabled) this.stemService?.cancel()
     this.engine.setPlaybackOnly(enabled)
     if (enabled) this.engine.setAnalysisEnabled(false)
     setPlaybackOnly(enabled)

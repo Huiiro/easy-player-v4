@@ -2,12 +2,15 @@
 import { computed } from 'vue'
 import { useMessage } from './useMessage'
 import type { MessageInstance } from './useMessage'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({
   name: 'BaseMessage'
 })
 
 const { messages, remove } = useMessage()
+const { t } = useI18n()
+withDefaults(defineProps<{ position?: 'top' | 'bottom' }>(), { position: 'top' })
 
 // ==================== 类型配置 ====================
 const typeConfig = computed(() => {
@@ -32,7 +35,7 @@ const typeConfig = computed(() => {
   return map
 })
 
-function getConfig(type: string) {
+function getConfig(type: string): { cls: string; icon: string } {
   return typeConfig.value[type] ?? typeConfig.value.info
 }
 
@@ -44,7 +47,8 @@ function handleClose(msg: MessageInstance): void {
 <template>
   <Teleport to="body">
     <div
-      class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 pointer-events-none"
+      class="ep-messages fixed left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 pointer-events-none"
+      :class="position === 'top' ? 'top-4' : 'bottom-4'"
     >
       <TransitionGroup
         enter-active-class="transition-all duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)]"
@@ -57,6 +61,7 @@ function handleClose(msg: MessageInstance): void {
         <div
           v-for="msg in messages"
           :key="msg.id"
+          :role="msg.type === 'error' ? 'alert' : 'status'"
           class="pointer-events-auto relative flex items-center gap-3 pl-5 pr-4 py-3 rounded-lg shadow-lg bg-bg border border-border min-w-75 max-w-125 overflow-hidden"
           :class="getConfig(msg.type ?? 'info').cls"
         >
@@ -96,6 +101,8 @@ function handleClose(msg: MessageInstance): void {
           <!-- 关闭按钮 -->
           <button
             v-if="msg.showClose"
+            type="button"
+            :aria-label="t('common.close')"
             class="shrink-0 p-0.5 rounded hover:bg-hover-bg transition-colors text-text-l hover:text-text"
             @click="handleClose(msg)"
           >

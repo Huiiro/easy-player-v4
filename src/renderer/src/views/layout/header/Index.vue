@@ -11,6 +11,7 @@ import { useI18n } from 'vue-i18n'
 import { VERSION } from '@/consts'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
+import { formatShortcut } from '@/utils/shortcut'
 
 const AudioControlPanelV2 = defineAsyncComponent(
   () => import('@/components/player/AudioControlPanelV2.vue')
@@ -32,8 +33,14 @@ const scanAdded = ref(0)
 const scanDuplicates = ref(0)
 const importingLocalFolder = ref(false)
 const isMac = navigator.userAgent.includes('Macintosh')
+const searchShortcut = computed(() => formatShortcut(ui.shortcutKeys.openSearch || ''))
+const searchTitle = computed(() =>
+  searchShortcut.value
+    ? `${t('header.globalSearch')} (${searchShortcut.value})`
+    : t('header.globalSearch')
+)
 const headerStyle = computed(() =>
-  ui.useMica
+  ui.nativeMaterialEnabled
     ? {
         background: 'transparent',
         backdropFilter: 'none'
@@ -137,12 +144,37 @@ eventBus.on('openAudioControls', openAudioControls)
     </div>
     <button
       v-if="!ui.useCardView"
-      class="ml-1 grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
+      class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
       :title="t('header.back')"
       :aria-label="t('header.back')"
       @click="router.back()"
     >
       <svgIcon name="common-back" class-name="size-4" />
+    </button>
+    <button
+      v-if="!ui.useCardView"
+      type="button"
+      class="ml-1 grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
+      :title="ui.sidebarExpanded ? t('sidebar.collapse') : t('sidebar.expand')"
+      :aria-label="ui.sidebarExpanded ? t('sidebar.collapse') : t('sidebar.expand')"
+      :aria-expanded="ui.sidebarExpanded"
+      aria-controls="app-sidebar"
+      @click="ui.sidebarExpanded = !ui.sidebarExpanded"
+    >
+      <svgIcon
+        :name="ui.sidebarExpanded ? 'common-menu-collapsed' : 'common-menu-expand'"
+        class-name="size-4"
+      />
+    </button>
+    <button
+      type="button"
+      class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
+      :title="searchTitle"
+      :aria-label="t('header.globalSearch')"
+      aria-haspopup="dialog"
+      @click="eventBus.emit('openGlobalSearch')"
+    >
+      <svgIcon name="common-search" class-name="size-4" />
     </button>
     <div class="h-full min-w-4 flex-1" />
     <SearchIndexStatus />

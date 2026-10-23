@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -110,11 +111,7 @@ async function exportTheme(): Promise<void> {
       </div>
       <p class="mt-1 text-xs">{{ t('customTheme.thirdPartyRisk') }}</p>
     </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('customTheme.title') }}</h3>
-        <p>{{ t('customTheme.description') }}</p>
-      </div>
+    <SettingRow :label="t('customTheme.title')" :description="t('customTheme.description')">
       <div class="flex shrink-0 flex-wrap gap-2">
         <input
           ref="fileInput"
@@ -134,7 +131,7 @@ async function exportTheme(): Promise<void> {
           {{ t(selected ? 'customTheme.export' : 'customTheme.example') }}
         </BaseButton>
       </div>
-    </div>
+    </SettingRow>
     <div class="setting-row">
       <span class="text-sm">{{ t('customTheme.active') }}</span>
       <div class="flex items-center gap-3">

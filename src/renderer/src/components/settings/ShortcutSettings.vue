@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import ShortcutInput from './ShortcutInput.vue'
@@ -7,6 +8,7 @@ import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../s
 const ui = useUIStore()
 const { t } = useI18n()
 const actions = [
+  { key: 'openSearch', label: 'settings.shortcutSearch' },
   { key: 'toggle', label: 'settings.shortcutToggle' },
   { key: 'previous', label: 'settings.shortcutPrevious' },
   { key: 'next', label: 'settings.shortcutNext' },
@@ -27,18 +29,17 @@ function reset(): void {
 </script>
 <template>
   <div class="settings-card shortcut-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.globalShortcuts') }}</h3>
-        <p>{{ t('settings.globalShortcutsDescription') }}</p>
-      </div>
+    <SettingRow
+      :label="t('settings.globalShortcuts')"
+      :description="t('settings.globalShortcutsDescription')"
+    >
       <div class="flex items-center gap-3">
         <button class="btn-hover-base text-sm" type="button" @click="reset">
           {{ t('settings.resetShortcutDefaults') }}
         </button>
         <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
       </div>
-    </div>
+    </SettingRow>
     <div class="shortcut-grid">
       <span>-</span>
       <span>{{ t('settings.localShortcuts') }}</span>

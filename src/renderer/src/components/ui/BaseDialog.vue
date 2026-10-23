@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { Dialog, DialogPanel, DialogTitle, TransitionRoot, TransitionChild } from '@headlessui/vue'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useModalClose } from './useModalClose'
+import { cssSize } from './types'
 
 defineOptions({
   name: 'BaseDialog'
@@ -12,7 +15,11 @@ const props = withDefaults(
   defineProps<{
     modelValue: boolean
     title?: string
-    width?: string
+    width?: string | number
+    closeOnEsc?: boolean
+    panelClass?: string
+    bodyClass?: string
+    headerClass?: string
     closeOnOverlay?: boolean
     showClose?: boolean
     blur?: boolean
@@ -21,6 +28,7 @@ const props = withDefaults(
   {
     width: 'max-w-lg',
     closeOnOverlay: true,
+    closeOnEsc: true,
     showClose: true,
     blur: true,
     footerAlign: 'right'
@@ -30,19 +38,18 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void
   (e: 'close'): void
+  (e: 'afterEnter'): void
+  (e: 'afterLeave'): void
 }>()
 
-function close(): void {
-  emit('update:modelValue', false)
-  emit('close')
-}
-
-function handleClose(): void {
-  if (props.closeOnOverlay) {
-    close()
-  }
-}
-
+const { t } = useI18n()
+const { close, onOverlayClose, onKeydown } = useModalClose(props, emit)
+const legacyWidth = computed(
+  () => typeof props.width === 'string' && /^(?:max-w-|w-)/.test(props.width)
+)
+const panelStyle = computed(() =>
+  legacyWidth.value ? undefined : { maxWidth: cssSize(props.width) }
+)
 /* footer */
 const footerClass = computed(() => {
   const map = {
@@ -56,12 +63,18 @@ const footerClass = computed(() => {
 
 <template>
   <!-- TransitionRoot owns unmounting so the portal stays intact during leave. -->
-  <TransitionRoot :show="modelValue" as="template">
+  <TransitionRoot
+    :show="modelValue"
+    as="template"
+    @after-enter="emit('afterEnter')"
+    @after-leave="emit('afterLeave')"
+  >
     <Dialog
       static
       as="div"
       class="ep-dialog pointer-events-auto fixed inset-0 z-50 text-text"
-      @close="handleClose"
+      @close="onOverlayClose"
+      @keydown="onKeydown"
     >
       <!-- overlay -->
       <TransitionChild
@@ -90,11 +103,15 @@ const footerClass = computed(() => {
           leave-from="opacity-100 scale-100"
           leave-to="opacity-0 scale-95"
         >
-          <DialogPanel :class="['ep-dialog-panel my-auto w-full', width]">
+          <DialogPanel
+            :class="['ep-dialog-panel my-auto w-full', legacyWidth ? width : '', panelClass]"
+            :style="panelStyle"
+          >
             <!-- header -->
             <div
               v-if="$slots.header || title || showClose"
               class="ep-dialog-header px-4 py-3 flex items-center justify-between"
+              :class="headerClass"
             >
               <!-- 左侧：标题 -->
               <div class="flex items-center">
@@ -110,6 +127,8 @@ const footerClass = computed(() => {
                 <slot name="close">
                   <button
                     v-if="showClose"
+                    type="button"
+                    :aria-label="t('common.close')"
                     class="p-1 rounded-md hover:text-primary transition"
                     @click="close"
                   >
@@ -120,14 +139,14 @@ const footerClass = computed(() => {
             </div>
 
             <!-- content -->
-            <div class="ep-dialog-body p-4">
-              <slot />
+            <div class="ep-dialog-body p-4" :class="bodyClass">
+              <slot :close="close" />
             </div>
 
             <!-- footer -->
             <div v-if="$slots.footer" class="ep-dialog-footer px-4 py-3">
               <div :class="footerClass">
-                <slot name="footer" />
+                <slot name="footer" :close="close" />
               </div>
             </div>
           </DialogPanel>

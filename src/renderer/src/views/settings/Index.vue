@@ -5,6 +5,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useMessage } from '@/components/ui/useMessage'
 import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/consts'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
 import PlayerAppearanceSettings from '@/components/settings/PlayerAppearanceSettings.vue'
@@ -20,6 +21,7 @@ import StatisticsSettings from '@/components/settings/StatisticsSettings.vue'
 import ResetPreferencesSettings from '@/components/settings/ResetPreferencesSettings.vue'
 
 const ui = useUIStore()
+const { error } = useMessage()
 const preferencesRevision = ref(0)
 const repositoryUrl = 'https://github.com/Huiiro/easy-player-v4'
 const themeDocumentationUrl = `${repositoryUrl}/blob/master/docs/custom-themes.md`
@@ -554,7 +556,8 @@ onBeforeUnmount(() => {
     :title="t('settings.restoreDefault')"
     :message="t('settings.confirmResetTheme')"
     :confirm-text="t('settings.restoreDefault')"
-    @confirm="ui.resetTheme"
+    :confirm-action="ui.resetTheme"
+    @error="error(t('settings.windowMaterialFailed'))"
   />
 </template>
 

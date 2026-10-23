@@ -15,6 +15,20 @@ vm.runInNewContext(
   }).outputText,
   { exports: sortModule.exports, module: sortModule, require }
 )
+const selectionModule = { exports: {} }
+vm.runInNewContext(
+  ts.transpileModule(
+    readFileSync('src/renderer/src/components/songlist/useSongSelection.ts', 'utf8'),
+    {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+    }
+  ).outputText,
+  {
+    exports: selectionModule.exports,
+    module: selectionModule,
+    require: (name) => (name === 'vue' ? Vue : require(name))
+  }
+)
 const filename = 'src/renderer/src/components/songlist/SongListView.vue'
 const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
 const source = ts.transpileModule(compileScript(descriptor, { id: 'song-search-ui' }).content, {
@@ -27,13 +41,14 @@ const requests = []
 let nextTimer = 0
 let indexChanged
 const module = { exports: {} }
+let serviceWindow
 vm.runInNewContext(
   source,
   {
     exports: module.exports,
     module,
     console,
-    window: {
+    window: (serviceWindow = {
       addEventListener() {},
       removeEventListener() {},
       api: {
@@ -50,7 +65,7 @@ vm.runInNewContext(
           }
         }
       }
-    },
+    }),
     setTimeout(callback) {
       timers.set(++nextTimer, callback)
       return nextTimer
@@ -59,6 +74,27 @@ vm.runInNewContext(
       timers.delete(id)
     },
     require(name) {
+      if (name.endsWith('searchPlayback')) {
+        const playback = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync('src/renderer/src/services/searchPlayback.ts', 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          { exports: playback.exports, module: playback }
+        )
+        return playback.exports
+      }
+      if (name.endsWith('songListQuery')) {
+        const queryModule = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync('src/renderer/src/services/songListQuery.ts', 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          { exports: queryModule.exports, module: queryModule, window: serviceWindow }
+        )
+        return queryModule.exports
+      }
+      if (name.endsWith('useSongSelection')) return selectionModule.exports
       if (name.endsWith('songTextSort')) return sortModule.exports
       if (name === 'vue')
         return {

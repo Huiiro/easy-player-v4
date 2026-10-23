@@ -104,7 +104,7 @@ const particles = Array.from({ length: 24 }, (_, index) => {
 
 <style scoped>
 .cover-frame {
-  width: min(540px, 38vw, calc(100dvh - 29rem));
+  width: calc(min(540px, 38vw, 100dvh - 29rem) * 0.9);
   max-width: 100%;
   position: relative;
   isolation: isolate;
@@ -113,12 +113,12 @@ const particles = Array.from({ length: 24 }, (_, index) => {
 }
 @media (max-width: 760px) {
   .cover-frame {
-    width: min(340px, 64vw, calc(100dvh - 24rem));
+    width: calc(min(340px, 64vw, 100dvh - 24rem) * 0.9);
   }
 }
 @media (max-width: 700px) {
   .cover-frame {
-    width: min(245px, 46vh);
+    width: calc(min(245px, 46vh) * 0.9);
   }
 }
 .cover-aura {

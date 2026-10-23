@@ -3,7 +3,9 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useSeekProgress } from './useSeekProgress'
 const player = usePlayerStore()
+const { displayPositionMs, previewSeek, commitSeek, cancelSeek } = useSeekProgress(player)
 const ui = useUIStore()
 const { t } = useI18n()
 const title = computed(
@@ -18,14 +20,11 @@ const subtitle = computed(() =>
     .join(' · ')
 )
 const progress = computed(() =>
-  Math.max(0, Math.min(100, (player.positionMs / (player.durationMs || 1)) * 100))
+  Math.max(0, Math.min(100, (displayPositionMs.value / (player.durationMs || 1)) * 100))
 )
 function time(ms: number): string {
   const seconds = Math.max(0, Math.floor(ms / 1000))
   return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0')
-}
-function seek(event: Event): void {
-  void player.seek(Number((event.target as HTMLInputElement).value))
 }
 </script>
 
@@ -42,13 +41,16 @@ function seek(event: Event): void {
           type="range"
           min="0"
           :max="player.durationMs || 1"
-          :value="player.positionMs"
+          :value="displayPositionMs"
           :style="{ '--fill': progress + '%' }"
           :aria-label="t('footer.progress')"
-          @change="seek"
+          @input="previewSeek"
+          @change="commitSeek"
+          @pointercancel="cancelSeek"
+          @blur="cancelSeek"
         />
         <div class="time">
-          <span>{{ time(player.positionMs) }}</span
+          <span>{{ time(displayPositionMs) }}</span
           ><span>{{ time(player.durationMs) }}</span>
         </div>
       </div>

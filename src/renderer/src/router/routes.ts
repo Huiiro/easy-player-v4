@@ -11,10 +11,16 @@ export const constRoutes = [
       ...(import.meta.env.DEV
         ? [
             {
+              path: '/dev/ui',
+              name: 'UiComponents',
+              meta: { title: 'UI Components' },
+              component: () => import('@/views/dev/UiTest.vue')
+            },
+            {
               path: '/dev',
               name: 'Dev',
               meta: { title: 'DEV' },
-              component: () => import('@/views/dev/Index.vue')
+              component: () => import('@/views/dev/UiTest.vue')
             }
           ]
         : []),

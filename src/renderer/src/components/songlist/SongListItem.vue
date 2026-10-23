@@ -8,6 +8,7 @@ import { useFriendlyTime } from '@/hooks/useTimeFormatter'
 import { getHighlightParts } from '@/utils/highlight'
 import { artistDisplayTokens } from '@/utils/artists'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useSongActivation } from '@/hooks/useSongActivation'
 
 const props = defineProps<{
   song: LibrarySong
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const router = useRouter()
 const ui = useUIStore()
+const activateSong = useSongActivation()
 const { format: formatPlayTime } = useFriendlyTime()
 const coverFailed = ref(false)
 const coverUrl = computed(() =>
@@ -92,7 +94,8 @@ function openAlbum(): void {
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       "
-      @dblclick="emit('play', song)"
+      @click="activateSong($event, () => emit('play', song))"
+      @dblclick="activateSong($event, () => emit('play', song))"
       @contextmenu.prevent.stop="requestMenu"
     >
       <span class="flex items-center gap-2 text-sm text-text-l">

@@ -11,16 +11,18 @@ const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
 const { error: showError } = useMessage()
-const activeTheme = computed(() => getSystemBackgroundTheme(ui.systemBackground))
-const isSystemTheme = computed(
-  () => !ui.customThemeOverridesBackground && !ui.useCustomBg && ui.systemBackground !== 'none'
+const background = computed(() => ui.resolvedAppearance.background)
+const activeTheme = computed(() =>
+  getSystemBackgroundTheme(background.value.type === 'preset' ? background.value.id : 'none')
 )
+const isSystemTheme = computed(() => background.value.type === 'preset')
 const isBackgroundActive = ref(!document.hidden && document.hasFocus())
-const isSolidTheme = computed(() => isSystemTheme.value && ui.systemBackground === 'solid')
+const isSolidTheme = computed(() => isSystemTheme.value && activeTheme.value.id === 'solid')
+const needsSongColor = computed(() => isSolidTheme.value || ui.accentSource === 'song')
 const video = ref<HTMLVideoElement | null>(null)
 const customMotionPaused = computed(
   () =>
-    ui.customThemeOverridesBackground ||
+    (background.value.type !== 'image' && background.value.type !== 'video') ||
     !isBackgroundActive.value ||
     ui.showPlayer ||
     ui.reduceMotion
@@ -36,10 +38,10 @@ watch([video, customMotionPaused, () => ui.customBg.url, () => ui.customBg.kind]
 })
 
 watch(
-  () => [isSolidTheme.value, player.currentQueueSong?.id, player.currentQueueSong?.cover],
+  () => [needsSongColor.value, player.currentQueueSong?.id, player.currentQueueSong?.cover],
   (_, __, onCleanup) => {
     const song = player.currentQueueSong
-    if (!isSolidTheme.value || !song?.cover) {
+    if (!needsSongColor.value || !song?.cover) {
       ui.songThemeColor = null
       return
     }
@@ -88,14 +90,22 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Transition name="app-theme-background">
+  <!-- Replace resources in one commit: canvases must not be cleared while a
+       leaving background is still being faded across the whole window. -->
+  <div class="absolute inset-0 pointer-events-none" aria-hidden="true">
     <div
-      v-if="ui.customThemeOverridesBackground"
+      v-if="background.type === 'theme'"
       key="imported-theme"
       class="ep-app-background absolute inset-0 z-0 overflow-hidden pointer-events-none"
       aria-hidden="true"
     />
-    <div v-else-if="ui.useCustomBg" key="custom" class="app-background-layer" aria-hidden="true">
+    <div
+      v-else-if="background.type === 'image' || background.type === 'video'"
+      key="custom"
+      class="app-background-layer"
+      :class="!ui.resolvedAppearance.dark && 'app-background-layer--light'"
+      aria-hidden="true"
+    >
       <div
         v-if="ui.customBg.kind === 'image'"
         class="absolute -inset-6 bg-cover bg-center transition-[filter] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-standard)]"
@@ -124,6 +134,7 @@ onBeforeUnmount(() => {
       v-else-if="isSystemTheme"
       :key="ui.systemBackground"
       class="app-background-layer"
+      :class="!ui.resolvedAppearance.dark && 'app-background-layer--light'"
       aria-hidden="true"
     >
       <div
@@ -155,7 +166,7 @@ onBeforeUnmount(() => {
         />
       </div>
       <div
-        v-if="!isSolidTheme"
+        v-if="!isSolidTheme || !ui.resolvedAppearance.dark"
         class="app-background-scrim app-background-scrim--system"
         :class="{
           'app-background-scrim--matrix': ui.systemBackground === 'matrix',
@@ -170,7 +181,7 @@ onBeforeUnmount(() => {
         }"
       />
     </div>
-  </Transition>
+  </div>
 </template>
 
 <style scoped>
@@ -253,17 +264,13 @@ onBeforeUnmount(() => {
   );
 }
 
+/* All scene canvases may contain near-black pixels, including solid artwork.
+   Use one light surface over them instead of each scene's dark-mode scrim. */
+.app-background-layer--light .app-background-scrim {
+  background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+}
+
 .app-background-host--paused :deep(*) {
   animation-play-state: paused !important;
-}
-
-.app-theme-background-enter-active,
-.app-theme-background-leave-active {
-  transition: opacity var(--motion-duration-theme) var(--motion-ease-standard);
-}
-
-.app-theme-background-enter-from,
-.app-theme-background-leave-to {
-  opacity: 0;
 }
 </style>

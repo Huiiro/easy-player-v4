@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import { formatShortcut, normalizeShortcut } from '@/utils/shortcut'
 import { useI18n } from 'vue-i18n'
+import eventBus from '@/utils/eventBus'
 
 import { SHORTCUT_ACTIONS, type ShortcutAction } from '../../../shared/shortcuts'
 
@@ -15,7 +16,13 @@ export function useShortcuts(): void {
   let preferenceBusy = false
   const run = async (action: ShortcutAction): Promise<void> => {
     try {
-      if (action === 'previous') await player.playPrevious()
+      if (action === 'openSearch') {
+        if (document.documentElement.dataset.playbackView === 'extreme') {
+          warning(t('settings.searchRequiresFullView'))
+          return
+        }
+        eventBus.emit('openGlobalSearch')
+      } else if (action === 'previous') await player.playPrevious()
       else if (action === 'next') await player.playNext()
       else if (action === 'toggle') {
         if (player.isPlaying) await player.pause()
@@ -64,20 +71,23 @@ export function useShortcuts(): void {
   const onKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null
     if (event.defaultPrevented || event.isComposing) return
-    if (
-      target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
-    )
-      return
     const shortcut = normalizeShortcut(event)
     if (!shortcut) return
     const action = SHORTCUT_ACTIONS.find(
       (key) => ui.shortcutKeys[key]?.toLowerCase() === shortcut.toLowerCase()
     )
+    if (
+      action !== 'openSearch' &&
+      target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')
+    )
+      return
     if (action) {
       event.preventDefault()
       if (
         event.repeat &&
-        ['like', 'dislike', 'toggleDesktopLyrics', 'enableLightweight'].includes(action)
+        ['like', 'dislike', 'toggleDesktopLyrics', 'enableLightweight', 'openSearch'].includes(
+          action
+        )
       )
         return
       void run(action)

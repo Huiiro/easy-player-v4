@@ -31,17 +31,24 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
 </script>
 
 <template>
-  <section class="xl:col-span-2">
-    <div class="mb-3 flex items-center justify-between">
-      <h2 class="text-lg font-semibold">{{ t('recommendation.title') }}</h2>
-      <button class="text-sm text-text-l hover:text-primary" @click="router.push('/recommend')">
+  <section class="home-section">
+    <div class="home-section-heading">
+      <h2>{{ t('recommendation.title') }}</h2>
+      <button type="button" class="home-section-link" @click="router.push('/recommend')">
         {{ t('home.viewRecommendations') }}
       </button>
     </div>
-    <div class="flex flex-wrap gap-4">
-      <article v-for="card in props.cards" :key="recommendationCardKey(card)" class="w-36 shrink-0">
+    <div class="home-collection-grid home-recommendation-grid">
+      <article
+        v-for="card in props.cards"
+        :key="recommendationCardKey(card)"
+        class="home-collection-card"
+        :class="{ 'is-active': props.activeCard === recommendationCardKey(card) }"
+      >
         <button
-          class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l disabled:cursor-not-allowed disabled:opacity-50"
+          type="button"
+          class="home-collection-cover group relative grid place-items-center overflow-hidden bg-bg-l disabled:cursor-not-allowed"
+          :class="{ 'opacity-50': card.total === 0 }"
           :aria-label="
             props.activeCard === recommendationCardKey(card) && props.isPlaying
               ? t('footer.pause')
@@ -68,12 +75,12 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
           />
           <span
             v-if="card.total > 0"
-            class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
+            class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/25 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
             aria-hidden="true"
           />
           <span
             v-if="card.total > 0"
-            class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
+            class="playlist-cover-action pointer-events-none absolute bottom-3 right-3 grid size-11 translate-y-1 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
           >
             <SvgIcon
               :name="
@@ -86,7 +93,8 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
           </span>
         </button>
         <button
-          class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary disabled:cursor-not-allowed"
+          type="button"
+          class="home-collection-title block w-full truncate text-left text-sm font-medium hover:text-primary focus-visible:text-primary disabled:cursor-not-allowed"
           :class="props.activeCard === recommendationCardKey(card) ? 'text-primary' : ''"
           :aria-label="recommendationCardName(card)"
           :title="recommendationCardName(card)"
@@ -100,9 +108,9 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
         >
           {{ t(`recommendation.${card.group}`) }}
         </button>
-        <p class="text-center text-xs text-text-l">{{ card.generatedFor }}</p>
-        <p class="text-center text-xs text-text-l">
-          {{ t('home.recommendationCount', { count: card.total }) }}
+        <p class="home-collection-description flex items-center gap-2 text-xs text-text-l">
+          <span>{{ t('home.recommendationCount', { count: card.total }) }}</span>
+          <span aria-hidden="true">·</span><span>{{ card.generatedFor }}</span>
         </p>
       </article>
     </div>

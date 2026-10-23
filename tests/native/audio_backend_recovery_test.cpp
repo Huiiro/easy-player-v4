@@ -1,5 +1,8 @@
 #include "audio_engine.h"
+#include "logger.h"
 #include <chrono>
+#include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -12,6 +15,7 @@ struct BackendState {
     std::atomic<int> opens{0}, stops_in_flight{0};
     std::atomic<bool> overlap{false}, slow_stop{false}, stop_entered{false}, fail_flush{false}, fail_open{false};
     std::atomic<int> frames{64};
+    std::atomic<bool> hold_output{false};
 };
 
 class FakeBackend : public AudioBackend {
@@ -29,7 +33,8 @@ public:
         render_ = std::thread([this] {
             std::vector<float> output(256 * format_.channels);
             while (running_) {
-                callback_(output.data(), shared_->frames.load(), format_.channels);
+                if (!shared_->hold_output)
+                    callback_(output.data(), shared_->frames.load(), format_.channels);
                 std::this_thread::sleep_for(1ms);
             }
         });
@@ -204,10 +209,14 @@ static void normal_playback_lifecycle() {
     CHECK(engine.play());
     until([&] { return engine.position_ms() > 1220; });
     const double before_switch = engine.position_ms();
+    // Reopening restores milliseconds as an integer source frame. Floating-point
+    // truncation may move the snapshot back by one frame, never a whole buffer.
+    const double frame_tolerance_ms = 1000.0 / engine.track_info().sample_rate + 1e-6;
     CHECK(engine.select_output_device(BackendType::WASAPI_SHARED, L"another-output"));
-    CHECK(engine.state() == EngineState::Playing && engine.position_ms() >= before_switch);
+    CHECK(engine.state() == EngineState::Playing && engine.position_ms() + frame_tolerance_ms >= before_switch);
+    const double before_resampler = engine.position_ms();
     CHECK(engine.set_resampler_config(true, 44100, 2));
-    CHECK(engine.state() == EngineState::Playing && engine.position_ms() >= before_switch);
+    CHECK(engine.state() == EngineState::Playing && engine.position_ms() + frame_tolerance_ms >= before_resampler);
     const int opens = factory->shared->opens;
     std::atomic<int> transitions{0};
     engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
@@ -224,12 +233,67 @@ static void normal_playback_lifecycle() {
     CHECK(!factory->shared->overlap);
 }
 
+static void resume_after_decoder_eof() {
+    // Decode a buffered tail completely before allowing the device to drain it.
+    // This reproduces pausing/resuming in the last buffered part of a song.
+    std::atomic<int> decoder_stops{0};
+    Logger::instance().set_callback([&](LogLevel, const std::string& message) {
+        if (message.find("Decoder thread stopped") != std::string::npos) ++decoder_stops;
+    });
+    {
+        auto factory = std::make_shared<FakeFactory>();
+        factory->shared->hold_output = true;
+        std::atomic<int> transitions{0}, ended{0};
+        AudioEngine engine(factory);
+        engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
+            if (reason == "transition") ++transitions;
+            else if (reason == "eof") ++ended;
+        });
+        auto config = engine.transition_config();
+        config.pause_fade_enabled = false;
+        CHECK(engine.set_transition_config(config));
+        CHECK(engine.open("recovery-buffered.wav"));
+        CHECK(engine.play());
+        until([&] { return decoder_stops >= 1; });
+        for (int attempt = 0; attempt < 3; ++attempt) {
+            CHECK(engine.pause());
+            CHECK(engine.play());
+            until([&] { return decoder_stops >= attempt + 2; });
+            CHECK(engine.state() == EngineState::Playing);
+            CHECK(engine.position_ms() == 0);
+        }
+        // A paused seek must also be able to restart the finished worker.
+        CHECK(engine.pause()); CHECK(engine.seek(20)); CHECK(engine.play());
+        until([&] { return decoder_stops >= 5; });
+        CHECK(engine.position_ms() == 20);
+        CHECK(engine.pause());
+        CHECK(engine.set_next_track("recovery-short.wav"));
+        CHECK(engine.play());
+        until([&] { return decoder_stops >= 6; });
+        CHECK(factory->shared->opens == 1 && transitions == 0 && ended == 0);
+        factory->shared->hold_output = false;
+        until([&] { return ended == 1; });
+        CHECK(transitions == 1);
+        CHECK(engine.state() == EngineState::Stopped);
+        engine.stop();
+        CHECK(!factory->shared->overlap);
+    }
+    Logger::instance().set_callback({});
+}
+
 int main() {
+    // Report fatal worker-lifecycle regressions without opening a system crash dialog.
+    std::set_terminate([] {
+        std::cerr << "Unexpected std::terminate during playback lifecycle\n";
+        std::_Exit(86);
+    });
     try {
         wave("recovery-short.wav", 256); wave("recovery-long.wav", 48000 * 5);
+        wave("recovery-buffered.wav", 4800);
         eof_device_switch(); reset_and_seek_errors(); render_failure_stops_engine();
         restore_position_after_startup_device_selection();
         retry_failed_output_open(); normal_playback_lifecycle();
+        resume_after_decoder_eof();
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
-    std::cout << "EOF switch, reset recovery, paused recovery and seek failure passed\n";
+    std::cout << "EOF switch, reset recovery, paused recovery, seek failure and buffered EOF resume passed\n";
 }

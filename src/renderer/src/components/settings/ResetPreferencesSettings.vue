@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -29,15 +30,14 @@ async function restore(): Promise<void> {
 </script>
 
 <template>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.restorePreferences') }}</h3>
-      <p>{{ t('settings.restorePreferencesDescription') }}</p>
-    </div>
+  <SettingRow
+    :label="t('settings.restorePreferences')"
+    :description="t('settings.restorePreferencesDescription')"
+  >
     <BaseButton size="sm" variant="danger" :disabled="busy" @click="visible = true">
       {{ t('settings.restorePreferences') }}
     </BaseButton>
-  </div>
+  </SettingRow>
   <BaseConfirmDialog
     v-model="visible"
     :title="t('settings.restorePreferences')"

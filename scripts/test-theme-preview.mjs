@@ -53,7 +53,13 @@ function harness() {
   const context = {
     ...vue,
     ...timerModule,
+    themeBackgroundEnabled: vue.ref(true),
+    resolvedAppearance: vue.ref({ background: { type: 'theme' } }),
     useDarkMode: vue.ref(true),
+    setColorMode: (mode) => {
+      context.useDarkMode.value = mode === 'dark'
+      context.followSystemTheme.value = mode === 'system'
+    },
     useCustomBg: vue.ref(false),
     systemBackground: vue.ref('none'),
     followSystemTheme: vue.ref(false),
@@ -77,7 +83,7 @@ function harness() {
   vm.runInNewContext(
     compile(
       region +
-        '\nglobalThis.state = {customThemes,activeCustomThemeName,effectiveCustomThemeName,effectiveCustomTheme,customThemePreviewActive,customThemePreviewSeconds,selectCustomTheme,confirmCustomThemePreview,cancelCustomThemePreview,importCustomTheme,removeCustomTheme,selectThemeBackground,useDarkMode,useCustomBg,systemBackground,followSystemTheme,useMica};'
+        '\nglobalThis.state = {customThemes,activeCustomThemeName,effectiveCustomThemeName,effectiveCustomTheme,customThemePreviewActive,customThemePreviewSeconds,selectCustomTheme,confirmCustomThemePreview,cancelCustomThemePreview,importCustomTheme,removeCustomTheme,selectThemeBackground,themeBackgroundEnabled,useDarkMode,useCustomBg,systemBackground,followSystemTheme,useMica};'
     ),
     context
   )
@@ -189,7 +195,7 @@ assert.equal(s.activeCustomThemeName.value, '')
 assert.equal(s.customThemePreviewActive.value, false)
 s.selectCustomTheme('New')
 assert.equal(s.selectThemeBackground('light'), true)
-assert.equal(s.activeCustomThemeName.value, '')
+assert.equal(s.activeCustomThemeName.value, 'New', 'color mode leaves the selected theme intact')
 assert.equal(s.useDarkMode.value, false)
 assert.equal(
   s.customThemePreviewActive.value,
@@ -200,17 +206,18 @@ h.advance(10000)
 assert.equal(s.useDarkMode.value, false, 'built-in selection is permanent immediately')
 s.selectThemeBackground('rainy')
 assert.equal(s.systemBackground.value, 'rainy')
-assert.equal(s.useDarkMode.value, true)
+assert.equal(s.useDarkMode.value, false, 'background selection does not change color mode')
+assert.equal(s.themeBackgroundEnabled.value, false)
 s.selectThemeBackground('custom')
 assert.equal(s.useCustomBg.value, true)
 assert.equal(s.systemBackground.value, 'none')
 assert.equal(s.customThemePreviewActive.value, false)
 assert.equal(s.selectThemeBackground('custom'), false, 'current background is a no-op')
 s.followSystemTheme.value = true
-assert.equal(s.selectThemeBackground('light'), false)
+assert.equal(s.selectThemeBackground('light'), true)
 s.followSystemTheme.value = false
 s.useMica.value = true
-assert.equal(s.selectThemeBackground('light'), false)
+assert.equal(s.selectThemeBackground('light'), true)
 s.useMica.value = false
 s.importCustomTheme(themeSource('DeletePending'), staged)
 s.removeCustomTheme('A')

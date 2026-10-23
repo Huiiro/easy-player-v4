@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -59,11 +60,7 @@ onMounted(() => {
         </button>
       </div>
     </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('remote.cacheLimit') }}</h3>
-        <p>{{ t('remote.cacheDescription') }}</p>
-      </div>
+    <SettingRow :label="t('remote.cacheLimit')" :description="t('remote.cacheDescription')">
       <div class="flex items-center gap-2">
         <input
           v-model.number="cacheLimitGb"
@@ -76,7 +73,7 @@ onMounted(() => {
         />
         <span>G</span>
       </div>
-    </div>
+    </SettingRow>
   </div>
 </template>
 

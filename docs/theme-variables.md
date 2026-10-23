@@ -1,5 +1,11 @@
 # 主题变量参考
 
+基础控件新增尺寸与反馈接口见 [UI 组件规范](player/ui-component-refactor.md)：
+`--ep-control-height-xs/sm/md/lg`（默认 24/28/32/40px）、`--ep-control-radius`（6px）、
+`--ep-disabled-opacity`（0.5）、`--ep-floating-radius`（12px）、
+`--ep-z-floating`（50）、`--ep-z-message`（9999）、`--ep-skeleton-bg`、`--ep-switch-thumb`。
+原有按钮、进度、弹窗和主题包接口继续兼容。
+
 适用主题格式 `version: 1`。变量写入主题 JSON 的 `tokens`，值全部使用字符串。语法、覆盖顺序及公开类见 [开发规范](custom-themes.md)，字体与图片见 [资源包规范](theme-packages.md)。
 
 表中为代码内默认值或 `var()` 回退值，不代表所有运行状态的最终 computed style。浅色 / 深色指内置普通模式；内置动态背景、歌曲主题色、用户设置可能另有调整。省略的变量继续跟随应用。组合一个配色主题时，至少一起检查文字、表面、边框、悬停与强调色的对比度。

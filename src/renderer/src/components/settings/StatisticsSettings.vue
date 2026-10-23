@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
@@ -36,11 +37,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.statistics') }}</h3>
-      <p>{{ t('settings.statisticsDescription') }}</p>
-    </div>
+  <SettingRow :label="t('settings.statistics')" :description="t('settings.statisticsDescription')">
     <BaseSwitch
       :model-value="statistics.enabled"
       :disabled="!statistics.ready || statistics.busy"
@@ -48,12 +45,11 @@ onMounted(() => {
       size="md"
       @update:model-value="setEnabled"
     />
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.clearStatistics') }}</h3>
-      <p>{{ t('settings.clearStatisticsDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.clearStatistics')"
+    :description="t('settings.clearStatisticsDescription')"
+  >
     <BaseButton
       variant="danger"
       size="sm"
@@ -62,7 +58,7 @@ onMounted(() => {
     >
       {{ t('settings.clearStatistics') }}
     </BaseButton>
-  </div>
+  </SettingRow>
   <BaseConfirmDialog
     v-model="clearVisible"
     :title="t('settings.clearStatistics')"

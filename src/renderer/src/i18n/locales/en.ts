@@ -1,4 +1,16 @@
 export default {
+  ui: {
+    selectPlaceholder: 'Select an option',
+    empty: 'No options',
+    color: 'Choose color',
+    colorValue: 'Color value',
+    presets: 'Presets',
+    hue: 'Hue',
+    saturation: 'Saturation',
+    brightness: 'Brightness',
+    alpha: 'Opacity',
+    clear: 'Clear'
+  },
   footerLayout: {
     title: 'Custom footer layout',
     description: 'Adjust the bottom bar layout style.',
@@ -96,6 +108,7 @@ export default {
     deleteFailed: 'Unable to delete songs in folder'
   },
   home: {
+    intro: 'Make room for the music you love.',
     layout: {
       clock: 'Clock',
       customize: 'Customize layout',
@@ -119,6 +132,7 @@ export default {
     viewRecommendations: 'View recommendations',
     playRecommendation: 'Play “{name}”',
     recommendationCount: '{count} songs',
+    playlistSongCount: '{count} songs',
     noRecommendationSongs: 'No playable songs in the recommendation section',
     playRecommendationFailed: 'Could not play recommended songs',
     playPlaylist: 'Play playlist “{name}”',
@@ -571,6 +585,7 @@ export default {
     }
   },
   header: {
+    globalSearch: 'Global search',
     back: 'Back',
     importLocalMusic: 'Import folder',
     settings: 'Settings',
@@ -632,14 +647,14 @@ export default {
     languageChinese: 'Simplified Chinese',
     languageEnglish: 'English',
     theme: 'Theme',
-    themeDescription: 'Set System Theme.',
+    themeDescription: 'Manage color mode, accent, global backgrounds and themes.',
     followSystemTheme: 'Follow system theme',
     followSystemThemeDescription:
-      'Automatically follows the system light/dark appearance and disables other theme effects.',
+      'Color mode is independent of backgrounds. System mode follows changes to the system appearance.',
     micaEffect: 'Windows Mica effect',
     windowMaterial: 'Native window material',
     windowMaterialDescription:
-      'Use the native system material and follow the system appearance. Other backgrounds are disabled; turning this off restores the previous appearance.',
+      'Temporarily hides global backgrounds while keeping your colors and background choice. Turn off to show the saved background.',
     windowMaterial_none: 'Off',
     windowMaterial_mica: 'Windows 11 Mica',
     windowMaterial_acrylic: 'Windows 11 Acrylic',
@@ -649,7 +664,7 @@ export default {
       'Uses native Windows 11 Mica, follows the system automatically, and disables other theme effects.',
     restoreDefault: 'Restore defaults',
     confirmResetTheme:
-      'Restore the default theme? Theme colors, backgrounds and player appearance will be reset, and the active custom theme will be disabled. Imported themes will be kept.',
+      'Restore color mode, accent and global background defaults, and turn off native material and the active theme? Imported themes and player appearance will be kept.',
     appearanceMode: 'Appearance Mode',
     appearanceDescription: 'Custom backgrounds default to dark scheme to ensure clear readability.',
     appearanceModeLight: 'Light',
@@ -657,9 +672,31 @@ export default {
     appearanceModeCustom: 'Custom',
     systemBackground: 'Built-in Background',
     systemBackgroundDescription: 'Choose a built-in backdrop for the whole player.',
-    themeBackground: 'Appearance & Theme Background',
+    themeBackground: 'Global background',
     themeBackgroundDescription:
-      'Light and dark use no background. Built-in backgrounds automatically apply their matching color mode.',
+      'Choose a scene or local media without changing your color mode or theme palette.',
+    accentSource: 'Accent source',
+    accentSourceDescription:
+      'Auto uses scene colors when active, otherwise your custom color. Theme color declarations take priority.',
+    accentSource_auto: 'Auto',
+    accentSource_user: 'Custom color',
+    accentSource_scene: 'Scene palette',
+    accentSource_song: 'Song artwork',
+    accentSource_theme: 'Active theme',
+    useThemeBackground: 'Use theme background',
+    useThemeBackgroundDescription:
+      'Turn off to keep the theme palette and controls while using your selected global background.',
+    effectiveBackground: 'Current background: {value}',
+    effectiveAccent: 'Current accent: {value}',
+    appearanceMaterialNotice:
+      'Native material is active. Your background choice is saved and will appear when material is turned off.',
+    appearanceReason_material:
+      'Native material takes priority; the global background is temporarily hidden.',
+    appearanceReason_themeBackground:
+      'The theme provides a background. Turn off Use theme background to show your selection.',
+    appearanceReason_themeAccent: 'The active theme provides the accent color.',
+    appearanceReason_songUnavailable: 'No artwork color is available. Using your custom color.',
+    appearanceReason_sceneUnavailable: 'No scene is selected. Using your custom color.',
     systemBackgroundNone: 'None',
     systemBackgroundAurora: 'Aurora',
     systemBackgroundOcean: 'Ocean',
@@ -671,8 +708,9 @@ export default {
     systemBackgroundStarTrails: 'Star Trails',
     systemBackgroundDna: 'DNA Helix',
     systemBackgroundStarfield: 'Starfield',
-    themeColor: 'Theme Color',
-    themeColorDescription: 'Used for progress, selection states, and primary actions.',
+    themeColor: 'Custom accent color',
+    themeColorDescription:
+      'Used by the custom source and as the fallback for progress, selections and primary actions.',
     customBackground: 'Custom Background',
     customBackgroundDescription: 'Use an image or MP4 video as the background.',
     backgroundMedia: 'Background media',
@@ -758,6 +796,8 @@ export default {
     shortcutSpecialKeys: 'Special keys: SPACE, META (Windows / Command), ESC, ↑ ↓ ← →.',
     shortcutPrevious: 'Previous track',
     shortcutToggle: 'Play / pause',
+    shortcutSearch: 'Open global search',
+    searchRequiresFullView: 'Exit lightweight mode to use global search',
     shortcutNext: 'Next track',
     shortcutVolumeUp: 'Volume +',
     shortcutVolumeDown: 'Volume −',
@@ -770,6 +810,11 @@ export default {
     shortcutActionFailed: 'Shortcut action failed. Please try again.',
     desktopLyricsLightweight: 'Exit lightweight mode to enable desktop lyrics.',
     autoPlayOnRestore: 'Autoplay on startup',
+    songPlayTrigger: 'Song activation',
+    songPlayTriggerDescription:
+      'Choose a single or double click to play songs in song lists, home rankings, the queue and search results.',
+    songPlaySingleClick: 'Single click to play',
+    songPlayDoubleClick: 'Double click to play',
     smartShuffle: 'Smart shuffle',
     smartShuffleDescription:
       'When enabled, shuffle playback adjusts selection weights based on listening behavior.',
@@ -1223,8 +1268,12 @@ export default {
     pauseFadeDuration: 'Fade duration',
     pauseFadeDesc:
       'Fade out on pause and back to the original volume on resume. DoP passthrough is unaffected.',
-    crossfadeAuto: 'Adaptive timing',
-    crossfadeAutoDesc: 'Use the outro level and skip long trailing silence',
+    crossfadeAuto: 'Auto Mix',
+    crossfadeVocalCue: 'Enter near vocals',
+    crossfadeVocalCueDesc:
+      'When local stems are ready, skip part of the intro and keep 1–3 seconds before vocals; retain the original entry when uncertain',
+    crossfadeAutoDesc:
+      'Overlap tracks with a gradual musical handoff, and align beats when analysis is reliable',
     crossfadeMax: 'ms maximum',
     eq: 'Parametric EQ',
     eqActive: 'active',

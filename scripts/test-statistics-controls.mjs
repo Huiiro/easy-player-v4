@@ -22,7 +22,13 @@ function load(file, mocks = {}, globals = {}, extra = '') {
     code,
     {
       exports,
-      require: (name) => mocks[name] ?? require(name),
+      require: (name) => {
+        if (name === '@/services/songListQuery')
+          return load('src/renderer/src/services/songListQuery.ts', mocks, globals)
+        if (name === './useSongSelection')
+          return load('src/renderer/src/components/songlist/useSongSelection.ts', mocks, globals)
+        return mocks[name] ?? require(name)
+      },
       console,
       setTimeout,
       clearTimeout,

@@ -23,12 +23,20 @@ function playlistCoverUrl(playlist: Playlist): string | null {
 </script>
 
 <template>
-  <section class="xl:col-span-2">
-    <h2 class="mb-3 text-lg font-semibold">{{ t('home.playlists') }}</h2>
-    <div v-if="props.playlists.length" class="flex flex-wrap gap-4">
-      <article v-for="playlist in props.playlists" :key="playlist.id" class="w-36 shrink-0">
+  <section class="home-section">
+    <div class="home-section-heading">
+      <h2>{{ t('home.playlists') }}</h2>
+    </div>
+    <div v-if="props.playlists.length" class="home-collection-grid home-playlist-grid">
+      <article
+        v-for="playlist in props.playlists"
+        :key="playlist.id"
+        class="home-collection-card"
+        :class="{ 'is-active': props.activePlaylistId === playlist.id }"
+      >
         <button
-          class="group relative grid size-36 place-items-center overflow-hidden rounded-xl bg-bg-l"
+          type="button"
+          class="home-collection-cover group relative grid place-items-center overflow-hidden bg-bg-l"
           :aria-label="
             props.activePlaylistId === playlist.id && props.isPlaying
               ? t('footer.pause')
@@ -54,11 +62,16 @@ function playlistCoverUrl(playlist: Playlist): string | null {
             class-name="size-12 text-text-l"
           />
           <span
-            class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/45 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
+            class="playlist-cover-overlay pointer-events-none absolute inset-0 bg-black/25 opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
             aria-hidden="true"
           />
           <span
-            class="playlist-cover-action pointer-events-none absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 scale-90 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:scale-100 group-hover:opacity-100 group-focus-visible:scale-100 group-focus-visible:opacity-100"
+            class="playlist-song-count pointer-events-none absolute bottom-3 left-3 rounded-md bg-black/45 px-2 py-1 text-xs text-white opacity-0 transition-opacity duration-[var(--motion-duration-standard)] group-hover:opacity-100 group-focus-visible:opacity-100"
+          >
+            {{ t('home.playlistSongCount', { count: playlist.songCount }) }}
+          </span>
+          <span
+            class="playlist-cover-action pointer-events-none absolute bottom-3 right-3 grid size-11 translate-y-1 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
           >
             <SvgIcon
               :name="
@@ -71,7 +84,8 @@ function playlistCoverUrl(playlist: Playlist): string | null {
           </span>
         </button>
         <button
-          class="mt-2 block w-full truncate text-center text-sm font-medium hover:text-primary focus-visible:text-primary"
+          type="button"
+          class="home-collection-title block w-full truncate text-left text-sm font-medium hover:text-primary focus-visible:text-primary"
           :class="props.activePlaylistId === playlist.id ? 'text-primary' : ''"
           :aria-label="
             props.activePlaylistId === playlist.id
@@ -87,7 +101,7 @@ function playlistCoverUrl(playlist: Playlist): string | null {
         </button>
         <p
           v-if="playlist.description"
-          class="truncate text-center text-xs text-text-l"
+          class="home-collection-description truncate text-xs text-text-l"
           :title="playlist.description"
         >
           {{ playlist.description }}

@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { Popover, PopoverButton, PopoverPanel } from '@headlessui/vue'
 import { computed, ref, watch } from 'vue'
+import FloatingPanel from './FloatingPanel.vue'
+import { fromHex, hsvaToRgba, rgbaToHex, type Hsva } from './color'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'BaseColorPicker' })
+const { t } = useI18n()
 
 const props = withDefaults(
   defineProps<{
@@ -44,226 +48,30 @@ const emit = defineEmits<{
 }>()
 
 // ==================== 颜色空间 ====================
-interface Rgba {
-  r: number
-  g: number
-  b: number
-  a: number
-}
-interface Hsva {
-  h: number
-  s: number
-  v: number
-  a: number
-}
-
-function linearToSrgb(value: number): number {
-  const clamped = Math.max(0, Math.min(1, value))
-  return clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * Math.pow(clamped, 1 / 2.4) - 0.055
-}
-
-function parseOklch(lightness: number, chroma: number, hue: number, alpha: number): Rgba {
-  const hueRadians = (hue * Math.PI) / 180
-  const a = chroma * Math.cos(hueRadians)
-  const b = chroma * Math.sin(hueRadians)
-  const l = Math.pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3)
-  const m = Math.pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3)
-  const s = Math.pow(lightness - 0.0894841775 * a - 1.291485548 * b, 3)
-
-  return {
-    r: Math.round(linearToSrgb(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s) * 255),
-    g: Math.round(linearToSrgb(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s) * 255),
-    b: Math.round(linearToSrgb(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s) * 255),
-    a: Math.max(0, Math.min(1, alpha))
-  }
-}
-
-function parseAnyColor(val: string): Rgba {
-  const s = val.trim()
-  // rgba / rgb
-  const rgbaMatch = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+))?\s*\)/)
-  if (rgbaMatch)
-    return {
-      r: +rgbaMatch[1],
-      g: +rgbaMatch[2],
-      b: +rgbaMatch[3],
-      a: rgbaMatch[4] !== undefined ? +rgbaMatch[4] : 1
-    }
-  // hsla / hsl
-  const hslMatch = s.match(/hsla?\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*(?:,\s*([\d.]+))?\s*\)/)
-  if (hslMatch) {
-    const h = +hslMatch[1] / 360,
-      ss = +hslMatch[2] / 100,
-      l = +hslMatch[3] / 100
-    const a = hslMatch[4] !== undefined ? +hslMatch[4] : 1
-    const hue2rgb = (p: number, q: number, t: number): number => {
-      if (t < 0) t += 1
-      if (t > 1) t -= 1
-      if (t < 1 / 6) return p + (q - p) * 6 * t
-      if (t < 1 / 2) return q
-      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
-      return p
-    }
-    if (ss === 0) {
-      const v = Math.round(l * 255)
-      return { r: v, g: v, b: v, a }
-    }
-    const q = l < 0.5 ? l * (1 + ss) : l + ss - l * ss
-    const p = 2 * l - q
-    return {
-      r: Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
-      g: Math.round(hue2rgb(p, q, h) * 255),
-      b: Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
-      a
-    }
-  }
-  // hsv (not standard CSS, but used in presets)
-  const hsvMatch = s.match(/hsv\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)/)
-  if (hsvMatch) {
-    const h = +hsvMatch[1] / 360,
-      ss = +hsvMatch[2] / 100,
-      v = +hsvMatch[3] / 100
-    const c = v * ss,
-      x = c * (1 - Math.abs(((h * 6) % 2) - 1)),
-      m = v - c
-    let r = 0,
-      g = 0,
-      b = 0
-    if (h * 6 < 1) {
-      r = c
-      g = x
-    } else if (h * 6 < 2) {
-      r = x
-      g = c
-    } else if (h * 6 < 3) {
-      g = c
-      b = x
-    } else if (h * 6 < 4) {
-      g = x
-      b = c
-    } else if (h * 6 < 5) {
-      r = x
-      b = c
-    } else {
-      r = c
-      b = x
-    }
-    return {
-      r: Math.round((r + m) * 255),
-      g: Math.round((g + m) * 255),
-      b: Math.round((b + m) * 255),
-      a: 1
-    }
-  }
-  // oklch(L C H / A)
-  const oklchMatch = s.match(
-    /^oklch\(\s*([\d.]+%?)\s+([\d.]+%?)\s+([+-]?[\d.]+)(?:deg)?(?:\s*\/\s*([\d.]+%?))?\s*\)$/i
-  )
-  if (oklchMatch) {
-    const parsePercentage = (value: string, scale = 1): number =>
-      value.endsWith('%') ? (parseFloat(value) / 100) * scale : parseFloat(value)
-    return parseOklch(
-      parsePercentage(oklchMatch[1]),
-      parsePercentage(oklchMatch[2], 0.4),
-      parseFloat(oklchMatch[3]),
-      oklchMatch[4] ? parsePercentage(oklchMatch[4]) : 1
-    )
-  }
-  // hex
-  const hx = s.replace('#', '')
-  if (hx.length === 6 || hx.length === 8)
-    return {
-      r: parseInt(hx.slice(0, 2), 16),
-      g: parseInt(hx.slice(2, 4), 16),
-      b: parseInt(hx.slice(4, 6), 16),
-      a: hx.length === 8 ? parseInt(hx.slice(6, 8), 16) / 255 : 1
-    }
-  if (hx.length === 3)
-    return {
-      r: parseInt(hx[0] + hx[0], 16),
-      g: parseInt(hx[1] + hx[1], 16),
-      b: parseInt(hx[2] + hx[2], 16),
-      a: 1
-    }
-  return { r: 0, g: 0, b: 0, a: 1 }
-}
-
-function hsvaToRgba(hsva: Hsva): Rgba {
-  const h = ((hsva.h % 360) + 360) % 360
-  const c = hsva.v * hsva.s
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
-  const m = hsva.v - c
-  let r = 0,
-    g = 0,
-    b = 0
-  if (h < 60) {
-    r = c
-    g = x
-  } else if (h < 120) {
-    r = x
-    g = c
-  } else if (h < 180) {
-    g = c
-    b = x
-  } else if (h < 240) {
-    g = x
-    b = c
-  } else if (h < 300) {
-    r = x
-    b = c
-  } else {
-    r = c
-    b = x
-  }
-  return {
-    r: Math.round((r + m) * 255),
-    g: Math.round((g + m) * 255),
-    b: Math.round((b + m) * 255),
-    a: hsva.a
-  }
-}
-
-function rgbaToHex(rgba: Rgba): string {
-  const hex = [rgba.r, rgba.g, rgba.b]
-    .map((v) =>
-      Math.round(Math.max(0, Math.min(255, v)))
-        .toString(16)
-        .padStart(2, '0')
-    )
-    .join('')
-  if (props.showAlpha && rgba.a < 1)
-    return `#${hex}${Math.round(rgba.a * 255)
-      .toString(16)
-      .padStart(2, '0')}`
-  return `#${hex}`
-}
-
-function fromHex(hex: string): Hsva {
-  const { r, g, b, a } = parseAnyColor(hex)
-  const max = Math.max(r, g, b) / 255,
-    min = Math.min(r, g, b) / 255,
-    d = max - min
-  let h = 0
-  if (d > 0) {
-    if (max === r / 255) h = 60 * (((g / 255 - b / 255) / d + 6) % 6)
-    else if (max === g / 255) h = 60 * ((b / 255 - r / 255) / d + 2)
-    else h = 60 * ((r / 255 - g / 255) / d + 4)
-  }
-  return { h, s: max === 0 ? 0 : d / max, v: max, a }
-}
-
 // ==================== 核心状态 ====================
-const hsva = ref<Hsva>(fromHex(props.modelValue))
+function readColor(value: string): Hsva {
+  try {
+    return fromHex(value)
+  } catch {
+    return { h: 0, s: 0, v: 0, a: 1 }
+  }
+}
+const hsva = ref<Hsva>(readColor(props.modelValue))
 
 watch(
   () => props.modelValue,
   (val) => {
-    hsva.value = fromHex(val)
+    try {
+      hsva.value = fromHex(val)
+    } catch {
+      /* Keep the last valid external color. */
+    }
   }
 )
 
 function emitColor(): void {
-  const hex = rgbaToHex(hsvaToRgba(hsva.value))
+  if (props.disabled) return
+  const hex = rgbaToHex(hsvaToRgba(hsva.value), props.showAlpha)
   emit('update:modelValue', hex)
   emit('change', hex)
 }
@@ -278,7 +86,7 @@ const svTop = computed(() => `${(1 - hsva.value.v) * 100}%`)
 const hueLeft = computed(() => `${(hsva.value.h / 360) * 100}%`)
 const alphaLeft = computed(() => `${hsva.value.a * 100}%`)
 const alphaPct = computed(() => Math.round(hsva.value.a * 100))
-const hexDisplay = computed(() => rgbaToHex(hsvaToRgba(hsva.value)))
+const hexDisplay = computed(() => rgbaToHex(hsvaToRgba(hsva.value), props.showAlpha))
 const colorStr = computed(() => {
   const a = hsva.value.a
   const { r, g, b } = hsvaToRgba({ ...hsva.value, a: 1 })
@@ -325,14 +133,14 @@ const hueEl = ref<HTMLElement | null>(null)
 const alphaEl = ref<HTMLElement | null>(null)
 
 function updateSv(e: PointerEvent): void {
-  if (!svEl.value) return
+  if (props.disabled || !svEl.value) return
   const r = svEl.value.getBoundingClientRect()
   hsva.value.s = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
   hsva.value.v = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height))
   emitColor()
 }
 function updateHue(e: PointerEvent): void {
-  if (!hueEl.value) return
+  if (props.disabled || !hueEl.value) return
   hsva.value.h = Math.max(
     0,
     Math.min(
@@ -345,7 +153,7 @@ function updateHue(e: PointerEvent): void {
   emitColor()
 }
 function updateAlpha(e: PointerEvent): void {
-  if (!alphaEl.value) return
+  if (props.disabled || !alphaEl.value) return
   hsva.value.a = Math.max(
     0,
     Math.min(
@@ -392,48 +200,27 @@ function onAlphaUp(): void {
 }
 
 function selectPreset(color: string): void {
-  hsva.value = fromHex(color)
-  emitColor()
+  if (props.disabled) return
+  try {
+    hsva.value = fromHex(color)
+    emitColor()
+  } catch {
+    /* Ignore an invalid caller-supplied preset. */
+  }
 }
 
 // ==================== 方向判断 ====================
 const anchorRef = ref<HTMLElement | null>(null)
-const panelAbove = ref(false)
-const panelLeft = ref(false)
-const panelPosition = ref<Record<string, string>>({})
-const panelWidth = 256
-const panelHeight = 370
-const panelGap = 8
-
-function onOpenChange(open: boolean): void {
-  if (!open || !anchorRef.value) return
-  const r = anchorRef.value.getBoundingClientRect()
-  const rightSpace = window.innerWidth - r.left
-  const leftSpace = r.right
-  // 下方放不下且上方空间更充足时向上展开。
-  panelAbove.value = r.bottom + panelHeight + panelGap > window.innerHeight && r.top > panelHeight
-  // 右侧空间不足时，优先向左展开。
-  panelLeft.value = rightSpace < panelWidth + panelGap && leftSpace > rightSpace
-  if (props.teleport) {
-    const desiredLeft = panelLeft.value ? r.right - panelWidth : r.left
-    panelPosition.value = {
-      left: `${Math.max(
-        panelGap,
-        Math.min(desiredLeft, Math.max(panelGap, window.innerWidth - panelWidth - panelGap))
-      )}px`,
-      top: `${panelAbove.value ? Math.max(panelGap, r.top - panelHeight) : r.bottom + panelGap}px`
-    }
-  }
-}
 </script>
 
 <template>
   <div ref="anchorRef" class="relative inline-block">
-    <Popover v-slot="{ open }" class="relative" :disabled="disabled">
-      <span style="display: none">{{ onOpenChange(open) }}</span>
-
+    <Popover v-slot="{ open }" class="relative">
       <PopoverButton
-        as="div"
+        as="button"
+        type="button"
+        :disabled="disabled"
+        :aria-label="t('ui.color')"
         :class="[
           'inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer transition-colors hover:border-primary select-none',
           disabled ? 'opacity-50 cursor-not-allowed' : '',
@@ -449,7 +236,7 @@ function onOpenChange(open: boolean): void {
         </span>
       </PopoverButton>
 
-      <Teleport to="body" :disabled="!teleport">
+      <FloatingPanel :open="open" :anchor="anchorRef" :teleport="teleport">
         <transition
           enter-active-class="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
           enter-from-class="opacity-0 scale-95"
@@ -459,17 +246,8 @@ function onOpenChange(open: boolean): void {
           leave-to-class="opacity-0 scale-95"
         >
           <PopoverPanel
-            class="z-50 rounded-xl border border-border bg-bg p-3 shadow-xl"
-            :class="
-              teleport
-                ? 'fixed'
-                : [
-                    'absolute',
-                    panelAbove ? 'bottom-full mb-2' : 'top-full mt-2',
-                    panelLeft ? 'right-0' : 'left-0'
-                  ]
-            "
-            :style="teleport ? panelPosition : undefined"
+            class="ep-color-picker rounded-xl border border-border bg-bg p-3 shadow-xl"
+            style="max-height: var(--ep-floating-available-height, 80vh); overflow-y: auto"
             @click.stop
           >
             <div class="flex flex-col gap-3 select-none" style="width: 232px">
@@ -550,6 +328,47 @@ function onOpenChange(open: boolean): void {
                 >
               </div>
 
+              <div class="sr-only focus-within:not-sr-only">
+                <label
+                  >{{ t('ui.hue')
+                  }}<input
+                    v-model.number="hsva.h"
+                    type="range"
+                    min="0"
+                    max="360"
+                    @input="emitColor"
+                /></label>
+                <label
+                  >{{ t('ui.saturation')
+                  }}<input
+                    v-model.number="hsva.s"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    @input="emitColor"
+                /></label>
+                <label
+                  >{{ t('ui.brightness')
+                  }}<input
+                    v-model.number="hsva.v"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    @input="emitColor"
+                /></label>
+                <label v-if="showAlpha"
+                  >{{ t('ui.alpha')
+                  }}<input
+                    v-model.number="hsva.a"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    @input="emitColor"
+                /></label>
+              </div>
               <!-- 预览 + Hex -->
               <div class="flex items-center gap-2">
                 <div
@@ -572,7 +391,8 @@ function onOpenChange(open: boolean): void {
                 </div>
                 <input
                   v-model="hexInput"
-                  class="input-base h-7 flex-1 text-xs font-mono"
+                  class="ep-input input-base h-7 min-w-0 flex-1 text-xs font-mono"
+                  :aria-label="t('ui.colorValue')"
                   @focus="onHexFocus"
                   @blur="onHexBlur"
                   @keydown.enter="($event.target as HTMLInputElement).blur()"
@@ -581,11 +401,13 @@ function onOpenChange(open: boolean): void {
 
               <!-- 预设 -->
               <div v-if="presets.length">
-                <p class="text-xs text-text-l mb-1.5">预设</p>
+                <p class="text-xs text-text-l mb-1.5">{{ t('ui.presets') }}</p>
                 <div class="grid grid-cols-8 gap-1">
                   <button
                     v-for="color in presets"
                     :key="color"
+                    type="button"
+                    :aria-label="color"
                     class="size-6 rounded-md border border-border/50 transition-transform hover:scale-115 active:scale-95"
                     :style="{ backgroundColor: color }"
                     :title="color"
@@ -596,7 +418,7 @@ function onOpenChange(open: boolean): void {
             </div>
           </PopoverPanel>
         </transition>
-      </Teleport>
+      </FloatingPanel>
     </Popover>
   </div>
 </template>

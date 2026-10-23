@@ -328,7 +328,7 @@ try {
     'search-test-i18n': 'export const t=(key)=>key',
     'search-test-logger': 'export const Logger={debug(){},info(){},warn(){},error(){}}',
     'search-test-recommendations':
-      'export const getDailyRecommendationGroups=()=>[]; export const getRecentDiscoveryGroups=()=>[]; export const invalidateDailyRecommendations=()=>{}',
+      'export const getDailyRecommendationGroups=()=>[]; export const getRecentDiscoveryGroups=()=>[]; export const invalidateDailyRecommendations=()=>{}; export const getRecommendationScores=()=>[]; export const selectRecommendationGroups=()=>({recommended:[],discovery:[],lessRecommended:[]})',
     'search-test-path': 'export const getDataPath=()=>"."'
   }
   const alias = {}
@@ -383,6 +383,18 @@ try {
   db.exec(`INSERT INTO song_list(id,name) VALUES(1,'Playlist'); INSERT INTO song_list_item(song_list_id,song_id) VALUES(1,1);
     INSERT INTO tag(id,name) VALUES(1,'Tag'); INSERT INTO song_tag(song_id,tag_id) VALUES(1,1);
     INSERT INTO history(song_id,play_time) VALUES(1,'2026-10-16 00:00:00')`)
+  const emptyPlaylist = repo.createPlaylist({ name: 'Empty count fixture' })
+  assert.equal(repo.listPlaylists().find((item) => item.id === emptyPlaylist.id).songCount, 0)
+  assert.equal(repo.listPlaylists().find((item) => item.id === 1).songCount, 1)
+  repo.addSongsToPlaylist(1, [1, 10, 10])
+  assert.equal(repo.listPlaylists().find((item) => item.id === 1).songCount, 2)
+  repo.removeSongsFromPlaylist(1, [10])
+  assert.equal(repo.listPlaylists().find((item) => item.id === 1).songCount, 1)
+  repo.deletePlaylists([emptyPlaylist.id])
+  assert.equal(repo.getLikedPlaylistCover().songCount, repo.querySongs({ preference: 1 }).total)
+  db.prepare('UPDATE song SET preference = 0 WHERE id = 10').run()
+  assert.equal(repo.getLikedPlaylistCover().songCount, repo.querySongs({ preference: 1 }).total)
+  db.prepare('UPDATE song SET preference = 1 WHERE id = 10').run()
   assert.equal(repo.querySongs({ search: 'dx', source: 'local' }).total, 1)
   assert.deepEqual(
     repo.querySongs({ search: 'dx', preference: 1 }).data.map((song) => song.id),

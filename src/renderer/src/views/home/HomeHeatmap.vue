@@ -26,7 +26,10 @@ const maxHeat = computed(() => Math.max(1, ...heatmapDays.value.map((item) => it
 const monthMarkers = computed(() =>
   heatmapDays.value
     .map((day, index) => ({ day, index, week: Math.floor(index / 7) }))
-    .filter(({ day, index }) => index === 0 || day.date.endsWith('-01'))
+    .filter(
+      ({ day, index }) =>
+        day.date.endsWith('-01') || (index === 0 && Number(day.date.slice(-2)) <= 14)
+    )
     .map(({ day, week }) => ({
       date: day.date,
       week,
@@ -65,27 +68,27 @@ function heatClass(seconds: number): string {
 </script>
 
 <template>
-  <section class="home-surface rounded-xl p-5 xl:col-span-2">
-    <div class="mb-4 flex items-center justify-between">
-      <h2 class="text-lg font-semibold">{{ t('home.heatmap') }}</h2>
+  <section class="home-section home-surface home-heatmap">
+    <div class="home-section-heading">
+      <h2>{{ t('home.heatmap') }}</h2>
       <span class="text-xs text-text-l">{{ t('home.lastYear') }}</span>
     </div>
-    <div class="overflow-x-auto pb-1">
-      <div class="w-max min-w-[53rem]">
+    <div class="custom-scrollbar overflow-x-auto pb-1">
+      <div class="home-heatmap-canvas">
         <div class="relative mb-1 h-4 text-[10px] text-text-l">
           <span
             v-for="marker in monthMarkers"
             :key="marker.date"
             class="absolute whitespace-nowrap"
-            :style="{ left: `${marker.week * 16}px` }"
+            :style="{ left: `${(marker.week / Math.ceil(heatmapDays.length / 7)) * 100}%` }"
             >{{ marker.label }}</span
           >
         </div>
-        <div class="grid grid-flow-col grid-rows-7 gap-1 [grid-auto-columns:0.75rem]">
+        <div class="home-heatmap-grid">
           <span
             v-for="day in heatmapDays"
             :key="day.date"
-            class="size-3 rounded-sm"
+            class="home-heatmap-cell rounded-sm"
             :class="heatClass(day.seconds)"
             :title="t('home.heatmapValue', { date: day.date, value: formatDuration(day.seconds) })"
           />

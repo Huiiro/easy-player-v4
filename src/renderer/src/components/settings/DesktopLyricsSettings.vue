@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SettingCard from './SettingCard.vue'
+import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -24,14 +26,13 @@ const desktopLyricsPreviewFontSize = computed(() =>
 </script>
 
 <template>
-  <div class="settings-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.desktopLyricsEnabled') }}</h3>
-        <p>{{ t('settings.desktopLyricsEnabledDescription') }}</p>
-      </div>
+  <SettingCard>
+    <SettingRow
+      :label="t('settings.desktopLyricsEnabled')"
+      :description="t('settings.desktopLyricsEnabledDescription')"
+    >
       <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
-    </div>
+    </SettingRow>
     <div class="desktop-lyrics-layout">
       <div class="desktop-lyrics-controls">
         <div class="desktop-lyrics-font-row">
@@ -131,7 +132,7 @@ const desktopLyricsPreviewFontSize = computed(() =>
         </div>
       </div>
     </div>
-  </div>
+  </SettingCard>
 </template>
 
 <style scoped>

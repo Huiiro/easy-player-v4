@@ -53,7 +53,7 @@ app.whenReady().then(async () => {
           })
         : new Response(null, { status: 404 })
     })
-    const assets = path.resolve('out/theme-validation/renderer/assets')
+    const assets = path.resolve('out/renderer/assets')
     const css = readdirSync(assets)
       .filter((file) => file.endsWith('.css'))
       .map((file) => readFileSync(path.join(assets, file), 'utf8'))
@@ -127,7 +127,7 @@ app.whenReady().then(async () => {
       values.max = 0; await Vue.nextTick();
       check(range.style.getPropertyValue('--ep-range-progress') === '0','zero duration');
       rangeApp.unmount();
-      const ui = Vue.reactive({customThemeOverridesBackground:false,useCustomBg:false,systemBackground:'rainy',reduceMotion:true,showPlayer:false,customBg:{kind:'image',url:''}});
+      const ui = Vue.reactive({resolvedAppearance:{background:{type:'preset',id:'rainy'}},customThemeOverridesBackground:false,useCustomBg:false,systemBackground:'rainy',reduceMotion:true,showPlayer:false,customBg:{kind:'image',url:''}});
       const backgroundComponent = loadComponent(${JSON.stringify(backgroundComponent)}, {
         'vue-i18n': {useI18n: () => ({t: (key) => key})},
         './systemBackgroundRegistry': {getSystemBackgroundTheme: () => ({id:'rainy',component:{render: () => Vue.h('div', {id:'legacy-background'})}})},
@@ -139,14 +139,14 @@ app.whenReady().then(async () => {
       const bgHost = document.createElement('div'); document.body.append(bgHost);
       const bgApp = Vue.createApp(backgroundComponent); bgApp.mount(bgHost);
       check(!!bgHost.querySelector('#legacy-background'),'original system background');
-      ui.customThemeOverridesBackground = true; await Vue.nextTick();
+      ui.customThemeOverridesBackground = true; ui.resolvedAppearance.background={type:'theme'}; await Vue.nextTick();
       // Transition may retain an outgoing layer briefly; inspect the incoming theme layer.
       const layer = bgHost.querySelector('.ep-app-background');
       check(!!layer,'theme replaces background');
       const backgroundTheme = parseCustomTheme(JSON.stringify({version:1,name:'Background',tokens:{'--ep-app-bg':'linear-gradient(#123456, #654321)'}}));
       applyCustomTheme(backgroundTheme);
       check(getComputedStyle(layer).backgroundImage.includes('linear-gradient'),'theme background material');
-      ui.customThemeOverridesBackground = false; await Vue.nextTick();
+      ui.customThemeOverridesBackground = false; ui.resolvedAppearance.background={type:'preset',id:'rainy'}; await Vue.nextTick();
       check(!!bgHost.querySelector('#legacy-background'),'original background restored');
       bgApp.unmount(); applyCustomTheme(null);
       const resourceTheme = parseCustomTheme(JSON.stringify({version:1,name:'Resources',package:{id:'12345678-1234-1234-1234-123456789abc',manifest:{

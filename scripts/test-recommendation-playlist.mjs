@@ -28,13 +28,14 @@ let nextTimer = 0
 const statistics = Vue.reactive({ enabled: true, generation: 'test' })
 const playback = []
 const module = { exports: {} }
+let serviceWindow
 vm.runInNewContext(
   source,
   {
     exports: module.exports,
     module,
     console,
-    window: {
+    window: (serviceWindow = {
       addEventListener() {},
       removeEventListener() {},
       api: {
@@ -48,7 +49,7 @@ vm.runInNewContext(
           }
         }
       }
-    },
+    }),
     setTimeout(callback) {
       timers.set(++nextTimer, callback)
       return nextTimer
@@ -57,6 +58,34 @@ vm.runInNewContext(
       timers.delete(id)
     },
     require(name) {
+      if (name.endsWith('searchPlayback')) {
+        const playback = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync('src/renderer/src/services/searchPlayback.ts', 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          { exports: playback.exports, module: playback }
+        )
+        return playback.exports
+      }
+      if (name.endsWith('songListQuery') || name.endsWith('useSongSelection')) {
+        const file = name.endsWith('songListQuery')
+          ? 'src/renderer/src/services/songListQuery.ts'
+          : 'src/renderer/src/components/songlist/useSongSelection.ts'
+        const helper = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync(file, 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          {
+            exports: helper.exports,
+            module: helper,
+            window: serviceWindow,
+            require: (dependency) => (dependency === 'vue' ? Vue : require(dependency))
+          }
+        )
+        return helper.exports
+      }
       if (name.endsWith('songTextSort')) return sortModule.exports
       if (name === 'vue')
         return {

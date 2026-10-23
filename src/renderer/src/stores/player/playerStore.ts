@@ -91,6 +91,7 @@ export const usePlayerStore = defineStore('player', () => {
     crossfadeEnabled: false,
     crossfadeMs: 5000,
     crossfadeAuto: false,
+    crossfadeVocalCue: true,
     pauseFadeEnabled: true,
     pauseFadeMs: 180
   })
@@ -2043,14 +2044,11 @@ export const usePlayerStore = defineStore('player', () => {
       artist: metadata?.artist || song?.artist || '',
       isPlaying: isPlaying.value,
       theme: {
-        dark: ui.useDarkMode,
-        background: ui.useCustomBg ? 'custom' : ui.systemBackground,
-        accent: ui.activeThemeColor,
-        fill:
-          ui.systemBackground === 'solid'
-            ? (ui.songThemeColor ?? ui.activeThemeColor)
-            : ui.activeThemeColor,
-        border: ui.useCustomBg ? ui.customBg.chromeBorder : null
+        dark: ui.resolvedAppearance.dark,
+        background: ui.resolvedAppearance.systemTheme,
+        accent: ui.resolvedAppearance.accentColor,
+        fill: ui.resolvedAppearance.primaryFill ?? ui.resolvedAppearance.accentColor,
+        border: ui.resolvedAppearance.chrome.border
       }
     })
     window.api.system.updateTray({
@@ -2077,18 +2075,7 @@ export const usePlayerStore = defineStore('player', () => {
   watch([queueTransitionEntries, currentQueueIndex, playMode], () => {
     if (isPlaying.value) void syncNextTrack()
   })
-  watch(
-    [
-      () => ui.useDarkMode,
-      () => ui.useCustomBg,
-      () => ui.systemBackground,
-      () => ui.customThemeColor,
-      () => ui.activeThemeColor,
-      () => ui.songThemeColor,
-      () => ui.customBg.chromeBorder
-    ],
-    publishMiniPlayerState
-  )
+  watch(() => ui.resolvedAppearance, publishMiniPlayerState)
 
   return {
     // State

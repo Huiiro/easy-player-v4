@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import type { ControlSize } from './types'
 
 defineOptions({
   name: 'BaseSlider'
 })
 
-type SliderSize = 'xs' | 'sm' | 'md'
+type SliderSize = ControlSize
 
 interface Props {
   modelValue: number
@@ -50,10 +51,8 @@ const sizeMap = {
     thumb: 14
   },
 
-  md: {
-    track: 8,
-    thumb: 18
-  }
+  md: { track: 8, thumb: 18 },
+  lg: { track: 10, thumb: 22 }
 }
 
 const cur = computed(() => sizeMap[props.size])
@@ -62,22 +61,39 @@ const cur = computed(() => sizeMap[props.size])
 // value
 // =======================
 
+const draft = ref(
+  props.reverseTransform ? props.reverseTransform(props.modelValue) : props.modelValue
+)
+watch(
+  () => [props.modelValue, props.reverseTransform] as const,
+  () => {
+    draft.value = props.reverseTransform
+      ? props.reverseTransform(props.modelValue)
+      : props.modelValue
+  }
+)
 const value = computed({
-  get() {
-    return props.reverseTransform ? props.reverseTransform(props.modelValue) : props.modelValue
-  },
-
-  set(v: number) {
-    emit('update:modelValue', props.transform ? props.transform(v) : v)
+  get: () => draft.value,
+  set: (v: number) => {
+    draft.value = v
+    emit('update:modelValue', toModel(v))
   }
 })
+function toModel(v: number): number {
+  return props.transform ? props.transform(v) : v
+}
+function commit(v: number): void {
+  if (props.disabled) return
+  value.value = snap(v)
+  emit('change', toModel(value.value))
+}
 
 const range = computed(() => props.max - props.min)
 
 const percent = computed(() => {
   if (range.value <= 0) return 0
 
-  return ((value.value - props.min) / range.value) * 100
+  return Math.max(0, Math.min(100, ((value.value - props.min) / range.value) * 100))
 })
 
 // =======================
@@ -177,11 +193,11 @@ function pointToValue(x: number, y: number): number {
   let ratio: number
 
   if (props.vertical) {
-    const usable = rect.height - thumb
+    const usable = Math.max(1, rect.height - thumb)
 
     ratio = (rect.bottom - y - thumb / 2) / usable
   } else {
-    const usable = rect.width - thumb
+    const usable = Math.max(1, rect.width - thumb)
 
     ratio = (x - rect.left - thumb / 2) / usable
   }
@@ -194,72 +210,58 @@ function pointToValue(x: number, y: number): number {
 function snap(v: number): number {
   v = Math.max(props.min, Math.min(props.max, v))
 
-  return Math.round((v - props.min) / props.step) * props.step + props.min
+  const step = props.step > 0 && Number.isFinite(props.step) ? props.step : 1
+  const snapped = Math.round((v - props.min) / step) * step + props.min
+  return Math.max(props.min, Math.min(props.max, Number(snapped.toPrecision(12))))
 }
 
 // =======================
 // events
 // =======================
 
-function onTrackClick(e: MouseEvent): void {
-  const v = snap(pointToValue(e.clientX, e.clientY))
-
-  value.value = v
-
-  emit('change', v)
-}
-
 function onPointerDown(e: PointerEvent): void {
+  if (props.disabled || e.button !== 0) return
   dragging.value = true
-
+  sliderRef.value?.focus()
   sliderRef.value?.setPointerCapture(e.pointerId)
-}
-
-function onPointerMove(e: PointerEvent): void {
-  if (!dragging.value) return
-
   value.value = snap(pointToValue(e.clientX, e.clientY))
 }
-
+function onPointerMove(e: PointerEvent): void {
+  if (!dragging.value || props.disabled) return
+  value.value = snap(pointToValue(e.clientX, e.clientY))
+}
 function onPointerUp(): void {
   if (!dragging.value) return
-
   dragging.value = false
-
-  emit('change', value.value)
+  if (!props.disabled) emit('change', toModel(value.value))
 }
-
+function onPointerCancel(): void {
+  dragging.value = false
+}
 function onKeyDown(e: KeyboardEvent): void {
+  if (props.disabled) return
+  const step = props.step > 0 ? props.step : 1
   let v = value.value
-
   switch (e.key) {
     case 'ArrowRight':
     case 'ArrowUp':
-      v += props.step
+      v += step
       break
-
     case 'ArrowLeft':
     case 'ArrowDown':
-      v -= props.step
+      v -= step
       break
-
     case 'Home':
       v = props.min
       break
-
     case 'End':
       v = props.max
       break
-
     default:
       return
   }
-
   e.preventDefault()
-
-  value.value = snap(v)
-
-  emit('change', value.value)
+  commit(v)
 }
 
 // =======================
@@ -271,25 +273,25 @@ const markEntries = computed(() => {
 
   const t = cur.value.thumb
 
-  return Object.entries(props.marks).map(([k, label]) => {
-    const val = Number(k)
-    const r = range.value > 0 ? (val - props.min) / range.value : 0
+  return Object.entries(props.marks)
+    .filter(([key]) => Number(key) >= props.min && Number(key) <= props.max)
+    .map(([k, label]) => {
+      const val = Number(k)
+      const r = range.value > 0 ? (val - props.min) / range.value : 0
 
-    // 与 thumbStyle 使用相同坐标系：ratio * (100% - thumb) + thumb/2 = 拇指中心
-    const pos = `calc(${r} * (100% - ${t}px) + ${t / 2}px)`
+      // 与 thumbStyle 使用相同坐标系：ratio * (100% - thumb) + thumb/2 = 拇指中心
+      const pos = `calc(${r} * (100% - ${t}px) + ${t / 2}px)`
 
-    return {
-      value: val,
-      label,
-      pos
-    }
-  })
+      return {
+        value: val,
+        label,
+        pos
+      }
+    })
 })
 
 function onMarkClick(v: number): void {
-  value.value = snap(v)
-
-  emit('change', value.value)
+  commit(v)
 }
 </script>
 
@@ -299,17 +301,18 @@ function onMarkClick(v: number): void {
       ref="sliderRef"
       role="slider"
       :tabindex="disabled ? -1 : 0"
-      class="relative outline-none"
+      class="relative outline-none touch-none ep-slider-control"
       :class="disabled ? 'pointer-events-none opacity-50' : ''"
       :style="containerStyle"
       :aria-valuemin="min"
       :aria-valuemax="max"
-      :aria-valuenow="modelValue"
+      :aria-valuenow="Number.isFinite(value) ? value : min"
+      :aria-orientation="vertical ? 'vertical' : 'horizontal'"
       :aria-disabled="disabled"
-      @click="onTrackClick"
+      @pointerdown.prevent="onPointerDown"
       @pointermove="onPointerMove"
       @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
+      @pointercancel="onPointerCancel"
       @keydown="onKeyDown"
     >
       <!-- track -->
@@ -338,7 +341,6 @@ function onMarkClick(v: number): void {
             height: `${cur.thumb}px`
           }
         ]"
-        @pointerdown.stop="onPointerDown"
       />
 
       <!-- marks -->
@@ -362,6 +364,7 @@ function onMarkClick(v: number): void {
                 }
           "
           @click.stop="onMarkClick(m.value)"
+          @pointerdown.stop
         >
           <div class="w-2 h-2 rounded-full bg-border-l mx-auto" />
 

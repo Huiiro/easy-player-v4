@@ -54,6 +54,7 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
   }
 })
 const stored = JSON.stringify({
+  songPlayTrigger: 'single',
   extremePlayback: true,
   playerLyricsFontFamily: 'Noto Sans SC',
   playlistHeaderCollapsed: true,
@@ -87,6 +88,11 @@ assert.equal(
   'Separate lyrics font survives a renderer restart'
 )
 const restoredHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(
+  restoredHeaders.songPlayTrigger,
+  'single',
+  'song activation survives a renderer restart'
+)
 assert.equal(restoredHeaders.playlistHeaderCollapsed, true, 'Playlist headers restore collapsed')
 assert.equal(
   restoredHeaders.recommendationPlaylistHeaderCollapsed,

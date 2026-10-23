@@ -8,6 +8,7 @@ import { getDataPath } from '../../utils/pathUtils'
 import type {
   PagedResult,
   Playlist,
+  PlaylistSummary,
   PlaylistInput,
   PlaylistMembership,
   Song,
@@ -16,12 +17,15 @@ import type {
 import { getAppSetting, setAppSetting } from './settings'
 import { attachTags, songColumnsFor, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 
-export function listPlaylists(): Playlist[] {
+export function listPlaylists(): PlaylistSummary[] {
   return getDatabase()
     .prepare(
-      'SELECT id, name, COALESCE(custom_cover, cover) AS cover, custom_cover AS customCover, description, position, created_at AS createdAt FROM song_list ORDER BY position, id'
+      `SELECT sl.id, sl.name, COALESCE(sl.custom_cover, sl.cover) AS cover,
+        sl.custom_cover AS customCover, sl.description, sl.position, sl.created_at AS createdAt,
+        (SELECT COUNT(*) FROM song_list_item sli WHERE sli.song_list_id = sl.id) AS songCount
+       FROM song_list sl ORDER BY sl.position, sl.id`
     )
-    .all() as Playlist[]
+    .all() as PlaylistSummary[]
 }
 
 export function getPlaylist(id: number): Playlist | null {
@@ -82,13 +86,20 @@ export function setPlaylistCustomCover(id: number, path: string | null, dataUrl?
 
 const likedPlaylistCoverSetting = 'playlist.liked.customCover'
 
-export function getLikedPlaylistCover(): { cover: string | null; customCover: string | null } {
+export function getLikedPlaylistCover(): {
+  cover: string | null
+  customCover: string | null
+  songCount: number
+} {
   const saved = getAppSetting(likedPlaylistCoverSetting)
   const customCover = typeof saved === 'string' ? saved : null
-  const song = getDatabase()
-    .prepare('SELECT cover FROM song WHERE preference = 1 ORDER BY id DESC LIMIT 1')
-    .get() as { cover: string | null } | undefined
-  return { cover: customCover || song?.cover || null, customCover }
+  const liked = getDatabase()
+    .prepare(
+      `SELECT (SELECT cover FROM song WHERE preference = 1 ORDER BY id DESC LIMIT 1) AS cover,
+        COUNT(*) AS songCount FROM song WHERE preference = 1`
+    )
+    .get() as { cover: string | null; songCount: number }
+  return { cover: customCover || liked.cover || null, customCover, songCount: liked.songCount }
 }
 
 export function setLikedPlaylistCustomCover(path: string | null, dataUrl?: string): void {

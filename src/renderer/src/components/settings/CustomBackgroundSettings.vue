@@ -59,12 +59,7 @@ async function updateBackground(event: Event): Promise<void> {
       url = await readImage(file)
     }
     retireVideo()
-    ui.customBg.kind = extension === 'mp4' ? 'video' : 'image'
-    ui.customBg.url = url
-    ui.customBg.path = file.name
-    ui.systemBackground = 'none'
-    ui.useCustomBg = true
-    ui.setTheme('dark')
+    ui.setCustomBackground({ kind: extension === 'mp4' ? 'video' : 'image', url, path: file.name })
   } catch {
     showError(t('settings.backgroundImportFailed'))
   } finally {
@@ -73,12 +68,7 @@ async function updateBackground(event: Event): Promise<void> {
 }
 function clearBackground(): void {
   retireVideo()
-  ui.useCustomBg = false
-  ui.customBg.kind = 'image'
-  ui.customBg.url = ''
-  ui.customBg.path = ''
-  ui.customBg.blur = 0
-  ui.customBg.brightness = 100
+  ui.clearCustomBackground()
   if (backgroundInput.value) backgroundInput.value.value = ''
 }
 </script>
@@ -87,10 +77,12 @@ function clearBackground(): void {
   <div
     class="settings-card"
     :class="{
-      muted: !ui.useCustomBg || ui.followSystemTheme,
-      'pointer-events-none': ui.followSystemTheme
+      muted: !ui.useCustomBg
     }"
   >
+    <p v-if="ui.nativeMaterialEnabled" class="mx-5 mt-4 text-xs text-text-l">
+      {{ t('settings.appearanceMaterialNotice') }}
+    </p>
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.backgroundMedia') }}</h3>

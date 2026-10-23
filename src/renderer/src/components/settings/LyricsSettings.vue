@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SettingCard from './SettingCard.vue'
+import SettingRow from './SettingRow.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -11,27 +13,24 @@ const lyricSourceKey = (source: string): string => source
 </script>
 
 <template>
-  <div class="settings-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.autoSearchNetworkLyrics') }}</h3>
-        <p>{{ t('settings.autoSearchNetworkLyricsDescription') }}</p>
-      </div>
+  <SettingCard>
+    <SettingRow
+      :label="t('settings.autoSearchNetworkLyrics')"
+      :description="t('settings.autoSearchNetworkLyricsDescription')"
+    >
       <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.preferWordTimedNetworkLyrics') }}</h3>
-        <p>{{ t('settings.preferWordTimedNetworkLyricsDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.preferWordTimedNetworkLyrics')"
+      :description="t('settings.preferWordTimedNetworkLyricsDescription')"
+    >
       <BaseSwitch v-model="ui.preferWordTimedNetworkLyrics" size="md" />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.lyricsPriority') }}</h3>
-        <p>{{ t('settings.lyricsPriorityDescription') }}</p>
-      </div>
-    </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.lyricsPriority')"
+      :description="t('settings.lyricsPriorityDescription')"
+    >
+    </SettingRow>
     <Draggable v-model="ui.lyricSourceOrder" :item-key="lyricSourceKey" handle=".lyric-drag-handle">
       <template #item="{ element: source, index }">
         <div class="setting-row lyric-source-item">
@@ -49,7 +48,7 @@ const lyricSourceKey = (source: string): string => source
         </div>
       </template>
     </Draggable>
-  </div>
+  </SettingCard>
 </template>
 
 <style scoped>

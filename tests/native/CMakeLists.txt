@@ -72,5 +72,12 @@ if(SAMPLERATE_INCLUDE_DIR AND SAMPLERATE_LIBRARY AND SOUNDTOUCH_INCLUDE_DIR AND 
     target_link_libraries(audio_backend_recovery_test PRIVATE ${FFMPEG_TEST_avcodec} ${FFMPEG_TEST_avformat}
       ${FFMPEG_TEST_avutil} ${FFMPEG_TEST_swresample} ${SAMPLERATE_LIBRARY} ${SOUNDTOUCH_LIBRARY})
     add_test(NAME audio_backend_recovery COMMAND audio_backend_recovery_test)
+    add_executable(auto_mix_test auto_mix_test.cpp ${EASY_PLAYER_ENGINE_CORE_SOURCES})
+    target_compile_features(auto_mix_test PRIVATE cxx_std_17)
+    target_include_directories(auto_mix_test PRIVATE ${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}
+      ${FFMPEG_TEST_INCLUDE} ${SAMPLERATE_INCLUDE_DIR} ${SOUNDTOUCH_INCLUDE_DIR})
+    target_link_libraries(auto_mix_test PRIVATE ${FFMPEG_TEST_avcodec} ${FFMPEG_TEST_avformat}
+      ${FFMPEG_TEST_avutil} ${FFMPEG_TEST_swresample} ${SAMPLERATE_LIBRARY} ${SOUNDTOUCH_LIBRARY})
+    add_test(NAME auto_mix COMMAND auto_mix_test)
   endif()
 endif()

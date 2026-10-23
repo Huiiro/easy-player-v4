@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, useAttrs, useSlots } from 'vue'
+import { computed, ref, useAttrs, useSlots } from 'vue'
+import { useI18n } from 'vue-i18n'
+import type { ControlSize } from './types'
 
 defineOptions({
   name: 'BaseInput',
@@ -12,12 +14,16 @@ const props = withDefaults(
     placeholder?: string
     clearable?: boolean
     disabled?: boolean
+    readonly?: boolean
+    invalid?: boolean
+    size?: ControlSize
     type?: string
   }>(),
   {
     modelValue: '',
     clearable: true,
     disabled: false,
+    size: 'md',
     type: 'text'
   }
 )
@@ -28,6 +34,13 @@ const emit = defineEmits<{
 }>()
 
 const attrs = useAttrs()
+const { t } = useI18n()
+const input = ref<HTMLInputElement | null>(null)
+defineExpose({
+  focus: () => input.value?.focus(),
+  blur: () => input.value?.blur(),
+  select: () => input.value?.select()
+})
 const slots = useSlots()
 
 const value = computed({
@@ -36,23 +49,29 @@ const value = computed({
 })
 
 function clear(): void {
+  if (props.disabled || props.readonly) return
   value.value = ''
   emit('clear')
+  input.value?.focus()
 }
+
+const canClear = computed(
+  () => props.clearable && !props.disabled && !props.readonly && String(value.value).length > 0
+)
 
 const inputPaddingClass = computed(() => {
   const hasPrefix = !!slots.prefix
   const hasSuffix = !!slots.suffix
-  const hasClear = props.clearable && !!value.value
+  const hasClear = canClear.value
 
   return [hasPrefix ? 'pl-8' : 'pl-2', hasSuffix || hasClear ? 'pr-8' : 'pr-2']
 })
 
-const inputAttrs = computed(() => {
+function inputAttrs(): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(attrs).filter(([key]) => key !== 'class' && key !== 'style')
   )
-})
+}
 </script>
 
 <template>
@@ -65,27 +84,31 @@ const inputAttrs = computed(() => {
       <slot name="prefix" />
     </div>
 
-    <!-- input -->
+    <!-- Native attributes and listeners belong to the input, not its wrapper. -->
     <input
+      ref="input"
       v-model="value"
       :type="type"
       :placeholder="placeholder"
       :disabled="disabled"
-      v-bind="inputAttrs"
+      :readonly="readonly"
+      :aria-invalid="invalid || undefined"
+      v-bind="inputAttrs()"
       class="ep-input py-1 rounded border text-sm w-full outline-none transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
-      :class="inputPaddingClass"
+      :class="[inputPaddingClass, `ep-control--${size}`]"
     />
 
     <!-- suffix + clear -->
     <div
-      v-if="$slots.suffix || (clearable && value)"
+      v-if="$slots.suffix || canClear"
       class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1"
     >
       <slot name="suffix" />
 
       <button
-        v-if="clearable && value"
+        v-if="canClear"
         type="button"
+        :aria-label="t('ui.clear')"
         class="text-text-l hover:text-text"
         @click="clear"
       >

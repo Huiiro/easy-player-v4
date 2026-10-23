@@ -168,7 +168,7 @@ Decoder::~Decoder() {
     av_packet_free(&impl_->packet);
 }
 
-bool Decoder::open(const std::string& file_path) {
+bool Decoder::open(const std::string& file_path, int pcm_rate, int pcm_channels) {
     ScopedFFmpegLogContext log_context(file_path, "open/probe");
     close();
 
@@ -262,15 +262,22 @@ bool Decoder::open(const std::string& file_path) {
         ? dsd_pcm_output_rate(impl_->input_sample_rate)
         : impl_->input_sample_rate;
 
-    // Setup resampler: native format to interleaved f32
+    if (!source_is_dsd && pcm_rate >= 8000 && pcm_rate <= 384000)
+        impl_->output_sample_rate = pcm_rate;
+    const int output_channels = !source_is_dsd && pcm_channels >= 1 && pcm_channels <= 8
+        ? pcm_channels : impl_->codec_ctx->ch_layout.nb_channels;
+    const bool format_conversion = impl_->output_sample_rate != impl_->input_sample_rate ||
+        output_channels != impl_->codec_ctx->ch_layout.nb_channels;
+    // Setup resampler: native format to interleaved f32 in the session format.
     AVChannelLayout out_ch_layout;
-    av_channel_layout_default(&out_ch_layout, impl_->codec_ctx->ch_layout.nb_channels);
+    av_channel_layout_default(&out_ch_layout, output_channels);
 
     ret = swr_alloc_set_opts2(&impl_->swr_ctx,
                               &out_ch_layout, AV_SAMPLE_FMT_FLT, impl_->output_sample_rate,
                               &impl_->codec_ctx->ch_layout, impl_->codec_ctx->sample_fmt, impl_->codec_ctx->sample_rate,
                               0, nullptr);
-    if (source_is_dsd && impl_->swr_ctx) {
+    av_channel_layout_uninit(&out_ch_layout);
+    if ((source_is_dsd || format_conversion) && impl_->swr_ctx) {
         // DSD decoder output is intentionally decimated before entering the
         // PCM/DSP path.  Keep this conversion deterministic and use a longer
         // low-pass filter than the swresample default; float output must not
@@ -279,7 +286,7 @@ bool Decoder::open(const std::string& file_path) {
         av_opt_set_int(impl_->swr_ctx, "phase_shift", 10, 0);
         av_opt_set_double(impl_->swr_ctx, "cutoff", 0.97, 0);
         av_opt_set_int(impl_->swr_ctx, "dither_method", SWR_DITHER_NONE, 0);
-        LOG_DEBUG("DSD PCM conversion: high-quality decimation " +
+        LOG_DEBUG(std::string(source_is_dsd ? "DSD PCM conversion: " : "Auto Mix PCM conversion: ") +
                  std::to_string(impl_->input_sample_rate) + "Hz -> " +
                  std::to_string(impl_->output_sample_rate) + "Hz (64-tap, no dither)");
     }
@@ -290,9 +297,9 @@ bool Decoder::open(const std::string& file_path) {
                   ", input_rate=" + std::to_string(impl_->input_sample_rate) +
                   ", output_rate=" + std::to_string(impl_->output_sample_rate) +
                   ", channels=" + std::to_string(impl_->codec_ctx->ch_layout.nb_channels) +
-                  std::string(source_is_dsd ? "; required DSD decimation unavailable" : "; falling back to native format"));
+                  std::string(source_is_dsd || format_conversion ? "; required format conversion unavailable" : "; falling back to native format"));
         swr_free(&impl_->swr_ctx);
-        if (source_is_dsd) {
+        if (source_is_dsd || format_conversion) {
             close();
             return false;
         }
@@ -312,7 +319,9 @@ bool Decoder::open(const std::string& file_path) {
     track_info_.sample_rate = impl_->output_sample_rate;
     track_info_.bit_depth = impl_->codec_ctx->bits_per_raw_sample ?
                             impl_->codec_ctx->bits_per_raw_sample : 16;
-    track_info_.channels = impl_->codec_ctx->ch_layout.nb_channels;
+    track_info_.channels = output_channels;
+    track_info_.original_sample_rate = impl_->input_sample_rate;
+    track_info_.original_channels = impl_->codec_ctx->ch_layout.nb_channels;
     track_info_.codec_name = codec->long_name ? codec->long_name : codec->name;
 
     if (stream->duration != AV_NOPTS_VALUE) {
@@ -636,7 +645,9 @@ int Decoder::decode(float* output, int max_frames) {
             AVRational{1, std::max(1, impl_->input_sample_rate)});
         const int64_t input_frame_start = frame_start_sample(
             impl_->frame, stream, impl_->input_sample_rate, input_fallback);
-        const int64_t frame_start = av_rescale_q(input_frame_start,
+        const int64_t resample_delay = impl_->swr_ctx
+            ? swr_get_delay(impl_->swr_ctx, std::max(1, impl_->input_sample_rate)) : 0;
+        const int64_t frame_start = av_rescale_q(input_frame_start - resample_delay,
             AVRational{1, std::max(1, impl_->input_sample_rate)},
             AVRational{1, std::max(1, track_info_.sample_rate)});
 

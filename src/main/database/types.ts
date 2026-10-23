@@ -83,6 +83,9 @@ export interface PlaylistInput {
   description?: string | null
   customCover?: string | null
 }
+export interface PlaylistSummary extends Playlist {
+  songCount: number
+}
 export interface Tag {
   id: number
   name: string

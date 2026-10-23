@@ -190,9 +190,9 @@ vm.runInContext(
 await ui.setNativeWindowMaterial('acrylic')
 assert.equal(ui.nativeWindowMaterial.value, 'acrylic')
 assert.equal(ui.useMica.value, true, 'all native materials share transparent renderer constraints')
-assert.equal(ui.followSystemTheme.value, true)
-assert.equal(ui.useCustomBg.value, false)
-assert.equal(ui.systemBackground.value, 'none')
+assert.equal(ui.followSystemTheme.value, false, 'materials preserve the chosen color mode')
+assert.equal(ui.useCustomBg.value, true, 'materials preserve background preferences')
+assert.equal(ui.systemBackground.value, 'aurora')
 const original = ui.themeBeforeMica.value
 await ui.setNativeWindowMaterial('mica')
 assert.equal(

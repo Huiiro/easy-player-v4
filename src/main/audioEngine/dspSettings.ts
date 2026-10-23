@@ -128,6 +128,7 @@ export interface DspSettings {
     crossfadeEnabled: boolean
     crossfadeMs: number
     crossfadeAuto: boolean
+    crossfadeVocalCue: boolean
     pauseFadeEnabled: boolean
     pauseFadeMs: number
   }
@@ -181,6 +182,7 @@ export const defaultDspSettings = (): DspSettings => ({
     crossfadeEnabled: false,
     crossfadeMs: 5000,
     crossfadeAuto: false,
+    crossfadeVocalCue: true,
     pauseFadeEnabled: true,
     pauseFadeMs: 180
   },
@@ -512,6 +514,7 @@ export function loadDspSettings(): DspSettings {
         gaplessEnabled: settings.transition?.gaplessEnabled !== false,
         crossfadeEnabled: settings.transition?.crossfadeEnabled === true,
         crossfadeAuto: settings.transition?.crossfadeAuto === true,
+        crossfadeVocalCue: settings.transition?.crossfadeVocalCue !== false,
         pauseFadeEnabled: settings.transition?.pauseFadeEnabled !== false,
         pauseFadeMs:
           typeof settings.transition?.pauseFadeMs === 'number' &&

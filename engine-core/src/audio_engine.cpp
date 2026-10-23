@@ -2,6 +2,8 @@
 #include "logger.h"
 #include "ffmpeg_logging.h"
 #include "spectrum_analysis.h"
+#include "auto_mix.h"
+#include "auto_mix_preparation.h"
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -39,6 +41,13 @@ namespace {
         double silence_threshold = 0.0;
         double earlier_rms = 0.0;
         double late_rms = 0.0;
+        double separation = 0.0;
+        int64_t incoming_start = 0;
+        int64_t vocal_end_frame = 0;
+        auto_mix::PreparedIntro prepared;
+        auto_mix::MusicalProfile outgoing_music, incoming_music;
+        double incoming_tempo = 1.0;
+        const char* strategy = "staged-overlap";
         const char* fallback_reason = "analysis unavailable";
     };
 
@@ -55,21 +64,21 @@ namespace {
         return value.str();
     }
 
-    AutoFadePlan analyze_auto_crossfade(const std::string& path, int max_ms) {
+    AutoFadePlan analyze_auto_crossfade(const std::string& path, const std::string& next_path, int max_ms, int mix_rate, int mix_channels) {
         ScopedFFmpegLogContext log_context(path, "auto-crossfade-analysis");
         Decoder probe;
-        if (!probe.open(path)) return fallback_plan("source could not be opened");
+        if (!probe.open(path, mix_rate, mix_channels)) return fallback_plan("source could not be opened");
         const auto info = probe.track_info();
         int64_t total = probe.total_samples();
         if (info.sample_rate <= 0 || info.channels <= 0 || total <= 0 || info.is_dsd)
             return fallback_plan("unsupported or unknown source format");
 
-        const int64_t start = std::max<int64_t>(0, total - static_cast<int64_t>(info.sample_rate) * 12);
+        int64_t start = std::max<int64_t>(0, total - static_cast<int64_t>(info.sample_rate) * std::max(60, max_ms / 1000 + 12));
         if (start > 0 && !probe.seek(start))
             return fallback_plan("tail seek failed");
         const int block_frames = std::max(256, info.sample_rate / 10);
         std::vector<float> pcm(static_cast<size_t>(block_frames) * info.channels);
-        struct Level { int64_t end; double rms; };
+        using Level = auto_mix::Level;
         std::vector<Level> levels;
         double peak = 0.0;
         int64_t cursor = start;
@@ -81,7 +90,7 @@ namespace {
             for (int i = 0; i < frames * info.channels; ++i) square_sum += pcm[i] * pcm[i];
             const double rms = std::sqrt(square_sum / (frames * info.channels));
             cursor += frames;
-            levels.push_back({cursor, rms});
+            levels.push_back(auto_mix::measure(pcm.data(), frames, info.channels, cursor));
             peak = std::max(peak, rms);
         }
         // Duration metadata can be shorter than the actual PCM stream. In that
@@ -97,17 +106,36 @@ namespace {
                 for (int i = 0; i < frames * info.channels; ++i) square_sum += pcm[i] * pcm[i];
                 const double rms = std::sqrt(square_sum / (frames * info.channels));
                 cursor += frames;
-                levels.push_back({cursor, rms});
+                levels.push_back(auto_mix::measure(pcm.data(), frames, info.channels, cursor));
                 peak = std::max(peak, rms);
             }
             if (extra > info.sample_rate / 4)
                 return fallback_plan("duration metadata differs from decoded audio by over 250ms");
             total = cursor;
         }
-        if (levels.empty() || peak < 0.0015)
-            return fallback_plan("tail is silent or contains no decoded samples");
+        // If the entire window is silent, walk backwards instead of reverting
+        // to fixed overlap (which would play the silent window in full).
+        // Bound work to three minutes for malformed/all-silent sources.
+        const int64_t scan_floor = std::max<int64_t>(0, total - info.sample_rate * 180LL);
+        while (peak < auto_mix::silence_floor && start > scan_floor) {
+            const int64_t stop = start;
+            start = std::max<int64_t>(scan_floor, start - info.sample_rate * 30LL);
+            if (!probe.seek(start)) return fallback_plan("silent tail backward seek failed");
+            int64_t at = start;
+            std::vector<Level> preceding;
+            while (at < stop) {
+                const int frames = probe.decode(pcm.data(), static_cast<int>(std::min<int64_t>(block_frames, stop - at)));
+                if (frames <= 0) return fallback_plan("silent tail backward decode failed");
+                at += frames;
+                preceding.push_back(auto_mix::measure(pcm.data(), frames, info.channels, at));
+                peak = std::max(peak, preceding.back().rms);
+            }
+            levels.insert(levels.begin(), preceding.begin(), preceding.end());
+        }
+        if (levels.empty() || peak < auto_mix::silence_floor)
+            return fallback_plan("no audible samples within bounded tail scan");
 
-        const double silence_threshold = std::max(0.0015, peak * 0.04);
+        const double silence_threshold = auto_mix::silence_threshold(peak);
         int64_t last_audible = start;
         for (const auto& level : levels) {
             if (level.rms >= silence_threshold) last_audible = level.end;
@@ -117,6 +145,7 @@ namespace {
         if (trailing >= info.sample_rate * 6 / 10)
             end = std::min<int64_t>(total, last_audible + info.sample_rate * 15 / 100);
 
+        const int64_t vocal_end_frame = end;
         auto average_level = [&](int64_t from, int64_t to) {
             double sum = 0.0;
             int count = 0;
@@ -127,12 +156,88 @@ namespace {
         };
         const double earlier = average_level(end - info.sample_rate * 6LL, end - info.sample_rate * 2LL);
         const double late = average_level(end - info.sample_rate * 3LL / 2, end);
-        const double drop = earlier > 0.0015 ? std::clamp(1.0 - late / earlier, 0.0, 1.0) : 0.0;
         const int64_t max_frames = std::min<int64_t>(end, static_cast<int64_t>(info.sample_rate) * max_ms / 1000);
-        const int64_t min_frames = std::min<int64_t>(max_frames, info.sample_rate * 3LL / 2);
-        const int64_t fade = min_frames + static_cast<int64_t>((max_frames - min_frames) * drop);
-        return {end, fade, total, cursor - start, trailing, peak, silence_threshold,
-            earlier, late, fade > 0 ? nullptr : "maximum overlap is zero"};
+        int64_t fade = max_frames;
+        // Compare the actual handoff regions, rather than inferring compatibility
+        // from genre tags. This is deliberately not a beat/key matching engine.
+        double separation = 1.0; // unknown intro: prefer a short handoff
+        int64_t incoming_start = 0;
+        Decoder incoming;
+        if (incoming.open(next_path, info.sample_rate, info.channels)) {
+            const auto next = incoming.track_info();
+            if (next.sample_rate == info.sample_rate && next.channels == info.channels) {
+                std::vector<Level> intro;
+                int64_t read = 0;
+                const int64_t limit = std::min<int64_t>(incoming.total_samples(), info.sample_rate * 8LL);
+                while (read < limit) {
+                    const int frames = incoming.decode(pcm.data(), static_cast<int>(std::min<int64_t>(block_frames, limit - read)));
+                    if (frames <= 0) break;
+                    read += frames;
+                    intro.push_back(auto_mix::measure(pcm.data(), frames, info.channels, read));
+                }
+                double intro_peak = 0;
+                for (const auto& level : intro) intro_peak = std::max(intro_peak, level.rms);
+                const double intro_threshold = auto_mix::silence_threshold(intro_peak);
+                for (const auto& level : intro) {
+                    if (level.rms >= intro_threshold) {
+                        incoming_start = std::max<int64_t>(0, level.end - block_frames - info.sample_rate / 20);
+                        break;
+                    }
+                }
+                // An exhausted fade-out can sound like a gap even after literal
+                // silence is removed. Finish near its last useful energy, while
+                // bounding the amount of musical material skipped.
+                const double outro_reference = average_level(end - info.sample_rate * 6LL, end - info.sample_rate * 2LL);
+                if (outro_reference > auto_mix::silence_floor && late < outro_reference * 0.4) {
+                    int64_t energetic_end = end;
+                    for (const auto& level : levels)
+                        if (level.end <= end && level.rms >= std::max(silence_threshold, peak * 0.30))
+                            energetic_end = level.end;
+                    const int64_t allowance = static_cast<int64_t>(info.sample_rate) * std::min(8, max_ms / 1000 + 2);
+                    if (energetic_end < end && end - energetic_end <= allowance && energetic_end > info.sample_rate * 2LL)
+                        end = energetic_end;
+                }
+                separation = auto_mix::difference(
+                    auto_mix::summarize(levels, end - info.sample_rate * 4LL, end),
+                    auto_mix::summarize(intro, 0, read));
+                // Never consume the entire incoming track during the overlap.
+                fade = std::min<int64_t>(fade, std::max<int64_t>(0, incoming.total_samples() / 2));
+            }
+        }
+        fade = auto_mix::overlap_frames(fade, info.sample_rate, separation);
+        AutoFadePlan plan;
+        fade = std::min(fade, end);
+        plan.end_frame = end; plan.fade_frames = fade; plan.source_frames = total;
+        plan.scanned_frames = cursor - start; plan.trailing_frames = trailing;
+        plan.peak_rms = peak; plan.silence_threshold = silence_threshold;
+        plan.incoming_start = incoming_start;
+        plan.vocal_end_frame = vocal_end_frame;
+        plan.earlier_rms = earlier; plan.late_rms = late; plan.separation = separation;
+        plan.fallback_reason = fade > 0 ? nullptr : "maximum overlap is zero";
+        plan.outgoing_music = auto_mix::analyze_region(path,
+            std::max<int64_t>(0, last_audible - info.sample_rate * 24LL), last_audible,
+            info.sample_rate, info.channels);
+        plan.incoming_music = auto_mix::analyze_region(next_path, incoming_start,
+            std::min<int64_t>(incoming.total_samples(), incoming_start + info.sample_rate * 24LL), info.sample_rate, info.channels);
+        if (!auto_mix::harmonic_compatible(plan.outgoing_music.key, plan.incoming_music.key)) {
+            plan.strategy = "harmonic-staged";
+            plan.separation = std::max(plan.separation, 0.85);
+            plan.fade_frames = auto_mix::overlap_frames(std::min<int64_t>({max_frames, end, incoming.total_samples() / 2}), info.sample_rate, plan.separation);
+        } else {
+            const int64_t musical_max = std::min<int64_t>({max_frames, info.sample_rate * 6LL,
+                std::max<int64_t>(0, incoming.total_samples() / 2)});
+            const auto handoff = auto_mix::choose_handoff(plan.outgoing_music, plan.incoming_music,
+                end, musical_max, info.sample_rate, separation, incoming_start);
+            if (handoff.matched) {
+                plan.prepared = auto_mix::prepare_intro(next_path, info.sample_rate, info.channels,
+                    handoff, plan.outgoing_music.period);
+                if (!plan.prepared.pcm.empty()) {
+                    plan.strategy = "beat-matched";
+                    plan.fade_frames = handoff.fade_frames; plan.incoming_tempo = handoff.tempo;
+                }
+            }
+        }
+        return plan;
     }
 } // namespace
 
@@ -169,6 +274,15 @@ AudioChainStatus AudioEngine::audio_chain_status() const {
         auto status = dsp_pipeline_.status();
         if (track_info_.is_dsd) {
             status.bit_perfect_blockers.push_back("DSD source was converted to PCM");
+            status.is_bit_perfect_eligible = false;
+            status.bit_perfect_verification_state = "blocked";
+            status.is_bit_perfect = false;
+        }
+        if (track_info_.original_sample_rate > 0 &&
+            (track_info_.original_sample_rate != track_info_.sample_rate ||
+             track_info_.original_channels != track_info_.channels)) {
+            status.active_nodes.emplace_back("Mix format conversion");
+            status.bit_perfect_blockers.emplace_back("Sample-rate conversion is active");
             status.is_bit_perfect_eligible = false;
             status.bit_perfect_verification_state = "blocked";
             status.is_bit_perfect = false;
@@ -274,6 +388,7 @@ bool AudioEngine::set_transition_config(const TransitionConfig& input) {
     value.crossfade_enabled = input.crossfade_enabled;
     value.crossfade_ms = std::max(0, std::min(30000, input.crossfade_ms));
     value.crossfade_auto = input.crossfade_auto;
+    value.vocal_cue_enabled = input.vocal_cue_enabled;
     value.pause_fade_enabled = input.pause_fade_enabled;
     value.pause_fade_ms = std::max(0, std::min(1000, input.pause_fade_ms));
     if (!value.gapless_enabled) value.crossfade_enabled = false;
@@ -291,6 +406,7 @@ bool AudioEngine::set_transition_config(const TransitionConfig& input) {
     crossfade_enabled_.store(value.crossfade_enabled, std::memory_order_release);
     crossfade_ms_.store(value.crossfade_ms, std::memory_order_release);
     crossfade_auto_.store(value.crossfade_auto, std::memory_order_release);
+    vocal_cue_enabled_.store(value.vocal_cue_enabled, std::memory_order_release);
     pause_fade_enabled_.store(value.pause_fade_enabled, std::memory_order_release);
     pause_fade_ms_.store(value.pause_fade_ms, std::memory_order_release);
     refresh_auto_fade_plan();
@@ -355,11 +471,13 @@ void AudioEngine::service_backend_events() {
 
 bool AudioEngine::prepare_next_decoder_locked() {
     next_decoder_.close();
-    if (next_track_path_.empty() || !next_decoder_.open(next_track_path_)) return false;
-    const auto& next = next_decoder_.track_info();
     const auto& current = decoder_.track_info();
+    const bool mix = crossfade_enabled_.load(std::memory_order_acquire) && !current.is_dsd;
+    if (next_track_path_.empty() || !next_decoder_.open(next_track_path_,
+        mix ? current.sample_rate : 0, mix ? current.channels : 0)) return false;
+    const auto& next = next_decoder_.track_info();
     const bool compatible = next.sample_rate == current.sample_rate &&
-        next.channels == current.channels && next.bit_depth == current.bit_depth &&
+        next.channels == current.channels && (mix || next.bit_depth == current.bit_depth) &&
         !next.is_dsd && !current.is_dsd;
     if (!compatible) {
         LOG_DEBUG("Next decoder incompatible: source=" + current.file_path + " (" +
@@ -386,6 +504,13 @@ bool AudioEngine::set_next_track(const std::string& file_path, const std::string
         next_decoder_.close();
         auto_fade_end_frame_ = 0;
         auto_fade_frames_ = 0;
+        auto_fade_vocal_end_frame_ = 0;
+        auto_mix_out_vocals_.clear();
+        auto_mix_in_vocals_.clear();
+        ++auto_fade_revision_;
+        auto_fade_intro_.clear();
+        auto_fade_source_frames_ = 0;
+        auto_fade_incoming_start_frame_ = 0;
         transition_active_.store(false, std::memory_order_release);
         crossfade_target_warned_ = false;
         crossfade_started_logged_ = false;
@@ -404,19 +529,35 @@ void AudioEngine::refresh_auto_fade_plan() {
     std::string next_path;
     int max_ms = 0;
     int sample_rate = 0;
+    int mix_channels = 0;
+    int generation = 0;
+    uint64_t revision = 0;
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
+        // Finish an audible adaptive overlap before applying transition changes.
+        // Its incoming decoder may already point past the pre-rendered segment.
+        if (transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0) return;
         auto_fade_end_frame_ = 0;
         auto_fade_frames_ = 0;
+        auto_fade_vocal_end_frame_ = 0;
+        auto_mix_out_vocals_.clear();
+        auto_mix_in_vocals_.clear();
+        ++auto_fade_revision_;
+        auto_fade_intro_.clear();
+        auto_fade_source_frames_ = 0;
+        auto_fade_incoming_start_frame_ = 0;
         if (!crossfade_enabled_.load(std::memory_order_acquire) ||
             !crossfade_auto_.load(std::memory_order_acquire) ||
             next_decoder_.track_info().file_path.empty()) return;
         current_path = decoder_.track_info().file_path;
         sample_rate = decoder_.track_info().sample_rate;
+        mix_channels = decoder_.track_info().channels;
         next_path = next_track_path_;
         max_ms = crossfade_ms_.load(std::memory_order_acquire);
+        generation = seek_generation_.load(std::memory_order_acquire);
+        revision = auto_fade_revision_;
     }
-    const auto plan = analyze_auto_crossfade(current_path, max_ms);
+    auto plan = analyze_auto_crossfade(current_path, next_path, max_ms, sample_rate, mix_channels);
     if (plan.end_frame <= 0 || plan.fade_frames <= 0) {
         LOG_WARN("Auto crossfade fallback: source=" + current_path +
             ", reason=" + plan.fallback_reason +
@@ -426,23 +567,60 @@ void AudioEngine::refresh_auto_fade_plan() {
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
         if (decoder_.track_info().file_path != current_path || next_track_path_ != next_path ||
-            !crossfade_auto_.load(std::memory_order_acquire)) {
+            !crossfade_auto_.load(std::memory_order_acquire) ||
+            !crossfade_enabled_.load(std::memory_order_acquire) ||
+            crossfade_ms_.load(std::memory_order_acquire) != max_ms ||
+            seek_generation_.load(std::memory_order_acquire) != generation ||
+            auto_fade_revision_ != revision ||
+            transition_active_.load(std::memory_order_acquire)) {
             LOG_DEBUG("Auto crossfade result discarded: queue or settings changed during analysis");
             return;
         }
         if (decoder_.position() >= plan.end_frame - plan.fade_frames) {
-            LOG_WARN("Auto crossfade fallback: source=" + current_path +
-                ", reason=playback already passed the planned start" +
+            LOG_DEBUG("Auto crossfade adjusted: source=" + current_path +
+                ", reason=shortening overlap for late preparation" +
                 ", position=" + std::to_string(decoder_.position() * 1000 / sample_rate) +
                 "ms, plannedStart=" + std::to_string((plan.end_frame - plan.fade_frames) * 1000 /
                 sample_rate) + "ms, fixedOverlap=" + std::to_string(max_ms) + "ms");
-            return;
         }
+        // A late queue/settings update must not reinstate a long silent tail.
+        // Decoder position includes buffered audio, so only modify future PCM.
+        if (decoder_.position() >= plan.end_frame) {
+            // Already inside the detected silent tail: hand off from the next
+            // undecoded frame, with a brief ramp rather than replaying silence.
+            plan.end_frame = std::min<int64_t>(plan.source_frames,
+                decoder_.position() + sample_rate / 20);
+        }
+        const int64_t remaining = plan.end_frame - decoder_.position();
+        if (remaining <= 0) return;
+        if (remaining < plan.fade_frames) {
+            plan.prepared = {};
+            plan.strategy = "late-short";
+            plan.fade_frames = std::min<int64_t>(remaining, sample_rate * 8LL / 10);
+        }
+        if (plan.incoming_start > 0 && !next_decoder_.seek(plan.incoming_start)) {
+            plan.prepared = {};
+            plan.incoming_start = 0;
+        }
+        auto_fade_intro_ = std::move(plan.prepared.pcm);
+        auto_fade_source_frames_ = plan.prepared.source_frames;
+        auto_fade_incoming_start_frame_ = plan.incoming_start;
         auto_fade_end_frame_ = plan.end_frame;
+        auto_fade_vocal_end_frame_ = plan.vocal_end_frame;
         auto_fade_frames_ = plan.fade_frames;
+        auto_fade_separation_ = plan.separation;
+        auto_mix_mixer_.reset(sample_rate, mix_channels);
     }
     LOG_DEBUG("Auto crossfade plan: source=" + current_path +
         ", next=" + next_path +
+        ", strategy=" + plan.strategy +
+        ", introTrim=" + std::to_string(plan.incoming_start * 1000 / sample_rate) + "ms" +
+        ", outgoingBpm=" + std::to_string(plan.outgoing_music.bpm) +
+        ", incomingBpm=" + std::to_string(plan.incoming_music.bpm) +
+        ", beatConfidence=" + std::to_string(std::min(plan.outgoing_music.confidence, plan.incoming_music.confidence)) +
+        ", outgoingKey=" + std::to_string(plan.outgoing_music.key) +
+        ", incomingKey=" + std::to_string(plan.incoming_music.key) +
+        ", incomingTempo=" + std::to_string(plan.incoming_tempo) +
         ", overlap=" + std::to_string(plan.fade_frames * 1000 / sample_rate) +
         "ms, start=" + std::to_string((plan.end_frame - plan.fade_frames) * 1000 / sample_rate) +
         "ms, end=" + std::to_string(plan.end_frame * 1000 / sample_rate) +
@@ -456,7 +634,63 @@ void AudioEngine::refresh_auto_fade_plan() {
         ", late=" + dbfs(plan.late_rms) +
         ", energyDrop=" + std::to_string(static_cast<int>(std::clamp(
             1.0 - plan.late_rms / std::max(plan.earlier_rms, 0.0015), 0.0, 1.0) * 100)) + "%" +
+        ", separation=" + std::to_string(plan.separation) +
         ", maxOverlap=" + std::to_string(max_ms) + "ms");
+}
+
+
+AutoMixStemRequest AudioEngine::auto_mix_stem_request() const {
+    std::lock_guard<std::mutex> lock(decoder_mutex_);
+    const auto& current = decoder_.track_info();
+    if (!crossfade_auto_.load() || !crossfade_enabled_.load() || transition_active_.load() ||
+        next_track_path_.empty() || !auto_mix_out_vocals_.empty() || auto_fade_frames_ <= 0 || current.sample_rate <= 0 ||
+        current.channels < 1 || current.channels > 2 || auto_fade_frames_ > current.sample_rate * 12LL ||
+        decoder_.position() >= auto_fade_end_frame_ - auto_fade_frames_) return {};
+    return {current.file_path, next_track_path_, auto_fade_revision_, current.sample_rate,
+        current.channels, std::max<int64_t>(0, auto_fade_vocal_end_frame_ - auto_fade_frames_),
+        auto_fade_incoming_start_frame_, auto_fade_frames_, vocal_cue_enabled_.load()};
+}
+
+bool AudioEngine::set_auto_mix_vocals(uint64_t revision, const std::string& out_path, const std::string& in_path, int64_t cue_frame, int64_t out_start_frame) {
+    const auto request = auto_mix_stem_request();
+    if (request.revision != revision || request.fade_frames <= 0) return false;
+    const int64_t outgoing_start = out_start_frame >= 0 ? out_start_frame : request.out_start_frame;
+    if (outgoing_start < std::max<int64_t>(0, request.out_start_frame - request.sample_rate * 8LL) ||
+        outgoing_start > request.out_start_frame) return false;
+    const int64_t incoming_start = cue_frame >= 0 ? cue_frame : request.in_start_frame;
+    if (incoming_start < request.in_start_frame || incoming_start > request.in_start_frame + request.sample_rate * 40LL ||
+        (!request.vocal_cue && incoming_start != request.in_start_frame)) return false;
+    auto read = [&](const std::string& path, std::vector<float>& pcm) {
+        Decoder stem;
+        if (!stem.open(path, request.sample_rate, request.channels) || stem.track_info().is_dsd) return false;
+        pcm.resize(static_cast<size_t>(request.fade_frames) * request.channels);
+        int64_t at = 0;
+        while (at < request.fade_frames) {
+            const int frames = stem.decode(pcm.data() + at * request.channels,
+                static_cast<int>(std::min<int64_t>(4096, request.fade_frames - at)));
+            if (frames <= 0) return false;
+            at += frames;
+        }
+        return std::all_of(pcm.begin(), pcm.end(), [](float x) { return std::isfinite(x) && std::abs(x) < 8; });
+    };
+    std::vector<float> outgoing, incoming;
+    if (!read(out_path, outgoing) || !read(in_path, incoming)) return false;
+    std::lock_guard<std::mutex> lock(decoder_mutex_);
+    if (auto_fade_revision_ != revision || decoder_.track_info().file_path != request.source_path ||
+        next_track_path_ != request.next_path || transition_active_.load() || !crossfade_auto_.load() ||
+        !crossfade_enabled_.load() || decoder_.position() >= std::min(outgoing_start, auto_fade_end_frame_ - auto_fade_frames_) ||
+        incoming_start + request.fade_frames >= next_decoder_.total_samples() ||
+        !next_decoder_.seek(incoming_start)) return false;
+    auto_mix_out_vocals_ = std::move(outgoing); auto_mix_in_vocals_ = std::move(incoming);
+    auto_fade_end_frame_ = outgoing_start + request.fade_frames;
+    auto_fade_incoming_start_frame_ = incoming_start;
+    auto_fade_intro_.clear(); auto_fade_source_frames_ = 0;
+    auto_mix_vocal_mixer_.reset(request.sample_rate);
+    ++auto_fade_revision_;
+    LOG_INFO("Auto Mix vocal protection ready: overlap=" + std::to_string(request.fade_frames * 1000 / request.sample_rate) +
+        "ms, tailTrim=" + std::to_string((request.out_start_frame - outgoing_start) * 1000 / request.sample_rate) +
+        "ms, incomingCue=" + std::to_string(incoming_start * 1000 / request.sample_rate) + "ms, source=" + request.source_path + ", next=" + request.next_path);
+    return true;
 }
 
 bool AudioEngine::switch_to_next_decoder_locked() {
@@ -471,7 +705,7 @@ bool AudioEngine::switch_to_next_decoder_locked() {
     const bool mixed = transition_active_.load(std::memory_order_acquire);
     const int rate = std::max(1, current.sample_rate);
     const int64_t fade = mixed
-        ? std::min<int64_t>(total, next_decoder_.position())
+        ? next_decoder_.position()
         : 0;
     LOG_DEBUG("Track transition: source=" + current.file_path +
         ", next=" + next.file_path +
@@ -490,6 +724,13 @@ bool AudioEngine::switch_to_next_decoder_locked() {
     crossfade_started_logged_ = false;
     auto_fade_end_frame_ = 0;
     auto_fade_frames_ = 0;
+    auto_fade_vocal_end_frame_ = 0;
+    auto_mix_out_vocals_.clear();
+    auto_mix_in_vocals_.clear();
+    ++auto_fade_revision_;
+    auto_fade_intro_.clear();
+    auto_fade_source_frames_ = 0;
+    auto_fade_incoming_start_frame_ = 0;
     return true;
 }
 
@@ -552,6 +793,13 @@ bool AudioEngine::open(const std::string& file_path) {
     crossfade_started_logged_ = false;
     auto_fade_end_frame_ = 0;
     auto_fade_frames_ = 0;
+    auto_fade_vocal_end_frame_ = 0;
+    auto_mix_out_vocals_.clear();
+    auto_mix_in_vocals_.clear();
+    ++auto_fade_revision_;
+    auto_fade_intro_.clear();
+    auto_fade_source_frames_ = 0;
+    auto_fade_incoming_start_frame_ = 0;
     pending_transition_frame_.store(-1, std::memory_order_release);
     track_start_frame_.store(0, std::memory_order_release);
     update_replay_gain_for_track();
@@ -853,6 +1101,11 @@ bool AudioEngine::play() {
 
     // Start decoder thread (only if not already running)
     if (!decoder_running_) {
+        // EOF can finish decoding while its buffered tail is still audible.
+        // A paused resume must reap that worker before replacing its joinable
+        // std::thread, otherwise destruction calls std::terminate(). Join before
+        // setting the running flag so the outgoing worker cannot observe a restart.
+        if (decoder_thread_ && decoder_thread_->joinable()) decoder_thread_->join();
         decoder_running_ = true;
         decoder_thread_ = std::make_unique<std::thread>(&AudioEngine::decoder_thread_func, this);
     }
@@ -915,6 +1168,13 @@ bool AudioEngine::stop() {
     crossfade_started_logged_ = false;
     auto_fade_end_frame_ = 0;
     auto_fade_frames_ = 0;
+    auto_fade_vocal_end_frame_ = 0;
+    auto_mix_out_vocals_.clear();
+    auto_mix_in_vocals_.clear();
+    ++auto_fade_revision_;
+    auto_fade_intro_.clear();
+    auto_fade_source_frames_ = 0;
+    auto_fade_incoming_start_frame_ = 0;
     pending_transition_frame_.store(-1, std::memory_order_release);
     track_start_frame_.store(0, std::memory_order_release);
     transition_active_.store(false, std::memory_order_release);
@@ -968,6 +1228,13 @@ bool AudioEngine::seek(double position_ms) {
             pcm_io_resetting_.store(false, std::memory_order_release);
             return false;
         }
+
+        if (!next_track_path_.empty() && prepare_next_decoder_locked() && auto_fade_incoming_start_frame_ > 0)
+            next_decoder_.seek(auto_fade_incoming_start_frame_);
+        transition_active_.store(false, std::memory_order_release);
+        crossfade_started_logged_ = false;
+        auto_mix_mixer_.reset(track_info_.sample_rate, track_info_.channels);
+        auto_mix_vocal_mixer_.reset(track_info_.sample_rate);
 
         played_frames_.store(track_start_frame_.load(std::memory_order_acquire) + sample_pos,
                              std::memory_order_release);
@@ -1220,11 +1487,12 @@ void AudioEngine::decoder_thread_func() {
             // - Ring buffer reset can't happen between decode and write
             std::lock_guard<std::mutex> lock(decoder_mutex_);
             const auto transition = transition_config();
-            const bool auto_fade = transition.crossfade_auto && auto_fade_end_frame_ > 0 &&
-                !next_decoder_.track_info().file_path.empty();
+            const bool finish_auto_fade = transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0;
+            const bool auto_fade = ((transition.crossfade_enabled && transition.crossfade_auto) || finish_auto_fade) &&
+                auto_fade_end_frame_ > 0 && !next_decoder_.track_info().file_path.empty();
             const int64_t total = auto_fade ? auto_fade_end_frame_ : decoder_.total_samples();
             const int64_t position = decoder_.position();
-            const int fade_frames = transition.crossfade_enabled && !track_info_.is_dsd
+            const int fade_frames = (transition.crossfade_enabled || finish_auto_fade) && !track_info_.is_dsd
                 ? static_cast<int>(std::min<int64_t>(total, auto_fade ? auto_fade_frames_ :
                     static_cast<int64_t>(track_info_.sample_rate) * transition.crossfade_ms / 1000))
                 : 0;
@@ -1243,7 +1511,32 @@ void AudioEngine::decoder_thread_func() {
                     }
                 } else {
                     transition_work_buffer_.resize(static_cast<size_t>(decoded) * channels);
-                    const int next_frames = next_decoder_.decode(transition_work_buffer_.data(), decoded);
+                    int next_frames = 0;
+                    const int64_t prepared_offset = fade_frames - remaining;
+                    if (auto_fade && auto_fade_intro_.size() == static_cast<size_t>(fade_frames) * channels &&
+                        prepared_offset >= 0 && prepared_offset + decoded <= fade_frames) {
+                        // Seek once before using prepared PCM, so the decoder is
+                        // ready at the exact original-source continuation point.
+                        if (next_decoder_.position() == auto_fade_source_frames_ ||
+                            next_decoder_.seek(auto_fade_source_frames_)) {
+                            std::copy_n(auto_fade_intro_.data() + prepared_offset * channels,
+                                decoded * channels, transition_work_buffer_.data());
+                            next_frames = decoded;
+                        } else {
+                            auto_fade_intro_.clear();
+                            prepare_next_decoder_locked();
+                        }
+                    }
+                    if (next_frames == 0) {
+                        // A seek can enter halfway through an overlap. Keep raw
+                        // incoming PCM aligned with both stem buffers and cues.
+                        if (auto_fade && auto_fade_intro_.empty()) {
+                            const int64_t expected = auto_fade_incoming_start_frame_ + prepared_offset;
+                            if (std::abs(next_decoder_.position() - expected) > 2 && !next_decoder_.seek(expected))
+                                auto_mix_in_vocals_.clear();
+                        }
+                        next_frames = next_decoder_.decode(transition_work_buffer_.data(), decoded);
+                    }
                     if (next_frames == decoded) {
                         if (!crossfade_started_logged_) {
                             LOG_DEBUG("Crossfade started: source=" + decoder_.track_info().file_path +
@@ -1255,11 +1548,23 @@ void AudioEngine::decoder_thread_func() {
                             crossfade_started_logged_ = true;
                         }
                         const int64_t fade_offset = fade_frames - remaining;
-                        for (int frame = 0; frame < decoded; ++frame) {
+                        if (auto_fade && auto_mix_out_vocals_.size() == static_cast<size_t>(fade_frames) * channels &&
+                            auto_mix_in_vocals_.size() == auto_mix_out_vocals_.size()) {
+                            auto_mix_vocal_mixer_.process(buffer.data(), transition_work_buffer_.data(),
+                                auto_mix_out_vocals_.data() + fade_offset * channels,
+                                auto_mix_in_vocals_.data() + fade_offset * channels,
+                                decoded, channels, fade_offset, fade_frames);
+                        } else if (auto_fade) {
+                            auto_mix_mixer_.process(buffer.data(), transition_work_buffer_.data(), decoded,
+                                channels, fade_offset, fade_frames, auto_fade_separation_);
+                        } else for (int frame = 0; frame < decoded; ++frame) {
                             const float t = std::min(1.0f, static_cast<float>(fade_offset + frame) /
                                 static_cast<float>(std::max(1, fade_frames - 1)));
-                            const float outgoing = std::cos(1.57079632679f * t);
-                            const float incoming = std::sin(1.57079632679f * t);
+                            // Equal-power throughout: complementary fades made unrelated
+                            // material dip in energy at the midpoint.
+                            const auto gains = auto_mix::gains(t, 0.0);
+                            const float outgoing = gains.first;
+                            const float incoming = gains.second;
                             for (int channel = 0; channel < channels; ++channel) {
                                 const size_t index = static_cast<size_t>(frame) * channels + channel;
                                 buffer[index] = buffer[index] * outgoing + transition_work_buffer_[index] * incoming;
@@ -1288,7 +1593,7 @@ void AudioEngine::decoder_thread_func() {
                     decoder_running_ = false;
                     break;
                 }
-                if (transition.gapless_enabled && !track_info_.is_dsd && switch_to_next_decoder_locked()) {
+                if ((transition.gapless_enabled || finish_auto_fade) && !track_info_.is_dsd && switch_to_next_decoder_locked()) {
                     transition_active_.store(false, std::memory_order_release);
                     continue;
                 }
@@ -1301,7 +1606,7 @@ void AudioEngine::decoder_thread_func() {
             // Switch immediately after the tail is queued. The already-open
             // decoder has advanced by fade_frames, so the overlap is not
             // replayed after a crossfade.
-            if (decoder_.position() >= total && transition.gapless_enabled && !track_info_.is_dsd) {
+            if (decoder_.position() >= total && (transition.gapless_enabled || finish_auto_fade) && !track_info_.is_dsd) {
                 if (switch_to_next_decoder_locked()) transition_active_.store(false, std::memory_order_release);
             }
         }

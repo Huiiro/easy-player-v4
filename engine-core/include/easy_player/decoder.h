@@ -9,6 +9,8 @@ struct TrackInfo {
     int sample_rate = 0;
     int bit_depth = 0;
     int channels = 0;
+    int original_sample_rate = 0;
+    int original_channels = 0;
     double duration_ms = 0.0;
     int bitrate_kbps = 0;
     std::string codec_name;
@@ -40,7 +42,9 @@ public:
     ~Decoder();
 
     // Open file and probe format. Returns false on failure.
-    bool open(const std::string& file_path);
+    // Optional PCM output format keeps a mixing session continuous across files.
+    // DSD transport never uses this override. Positions use output-rate frames.
+    bool open(const std::string& file_path, int pcm_rate = 0, int pcm_channels = 0);
 
     // Close current file.
     void close();

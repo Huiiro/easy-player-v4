@@ -37,6 +37,7 @@ const watchers = []
 const listeners = new Map()
 const calls = []
 const warnings = []
+const searchEvents = []
 const pageDataset = {}
 let globalAction
 let preference = 0
@@ -107,6 +108,7 @@ const hook = load(
     },
     '@/utils/shortcut': load('src/renderer/src/utils/shortcut.ts'),
     'vue-i18n': { useI18n: () => ({ t: (key) => key }) },
+    '@/utils/eventBus': { default: { emit: (event) => searchEvents.push(event) } },
     '../../../shared/shortcuts': shared
   },
   {
@@ -138,6 +140,23 @@ async function press(key, options = {}) {
   await settle()
   return event
 }
+await press('k', { ctrlKey: true })
+assert.deepEqual(searchEvents, ['openGlobalSearch'])
+await press('k', { ctrlKey: true, target: { closest: () => true } })
+assert.equal(searchEvents.length, 2, 'Global search remains available from text fields')
+await press('k', { ctrlKey: true, repeat: true })
+await press('k', { ctrlKey: true, isComposing: true })
+await press('k', { ctrlKey: true, defaultPrevented: true })
+assert.equal(searchEvents.length, 2, 'Search respects IME, handled keys and held shortcuts')
+ui.shortcutKeys.openSearch = 'ctrl+f'
+await press('k', { ctrlKey: true })
+assert.equal(searchEvents.length, 2, 'Changing the search shortcut releases its former binding')
+await press('f', { ctrlKey: true })
+assert.equal(searchEvents.length, 3, 'Search uses the configured local binding')
+ui.shortcutKeys.openSearch = shared.DEFAULT_LOCAL_SHORTCUTS.openSearch
+globalAction('openSearch')
+await settle()
+assert.equal(searchEvents.length, 4, 'Configured system shortcuts open the same search')
 await press('ArrowRight')
 assert.equal(player.positionMs, 9000)
 await press('ArrowRight')
@@ -199,6 +218,9 @@ assert.deepEqual(
   [['lightweight', true]],
   'Lightweight mode must only be exited manually'
 )
+await press('k', { ctrlKey: true })
+assert.equal(searchEvents.length, 4, 'Search does not load the full UI into lightweight mode')
+assert.equal(warnings.at(-1), 'settings.searchRequiresFullView')
 await press('g', { ctrlKey: true })
 assert.equal(ui.useDesktopLyrics, false)
 assert.equal(warnings.at(-1), 'settings.desktopLyricsLightweight')
@@ -250,6 +272,7 @@ vm.runInNewContext(
     SHORTCUT_ACTIONS: shared.SHORTCUT_ACTIONS,
     process,
     Logger: { debug: () => undefined, warn: () => undefined },
+    showMainWindow: () => delivered.push(['show']),
     mainWindow: { webContents: { send: (channel, action) => delivered.push([channel, action]) } },
     globalShortcut: {
       unregisterAll: () => accelerators.clear(),

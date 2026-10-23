@@ -1,0 +1,115 @@
+/* Shared geometry and feedback. Public ep-* hooks remain theme compatible. */
+:root {
+  --ep-control-height-xs: 24px;
+  --ep-control-height-sm: 28px;
+  --ep-control-height-md: 32px;
+  --ep-control-height-lg: 40px;
+  --ep-control-radius: 6px;
+  --ep-focus-ring: color-mix(in srgb, var(--color-primary) 28%, transparent);
+  --ep-disabled-opacity: 0.5;
+  --ep-floating-radius: 12px;
+  --ep-z-floating: 50;
+  --ep-z-message: 9999;
+  --ep-skeleton-bg: color-mix(in srgb, var(--color-text) 12%, transparent);
+  --ep-switch-thumb: var(--color-white, #fff);
+}
+.ep-control--xs {
+  --ep-control-height: var(--ep-control-height-xs);
+}
+.ep-control--sm {
+  --ep-control-height: var(--ep-control-height-sm);
+}
+.ep-control--md {
+  --ep-control-height: var(--ep-control-height-md);
+}
+.ep-control--lg {
+  --ep-control-height: var(--ep-control-height-lg);
+}
+:is(.ep-button, .ep-input, .ep-select) {
+  height: var(--ep-control-height, 32px);
+  min-height: var(--ep-control-height, 32px);
+  padding-block: 0;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+}
+.ep-input,
+.ep-select {
+  border-radius: var(--ep-control-radius);
+}
+.ep-button--icon {
+  width: var(--ep-control-height);
+  padding-inline: 0;
+  aspect-ratio: 1;
+}
+:is(
+  .ep-button,
+  .ep-input,
+  .ep-select,
+  .ep-focusable,
+  .ep-range,
+  .ep-slider-control,
+  .ep-popover-trigger
+):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+:is(.ep-button, .ep-input, .ep-select, .ep-switch, .ep-range):disabled {
+  opacity: var(--ep-disabled-opacity);
+  cursor: not-allowed;
+}
+.ep-input[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+.ep-input[aria-invalid='true']:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-danger) 25%, transparent);
+}
+.ep-switch-thumb {
+  background: var(--ep-switch-thumb);
+}
+.ep-floating {
+  z-index: var(--ep-z-floating);
+}
+.ep-floating > * {
+  transform-origin: inherit;
+}
+.ep-messages {
+  z-index: var(--ep-z-message);
+  max-width: calc(100vw - 24px);
+}
+.ep-messages > div {
+  min-width: min(300px, calc(100vw - 24px));
+  max-width: min(500px, calc(100vw - 24px));
+}
+:is(.ep-menu, .ep-popover, .ep-select-options, .ep-color-picker) {
+  border-radius: var(--ep-floating-radius);
+}
+.ep-skeleton-block {
+  background: var(--ep-skeleton-bg);
+}
+.ep-spinner {
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: ep-spin 700ms linear infinite;
+}
+@keyframes ep-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.ep-float-enter-active {
+  transition:
+    opacity var(--motion-duration-standard),
+    transform var(--motion-duration-standard);
+}
+.ep-float-leave-active {
+  transition:
+    opacity var(--motion-duration-fast),
+    transform var(--motion-duration-fast);
+}
+.ep-float-enter-from,
+.ep-float-leave-to {
+  opacity: 0;
+  transform: scale(0.97);
+}

@@ -7,36 +7,62 @@ import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import DspKnobField from '@/components/player/DspKnobField.vue'
 import EqResponseGraph from '@/components/player/EqResponseGraph.vue'
+import ChannelMatrixEditor from './ChannelMatrixEditor.vue'
+import ReplayGainEditor from './ReplayGainEditor.vue'
+import PreampEditor from './PreampEditor.vue'
+import StereoFieldEditor from './StereoFieldEditor.vue'
+import CrossfeedEditor from './CrossfeedEditor.vue'
+import AudioOutputSettings from './AudioOutputSettings.vue'
+import PlaybackSpeedSettings from './PlaybackSpeedSettings.vue'
+import ResamplerSettings from './ResamplerSettings.vue'
+import PlaybackTransitionSettings from './PlaybackTransitionSettings.vue'
+import ImpulseResponseEditor from './ImpulseResponseEditor.vue'
+import DspEffectEditor from './DspEffectEditor.vue'
+import { useEqEditor } from './useEqEditor'
 import { useMessage } from '@/components/ui/useMessage'
 import { BUILT_IN_EQ_PRESETS, useEqPresetStore } from '@/stores/player/eqPresetStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
-import type { DspNodeConfig, EqBand } from '@/types/audio'
+import type { LegacyId } from './dspEffectFields'
+import type { DspNodeConfig } from '@/types/audio'
 
 type NodeId = DspNodeConfig['id']
 type ExtraId = 'output' | 'playback' | 'resampler' | 'transition'
 type Selection = NodeId | ExtraId
-type LegacyId = 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
-type Field = {
-  key: string
-  label: string
-  help: string
-  min: number
-  max: number
-  step?: number
-  decimals?: number
-  unit?: string
-}
-
 const player = usePlayerStore()
 const eqPresets = useEqPresetStore()
 const { t, te } = useI18n()
 const { success, warning } = useMessage()
 const selected = ref<Selection>('output')
+const {
+  selectedEqIndex,
+  eqHistory,
+  eqFuture,
+  eqComparison,
+  previousSelectedEqBand,
+  selectedEqPreset,
+  selectedEqBand,
+  selectedEqFrequencyLimits,
+  beginEqEdit,
+  recordEqEdit,
+  commitEq,
+  stopEqComparison,
+  undoEq,
+  redoEq,
+  undoSelectedEqBand,
+  toggleEqComparison,
+  selectEqPreset,
+  updateEqBand,
+  resetEq,
+  toggleEqBand,
+  cancelPendingCommit,
+  clearHistory
+} = useEqEditor(player, eqPresets, selected)
+
 const rightScrollRef = ref<HTMLElement | null>(null)
 const detailSectionRef = ref<HTMLElement | null>(null)
 const pipelineExpanded = ref(true)
 const draggingId = ref<NodeId | null>(null)
-const irFileInput = ref<HTMLInputElement | null>(null)
+const impulseEditor = ref<InstanceType<typeof ImpulseResponseEditor> | null>(null)
 const irError = ref('')
 const resetDialogOpen = ref(false)
 const resetting = ref(false)
@@ -45,19 +71,6 @@ const presetName = ref('')
 const editingPresetId = ref<string | undefined>()
 const clipGuardRecentlyActive = ref(false)
 let clipGuardTimer: ReturnType<typeof setTimeout> | undefined
-let eqCommitTimer: ReturnType<typeof setTimeout> | undefined
-const selectedEqIndex = ref(0)
-type EqHistoryEntry = {
-  before: EqBand[]
-  after: EqBand[]
-  kind: 'edit' | 'bandUndo'
-  bandIndex?: number
-}
-const eqHistory = ref<EqHistoryEntry[]>([])
-const eqFuture = ref<EqHistoryEntry[]>([])
-const eqComparison = ref<{ index: number; current: EqBand } | null>(null)
-let eqPendingSnapshot: EqBand[] | null = null
-
 const nodeLabels: Record<NodeId, string> = {
   channel_matrix: 'channelMatrix',
   replay_gain: 'replayGain',
@@ -175,7 +188,7 @@ async function setNodeEnabled(id: NodeId, value: boolean | string | number): Pro
     if (enabled && !player.impulseResponseConfig.path) {
       selectSection(id)
       await nextTick()
-      irFileInput.value?.click()
+      impulseEditor.value?.openFilePicker()
       return
     }
     player.impulseResponseConfig.enabled = enabled
@@ -326,179 +339,6 @@ const eqPresetOptions = computed(() => [
   ...eqPresets.customPresets.map((preset) => ({ value: preset.id, label: preset.name })),
   { value: 'modified', label: t('ap.eqPresetModified'), disabled: true }
 ])
-function bandsMatch(left: EqBand[], right: EqBand[]): boolean {
-  return (
-    left.length === right.length &&
-    left.every((band, index) => {
-      const other = right[index]
-      return (
-        other &&
-        band.enabled === other.enabled &&
-        Math.abs(band.frequencyHz - other.frequencyHz) < 0.001 &&
-        Math.abs(band.gainDb - other.gainDb) < 0.001 &&
-        Math.abs(band.q - other.q) < 0.001
-      )
-    })
-  )
-}
-function copyEqBands(bands = player.eqBands): EqBand[] {
-  return bands.map((band) => ({ ...band }))
-}
-function sameEqBand(left: EqBand | undefined, right: EqBand | undefined): boolean {
-  return !!left && !!right && bandsMatch([left], [right])
-}
-function applyEq(): void {
-  if (eqCommitTimer) clearTimeout(eqCommitTimer)
-  eqCommitTimer = undefined
-  void player.commitEqBands().then(() => player.refreshAudioChain())
-}
-function stopEqComparison(): void {
-  const comparison = eqComparison.value
-  if (!comparison) return
-  player.eqBands[comparison.index] = { ...comparison.current }
-  eqComparison.value = null
-  applyEq()
-}
-function beginEqEdit(): void {
-  stopEqComparison()
-  if (!eqPendingSnapshot) eqPendingSnapshot = copyEqBands()
-}
-function recordEqEdit(): void {
-  const before = eqPendingSnapshot
-  eqPendingSnapshot = null
-  if (!before || bandsMatch(before, player.eqBands)) return
-  eqHistory.value = [...eqHistory.value.slice(-79), { before, after: copyEqBands(), kind: 'edit' }]
-  eqFuture.value = []
-}
-function commitEq(): void {
-  recordEqEdit()
-  applyEq()
-}
-function scheduleEq(): void {
-  if (eqCommitTimer) clearTimeout(eqCommitTimer)
-  eqCommitTimer = setTimeout(applyEq, 100)
-}
-function previousEqBand(index: number): EqBand | null {
-  let undoneEdits = 0
-  for (let cursor = eqHistory.value.length - 1; cursor >= 0; cursor--) {
-    const entry = eqHistory.value[cursor]
-    if (entry.kind === 'bandUndo' && entry.bandIndex === index) {
-      undoneEdits++
-    } else if (entry.kind === 'edit' && !sameEqBand(entry.before[index], entry.after[index])) {
-      if (undoneEdits > 0) undoneEdits--
-      else return { ...entry.before[index] }
-    }
-  }
-  return null
-}
-const previousSelectedEqBand = computed(() => previousEqBand(selectedEqIndex.value))
-function undoEq(): void {
-  stopEqComparison()
-  if (eqPendingSnapshot) commitEq()
-  const entry = eqHistory.value.at(-1)
-  if (!entry) return
-  eqHistory.value = eqHistory.value.slice(0, -1)
-  eqFuture.value = [...eqFuture.value, entry]
-  player.eqBands = copyEqBands(entry.before)
-  applyEq()
-}
-function redoEq(): void {
-  stopEqComparison()
-  if (eqPendingSnapshot) commitEq()
-  const entry = eqFuture.value.at(-1)
-  if (!entry) return
-  eqFuture.value = eqFuture.value.slice(0, -1)
-  eqHistory.value = [...eqHistory.value, entry]
-  player.eqBands = copyEqBands(entry.after)
-  applyEq()
-}
-function undoSelectedEqBand(): void {
-  stopEqComparison()
-  if (eqPendingSnapshot) commitEq()
-  const index = selectedEqIndex.value
-  const previous = previousEqBand(index)
-  if (!previous || sameEqBand(previous, player.eqBands[index])) return
-  const before = copyEqBands()
-  player.eqBands[index] = previous
-  eqHistory.value = [
-    ...eqHistory.value.slice(-79),
-    { before, after: copyEqBands(), kind: 'bandUndo', bandIndex: index }
-  ]
-  eqFuture.value = []
-  applyEq()
-}
-function toggleEqComparison(): void {
-  if (eqComparison.value) {
-    stopEqComparison()
-    return
-  }
-  if (eqPendingSnapshot) commitEq()
-  const index = selectedEqIndex.value
-  const previous = previousEqBand(index)
-  const current = player.eqBands[index]
-  if (!previous || !current || sameEqBand(previous, current)) return
-  eqComparison.value = { index, current: { ...current } }
-  player.eqBands[index] = previous
-  applyEq()
-}
-watch(selectedEqIndex, () => stopEqComparison())
-watch(selected, (id) => {
-  if (id === 'eq') return
-  stopEqComparison()
-  if (eqPendingSnapshot) commitEq()
-})
-const selectedEqPreset = computed(
-  () =>
-    eqPresets.allPresets.find((preset) => bandsMatch(player.eqBands, preset.bands))?.id ??
-    'modified'
-)
-function selectEqPreset(value: string | number | (string | number)[]): void {
-  if (typeof value !== 'string') return
-  const preset = eqPresets.allPresets.find((item) => item.id === value)
-  if (!preset) return
-  beginEqEdit()
-  player.eqBands = copyEqBands(preset.bands)
-  commitEq()
-}
-const selectedEqBand = computed(() => player.eqBands[selectedEqIndex.value])
-function eqFrequencyLimits(index: number): { min: number; max: number } {
-  return {
-    min: Math.max(20, (player.eqBands[index - 1]?.frequencyHz ?? 20 / 1.02) * 1.02),
-    max: Math.min(20000, (player.eqBands[index + 1]?.frequencyHz ?? 20000 * 1.02) / 1.02)
-  }
-}
-const selectedEqFrequencyLimits = computed(() => eqFrequencyLimits(selectedEqIndex.value))
-function updateEqBand(index: number, update: Partial<EqBand>): void {
-  const band = player.eqBands[index]
-  if (!band) return
-  beginEqEdit()
-  if (update.frequencyHz !== undefined) {
-    const { min, max } = eqFrequencyLimits(index)
-    band.frequencyHz = Math.min(max, Math.max(min, update.frequencyHz))
-  }
-  if (update.gainDb !== undefined) {
-    band.gainDb = Math.max(-12, Math.min(12, update.gainDb))
-    band.enabled = Math.abs(band.gainDb) >= 0.0001
-  }
-  if (update.q !== undefined) band.q = Math.max(0.1, Math.min(24, update.q))
-  if (update.enabled !== undefined) band.enabled = update.enabled
-  scheduleEq()
-}
-function resetEq(): void {
-  beginEqEdit()
-  player.eqBands.forEach((band) => {
-    band.enabled = false
-    band.gainDb = 0
-    band.q = 1
-  })
-  commitEq()
-}
-function toggleEqBand(index: number): void {
-  const band = player.eqBands[index]
-  if (!band) return
-  updateEqBand(index, { enabled: !band.enabled })
-  commitEq()
-}
 function savePreset(): void {
   const name = presetName.value.trim()
   if (!name) {
@@ -530,267 +370,16 @@ function openPresetDialog(): void {
   savePresetDialogOpen.value = true
 }
 
-const effectFields: Record<LegacyId | 'limiter', Field[]> = {
-  compressor: [
-    {
-      key: 'thresholdDb',
-      label: 'threshold',
-      help: 'compressorThreshold',
-      min: -60,
-      max: 0,
-      step: 0.1,
-      decimals: 1,
-      unit: 'dB'
-    },
-    {
-      key: 'ratio',
-      label: 'ratio',
-      help: 'compressorRatio',
-      min: 1,
-      max: 20,
-      step: 0.1,
-      decimals: 1
-    },
-    {
-      key: 'attackMs',
-      label: 'attack',
-      help: 'compressorAttack',
-      min: 0.1,
-      max: 500,
-      step: 0.1,
-      decimals: 1,
-      unit: 'ms'
-    },
-    {
-      key: 'releaseMs',
-      label: 'release',
-      help: 'compressorRelease',
-      min: 5,
-      max: 2000,
-      unit: 'ms'
-    },
-    {
-      key: 'makeupDb',
-      label: 'makeupGain',
-      help: 'compressorMakeup',
-      min: -12,
-      max: 24,
-      step: 0.1,
-      decimals: 1,
-      unit: 'dB'
-    }
-  ],
-  delay: [
-    { key: 'delayMs', label: 'time', help: 'delayTime', min: 1, max: 2000, unit: 'ms' },
-    {
-      key: 'feedback',
-      label: 'feedback',
-      help: 'delayFeedback',
-      min: 0,
-      max: 0.95,
-      step: 0.01,
-      decimals: 2
-    },
-    { key: 'mix', label: 'mix', help: 'wetDryMix', min: 0, max: 1, step: 0.01, decimals: 2 }
-  ],
-  reverb: [
-    {
-      key: 'roomSize',
-      label: 'roomSize',
-      help: 'reverbRoomSize',
-      min: 0,
-      max: 1,
-      step: 0.05,
-      decimals: 2
-    },
-    { key: 'decay', label: 'decay', help: 'reverbDecay', min: 0, max: 1, step: 0.05, decimals: 2 },
-    { key: 'mix', label: 'mix', help: 'wetDryMix', min: 0, max: 1, step: 0.05, decimals: 2 }
-  ],
-  chorus: [
-    {
-      key: 'rateHz',
-      label: 'rate',
-      help: 'chorusRate',
-      min: 0.05,
-      max: 10,
-      step: 0.05,
-      decimals: 2,
-      unit: 'Hz'
-    },
-    {
-      key: 'depthMs',
-      label: 'depth',
-      help: 'chorusDepth',
-      min: 0.1,
-      max: 15,
-      step: 0.1,
-      decimals: 1,
-      unit: 'ms'
-    },
-    { key: 'mix', label: 'mix', help: 'wetDryMix', min: 0, max: 1, step: 0.01, decimals: 2 }
-  ],
-  noise_gate: [
-    {
-      key: 'thresholdDb',
-      label: 'threshold',
-      help: 'gateThreshold',
-      min: -80,
-      max: 0,
-      step: 0.1,
-      decimals: 1,
-      unit: 'dB'
-    },
-    {
-      key: 'attackMs',
-      label: 'attack',
-      help: 'gateAttack',
-      min: 0.1,
-      max: 200,
-      step: 0.1,
-      decimals: 1,
-      unit: 'ms'
-    },
-    { key: 'holdMs', label: 'hold', help: 'gateHold', min: 0, max: 2000, unit: 'ms' },
-    { key: 'releaseMs', label: 'release', help: 'gateRelease', min: 5, max: 2000, unit: 'ms' },
-    {
-      key: 'rangeDb',
-      label: 'attenuationRange',
-      help: 'gateRange',
-      min: -100,
-      max: 0,
-      step: 0.1,
-      decimals: 1,
-      unit: 'dB'
-    }
-  ],
-  phaser: [
-    {
-      key: 'rateHz',
-      label: 'rate',
-      help: 'phaserRate',
-      min: 0.05,
-      max: 10,
-      step: 0.05,
-      decimals: 2,
-      unit: 'Hz'
-    },
-    { key: 'depth', label: 'depth', help: 'phaserDepth', min: 0, max: 1, step: 0.05, decimals: 2 },
-    {
-      key: 'centerHz',
-      label: 'centerFrequency',
-      help: 'phaserCenter',
-      min: 100,
-      max: 5000,
-      unit: 'Hz'
-    },
-    {
-      key: 'feedback',
-      label: 'feedback',
-      help: 'phaserFeedback',
-      min: -0.95,
-      max: 0.95,
-      step: 0.05,
-      decimals: 2
-    },
-    { key: 'mix', label: 'mix', help: 'wetDryMix', min: 0, max: 1, step: 0.05, decimals: 2 }
-  ],
-  limiter: [
-    {
-      key: 'ceilingDb',
-      label: 'ceiling',
-      help: 'limiterCeiling',
-      min: -12,
-      max: 0,
-      step: 0.1,
-      decimals: 1,
-      unit: 'dB'
-    },
-    { key: 'releaseMs', label: 'release', help: 'limiterRelease', min: 5, max: 2000, unit: 'ms' }
-  ]
-}
-function effectConfig(id: LegacyId | 'limiter'): Record<string, number> {
-  const configs = {
-    compressor: player.compressorConfig,
-    delay: player.delayConfig,
-    reverb: player.reverbConfig,
-    chorus: player.chorusConfig,
-    noise_gate: player.noiseGateConfig,
-    phaser: player.phaserConfig,
-    limiter: player.limiterConfig
-  }
-  return configs[id] as unknown as Record<string, number>
-}
-async function applyEffect(id: LegacyId | 'limiter'): Promise<void> {
-  const actions = {
-    compressor: () => player.setCompressorConfig(),
-    delay: () => player.setDelayConfig(),
-    reverb: () => player.setReverbConfig(),
-    chorus: () => player.setChorusConfig(),
-    noise_gate: () => player.setNoiseGateConfig(),
-    phaser: () => player.setPhaserConfig(),
-    limiter: () => player.setLimiter()
-  }
-  if (!(await actions[id]())) warning(t('ap.v2UpdateFailed'))
-  await player.refreshAudioChain()
-}
-
 function showIrError(code?: string): void {
   const key = `ap.irErrors.${code || 'unknown'}`
   irError.value = te(key) ? t(key) : t('ap.irLoadFailed')
   warning(irError.value)
 }
-async function importIr(event: Event): Promise<void> {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (!file) return
-  const path = window.api.audio.getFilePath(file)
-  if (!path) return showIrError('path_unavailable')
-  const previous = { ...player.impulseResponseConfig }
-  player.impulseResponseConfig = { ...previous, enabled: true, path }
-  const result = await player.setImpulseResponseConfig()
-  if (!result.success) {
-    player.impulseResponseConfig = previous
-    showIrError(result.error)
-  } else irError.value = ''
-}
-async function applyIr(): Promise<void> {
-  const result = await player.setImpulseResponseConfig()
-  if (!result.success) {
-    await player.loadImpulseResponseConfig()
-    showIrError(result.error)
-  } else irError.value = ''
-}
-
-const deviceOptions = computed(() =>
-  player.devices.map((device) => ({
-    value: `${device.backend}\u0000${device.id}`,
-    label: `${backendLabel(device.backend)} · ${device.name}${device.isDefault ? ` (${t('ap.defaultDevice')})` : ''}`
-  }))
-)
-const selectedDevice = computed(() => `${player.currentBackend}\u0000${player.currentDeviceId}`)
-async function selectDevice(value: string | number | (string | number)[]): Promise<void> {
-  if (typeof value !== 'string') return
-  const device = player.devices.find((item) => `${item.backend}\u0000${item.id}` === value)
-  if (device && !(await player.selectOutputDevice(device))) warning(t('ap.v2UpdateFailed'))
-  await player.refreshAudioChain()
-}
-const sampleRateOptions = [44100, 48000, 88200, 96000, 176400, 192000].map((value) => ({
-  value,
-  label: `${value / 1000} kHz`
-}))
-const qualityOptions = computed(() => [
-  { value: 'best', label: t('ap.qualityBest') },
-  { value: 'medium', label: t('ap.qualityMedium') },
-  { value: 'fast', label: t('ap.qualityFast') }
-])
-
 async function restoreDefaults(): Promise<void> {
   if (resetting.value) return
   resetting.value = true
   stopEqComparison()
-  if (eqCommitTimer) clearTimeout(eqCommitTimer)
-  eqCommitTimer = undefined
+  cancelPendingCommit()
   try {
     const result = await player.resetAudioProcessingSettings()
     if (!result.success) {
@@ -798,9 +387,7 @@ async function restoreDefaults(): Promise<void> {
       return
     }
     irError.value = ''
-    eqPendingSnapshot = null
-    eqHistory.value = []
-    eqFuture.value = []
+    clearHistory()
     resetDialogOpen.value = false
     success(t('ap.resetAudioSettingsDone'))
   } catch (error) {
@@ -840,8 +427,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopEqComparison()
   if (clipGuardTimer) clearTimeout(clipGuardTimer)
-  if (eqPendingSnapshot) commitEq()
-  else if (eqCommitTimer) applyEq()
   player.setAudioControlAnalysisActive(false)
   player.setLoudnessAnalysisEnabled(false)
 })
@@ -1048,118 +633,10 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <!-- limiter -->
-        <div v-if="isLegacyId(selected) || selected === 'limiter'" class="flex flex-wrap gap-3">
-          <p v-if="selected === 'limiter'" class="w-full text-xs text-text-l">
-            {{ t('ap.outputClipGuardDesc') }}
-          </p>
-          <DspKnobField
-            v-for="field in effectFields[selected as LegacyId | 'limiter']"
-            :key="field.key"
-            :model-value="effectConfig(selected as LegacyId | 'limiter')[field.key]"
-            :label="t(`ap.${field.label}`)"
-            :description="t(`ap.dspHelp.${field.help}`)"
-            :min="field.min"
-            :max="field.max"
-            :step="field.step"
-            :decimals="field.decimals"
-            :unit="field.unit"
-            @update:model-value="effectConfig(selected as LegacyId | 'limiter')[field.key] = $event"
-            @change="applyEffect(selected as LegacyId | 'limiter')"
-          />
-        </div>
-        <!-- channel_matrix -->
-        <div v-else-if="selected === 'channel_matrix'" class="space-y-4 text-xs">
-          <div class="flex flex-wrap items-center gap-5">
-            <div class="flex items-center gap-2">
-              <BaseSwitch
-                v-model="player.channelMatrixConfig.swapStereo"
-                class="w-fit text-left"
-                @change="player.setChannelMatrixConfig()"
-              >
-                {{ t('ap.changeChannels') }}
-              </BaseSwitch>
-            </div>
-            <div class="flex items-center gap-2">
-              <BaseSwitch
-                v-model="player.channelMatrixConfig.monoDownmix"
-                class="w-fit text-left"
-                @change="player.setChannelMatrixConfig()"
-              >
-                {{ t('ap.stereoToMono') }}
-              </BaseSwitch>
-            </div>
-          </div>
-          <DspKnobField
-            v-model="player.channelMatrixConfig.balance"
-            :label="t('ap.channelMatrix')"
-            :description="t('ap.v2BalanceHelp')"
-            :min="-1"
-            :max="1"
-            :step="0.05"
-            :decimals="2"
-            @change="player.setChannelMatrixConfig()"
-          />
-
-          <div class="flex flex-wrap gap-3">
-            <DspKnobField
-              v-for="(_gain, index) in player.channelMatrixConfig.outputGains"
-              :key="index"
-              v-model="player.channelMatrixConfig.outputGains[index]"
-              :label="t('ap.channelNumber', { number: index + 1 })"
-              :description="t('ap.v2OutputGainHelp')"
-              :min="0"
-              :max="2"
-              :step="0.01"
-              :decimals="2"
-              @change="player.setChannelMatrixConfig()"
-            />
-          </div>
-        </div>
-        <!-- replay_gain -->
-        <div v-else-if="selected === 'replay_gain'" class="space-y-4 text-xs">
-          <label class="flex flex-wrap items-center gap-3">
-            <BaseSelect
-              v-model="player.replayGainConfig.mode"
-              :options="[
-                { value: 'off', label: t('ap.off') },
-                { value: 'track', label: t('ap.track') },
-                { value: 'album', label: t('ap.album') }
-              ]"
-              class="w-40"
-              @change="player.setReplayGain()"
-            />
-          </label>
-          <BaseSwitch
-            v-model="player.replayGainConfig.preventClipping"
-            class="w-fit text-left"
-            @change="player.setReplayGain()"
-          >
-            {{ t('ap.preventClipping') }}
-          </BaseSwitch>
-          <p class="text-text-l">
-            {{
-              player.replayGainConfig.active
-                ? `${player.replayGainConfig.appliedGainDb.toFixed(2)} dB ${t('ap.applied')}`
-                : t('ap.noMatchingTags')
-            }}
-          </p>
-        </div>
-        <!-- preamp -->
-        <div v-else-if="selected === 'preamp'" class="space-y-3 text-xs">
-          <DspKnobField
-            :model-value="player.preampDb"
-            :label="t('ap.preamp')"
-            :description="t('ap.v2PreampHelp')"
-            :min="-24"
-            :max="24"
-            :step="0.1"
-            :decimals="1"
-            unit="dB"
-            @update:model-value="player.preampDb = $event"
-            @change="player.setPreamp(player.preampDb, player.preampEnabled)"
-          />
-        </div>
+        <DspEffectEditor v-if="isLegacyId(selected) || selected === 'limiter'" :effect="selected" />
+        <ChannelMatrixEditor v-else-if="selected === 'channel_matrix'" />
+        <ReplayGainEditor v-else-if="selected === 'replay_gain'" />
+        <PreampEditor v-else-if="selected === 'preamp'" />
         <!-- eq -->
         <div v-else-if="selected === 'eq'" class="space-y-4 text-xs">
           <div class="flex flex-wrap items-center gap-2">
@@ -1308,268 +785,19 @@ onBeforeUnmount(() => {
             </fieldset>
           </div>
         </div>
-        <!-- stereo_field -->
-        <div v-else-if="selected === 'stereo_field'" class="flex flex-wrap gap-3 text-xs">
-          <p class="w-full text-text-l">{{ t('ap.stereoFieldDesc') }}</p>
-          <DspKnobField
-            v-model="player.stereoFieldConfig.width"
-            :label="t('ap.stereoWidth')"
-            :description="t('ap.stereoWidthHelp')"
-            :min="0"
-            :max="2"
-            :step="0.05"
-            :decimals="2"
-            @change="player.setStereoFieldConfig()"
-          />
-          <DspKnobField
-            v-model="player.stereoFieldConfig.midDb"
-            :label="t('ap.midGain')"
-            :description="t('ap.midGainHelp')"
-            :min="-12"
-            :max="6"
-            :step="0.5"
-            :decimals="1"
-            unit="dB"
-            @change="player.setStereoFieldConfig()"
-          />
-          <DspKnobField
-            v-model="player.stereoFieldConfig.sideDb"
-            :label="t('ap.sideGain')"
-            :description="t('ap.sideGainHelp')"
-            :min="-12"
-            :max="6"
-            :step="0.5"
-            :decimals="1"
-            unit="dB"
-            @change="player.setStereoFieldConfig()"
-          />
-        </div>
-        <!-- crossfeed -->
-        <div v-else-if="selected === 'crossfeed'" class="flex flex-wrap gap-3 text-xs">
-          <p class="w-full text-text-l">{{ t('ap.crossfeedDesc') }}</p>
-          <DspKnobField
-            v-model="player.crossfeedConfig.strength"
-            :label="t('ap.crossfeedStrength')"
-            :description="t('ap.crossfeedStrengthHelp')"
-            :min="0"
-            :max="1"
-            :step="0.05"
-            :decimals="2"
-            @change="player.setCrossfeedConfig()"
-          />
-          <DspKnobField
-            v-model="player.crossfeedConfig.cutoffHz"
-            :label="t('ap.crossfeedCutoff')"
-            :description="t('ap.crossfeedCutoffHelp')"
-            :min="300"
-            :max="1500"
-            :step="50"
-            unit="Hz"
-            @change="player.setCrossfeedConfig()"
-          />
-          <DspKnobField
-            v-model="player.crossfeedConfig.delayMs"
-            :label="t('ap.crossfeedDelay')"
-            :description="t('ap.crossfeedDelayHelp')"
-            :min="0"
-            :max="0.6"
-            :step="0.05"
-            :decimals="2"
-            unit="ms"
-            @change="player.setCrossfeedConfig()"
-          />
-        </div>
-        <!-- fir -->
-        <div v-else-if="selected === 'impulse_response'" class="space-y-4 text-xs">
-          <p class="text-text-l">{{ t('ap.irDesc') }}</p>
-          <input
-            ref="irFileInput"
-            class="hidden"
-            type="file"
-            accept=".wav,audio/wav"
-            @change="importIr"
-          />
-          <div class="flex items-center gap-4">
-            <button
-              class="rounded-lg border border-border px-3 py-1.5 hover:border-primary"
-              @click="irFileInput?.click()"
-            >
-              {{ t('ap.irImport') }}
-            </button>
-            <p v-if="player.impulseResponseConfig.path" class="break-all text-text-l">
-              {{ player.impulseResponseConfig.path }}
-            </p>
-          </div>
-          <BaseSwitch
-            v-model="player.impulseResponseConfig.autoGain"
-            class="w-fit text-left"
-            @change="applyIr"
-          >
-            {{ t('ap.irAutoGain') }}
-            {{ player.impulseResponseConfig.autoPreampDb?.toFixed(1) ?? '0.0' }} dB
-          </BaseSwitch>
-          <DspKnobField
-            v-model="player.impulseResponseConfig.gainDb"
-            :label="t('ap.irManualGain')"
-            :description="t('ap.irTotalGain')"
-            :min="-24"
-            :max="12"
-            :step="0.5"
-            :decimals="1"
-            unit="dB"
-            :live="false"
-            @change="applyIr"
-          />
-          <p v-if="irError" class="text-danger">{{ irError }}</p>
-        </div>
-        <!-- output -->
-        <div v-else-if="selected === 'output'" class="space-y-4 text-xs">
-          <div class="my-2">{{ t('ap.outputDevice') }}</div>
-          <label class="flex flex-wrap items-center gap-3">
-            <BaseSelect
-              :model-value="selectedDevice"
-              :options="deviceOptions"
-              class="min-w-48 flex-1"
-              @change="selectDevice"
-            />
-            <button
-              class="rounded border border-border px-2.5 py-1.5 hover:border-primary"
-              @click="player.refreshDevices()"
-            >
-              {{ t('ap.refreshDevice') }}
-            </button>
-          </label>
-          <DspKnobField
-            :model-value="Math.round(player.volume * 100)"
-            :label="t('ap.volume')"
-            :description="t('ap.v2VolumeHelp')"
-            :min="0"
-            :max="100"
-            unit="%"
-            @update:model-value="player.setVolume($event / 100)"
-          />
-        </div>
-        <!-- playback -->
-        <div v-else-if="selected === 'playback'" class="space-y-4 text-xs">
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.playbackSpeedConfig.enabled"
-              class="w-fit text-left"
-              @change="player.setPlaybackSpeed()"
-            >
-              {{ t('ap.playSpeed') }}
-            </BaseSwitch>
-          </div>
-          <DspKnobField
-            v-model="player.playbackSpeedConfig.speed"
-            :label="t('ap.playSpeed')"
-            :description="t('ap.v2SpeedHelp')"
-            :min="0.5"
-            :max="2"
-            :step="0.05"
-            :decimals="2"
-            unit="×"
-            @change="player.setPlaybackSpeed()"
-          />
-        </div>
-        <!-- resampler -->
-        <div v-else-if="selected === 'resampler'" class="space-y-4 text-xs">
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.resamplerConfig.forceOutputRate"
-              class="w-fit text-left"
-              @change="player.setResamplerConfig(player.resamplerConfig)"
-            >
-              {{ t('ap.resampler') }}
-            </BaseSwitch>
-          </div>
-          <div class="flex flex-wrap gap-3">
-            <BaseSelect
-              v-model="player.resamplerConfig.targetSampleRate"
-              :options="sampleRateOptions"
-              class="w-44"
-              @change="player.setResamplerConfig(player.resamplerConfig)"
-            /><BaseSelect
-              v-model="player.resamplerConfig.quality"
-              :options="qualityOptions"
-              class="w-44"
-              @change="player.setResamplerConfig(player.resamplerConfig)"
-            />
-          </div>
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              class="w-fit text-left"
-              :model-value="player.dopEnabled"
-              @change="(value) => player.setDopEnabled(value === true)"
-            >
-              {{ t('ap.enableDoP') }}
-            </BaseSwitch>
-          </div>
-          <p class="text-text-l">{{ t('ap.dopDesc') }} {{ t('ap.dopNextPlayback') }}</p>
-        </div>
-        <!-- transition -->
-        <div v-else-if="selected === 'transition'" class="space-y-4 text-xs">
-          <p class="text-text-l">{{ t('ap.pauseFadeDesc') }}</p>
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.transitionConfig.pauseFadeEnabled"
-              class="w-fit text-left"
-              @change="player.setTransitionConfig()"
-            >
-              {{ t('ap.pauseFade') }}
-            </BaseSwitch>
-          </div>
-          <DspKnobField
-            v-if="player.transitionConfig.pauseFadeEnabled"
-            v-model="player.transitionConfig.pauseFadeMs"
-            :label="t('ap.pauseFadeDuration')"
-            :description="t('ap.pauseFadeDesc')"
-            :min="50"
-            :max="1000"
-            :step="10"
-            unit="ms"
-            @change="player.setTransitionConfig()"
-          />
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.transitionConfig.gaplessEnabled"
-              class="w-fit text-left"
-              @change="player.setTransitionConfig()"
-            >
-              {{ t('ap.gapless') }}
-            </BaseSwitch>
-          </div>
-          <div class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.transitionConfig.crossfadeEnabled"
-              class="w-fit text-left"
-              :disabled="!player.transitionConfig.gaplessEnabled"
-              @change="player.setTransitionConfig()"
-            >
-              {{ t('ap.crossfade') }}
-            </BaseSwitch>
-          </div>
-          <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3">
-            <BaseSwitch
-              v-model="player.transitionConfig.crossfadeAuto"
-              class="w-fit text-left"
-              @change="player.setTransitionConfig()"
-            >
-              {{ t('ap.crossfadeAuto') }}
-            </BaseSwitch>
-          </div>
-          <DspKnobField
-            v-if="player.transitionConfig.crossfadeEnabled"
-            v-model="player.transitionConfig.crossfadeMs"
-            :label="t('ap.crossfade')"
-            :description="t('ap.crossfadeAutoDesc')"
-            :min="0"
-            :max="30000"
-            :step="100"
-            unit="ms"
-            @change="player.setTransitionConfig()"
-          />
-        </div>
+        <StereoFieldEditor v-else-if="selected === 'stereo_field'" />
+        <CrossfeedEditor v-else-if="selected === 'crossfeed'" />
+        <ImpulseResponseEditor
+          v-else-if="selected === 'impulse_response'"
+          ref="impulseEditor"
+          :error="irError"
+          @load-error="showIrError"
+          @clear-error="irError = ''"
+        />
+        <AudioOutputSettings v-else-if="selected === 'output'" />
+        <PlaybackSpeedSettings v-else-if="selected === 'playback'" />
+        <ResamplerSettings v-else-if="selected === 'resampler'" />
+        <PlaybackTransitionSettings v-else-if="selected === 'transition'" />
       </section>
     </div>
 

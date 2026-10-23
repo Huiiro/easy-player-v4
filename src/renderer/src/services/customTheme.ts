@@ -170,10 +170,18 @@ function loadPackageFonts(installed?: InstalledThemePackage): void {
 
 export function applyCustomTheme(theme: CustomTheme | null): void {
   loadPackageFonts(theme?.package)
-  document.getElementById('ep-custom-theme')?.remove()
-  if (!theme) return
+  const existing = document.getElementById('ep-custom-theme')
+  if (!theme) {
+    existing?.remove()
+    return
+  }
+  const css = customThemeCSS(theme)
+  if (existing) {
+    if (existing.textContent !== css) existing.textContent = css
+    return
+  }
   const style = document.createElement('style')
   style.id = 'ep-custom-theme'
-  style.textContent = customThemeCSS(theme)
+  style.textContent = css
   document.head.append(style)
 }

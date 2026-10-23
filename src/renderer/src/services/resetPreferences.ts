@@ -13,9 +13,9 @@ export async function restoreDefaultPreferences(): Promise<void> {
     await player.setExtremePlayback(false, false)
     if (ui.extremePlayback) throw new Error('Unable to leave playback-only mode')
   }
-  if (ui.useMica) {
-    await ui.setMicaEnabled(false)
-    if (ui.useMica) throw new Error('Unable to disable Mica')
+  if (ui.nativeMaterialEnabled) {
+    await ui.setNativeWindowMaterial('none')
+    if (ui.nativeMaterialEnabled) throw new Error('Unable to disable window material')
   }
   const audio = await player.resetAudioProcessingSettings()
   if (!audio.success) throw new Error(audio.error || 'Unable to reset audio settings')

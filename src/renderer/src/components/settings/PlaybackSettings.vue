@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import SettingCard from './SettingCard.vue'
+import SettingRow from './SettingRow.vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import SleepTimerSettings from './SleepTimerSettings.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -9,6 +13,10 @@ import eventBus from '@/utils/eventBus'
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
+const songPlayTriggerOptions = computed(() => [
+  { label: t('settings.songPlayDoubleClick'), value: 'double' },
+  { label: t('settings.songPlaySingleClick'), value: 'single' }
+])
 
 function openAudioControls(): void {
   eventBus.emit('openAudioControls')
@@ -19,55 +27,62 @@ function setSmartShuffle(value: boolean | string | number): void {
 }
 </script>
 <template>
-  <div class="settings-card">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.audioControlPanel') }}</h3>
-        <p>{{ t('settings.audioControlPanelDescription') }}</p>
-      </div>
+  <SettingCard>
+    <SettingRow
+      :label="t('settings.audioControlPanel')"
+      :description="t('settings.audioControlPanelDescription')"
+    >
       <button class="secondary-button" type="button" @click="openAudioControls">
         {{ t('settings.openAudioControlPanel') }}
       </button>
-    </div>
+    </SettingRow>
     <hr class="mx-5 my-4 border-0 border-t border-border" />
     <SleepTimerSettings />
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.autoPlayOnRestore') }}</h3>
-        <p>{{ t('settings.autoPlayOnRestoreDescription') }}</p>
-      </div>
+    <SettingRow
+      :label="t('settings.songPlayTrigger')"
+      :description="t('settings.songPlayTriggerDescription')"
+    >
+      <BaseSelect
+        v-model="ui.songPlayTrigger"
+        class="w-48"
+        :options="songPlayTriggerOptions"
+        :aria-label="t('settings.songPlayTrigger')"
+        teleport
+      />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.autoPlayOnRestore')"
+      :description="t('settings.autoPlayOnRestoreDescription')"
+    >
       <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.smartShuffle') }}</h3>
-        <p>{{ t('settings.smartShuffleDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.smartShuffle')"
+      :description="t('settings.smartShuffleDescription')"
+    >
       <BaseSwitch
         :model-value="player.smartShuffleEnabled"
         size="md"
         @update:model-value="setSmartShuffle"
       />
-    </div>
+    </SettingRow>
     <hr class="mx-5 my-4 border-0 border-t border-border" />
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.reduceMotion') }}</h3>
-        <p>{{ t('settings.reduceMotionDescription') }}</p>
-      </div>
+    <SettingRow
+      :label="t('settings.reduceMotion')"
+      :description="t('settings.reduceMotionDescription')"
+    >
       <BaseSwitch v-model="ui.reduceMotion" size="md" />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.extremePlayback') }}</h3>
-        <p>{{ t('settings.extremePlaybackDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.extremePlayback')"
+      :description="t('settings.extremePlaybackDescription')"
+    >
       <BaseSwitch
         :model-value="ui.extremePlayback"
         :disabled="player.playbackModeChanging"
         size="md"
         @update:model-value="player.setExtremePlayback($event === true)"
       />
-    </div>
-  </div>
+    </SettingRow>
+  </SettingCard>
 </template>

@@ -198,6 +198,8 @@ public:
             InstanceMethod("getLimiter", &AudioEngineWrapper::GetLimiter),
             InstanceMethod("setTransitionConfig", &AudioEngineWrapper::SetTransitionConfig),
             InstanceMethod("setNextTrack", &AudioEngineWrapper::SetNextTrack),
+            InstanceMethod("getAutoMixStemRequest", &AudioEngineWrapper::GetAutoMixStemRequest),
+            InstanceMethod("setAutoMixVocals", &AudioEngineWrapper::SetAutoMixVocals),
             InstanceMethod("getTransitionConfig", &AudioEngineWrapper::GetTransitionConfig),
             InstanceMethod("enumerateDevices", &AudioEngineWrapper::EnumerateDevices),
             InstanceMethod("setDevice", &AudioEngineWrapper::SetDevice),
@@ -826,13 +828,15 @@ private:
             const auto auto_value = read_property(v, "crossfadeAuto", parameters);
             const auto pause_fade_value = read_property(v, "pauseFadeEnabled", parameters);
             const auto pause_fade_ms_value = read_property(v, "pauseFadeMs", parameters);
+            const auto cue_value = read_property(v, "crossfadeVocalCue", parameters);
             const TransitionConfig config{read_property(v, "gaplessEnabled", parameters).ToBoolean().Value(),
                 read_property(v, "crossfadeEnabled", parameters).ToBoolean().Value(), read_property(v, "crossfadeMs", parameters).ToNumber().Int32Value(),
                 auto_value.IsBoolean() && auto_value.As<Napi::Boolean>().Value(),
                 !pause_fade_value.IsBoolean() || pause_fade_value.As<Napi::Boolean>().Value(),
-                pause_fade_ms_value.IsNumber() ? pause_fade_ms_value.As<Napi::Number>().Int32Value() : 180};
+                pause_fade_ms_value.IsNumber() ? pause_fade_ms_value.As<Napi::Number>().Int32Value() : 180,
+                !cue_value.IsBoolean() || cue_value.As<Napi::Boolean>().Value()};
             parameters = format_params({{"gaplessEnabled", config.gapless_enabled}, {"crossfadeEnabled", config.crossfade_enabled},
-                {"crossfadeMs", config.crossfade_ms}, {"crossfadeAuto", config.crossfade_auto},
+                {"crossfadeMs", config.crossfade_ms}, {"crossfadeAuto", config.crossfade_auto}, {"crossfadeVocalCue", config.vocal_cue_enabled},
                 {"pauseFadeEnabled", config.pause_fade_enabled}, {"pauseFadeMs", config.pause_fade_ms}});
             return engine_->set_transition_config(config);
         }, true);
@@ -843,6 +847,7 @@ private:
         v.Set("crossfadeEnabled", Napi::Boolean::New(info.Env(), c.crossfade_enabled));
         v.Set("crossfadeMs", Napi::Number::New(info.Env(), c.crossfade_ms));
         v.Set("crossfadeAuto", Napi::Boolean::New(info.Env(), c.crossfade_auto));
+        v.Set("crossfadeVocalCue", Napi::Boolean::New(info.Env(), c.vocal_cue_enabled));
         v.Set("pauseFadeEnabled", Napi::Boolean::New(info.Env(), c.pause_fade_enabled));
         v.Set("pauseFadeMs", Napi::Number::New(info.Env(), c.pause_fade_ms)); return v;
     }
@@ -926,6 +931,43 @@ private:
             const std::string source = info.Length() > 1 && info[1].IsString()
                 ? info[1].As<Napi::String>().Utf8Value() : "";
             return engine_->set_next_track(info[0].As<Napi::String>().Utf8Value(), source);
+        });
+    }
+
+
+    Napi::Value GetAutoMixStemRequest(const Napi::CallbackInfo& info) {
+        const auto request = engine_->auto_mix_stem_request();
+        if (request.fade_frames <= 0) return info.Env().Null();
+        auto result = Napi::Object::New(info.Env());
+        result.Set("sourcePath", request.source_path); result.Set("nextPath", request.next_path);
+        result.Set("revision", Napi::Number::New(info.Env(), static_cast<double>(request.revision)));
+        result.Set("vocalCue", request.vocal_cue);
+        result.Set("sampleRate", request.sample_rate); result.Set("channels", request.channels);
+        result.Set("outStartFrame", Napi::Number::New(info.Env(), static_cast<double>(request.out_start_frame)));
+        result.Set("inStartFrame", Napi::Number::New(info.Env(), static_cast<double>(request.in_start_frame)));
+        result.Set("fadeFrames", Napi::Number::New(info.Env(), static_cast<double>(request.fade_frames)));
+        return result;
+    }
+    Napi::Value SetAutoMixVocals(const Napi::CallbackInfo& info) {
+        if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsString() || !info[2].IsString())
+            return RejectCommand(info, "setAutoMixVocals", "revision, outgoing WAV, incoming WAV");
+        return RunBoolCommand(info, "setAutoMixVocals", [&](std::string&) {
+            const double revision = info[0].As<Napi::Number>().DoubleValue();
+            if (!std::isfinite(revision) || revision < 0 || revision > 9007199254740991.0 || std::floor(revision) != revision) return false;
+            int64_t cue = -1;
+            if (info.Length() > 3 && info[3].IsNumber()) {
+                const double value = info[3].As<Napi::Number>().DoubleValue();
+                if (!std::isfinite(value) || value < 0 || value > 9007199254740991.0 || std::floor(value) != value) return false;
+                cue = static_cast<int64_t>(value);
+            }
+            int64_t out_start = -1;
+            if (info.Length() > 4 && info[4].IsNumber()) {
+                const double value = info[4].As<Napi::Number>().DoubleValue();
+                if (!std::isfinite(value) || value < 0 || value > 9007199254740991.0 || std::floor(value) != value) return false;
+                out_start = static_cast<int64_t>(value);
+            }
+            return engine_->set_auto_mix_vocals(static_cast<uint64_t>(revision),
+                info[1].As<Napi::String>().Utf8Value(), info[2].As<Napi::String>().Utf8Value(), cue, out_start);
         });
     }
 

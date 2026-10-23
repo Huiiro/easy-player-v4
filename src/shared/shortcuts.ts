@@ -9,7 +9,8 @@ export const SHORTCUT_ACTIONS = [
   'like',
   'dislike',
   'toggleDesktopLyrics',
-  'enableLightweight'
+  'enableLightweight',
+  'openSearch'
 ] as const
 
 export type ShortcutAction = (typeof SHORTCUT_ACTIONS)[number]
@@ -25,7 +26,8 @@ export const DEFAULT_LOCAL_SHORTCUTS: Record<ShortcutAction, string> = {
   like: 'ctrl+l',
   dislike: 'ctrl+d',
   toggleDesktopLyrics: 'ctrl+g',
-  enableLightweight: 'ctrl+e'
+  enableLightweight: 'ctrl+e',
+  openSearch: 'ctrl+k'
 }
 
 export const DEFAULT_GLOBAL_SHORTCUTS = Object.fromEntries(

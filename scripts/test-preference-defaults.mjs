@@ -28,6 +28,13 @@ const defaults = load('src/renderer/src/utils/preferenceDefaults.ts', { vue: Vue
 const footer = load('src/renderer/src/utils/footerLayout.ts')
 const shortcuts = load('src/shared/shortcuts.ts')
 const themePreview = load('src/renderer/src/services/themePreview.ts')
+const colors = load('src/renderer/src/components/background/songThemeColors.ts')
+const appearance = load('src/renderer/src/services/appearance.ts', {
+  '@/components/background/songThemeColors': colors
+})
+const controller = load('src/renderer/src/services/appearanceController.ts', {
+  '@/components/background/songThemeColors': colors
+})
 const uiModule = load(
   'src/renderer/src/stores/ui/uiStore.ts',
   {
@@ -38,9 +45,12 @@ const uiModule = load(
     '../../../../shared/shortcuts': shortcuts,
     '@/services/customTheme': {},
     '@/services/themePreview': themePreview,
-    '@/components/background/songThemeColors': {},
+    '@/services/appearance': appearance,
+    '@/services/appearanceController': controller,
     '@/stores/persistence': {},
-    '@/components/background/systemBackgroundRegistry': {},
+    '@/components/background/systemBackgroundRegistry': {
+      getSystemBackgroundTheme: () => ({ accentColor: '#00ff00' })
+    },
     '@/consts': {
       PlayerBgType: { ALBUM: 'album' },
       PlayerCoverStyle: { STANDARD: 'standard' },
@@ -59,6 +69,8 @@ const uiModule = load(
 )
 Pinia.setActivePinia(Pinia.createPinia())
 const ui = uiModule.useUIStore()
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
+assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
 assert.equal(ui.playerLyricsFontFamily, '', 'lyrics follow interface fonts by default')
 ui.customFontFamily = 'MiSans'

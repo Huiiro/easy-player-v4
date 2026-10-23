@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SettingCard from './SettingCard.vue'
+import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -34,7 +36,7 @@ const openFooterAnywhere = computed({
 </script>
 
 <template>
-  <div class="settings-card">
+  <SettingCard>
     <div class="setting-row setting-row-stack">
       <div>
         <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
@@ -120,54 +122,49 @@ const openFooterAnywhere = computed({
         </button>
       </div>
     </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.playerSpectrumStyle') }}</h3>
-        <p>{{ t('settings.playerSpectrumStyleDescription') }}</p>
-      </div>
+    <SettingRow
+      :label="t('settings.playerSpectrumStyle')"
+      :description="t('settings.playerSpectrumStyleDescription')"
+    >
       <BaseSelect
         v-model="ui.playerSpectrumStyle"
         :options="spectrumStyleOptions"
         teleport
         class="w-32"
       />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.karaokeAnimation') }}</h3>
-        <p>{{ t('settings.karaokeAnimationDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.karaokeAnimation')"
+      :description="t('settings.karaokeAnimationDescription')"
+    >
       <BaseSelect
         v-model="ui.karaokeAnimation"
         :options="karaokeAnimationOptions"
         teleport
         class="w-32"
       />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.autoAdjustLyricsDisplay') }}</h3>
-        <p>{{ t('settings.autoAdjustLyricsDisplayDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.autoAdjustLyricsDisplay')"
+      :description="t('settings.autoAdjustLyricsDisplayDescription')"
+    >
       <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
-    </div>
+    </SettingRow>
     <hr class="mx-5 my-4 border-0 border-t border-border" />
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.footerOpenAnywhere') }}</h3>
-        <p>{{ t('settings.footerOpenModeDescription') }}</p>
-      </div>
+    <SettingRow
+      :label="t('settings.footerOpenAnywhere')"
+      :description="t('settings.footerOpenModeDescription')"
+    >
       <BaseSwitch v-model="openFooterAnywhere" size="md" />
-    </div>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.autoHideFooter') }}</h3>
-        <p>{{ t('settings.autoHideFooterDescription') }}</p>
-      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.autoHideFooter')"
+      :description="t('settings.autoHideFooterDescription')"
+    >
       <BaseSwitch v-model="ui.autoHideFooter" size="md" />
-    </div>
+    </SettingRow>
     <FooterLayoutSettings />
-  </div>
+  </SettingCard>
 </template>
 
 <style scoped>

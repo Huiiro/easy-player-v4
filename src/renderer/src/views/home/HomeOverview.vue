@@ -270,11 +270,12 @@ watch(
 </script>
 
 <template>
-  <section class="xl:col-span-2">
-    <div class="mb-3 flex items-center justify-between">
-      <h2 class="text-lg font-semibold">{{ t('home.overview') }}</h2>
+  <section class="home-section home-overview">
+    <div class="home-section-heading">
+      <h2>{{ t('home.overview') }}</h2>
       <button
-        class="btn-hover flex items-center gap-1.5 px-2 py-1 text-sm"
+        type="button"
+        class="home-section-link flex items-center gap-1.5"
         :disabled="refreshing"
         @click="emit('refresh')"
       >
@@ -286,41 +287,29 @@ watch(
         {{ t('home.refresh') }}
       </button>
     </div>
-    <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <article
-        v-for="item in statCards"
-        :key="item.label"
-        class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
-        :title="item.title"
-      >
-        <span
-          class="grid size-14 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
-        >
+    <div class="home-surface home-overview-grid">
+      <article v-for="item in statCards" :key="item.label" class="home-stat" :title="item.title">
+        <span class="home-stat-icon">
           <SvgIcon :name="item.icon" class-name="size-5" />
         </span>
-        <div>
+        <div class="min-w-0">
           <p class="text-xs text-text-l">{{ item.label }}</p>
-          <p class="mt-1 text-2xl font-semibold">{{ loading ? '—' : item.value }}</p>
-          <p v-if="item.hint && !loading" class="mt-1 text-xs text-text-l">
+          <p class="home-stat-value">{{ loading ? '—' : item.value }}</p>
+          <p v-if="item.hint && !loading" class="home-stat-hint text-xs text-text-l">
             {{ item.hint }}
           </p>
         </div>
       </article>
-      <article
-        class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
-        :title="t('home.listeningPeriodsHint')"
-      >
-        <span
-          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
-        >
+      <article class="home-stat" :title="t('home.listeningPeriodsHint')">
+        <span class="home-stat-icon">
           <SvgIcon name="common-time" class-name="size-5" />
         </span>
         <div class="min-w-0 flex-1">
           <p class="text-xs text-text-l">{{ t('home.listeningPeriods') }}</p>
-          <p class="mt-1 truncate text-xl font-semibold">
+          <p class="home-stat-value truncate">
             {{ !loading && longestPeriod ? t(`home.periods.${longestPeriod.id}`) : '—' }}
           </p>
-          <p v-if="!loading && longestPeriod" class="mt-1 text-xs text-text-l">
+          <p v-if="!loading && longestPeriod" class="home-stat-hint text-xs text-text-l">
             {{ formatPeriodDuration(longestPeriod.playedSeconds) }} ·
             {{ percentage(longestPeriod.playedSeconds, totalPeriodSeconds) }}%
           </p>
@@ -347,21 +336,16 @@ watch(
           />
         </button>
       </article>
-      <article
-        class="home-surface home-stat group flex h-24 items-center gap-4 rounded-xl p-4 transition-all duration-[var(--motion-duration-standard)] hover:-translate-y-1"
-        :title="t('home.qualityHint')"
-      >
-        <span
-          class="grid size-14 shrink-0 place-items-center rounded-lg bg-primary/15 text-primary transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-110 group-hover:rotate-3"
-        >
+      <article class="home-stat" :title="t('home.qualityHint')">
+        <span class="home-stat-icon">
           <SvgIcon name="common-music" class-name="size-5" />
         </span>
         <div class="min-w-0 flex-1">
           <p class="text-xs text-text-l">{{ t('home.qualityStats') }}</p>
-          <p class="mt-1 truncate text-xl font-semibold">
+          <p class="home-stat-value truncate">
             {{ !loading && dominantQuality ? t(`home.qualityLevels.${dominantQuality.id}`) : '—' }}
           </p>
-          <p v-if="!loading && dominantQuality" class="mt-1 text-xs text-text-l">
+          <p v-if="!loading && dominantQuality" class="home-stat-hint text-xs text-text-l">
             {{ t('home.qualitySongCount', { count: dominantQuality.count }) }} ·
             {{ percentage(dominantQuality.count, knownQualityCount) }}%
           </p>
@@ -413,7 +397,7 @@ watch(
             <h3 class="font-semibold">
               {{ t(openStatDetail === 'periods' ? 'home.listeningPeriods' : 'home.qualityStats') }}
             </h3>
-            <p class="mt-1 text-xs text-text-l">
+            <p class="home-stat-hint text-xs text-text-l">
               {{
                 t(openStatDetail === 'periods' ? 'home.listeningPeriodsHint' : 'home.qualityHint')
               }}
@@ -517,7 +501,7 @@ watch(
                     }"
                   />
                 </div>
-                <p class="mt-1 text-xs text-text-l">
+                <p class="home-stat-hint text-xs text-text-l">
                   {{
                     t('home.listeningPeriodTooltip', {
                       count: period.plays,
@@ -550,7 +534,7 @@ watch(
                     }"
                   />
                 </div>
-                <p class="mt-1 text-xs text-text-l">
+                <p class="home-stat-hint text-xs text-text-l">
                   {{ t('home.qualitySongCount', { count: level.count }) }} ·
                   {{ formatBytes(level.bytes) }}
                 </p>

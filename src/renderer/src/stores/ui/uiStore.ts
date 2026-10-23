@@ -6,8 +6,15 @@ import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
-import { accessibleSongAccent, primarySurfaceColors } from '@/components/background/songThemeColors'
-import { computed, nextTick, reactive, ref, shallowRef, watch } from 'vue'
+import {
+  resolveAppearance,
+  DEFAULT_ACCENT_COLOR,
+  type AccentSource,
+  type AppearancePreferences,
+  type ColorMode
+} from '@/services/appearance'
+import { applyAppearance, createAppearanceScheduler } from '@/services/appearanceController'
+import { computed, nextTick, onScopeDispose, reactive, ref, shallowRef, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
   DEFAULT_PLAYER_COVER_STYLE,
@@ -54,15 +61,18 @@ export const UI_PREFERENCE_KEYS = [
   'useMica',
   'themeBeforeMica',
   'themeBeforeFollowingSystem',
+  'appearanceRulesVersion',
+  'accentSource',
+  'themeBackgroundEnabled',
   'useCardView',
   'compactSongList',
   'useCustomBg',
   'reduceMotion',
-  'useDynamicBg',
   'useLocalFileName',
   'useFullProgress',
   'extremePlayback',
   'autoPlayOnRestore',
+  'songPlayTrigger',
   'closeToTray',
   'autoStart',
   'showWelcomeText',
@@ -78,7 +88,6 @@ export const UI_PREFERENCE_KEYS = [
   'customThemeColor',
   'systemBackground',
   'customBg',
-  'currentDynamicBg',
   'lyricsAlignment',
   'lyricSourceMode',
   'autoSearchNetworkLyrics',
@@ -156,32 +165,33 @@ export const useUIStore = defineStore(
       if (name && !customThemes.value.some((theme) => theme.name === name)) return
       cancelCustomThemePreview()
       activeCustomThemeName.value = name
+      themeBackgroundEnabled.value = true
     }
     function selectThemeBackground(value: SystemBackground | 'light' | 'dark' | 'custom'): boolean {
-      if (followSystemTheme.value || useMica.value) return false
       if (value !== 'light' && value !== 'dark' && value !== 'custom' && !isSystemBackground(value))
         return false
+      if (value === 'light' || value === 'dark') {
+        setColorMode(value)
+        return true
+      }
+      const background = value === 'custom' ? 'none' : value
+      const changed =
+        useCustomBg.value !== (value === 'custom') ||
+        systemBackground.value !== background ||
+        themeBackgroundEnabled.value
       cancelCustomThemePreview()
-      const background =
-        value === 'light' || value === 'dark' || value === 'custom' ? 'none' : value
-      const dark =
-        value === 'light'
-          ? false
-          : value === 'dark' || value === 'custom'
-            ? true
-            : getSystemBackgroundTheme(value).colorMode === 'dark'
-      if (
-        !activeCustomThemeName.value &&
-        useCustomBg.value === (value === 'custom') &&
-        systemBackground.value === background &&
-        useDarkMode.value === dark
-      )
-        return false
       useCustomBg.value = value === 'custom'
       systemBackground.value = background
-      useDarkMode.value = dark
-      activeCustomThemeName.value = ''
-      return true
+      themeBackgroundEnabled.value = false
+      return changed
+    }
+    function setCustomBackground(media: Pick<typeof customBg, 'kind' | 'url' | 'path'>): void {
+      selectThemeBackground('custom')
+      Object.assign(customBg, media)
+    }
+    function clearCustomBackground(): void {
+      useCustomBg.value = false
+      Object.assign(customBg, { kind: 'image', url: '', path: '', blur: 0, brightness: 100 })
     }
     function confirmCustomThemePreview(): void {
       if (!customThemePreviewActive.value || !themePreviewTimer.confirm()) return
@@ -194,13 +204,13 @@ export const useUIStore = defineStore(
         else customThemes.value.push(pending)
       }
       activeCustomThemeName.value = pending?.name ?? activeCustomThemeName.value
+      themeBackgroundEnabled.value = true
       pendingCustomTheme.value = null
       releaseThemePackage(previousPackage)
     }
     const customThemeText = computed(() => effectiveCustomTheme.value?.package?.manifest.text ?? {})
     const customThemeOverridesBackground = computed(() => {
-      const theme = effectiveCustomTheme.value
-      return !!theme && theme.background !== 'inherit'
+      return resolvedAppearance.value.background.type === 'theme'
     })
     function refreshCustomTheme(): void {
       const theme = effectiveCustomTheme.value
@@ -235,7 +245,6 @@ export const useUIStore = defineStore(
       if (activeCustomThemeName.value === name) activeCustomThemeName.value = ''
       releaseThemePackage(previous)
     }
-    watch([customThemes, effectiveCustomTheme], refreshCustomTheme, { deep: true })
     const themeSettingsKey = 'ui.theme-settings'
     const persistedSettingsKey = 'ui.preferences.v1'
     // ========== 基础设置 ==========
@@ -270,12 +279,12 @@ export const useUIStore = defineStore(
     const useCardView = ref(false)
     const compactSongList = ref(false)
     const useCustomBg = ref(false)
-    const useDynamicBg = ref(false)
     const reduceMotion = ref(false)
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const extremePlayback = ref(false)
     const autoPlayOnRestore = ref(false)
+    const songPlayTrigger = ref<'single' | 'double'>('double')
     const closeToTray = ref(false)
     const autoStart = ref(false)
     const showWelcomeText = ref(true)
@@ -293,23 +302,17 @@ export const useUIStore = defineStore(
     const loadedCustomFontUrls = new Set<string>()
     let themeInitialized = false
     let themeTransitionTimer: ReturnType<typeof setTimeout> | undefined
-    let applyingVisualTheme = false
-    const customThemeColor = ref('oklch(0.691 0.198 148.262)')
+    const customThemeColor = ref(DEFAULT_ACCENT_COLOR)
+    const accentSource = ref<AccentSource>('auto')
+    const themeBackgroundEnabled = ref(true)
+    const appearanceRulesVersion = ref(0)
+    const systemDarkMode = ref(false)
+    const colorMode = computed<ColorMode>(() =>
+      followSystemTheme.value ? 'system' : useDarkMode.value ? 'dark' : 'light'
+    )
     const systemBackground = ref<SystemBackground>('none')
     // Transient song palette; theme selection remains the persisted preference.
     const songThemeColor = ref<string | null>(null)
-    const activeThemeColor = computed(() => {
-      if (
-        !customThemeOverridesBackground.value &&
-        !useCustomBg.value &&
-        systemBackground.value !== 'none'
-      ) {
-        if (systemBackground.value === 'solid' && songThemeColor.value)
-          return accessibleSongAccent(songThemeColor.value)
-        return getSystemBackgroundTheme(systemBackground.value).accentColor
-      }
-      return customThemeColor.value
-    })
     const customBg = reactive({
       kind: 'image' as 'image' | 'video',
       url: '',
@@ -320,11 +323,57 @@ export const useUIStore = defineStore(
       footerBackground: '#101827d9',
       chromeBorder: '#ffffff30'
     })
-    const currentDynamicBg = reactive({
-      bg: 'static_light',
-      footer: '',
-      dark: false
-    })
+    // Legacy fields remain the storage adapter. All consumers use this normalized model.
+    const appearancePreferences = computed<AppearancePreferences>(() => ({
+      colorMode: colorMode.value,
+      background: useCustomBg.value
+        ? { type: customBg.kind }
+        : systemBackground.value !== 'none'
+          ? { type: 'preset', id: systemBackground.value }
+          : { type: 'none' },
+      accentSource: accentSource.value,
+      accentColor: customThemeColor.value,
+      themeBackgroundEnabled: customThemePreviewActive.value || themeBackgroundEnabled.value,
+      customChrome: {
+        header: customBg.headerBackground,
+        footer: customBg.footerBackground,
+        border: customBg.chromeBorder
+      }
+    }))
+    const resolvedAppearance = computed(() =>
+      resolveAppearance(appearancePreferences.value, {
+        systemDark: systemDarkMode.value,
+        material: nativeWindowMaterial.value,
+        scene: getSystemBackgroundTheme(systemBackground.value),
+        songColor: songThemeColor.value,
+        theme: effectiveCustomTheme.value
+      })
+    )
+    const activeThemeColor = computed(() => resolvedAppearance.value.accentColor)
+    const nativeMaterialEnabled = computed(() => resolvedAppearance.value.nativeMaterialEnabled)
+    function setColorMode(mode: ColorMode): void {
+      followSystemTheme.value = mode === 'system'
+      if (mode !== 'system') useDarkMode.value = mode === 'dark'
+      syncFollowSystemTheme()
+    }
+    function migrateAppearanceRules(): void {
+      if (appearanceRulesVersion.value >= 1) return
+      const previous = themeBeforeMica.value
+      if (previous) {
+        useDarkMode.value = previous.useDarkMode
+        followSystemTheme.value = previous.followSystemTheme
+        useCustomBg.value = previous.useCustomBg
+        systemBackground.value = previous.systemBackground
+      } else if (themeBeforeFollowingSystem.value) {
+        const prior = themeBeforeFollowingSystem.value
+        useDarkMode.value = prior.useDarkMode
+        useCustomBg.value = prior.useCustomBg
+        systemBackground.value = prior.systemBackground
+      }
+      themeBeforeMica.value = null
+      themeBeforeFollowingSystem.value = null
+      appearanceRulesVersion.value = 1
+    }
     // ========== 歌词设置 ==========
     const lyricsAlignment = ref<'left' | 'center' | 'right'>('center')
     const lyricSourceMode = ref<'auto' | LyricSource>('auto')
@@ -445,7 +494,7 @@ export const useUIStore = defineStore(
     const getBackgroundFilter = computed(
       () => `blur(${customBg.blur ?? 0}px) brightness(${customBg.brightness ?? 100}%)`
     )
-    const hasBackground = computed(() => useCustomBg.value || systemBackground.value !== 'none')
+    const hasBackground = computed(() => resolvedAppearance.value.background.type !== 'none')
     function toggleCardStyle(): void {
       useCardView.value = !useCardView.value
     }
@@ -453,31 +502,52 @@ export const useUIStore = defineStore(
       useCardView.value = v
     }
 
+    let appliedAppearanceKey = ''
+    let appliedDark: boolean | undefined
+    let appliedThemePaletteKey: string | undefined
     function applyTheme(): void {
       const root = document.documentElement
-      root.classList.toggle('dark', useDarkMode.value)
-      root.classList.toggle('reduce-motion', reduceMotion.value)
-      root.classList.toggle('mica-enabled', useMica.value)
-      root.dataset.windowMaterial = nativeWindowMaterial.value
-      document.body.classList.toggle('mica-enabled', useMica.value)
-      root.style.colorScheme = useDarkMode.value ? 'dark' : 'light'
-      if (activeThemeColor.value) root.style.setProperty('--color-primary', activeThemeColor.value)
-      else root.style.removeProperty('--color-primary')
-      if (
-        !customThemeOverridesBackground.value &&
-        !useCustomBg.value &&
-        systemBackground.value === 'solid'
-      ) {
-        const fill = songThemeColor.value ?? activeThemeColor.value
-        const surface = primarySurfaceColors(fill)
-        root.style.setProperty('--color-primary-fill', fill)
-        root.style.setProperty('--color-on-primary', surface.text)
-        root.style.setProperty('--btn-primary-bg-hover', surface.hover)
-      } else {
-        root.style.removeProperty('--color-primary-fill')
-        root.style.removeProperty('--color-on-primary')
-        root.style.removeProperty('--btn-primary-bg-hover')
+      const appearance = resolvedAppearance.value
+      const themeTokens = effectiveCustomTheme.value?.tokens
+      const themePaletteKey = JSON.stringify([
+        themeTokens?.['--color-bg'],
+        themeTokens?.['--color-bg-l'],
+        themeTokens?.['--color-bg-l2'],
+        themeTokens?.['--color-text']
+      ])
+      const key = JSON.stringify([
+        appearance.dark,
+        appearance.material,
+        appearance.systemTheme,
+        appearance.accentColor,
+        appearance.primaryFill,
+        appearance.chrome
+      ])
+      if (key !== appliedAppearanceKey || themePaletteKey !== appliedThemePaletteKey) {
+        if (
+          (appliedDark !== undefined && appliedDark !== appearance.dark) ||
+          (appliedThemePaletteKey !== undefined && appliedThemePaletteKey !== themePaletteKey)
+        ) {
+          // Cross-fading light text and dark surfaces together passes through a
+          // gray-on-gray frame. Switch mode or authored surface palettes atomically;
+          // accent changes within one palette retain their normal color transition.
+          if (themeTransitionTimer) clearTimeout(themeTransitionTimer)
+          themeTransitionTimer = undefined
+          root.classList.remove('theme-transitioning')
+          void getComputedStyle(root).transitionProperty
+        } else if (
+          themeInitialized &&
+          !reduceMotion.value &&
+          !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          beginThemeTransition()
+        }
+        applyAppearance(appearance, root)
+        appliedAppearanceKey = key
+        appliedDark = appearance.dark
+        appliedThemePaletteKey = themePaletteKey
       }
+      root.classList.toggle('reduce-motion', reduceMotion.value)
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
       const normalizedPadding = normalizeLyricsFontPadding(lyricsFontPadding.value)
       if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
@@ -504,119 +574,15 @@ export const useUIStore = defineStore(
         themeTransitionTimer = undefined
       }, durationMs + 80)
     }
-    async function updateVisualTheme(): Promise<void> {
-      applyingVisualTheme = true
-      try {
-        syncSystemBackgroundThemeColor()
-        applyTheme()
-        await nextTick()
-      } finally {
-        applyingVisualTheme = false
-      }
-    }
-    function applyVisualThemeWithTransition(): void {
-      if (applyingVisualTheme) return
-      if (
-        !themeInitialized ||
-        reduceMotion.value ||
-        typeof document === 'undefined' ||
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      ) {
-        void updateVisualTheme()
-        return
-      }
-      beginThemeTransition()
-      void updateVisualTheme()
-    }
+    const scheduleAppearance = createAppearanceScheduler(applyTheme, (job) => {
+      void nextTick(job)
+    })
     function syncFollowSystemTheme(): void {
-      if (!followSystemTheme.value || typeof window === 'undefined') return
-      useDarkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches
-    }
-    function applyMicaThemeConstraints(): void {
-      followSystemTheme.value = true
-      useCustomBg.value = false
-      systemBackground.value = 'none'
-      syncFollowSystemTheme()
+      if (typeof window !== 'undefined')
+        systemDarkMode.value = window.matchMedia('(prefers-color-scheme: dark)').matches
     }
     function setFollowSystemTheme(enabled: boolean): void {
-      if (useMica.value && !enabled) return
-      if (enabled === followSystemTheme.value) return
-      if (!enabled) {
-        const previous = themeBeforeFollowingSystem.value
-        followSystemTheme.value = false
-        if (previous) {
-          useDarkMode.value = previous.useDarkMode
-          useCustomBg.value = previous.useCustomBg
-          systemBackground.value = previous.systemBackground
-        }
-        themeBeforeFollowingSystem.value = null
-        return
-      }
-      themeBeforeFollowingSystem.value = {
-        useDarkMode: useDarkMode.value,
-        useCustomBg: useCustomBg.value,
-        systemBackground: systemBackground.value
-      }
-      followSystemTheme.value = enabled
-      useCustomBg.value = false
-      systemBackground.value = 'none'
-      syncFollowSystemTheme()
-    }
-    function syncSystemBackgroundThemeColor(): void {
-      if (followSystemTheme.value) {
-        useCustomBg.value = false
-        systemBackground.value = 'none'
-      }
-      const overridesBackground = customThemeOverridesBackground.value
-      const useTranslucentChrome =
-        useMica.value &&
-        (nativeWindowMaterial.value === 'acrylic' || nativeWindowMaterial.value === 'vibrancy')
-      const theme = getSystemBackgroundTheme(
-        useCustomBg.value || overridesBackground ? 'none' : systemBackground.value
-      )
-      if (!overridesBackground && !useCustomBg.value && systemBackground.value !== 'none') {
-        useDarkMode.value = theme.colorMode === 'dark'
-      }
-      const root = document.documentElement
-      root.dataset.systemTheme = overridesBackground
-        ? 'none'
-        : useCustomBg.value
-          ? 'custom'
-          : systemBackground.value
-      root.style.setProperty(
-        '--app-header-bg',
-        useMica.value
-          ? 'transparent'
-          : useCustomBg.value && !overridesBackground
-            ? customBg.headerBackground
-            : theme.headerBackground
-      )
-      root.style.setProperty(
-        '--app-footer-bg',
-        useTranslucentChrome
-          ? 'color-mix(in srgb, var(--color-primary) 8%, color-mix(in srgb, var(--color-bg) 24%, transparent))'
-          : useCustomBg.value && !overridesBackground
-            ? customBg.footerBackground
-            : theme.footerBackground
-      )
-      root.style.setProperty(
-        '--app-chrome-border',
-        useTranslucentChrome
-          ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)'
-          : useCustomBg.value && !overridesBackground
-            ? customBg.chromeBorder
-            : theme.chromeBorder
-      )
-      if (useCustomBg.value && !overridesBackground) {
-        root.style.setProperty('--color-border', customBg.chromeBorder)
-        root.style.setProperty(
-          '--color-border-l',
-          `color-mix(in srgb, ${customBg.chromeBorder} 68%, white)`
-        )
-      } else {
-        root.style.removeProperty('--color-border')
-        root.style.removeProperty('--color-border-l')
-      }
+      setColorMode(enabled ? 'system' : useDarkMode.value ? 'dark' : 'light')
     }
 
     async function loadCustomFonts(): Promise<void> {
@@ -685,9 +651,8 @@ export const useUIStore = defineStore(
       // plugin. Keep this one-time reader solely for migration from the former
       // partial theme snapshot.
       if (hasPersistedStore(persistedSettingsKey)) {
-        if (useMica.value) applyMicaThemeConstraints()
+        migrateAppearanceRules()
         syncFollowSystemTheme()
-        syncSystemBackgroundThemeColor()
         applyTheme()
         themeInitialized = true
         return
@@ -762,8 +727,7 @@ export const useUIStore = defineStore(
             ? background.chromeBorder
             : customBg.chromeBorder
       }
-      syncSystemBackgroundThemeColor()
-      if (useMica.value) applyMicaThemeConstraints()
+      migrateAppearanceRules()
       syncFollowSystemTheme()
       applyTheme()
       themeInitialized = true
@@ -771,8 +735,7 @@ export const useUIStore = defineStore(
     }
 
     function setTheme(mode: 'light' | 'dark'): void {
-      if (followSystemTheme.value) return
-      useDarkMode.value = mode === 'dark'
+      setColorMode(mode)
     }
     function setPlayerBgType(value: unknown): void {
       playerBgType.value = resolvePlayerBgType(value)
@@ -795,43 +758,23 @@ export const useUIStore = defineStore(
         windowMaterialPending.value = false
       }
       nativeWindowMaterial.value = response.data.material
-      if (response.data.enabled) {
-        if (!useMica.value) {
-          themeBeforeMica.value = {
-            useDarkMode: useDarkMode.value,
-            followSystemTheme: followSystemTheme.value,
-            useCustomBg: useCustomBg.value,
-            systemBackground: systemBackground.value
-          }
-        }
-        useMica.value = true
-        applyMicaThemeConstraints()
-        return
-      }
-
-      useMica.value = false
-      const previous = themeBeforeMica.value
-      if (previous) {
-        useDarkMode.value = previous.useDarkMode
-        followSystemTheme.value = previous.followSystemTheme
-        useCustomBg.value = previous.useCustomBg
-        systemBackground.value = previous.systemBackground
-        syncFollowSystemTheme()
-      }
-      themeBeforeMica.value = null
+      useMica.value = response.data.enabled
     }
 
-    function resetTheme(): void {
+    async function resetTheme(): Promise<void> {
+      if (windowMaterialPending.value) throw new Error('Window material update is pending')
+      if (nativeMaterialEnabled.value) await setNativeWindowMaterial('none')
       cancelCustomThemePreview()
       activeCustomThemeName.value = ''
       useDarkMode.value = true
       followSystemTheme.value = false
       themeBeforeFollowingSystem.value = null
-      customThemeColor.value = ''
+      themeBeforeMica.value = null
+      customThemeColor.value = DEFAULT_ACCENT_COLOR
+      accentSource.value = 'auto'
+      themeBackgroundEnabled.value = true
       useCustomBg.value = false
       systemBackground.value = 'none'
-      setPlayerBgType(DEFAULT_PLAYER_BG_TYPE)
-      setPlayerCoverStyle(DEFAULT_PLAYER_COVER_STYLE)
       Object.assign(customBg, {
         kind: 'image',
         url: '',
@@ -883,21 +826,8 @@ export const useUIStore = defineStore(
     function toggleRomanization(): void {
       showLyricsRomanization.value = !showLyricsRomanization.value
     }
-    watch(
-      [
-        useDarkMode,
-        useMica,
-        nativeWindowMaterial,
-        customThemeColor,
-        useCustomBg,
-        systemBackground,
-        customThemeOverridesBackground,
-        () => customBg.url
-      ],
-      applyVisualThemeWithTransition
-    )
-    watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], applyTheme)
-    watch(songThemeColor, applyTheme)
+    watch([resolvedAppearance, effectiveCustomTheme], scheduleAppearance, { deep: true })
+    watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], scheduleAppearance)
     watch(
       playerBgType,
       (value) => {
@@ -917,17 +847,20 @@ export const useUIStore = defineStore(
     if (typeof window !== 'undefined') {
       const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
       systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
+      onScopeDispose(() => systemThemeQuery.removeEventListener('change', syncFollowSystemTheme))
     }
-    watch(
-      [
-        () => customBg.headerBackground,
-        () => customBg.footerBackground,
-        () => customBg.chromeBorder
-      ],
-      syncSystemBackgroundThemeColor
-    )
     const state = {
       customThemes,
+      appearancePreferences,
+      resolvedAppearance,
+      colorMode,
+      setColorMode,
+      nativeMaterialEnabled,
+      appearanceRulesVersion,
+      accentSource,
+      themeBackgroundEnabled,
+      setCustomBackground,
+      clearCustomBackground,
       selectThemeBackground,
       effectiveCustomThemeName,
       effectiveCustomTheme,
@@ -964,9 +897,9 @@ export const useUIStore = defineStore(
       reduceMotion,
       extremePlayback,
       autoPlayOnRestore,
+      songPlayTrigger,
       closeToTray,
       autoStart,
-      useDynamicBg,
       useLocalFileName,
       useFullProgress,
       showWelcomeText,
@@ -987,7 +920,6 @@ export const useUIStore = defineStore(
       songThemeColor,
       systemBackground,
       customBg,
-      currentDynamicBg,
       lyricsAlignment,
       lyricSourceMode,
       autoSearchNetworkLyrics,

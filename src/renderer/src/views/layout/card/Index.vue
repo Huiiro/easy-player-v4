@@ -4,15 +4,10 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
+import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { formatArtists } from '@/utils/artists'
-
-interface Playlist {
-  id: number
-  name: string
-  cover: string | null
-}
+import { useCardLibrary } from '@/components/library/useCardLibrary'
 
 const { t } = useI18n()
 const player = usePlayerStore()
@@ -32,18 +27,38 @@ function revealPlaylistsNearTop(event: MouseEvent): void {
   const top = cardViewRef.value?.getBoundingClientRect().top
   if (top !== undefined && event.clientY - top <= 120) showPlaylists()
 }
-const songs = ref<LibrarySong[]>([])
-const playlists = ref<Playlist[]>([])
-const activePlaylistId = ref<number | null>(null)
 const centerIndex = ref(0)
+const {
+  songs,
+  playlists,
+  activePlaylistId,
+  isLoading,
+  isSwitchingPlaylist,
+  loadSongs,
+  loadPlaylists,
+  selectPlaylist
+} = useCardLibrary({
+  beforeLoad: () => {
+    stopInertia()
+    stopMotion()
+  },
+  onSongsLoaded: async () => {
+    centerIndex.value = 0
+    await nextTick()
+    centerOnSong(player.currentQueueSong?.id)
+  },
+  onPlaylistsLoaded: async () => {
+    await nextTick()
+    updatePlaylistScrollState()
+  },
+  reduceMotion: () => ui.reduceMotion
+})
 const carouselRef = ref<HTMLElement | null>(null)
 const playlistStripRef = ref<HTMLElement | null>(null)
 const canScrollPlaylistsLeft = ref(false)
 const canScrollPlaylistsRight = ref(false)
 const cardWidth = ref(220)
-const isLoading = ref(false)
 const mounted = ref(false)
-const isSwitchingPlaylist = ref(false)
 
 let isDragging = false
 let pointerStartX = 0
@@ -307,44 +322,6 @@ async function playSong(song: LibrarySong): Promise<void> {
     return
   }
   await player.playCollection(songs.value, song.id, activePlaylistId.value)
-}
-async function loadSongs(): Promise<void> {
-  isLoading.value = true
-  stopInertia()
-  stopMotion()
-  try {
-    const response =
-      activePlaylistId.value === null
-        ? await window.api.database.command('querySongs', {})
-        : await window.api.database.command('queryPlaylistSongs', {
-            playlistId: activePlaylistId.value,
-            query: {}
-          })
-    const data = response.success ? (response.data as PagedLibrarySongs) : null
-    songs.value = data?.data.filter((song) => song.songStatus !== 0) || []
-    centerIndex.value = 0
-    await nextTick()
-    centerOnSong(player.currentQueueSong?.id)
-  } finally {
-    isLoading.value = false
-  }
-}
-async function loadPlaylists(): Promise<void> {
-  const response = await window.api.database.command('listPlaylists')
-  if (response.success) {
-    playlists.value = response.data as Playlist[]
-    await nextTick()
-    updatePlaylistScrollState()
-  }
-}
-async function selectPlaylist(id: number | null): Promise<void> {
-  if (activePlaylistId.value === id) return
-  isSwitchingPlaylist.value = true
-  await new Promise<void>((resolve) => setTimeout(resolve, 150))
-  activePlaylistId.value = id
-  await loadSongs()
-  await nextTick()
-  requestAnimationFrame(() => (isSwitchingPlaylist.value = false))
 }
 
 watch(

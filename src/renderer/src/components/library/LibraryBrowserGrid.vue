@@ -1,37 +1,14 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
-import { useUIStore } from '@/stores/ui/uiStore'
-
-type LibraryKind = 'album' | 'artist' | 'genre'
+import LibraryItemCard from './LibraryItemCard.vue'
+import { queryLibraryItems, type LibraryKind, type GridItem } from '@/services/libraryBrowser'
+import { useScrollPosition } from '@/hooks/useScrollPosition'
 type SortOrder = 'asc' | 'desc'
-
-interface AlbumRow {
-  albumName: string | null
-  artistName: string | null
-  songCount: number
-  albumCover: string | null
-}
-interface ArtistRow {
-  artistName: string | null
-  songCount: number
-  artistCover: string | null
-}
-interface GenreRow {
-  name: string
-  count: number
-}
-interface GridItem {
-  name: string
-  value: string
-  subtitle?: string
-  subtitleValue?: string
-  count: number
-  cover: string | null
-}
+import { useUIStore } from '@/stores/ui/uiStore'
 
 const props = defineProps<{ kind: LibraryKind }>()
 const { t } = useI18n()
@@ -54,11 +31,11 @@ const cardSize = computed<number>({
   }
 })
 const loading = ref(false)
+let loadRevision = 0
 const items = ref<GridItem[]>([])
 const visibleCoverKeys = ref(new Set<string>())
 const scrollContainer = ref<HTMLElement | null>(null)
 let coverObserver: IntersectionObserver | null = null
-let scrollSaveFrame = 0
 
 const title = computed(() => t(`library.${props.kind}s`))
 const icon = computed(() =>
@@ -72,57 +49,16 @@ const cardSizeOptions = computed(() => [
   { label: t('library.cardSizeMedium'), value: 176 },
   { label: t('library.cardSizeLarge'), value: 224 }
 ])
-const scrollStorageKey = computed(() => `library-scroll-position:${props.kind}`)
+const {
+  saveScrollPosition,
+  scheduleScrollPositionSave,
+  clearSavedScrollPosition,
+  restoreScrollPosition
+} = useScrollPosition(
+  scrollContainer,
+  computed(() => `library-scroll-position:${props.kind}`)
+)
 
-function savedScrollTop(): number {
-  try {
-    const value = Number(sessionStorage.getItem(scrollStorageKey.value))
-    return Number.isFinite(value) && value > 0 ? value : 0
-  } catch {
-    return 0
-  }
-}
-function saveScrollPosition(): void {
-  const container = scrollContainer.value
-  if (!container) return
-  try {
-    sessionStorage.setItem(scrollStorageKey.value, String(container.scrollTop))
-  } catch {
-    // Scroll restoration is optional when session storage is unavailable.
-  }
-}
-function scheduleScrollPositionSave(): void {
-  if (scrollSaveFrame) return
-  scrollSaveFrame = requestAnimationFrame(() => {
-    scrollSaveFrame = 0
-    saveScrollPosition()
-  })
-}
-function clearSavedScrollPosition(): void {
-  if (scrollSaveFrame) {
-    cancelAnimationFrame(scrollSaveFrame)
-    scrollSaveFrame = 0
-  }
-  try {
-    sessionStorage.removeItem(scrollStorageKey.value)
-  } catch {
-    // Scroll restoration is optional when session storage is unavailable.
-  }
-}
-async function restoreScrollPosition(): Promise<void> {
-  const top = savedScrollTop()
-  if (!top) return
-  await nextTick()
-  requestAnimationFrame(() => scrollContainer.value?.scrollTo({ top, behavior: 'auto' }))
-}
-
-function valueOrUnknown(value: string | null, kind: LibraryKind): string {
-  if (value?.trim()) return value
-  return `__easy_player_unknown_${kind}__`
-}
-function displayName(value: string | null): string {
-  return value?.trim() || t('library.unknown')
-}
 function itemKey(item: GridItem): string {
   return `${item.value}-${item.subtitle || ''}`
 }
@@ -142,49 +78,21 @@ function observeCover(element: unknown, item: GridItem): void {
 }
 async function load(restoreScroll = false): Promise<void> {
   loading.value = true
+  const revision = ++loadRevision
   try {
-    const action =
-      props.kind === 'album'
-        ? 'queryAlbums'
-        : props.kind === 'artist'
-          ? 'queryArtists'
-          : 'queryGenres'
-    const response = await window.api.database.command(action, {
-      sort: order.value,
-      search: keyword.value,
-      separator: props.kind === 'artist' ? ui.artistSeparator : undefined
-    })
-    if (!response.success) {
-      items.value = []
-      return
-    }
-    if (props.kind === 'album') {
-      items.value = (response.data as AlbumRow[]).map((item) => ({
-        name: displayName(item.albumName),
-        value: valueOrUnknown(item.albumName, 'album'),
-        subtitle: displayName(item.artistName),
-        subtitleValue: valueOrUnknown(item.artistName, 'artist'),
-        count: item.songCount,
-        cover: item.albumCover
-      }))
-    } else if (props.kind === 'artist') {
-      items.value = (response.data as ArtistRow[]).map((item) => ({
-        name: displayName(item.artistName),
-        value: valueOrUnknown(item.artistName, 'artist'),
-        count: item.songCount,
-        cover: item.artistCover
-      }))
-    } else {
-      items.value = (response.data as GenreRow[]).map((item) => ({
-        name: item.name === 'unknown_genre' ? t('library.unknown') : item.name,
-        value: item.name === 'unknown_genre' ? '__easy_player_unknown_genre__' : item.name,
-        count: item.count,
-        cover: null
-      }))
-    }
+    const result = await queryLibraryItems(
+      props.kind,
+      order.value,
+      keyword.value,
+      ui.artistSeparator,
+      t('library.unknown')
+    )
+    if (revision === loadRevision) items.value = result
   } finally {
-    loading.value = false
-    if (restoreScroll) await restoreScrollPosition()
+    if (revision === loadRevision) {
+      loading.value = false
+      if (restoreScroll) await restoreScrollPosition()
+    }
   }
 }
 function open(item: GridItem): void {
@@ -230,8 +138,7 @@ onMounted(() => {
   void load(true)
 })
 onBeforeUnmount(() => {
-  if (scrollSaveFrame) cancelAnimationFrame(scrollSaveFrame)
-  saveScrollPosition()
+  loadRevision++
   coverObserver?.disconnect()
 })
 </script>
@@ -308,45 +215,23 @@ onBeforeUnmount(() => {
       :style="gridStyle"
       @scroll.passive="scheduleScrollPositionSave"
     >
-      <div
+      <button
         v-for="item in items"
         :key="itemKey(item)"
+        :ref="(element) => observeCover(element, item)"
+        type="button"
         class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
         @click="open(item)"
       >
-        <div
-          class="relative aspect-square bg-bg-l"
-          :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-xl'"
-        >
-          <div
-            :ref="(element) => observeCover(element, item)"
-            class="size-full overflow-hidden"
-            :class="props.kind === 'artist' ? 'rounded-full' : 'rounded-lg'"
-          >
-            <img
-              v-if="shouldLoadCover(item) && coverUrl(item.cover)"
-              :src="coverUrl(item.cover)!"
-              loading="lazy"
-              decoding="async"
-              class="size-full object-cover transition-transform duration-[var(--motion-duration-slow)] group-hover:scale-105"
-              :alt="item.name"
-            />
-            <span v-else class="grid size-full place-items-center text-text-l">
-              <SvgIcon :name="icon" class-name="size-12" />
-            </span>
-          </div>
-          <span
-            class="absolute rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white"
-            :class="props.kind === 'artist' ? 'bottom-1 right-[9%]' : 'bottom-1 right-1'"
-          >
-            {{ t('library.songCount', { count: item.count }) }}
-          </span>
-        </div>
-        <p class="mt-2 truncate text-sm font-medium">{{ item.name }}</p>
-        <p v-if="item.subtitle" class="mt-0.5 truncate text-xs text-text-l">
-          {{ item.subtitle }}
-        </p>
-      </div>
+        <LibraryItemCard
+          :name="item.name"
+          :subtitle="item.subtitle"
+          :cover="shouldLoadCover(item) ? coverUrl(item.cover) : null"
+          :icon="icon"
+          :circle="kind === 'artist'"
+          :badge="t('library.songCount', { count: item.count })"
+        />
+      </button>
     </div>
   </section>
 </template>

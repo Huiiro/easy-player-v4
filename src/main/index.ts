@@ -261,6 +261,7 @@ function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, strin
       continue
     }
     const registered = globalShortcut.register(electronAccelerator, () => {
+      if (action === 'openSearch') showMainWindow()
       mainWindow?.webContents.send('shortcuts:action', action)
     })
     if (!registered) failed.push(accelerator)

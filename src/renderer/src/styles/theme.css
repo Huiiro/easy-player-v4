@@ -193,8 +193,13 @@
   --scrollbar-thumb-hover: oklch(0.402 0.025 257.521);
 }
 
-/* Built-in backgrounds remain expressive, while these tokens keep content readable. */
+/* Artwork fills have independent foreground contrast in both color modes. */
 :root[data-system-theme='solid'] {
+  --btn-primary-text: var(--color-on-primary);
+}
+
+/* Built-in backgrounds remain expressive, while these tokens keep content readable. */
+:root.dark[data-system-theme='solid'] {
   --btn-primary-text: var(--color-on-primary);
   --color-text: #e5eae9;
   --color-text-l: #b8c2c0;
@@ -219,7 +224,7 @@
   background-color: var(--color-primary-fill);
 }
 
-:root[data-system-theme='blackhole'] {
+:root.dark[data-system-theme='blackhole'] {
   --color-bg: rgb(13 12 9);
   --color-bg-l: rgb(25 22 16);
   --color-bg-l2: rgb(36 31 21);
@@ -234,7 +239,7 @@
   --scrollbar-thumb-hover: rgb(199 164 83 / 0.68);
 }
 
-:root[data-system-theme='rainy'] {
+:root.dark[data-system-theme='rainy'] {
   --color-bg: rgb(9 19 31);
   --color-bg-l: rgb(19 34 48);
   --color-bg-l2: rgb(29 46 61);
@@ -249,8 +254,8 @@
   --scrollbar-thumb-hover: rgb(159 202 225 / 0.66);
 }
 
-:root[data-system-theme='startrails'],
-:root[data-system-theme='starfield'] {
+:root.dark[data-system-theme='startrails'],
+:root.dark[data-system-theme='starfield'] {
   --color-bg: rgb(9 14 31);
   --color-bg-l: rgb(20 29 56);
   --color-bg-l2: rgb(30 40 70);
@@ -265,7 +270,7 @@
   --scrollbar-thumb-hover: rgb(162 187 245 / 0.68);
 }
 
-:root[data-system-theme='aurora'] {
+:root.dark[data-system-theme='aurora'] {
   /*--color-text: rgb(239 255 252);*/
   /*--color-text-l: rgb(185 224 217);*/
   /*--color-text-l2: rgb(139 185 178);*/
@@ -284,7 +289,7 @@
   --scrollbar-thumb-hover: rgb(146 245 219 / 0.7);
 }
 
-:root[data-system-theme='ocean'] {
+:root.dark[data-system-theme='ocean'] {
   --color-bg: rgb(6 25 35);
   --color-bg-l: rgb(14 42 52);
   --color-bg-l2: rgb(23 56 65);
@@ -299,7 +304,7 @@
   --scrollbar-thumb-hover: rgb(150 209 212 / 0.65);
 }
 
-:root[data-system-theme='sunset'] {
+:root.dark[data-system-theme='sunset'] {
   --color-bg: rgb(29 28 35);
   --color-bg-l: rgb(44 39 44);
   --color-bg-l2: rgb(58 49 52);
@@ -314,7 +319,7 @@
   --scrollbar-thumb-hover: rgb(245 195 146 / 0.65);
 }
 
-:root[data-system-theme='forest'] {
+:root.dark[data-system-theme='forest'] {
   --color-bg: rgb(21 34 28);
   --color-bg-l: rgb(32 47 37);
   --color-bg-l2: rgb(43 60 45);
@@ -329,7 +334,7 @@
   --scrollbar-thumb-hover: rgb(197 212 163 / 0.62);
 }
 
-:root[data-system-theme='matrix'] {
+:root.dark[data-system-theme='matrix'] {
   --color-bg: rgb(8 19 15);
   --color-bg-l: rgb(16 31 24);
   --color-bg-l2: rgb(24 43 33);
@@ -344,7 +349,7 @@
   --scrollbar-thumb-hover: rgb(156 212 177 / 0.62);
 }
 
-:root[data-system-theme='dna'] {
+:root.dark[data-system-theme='dna'] {
   --color-bg: rgb(8 18 26);
   --color-bg-l: rgb(17 32 40);
   --color-bg-l2: rgb(26 44 52);

@@ -217,6 +217,7 @@ onBeforeUnmount(() => {
 
 <template>
   <aside
+    id="app-sidebar"
     class="ep-sidebar app-sidebar flex h-full flex-col overflow-hidden border-r border-border text-text transition-[width] duration-[var(--motion-duration-standard)]"
     :class="expanded ? 'w-54' : 'w-14'"
   >
@@ -226,25 +227,12 @@ onBeforeUnmount(() => {
       @scroll="closePlaylistMenu"
     >
       <section class="pb-3">
-        <div
-          class="mb-1 flex h-8 items-center px-2"
-          :class="expanded ? 'justify-between' : 'justify-center'"
+        <p
+          v-if="expanded"
+          class="mb-1 flex h-8 items-center px-2 text-[11px] font-semibold tracking-[0.08em] text-text-l"
         >
-          <p v-if="expanded" class="text-[11px] font-semibold tracking-[0.08em] text-text-l">
-            {{ t('sidebar.library') }}
-          </p>
-          <button
-            class="grid size-7 place-items-center rounded-md text-text-l transition-colors hover:bg-hover hover:text-text"
-            :title="expanded ? t('sidebar.collapse') : t('sidebar.expand')"
-            @click="expanded = !expanded"
-          >
-            <SvgIcon
-              name="arrow-arrow-left-thin"
-              class-name="h-4 w-4 transition-transform duration-[var(--motion-duration-standard)]"
-              :class="{ 'rotate-180': !expanded }"
-            />
-          </button>
-        </div>
+          {{ t('sidebar.library') }}
+        </p>
         <button
           v-for="item in libraryItems"
           :key="item.path"

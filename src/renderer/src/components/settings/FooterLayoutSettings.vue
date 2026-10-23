@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
@@ -22,13 +23,9 @@ function update(key: keyof FooterLayout, value: unknown): void {
 
 <template>
   <section :aria-label="t('footerLayout.title')">
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('footerLayout.title') }}</h3>
-        <p>{{ t('footerLayout.description') }}</p>
-      </div>
+    <SettingRow :label="t('footerLayout.title')" :description="t('footerLayout.description')">
       <BaseSwitch :model-value="layout.enabled" @update:model-value="update('enabled', $event)" />
-    </div>
+    </SettingRow>
     <template v-if="layout.enabled">
       <div class="setting-row">
         <label class="text-sm">{{ t('footerLayout.mode') }}</label>

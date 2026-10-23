@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { useSongActivation } from '@/hooks/useSongActivation'
 import { formatArtists } from '@/utils/artists'
 import type { RankedSong } from './types'
 
@@ -9,6 +10,7 @@ const props = defineProps<{ songs: RankedSong[]; kind: 'played' | 'duration' }>(
 const emit = defineEmits<{ play: [song: RankedSong] }>()
 const { t } = useI18n()
 const uiStore = useUIStore()
+const activateSong = useSongActivation()
 
 function coverUrl(song: RankedSong): string | null {
   return song.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
@@ -25,24 +27,28 @@ function formatDuration(seconds: number): string {
 </script>
 
 <template>
-  <article class="home-surface rounded-xl p-5">
-    <h2 class="mb-3 text-lg font-semibold">
-      {{ t(props.kind === 'played' ? 'home.topPlayed' : 'home.topDuration') }}
-    </h2>
-    <ol v-if="props.songs.length" class="space-y-1">
+  <article class="home-surface home-ranked">
+    <div class="home-section-heading">
+      <h2>
+        {{ t(props.kind === 'played' ? 'home.topPlayed' : 'home.topDuration') }}
+      </h2>
+    </div>
+    <ol v-if="props.songs.length" class="home-ranked-list">
       <li v-for="(song, index) in props.songs" :key="song.id">
         <button
-          class="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left hover:bg-hover"
-          @dblclick="emit('play', song)"
+          type="button"
+          class="home-ranked-row"
+          @click="activateSong($event, () => emit('play', song))"
+          @dblclick="activateSong($event, () => emit('play', song))"
         >
-          <span class="w-5 text-center text-sm text-text-l">{{ index + 1 }}</span>
+          <span class="home-rank-number">{{ index + 1 }}</span>
           <img
             v-if="coverUrl(song)"
             :src="coverUrl(song)!"
-            class="size-9 shrink-0 rounded-md object-cover"
+            class="home-ranked-cover shrink-0 object-cover"
             :alt="song.title"
           />
-          <span v-else class="grid size-9 shrink-0 place-items-center rounded-md bg-hover">
+          <span v-else class="home-ranked-cover grid shrink-0 place-items-center bg-hover">
             <SvgIcon name="common-music" class-name="size-4" />
           </span>
           <span class="min-w-0 flex-1">
@@ -55,7 +61,7 @@ function formatDuration(seconds: number): string {
               ) || t('songList.unknownArtist')
             }}</span>
           </span>
-          <span class="text-xs text-text-l">{{
+          <span class="home-rank-value text-xs text-text-l">{{
             props.kind === 'played'
               ? t('home.playCount', { count: song.value })
               : formatDuration(song.value)

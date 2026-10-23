@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -49,11 +50,7 @@ onBeforeUnmount(clearTimer)
 </script>
 
 <template>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.sleepTimer') }}</h3>
-      <p>{{ t('settings.sleepTimerDescription') }}</p>
-    </div>
+  <SettingRow :label="t('settings.sleepTimer')" :description="t('settings.sleepTimerDescription')">
     <div class="flex items-center gap-2 text-nowrap">
       <span v-if="deadline" class="tabular-nums text-sm text-primary">{{ remainingLabel }}</span>
       <input
@@ -68,12 +65,11 @@ onBeforeUnmount(clearTimer)
         {{ deadline ? t('settings.cancelSleepTimer') : t('settings.startSleepTimer') }}
       </button>
     </div>
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.stopAfterCurrent') }}</h3>
-      <p>{{ t('settings.stopAfterCurrentDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.stopAfterCurrent')"
+    :description="t('settings.stopAfterCurrentDescription')"
+  >
     <BaseSwitch v-model="finishCurrentTrack" size="md" />
-  </div>
+  </SettingRow>
 </template>

@@ -2,6 +2,7 @@
 @import 'theme.css';
 @import 'motion.css';
 @import 'components.css';
+@import 'controls.css';
 
 :root.reduce-motion *,
 :root.reduce-motion *::before,
@@ -185,8 +186,6 @@ textarea,
   transition-all
   duration-[var(--motion-duration-standard)]
   ease-[var(--motion-ease-standard)]
-  hover:scale-102
-  active:scale-100
   hover:bg-primary
   text-text text-sm
   rounded
@@ -212,7 +211,7 @@ textarea,
 .more-item {
   @apply px-3 py-2
   rounded-lg
-  hover:bg-primary
+  hover:bg-hover-bg
   cursor-pointer
   text-sm
   flex
@@ -258,11 +257,11 @@ textarea,
 }
 
 .btn-hover {
-  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:scale-102 active:scale-100 hover:text-primary;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary;
 }
 
 .btn-hover-base {
-  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:scale-102 active:scale-100;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)];
 }
 
 .dsp-input {

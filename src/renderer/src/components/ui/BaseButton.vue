@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
+import type { ControlSize } from './types'
 
 defineOptions({
   name: 'BaseButton',
@@ -7,15 +8,16 @@ defineOptions({
 })
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
-type Size = 'xs' | 'sm' | 'md' | 'lg'
 type ButtonType = 'button' | 'submit' | 'reset'
 
 const props = withDefaults(
   defineProps<{
     type?: ButtonType
     variant?: Variant
-    size?: Size
+    size?: ControlSize
     disabled?: boolean
+    loading?: boolean
+    iconOnly?: boolean
     block?: boolean
   }>(),
   {
@@ -25,7 +27,7 @@ const props = withDefaults(
   }
 )
 
-const emit = defineEmits(['click'])
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
 
 /* size */
 const sizeClass = computed(() => {
@@ -49,24 +51,27 @@ const classes = computed(() => [
   sizeClass.value,
   variantClass.value,
   props.block && 'w-full',
-  props.disabled && 'opacity-50 cursor-not-allowed'
+  `ep-control--${props.size}`,
+  props.iconOnly && 'ep-button--icon',
+  (props.disabled || props.loading) && 'opacity-50 cursor-not-allowed'
 ])
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function handleClick(e) {
-  if (props.disabled) return
+function handleClick(e: MouseEvent): void {
+  if (props.disabled || props.loading) return
   emit('click', e)
 }
 </script>
 
 <template>
   <button
-    :type="type"
-    :disabled="disabled"
     v-bind="$attrs"
-    :class="[classes, $attrs.class]"
+    :type="type"
+    :disabled="disabled || loading"
+    :aria-busy="loading || undefined"
+    :class="classes"
     @click="handleClick"
   >
+    <slot v-if="loading" name="loading"><span class="ep-spinner" aria-hidden="true" /></slot>
     <!-- left icon -->
     <span v-if="$slots.left" class="flex items-center">
       <slot name="left" />

@@ -1,4 +1,6 @@
 #pragma once
+#include "auto_mix.h"
+#include "vocal_mix.h"
 #include "audio_backend.h"
 #include "audio_backend_factory.h"
 #include "byte_ring_buffer.h"
@@ -29,6 +31,7 @@ struct TransitionConfig {
     bool crossfade_auto = false;
     bool pause_fade_enabled = true;
     int pause_fade_ms = 180;
+    bool vocal_cue_enabled = true;
 };
 
 struct ImpulseResponseConfig {
@@ -55,6 +58,14 @@ struct AudioAnalysisSnapshot {
     float short_term_lufs = -70.0f;
     float integrated_lufs = -70.0f;
     std::array<float, 64> spectrum{};
+};
+
+struct AutoMixStemRequest {
+    std::string source_path, next_path;
+    uint64_t revision = 0;
+    int sample_rate = 0, channels = 0;
+    int64_t out_start_frame = 0, in_start_frame = 0, fade_frames = 0;
+    bool vocal_cue = true;
 };
 
 class AudioEngine {
@@ -123,13 +134,16 @@ public:
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
     bool set_transition_config(const TransitionConfig& config);
     bool set_next_track(const std::string& file_path, const std::string& source_path = "");
+    AutoMixStemRequest auto_mix_stem_request() const;
+    bool set_auto_mix_vocals(uint64_t revision, const std::string& out_path, const std::string& in_path, int64_t cue_frame = -1, int64_t out_start_frame = -1);
     TransitionConfig transition_config() const {
         return {gapless_enabled_.load(std::memory_order_acquire),
                 crossfade_enabled_.load(std::memory_order_acquire),
                 crossfade_ms_.load(std::memory_order_acquire),
                 crossfade_auto_.load(std::memory_order_acquire),
                 pause_fade_enabled_.load(std::memory_order_acquire),
-                pause_fade_ms_.load(std::memory_order_acquire)};
+                pause_fade_ms_.load(std::memory_order_acquire),
+                vocal_cue_enabled_.load(std::memory_order_acquire)};
     }
 
     // ── Device / Backend ──
@@ -228,6 +242,7 @@ private:
     std::atomic<bool> crossfade_enabled_{false};
     std::atomic<int> crossfade_ms_{5000};
     std::atomic<bool> crossfade_auto_{false};
+    std::atomic<bool> vocal_cue_enabled_{true};
     std::atomic<bool> pause_fade_enabled_{true};
     std::atomic<int> pause_fade_ms_{180};
     std::atomic<bool> pause_fade_pending_{false};
@@ -236,6 +251,15 @@ private:
     std::atomic<int> pcm_output_sample_rate_{0};
     int64_t auto_fade_end_frame_ = 0;
     int64_t auto_fade_frames_ = 0;
+    double auto_fade_separation_ = 0.0;
+    auto_mix::StagedMixer auto_mix_mixer_;
+    auto_mix::VocalMixer auto_mix_vocal_mixer_;
+    std::vector<float> auto_mix_out_vocals_, auto_mix_in_vocals_;
+    int64_t auto_fade_vocal_end_frame_ = 0;
+    std::vector<float> auto_fade_intro_;
+    int64_t auto_fade_source_frames_ = 0;
+    int64_t auto_fade_incoming_start_frame_ = 0;
+    uint64_t auto_fade_revision_ = 0; // guarded by decoder_mutex_
     std::atomic<bool> transition_active_{false};
     bool crossfade_target_warned_ = false;
     bool crossfade_started_logged_ = false;

@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseRange from '@/components/ui/BaseRange.vue'
+import { useFooterSwipe } from '@/components/player/useFooterSwipe'
+import { useFooterAutoHide } from '@/components/player/useFooterAutoHide'
+import { useSeekProgress } from '@/components/player/useSeekProgress'
+import { loadLyricSourceOptions } from '@/services/lyricSourceOptions'
 import { footerLayoutStyle, updateFooterSideWidths } from '@/utils/footerLayout'
 import { useRouter } from 'vue-router'
 import { PlayMode } from '@/consts'
@@ -17,11 +21,13 @@ import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 import type { LibrarySong } from '@/types/library'
 import { formatArtists, splitArtists } from '@/utils/artists'
-import { isLyricFormat, parseLyrics, type LyricFormat, type LyricSource } from '@/services/lyrics'
+import type { LyricFormat, LyricSource } from '@/services/lyrics'
 
 const ui = useUIStore()
 const layoutStyle = computed(() => footerLayoutStyle(ui.footerLayout))
 const player = usePlayerStore()
+const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
+  useSeekProgress(player)
 const { t } = useI18n()
 const router = useRouter()
 const { error } = useMessage()
@@ -35,6 +41,24 @@ async function markCurrent(preference: -1 | 1): Promise<void> {
   if (!(await player.setPreference(song.id, next))) error(t('recommendation.failed'))
 }
 const collapsed = ref(false)
+const {
+  collapsedCarouselRef,
+  renderedCollapsedSongCards,
+  collapsedTrackStyle,
+  handleSwipePointerDown,
+  handleSwipePointerMove,
+  handleSwipePointerUp,
+  handleSwipePointerCancel,
+  handleSwipeTransitionEnd,
+  handleFooterClickCapture
+} = useFooterSwipe(
+  player,
+  collapsed,
+  computed(() => ui.reduceMotion)
+)
+function setCollapsedCarousel(element: unknown): void {
+  collapsedCarouselRef.value = element instanceof HTMLElement ? element : null
+}
 const footerRoot = ref<HTMLElement | null>(null)
 const footerSection = ref<HTMLElement | null>(null)
 const footerTime = ref<HTMLElement | null>(null)
@@ -54,15 +78,6 @@ watch(
   },
   { flush: 'post' }
 )
-const footerHidden = ref(false)
-const footerPeekVisible = ref(false)
-const pointerNearFooter = ref(false)
-const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)')
-const hoverPointer = ref(hoverQuery.matches)
-const AUTO_HIDE_DELAY = 5000
-const REVEAL_MARGIN = 8
-let autoHideTimer: ReturnType<typeof setTimeout> | null = null
-let peekTimer: ReturnType<typeof setTimeout> | null = null
 const queueVisible = ref(false)
 const moreVisible = ref(false)
 const detailsVisible = ref(false)
@@ -78,80 +93,16 @@ const footerBusy = computed(
     playlistVisible.value ||
     lyricSourceVisible.value
 )
-const autoHideActive = computed(() => ui.autoHideFooter && hoverPointer.value && !ui.showPlayer)
-
-function revealFooter(): void {
-  if (autoHideTimer) clearTimeout(autoHideTimer)
-  if (peekTimer) clearTimeout(peekTimer)
-  autoHideTimer = null
-  peekTimer = null
-  footerPeekVisible.value = false
-  footerHidden.value = false
-}
-
-function scheduleFooterHide(): void {
-  if (!autoHideActive.value || footerBusy.value || pointerNearFooter.value) {
-    revealFooter()
-    return
-  }
-  if (autoHideTimer || footerHidden.value) return
-  autoHideTimer = setTimeout(() => {
-    autoHideTimer = null
-    if (autoHideActive.value && !footerBusy.value && !pointerNearFooter.value) {
-      footerHidden.value = true
-      peekTimer = setTimeout(
-        () => {
-          peekTimer = null
-          footerPeekVisible.value = autoHideActive.value && footerHidden.value
-        },
-        ui.reduceMotion ? 0 : 300
-      )
-    }
-  }, AUTO_HIDE_DELAY)
-}
-
-function onWindowPointerMove(event: PointerEvent): void {
-  const revealDistance = (footerRoot.value?.offsetHeight ?? 96) + REVEAL_MARGIN
-  pointerNearFooter.value =
-    event.clientY >= window.innerHeight - revealDistance ||
-    (event.target instanceof Node && footerRoot.value?.contains(event.target) === true)
-  if (pointerNearFooter.value) revealFooter()
-  else scheduleFooterHide()
-}
-
-function onWindowPointerOut(event: PointerEvent): void {
-  if (event.relatedTarget) return
-  pointerNearFooter.value = false
-  scheduleFooterHide()
-}
-
-function onHoverPointerChange(event: MediaQueryListEvent): void {
-  hoverPointer.value = event.matches
-}
-
-watch([autoHideActive, footerBusy], scheduleFooterHide)
+const { footerHidden, footerPeekVisible, autoHideActive } = useFooterAutoHide(
+  footerRoot,
+  computed(() => ui.autoHideFooter && !ui.showPlayer),
+  footerBusy,
+  computed(() => ui.reduceMotion)
+)
 const lyricSourcesLoading = ref(false)
 const lyricSourceOptions = ref<
   Array<{ source: LyricSource; content: string; format?: LyricFormat }>
 >([])
-const SWIPE_DISTANCE = 56
-const SWIPE_DIRECTION_RATIO = 1.25
-const SWIPE_SETTLE_DURATION = 240
-const swipeOffset = ref(0)
-const swipeTransitioning = ref(false)
-const swipeCommitting = ref(false)
-const collapsedCarouselRef = ref<HTMLElement | null>(null)
-let swipePointerId: number | null = null
-let swipeStartX = 0
-let swipeStartY = 0
-let swipeWasDragged = false
-let suppressSwipeClick = false
-let swipeSettleTimer: ReturnType<typeof setTimeout> | null = null
-let pendingSwipeTargetIndex: number | null = null
-let pendingSwipeDirection: -1 | 0 | 1 = 0
-const swipePreviousIndex = ref<number | null>(null)
-const swipeNextIndex = ref<number | null>(null)
-
 const trackTitle = computed(
   () => player.trackInfo?.metadata?.title || player.currentQueueSong?.title || t('footer.noTrack')
 )
@@ -171,44 +122,6 @@ function getCoverUrl(song: LibrarySong | null): string | null {
   return song?.cover ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}` : null
 }
 
-function refreshSwipeTargetIndices(): void {
-  const previousIndex = player.getPreviousQueueIndex()
-  const nextIndex = player.getNextQueueIndex()
-  swipePreviousIndex.value = previousIndex >= 0 ? previousIndex : null
-  swipeNextIndex.value = nextIndex >= 0 ? nextIndex : null
-}
-
-function getSwipeTargetIndex(direction: -1 | 1): number | null {
-  return direction < 0 ? swipePreviousIndex.value : swipeNextIndex.value
-}
-
-interface CollapsedSongCard {
-  slot: 'previous' | 'current' | 'next'
-  song: LibrarySong | null
-}
-
-const frozenSwipeCards = ref<CollapsedSongCard[] | null>(null)
-const collapsedSongCards = computed<CollapsedSongCard[]>(() => {
-  const previousIndex = getSwipeTargetIndex(-1)
-  const nextIndex = getSwipeTargetIndex(1)
-  return [
-    {
-      slot: 'previous',
-      song: previousIndex === null ? null : player.queue[previousIndex]
-    },
-    { slot: 'current', song: player.currentQueueSong },
-    { slot: 'next', song: nextIndex === null ? null : player.queue[nextIndex] }
-  ]
-})
-const renderedCollapsedSongCards = computed(
-  () => frozenSwipeCards.value ?? collapsedSongCards.value
-)
-const collapsedTrackStyle = computed(() => ({
-  transform: `translate3d(calc(-33.333333% + ${swipeOffset.value}px), 0, 0)`,
-  transition: swipeTransitioning.value
-    ? `transform ${ui.reduceMotion ? 0 : SWIPE_SETTLE_DURATION}ms cubic-bezier(0.22, 1, 0.36, 1)`
-    : 'none'
-}))
 const audioSummary = computed(() => {
   const info = player.trackInfo
   if (!info) return ''
@@ -222,16 +135,6 @@ const audioSummary = computed(() => {
 watch(coverUrl, () => {
   coverFailed.value = false
 })
-watch(
-  [
-    () => player.currentQueueIndex,
-    () => player.playMode,
-    () => player.shuffleNavigationRevision,
-    () => player.queue.map((song) => song.id).join('|')
-  ],
-  refreshSwipeTargetIndices,
-  { immediate: true }
-)
 const playModeIcon = computed(() => {
   const icons: Record<PlayMode, string> = {
     [PlayMode.Sequential]: 'control-order',
@@ -267,127 +170,8 @@ function playNext(): void {
   void player.playNext()
 }
 
-function resetSwipe(): void {
-  swipePointerId = null
-  swipeStartX = 0
-  swipeStartY = 0
-  swipeWasDragged = false
-}
-
-function handleSwipePointerDown(event: PointerEvent): void {
-  if (
-    !collapsed.value ||
-    swipeTransitioning.value ||
-    swipeCommitting.value ||
-    !event.isPrimary ||
-    event.button !== 0
-  )
-    return
-  swipePointerId = event.pointerId
-  swipeStartX = event.clientX
-  swipeStartY = event.clientY
-  swipeOffset.value = 0
-  swipeWasDragged = false
-}
-
-function handleSwipePointerMove(event: PointerEvent): void {
-  if (!collapsed.value || swipePointerId !== event.pointerId) return
-  const deltaX = event.clientX - swipeStartX
-  const deltaY = event.clientY - swipeStartY
-  if (Math.abs(deltaX) <= Math.abs(deltaY) || Math.abs(deltaX) < 4) return
-  if (!swipeWasDragged) {
-    frozenSwipeCards.value = collapsedSongCards.value.map((card) => ({ ...card }))
-    const footer = event.currentTarget
-    if (footer instanceof HTMLElement) footer.setPointerCapture(event.pointerId)
-  }
-  swipeWasDragged = true
-  const targetIndex = getSwipeTargetIndex(deltaX < 0 ? 1 : -1)
-  swipeOffset.value = targetIndex === null ? deltaX * 0.2 : deltaX
-}
-
-async function finishSwipeTransition(): Promise<void> {
-  if (!swipeTransitioning.value) return
-  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
-  swipeSettleTimer = null
-  const targetIndex = pendingSwipeTargetIndex
-  const direction = pendingSwipeDirection
-  pendingSwipeTargetIndex = null
-  pendingSwipeDirection = 0
-  swipeTransitioning.value = false
-  swipeCommitting.value = true
-  await nextTick()
-  try {
-    if (targetIndex !== null && direction < 0) await player.playPrevious()
-    else if (targetIndex !== null && direction > 0) await player.playNext(targetIndex)
-  } finally {
-    swipeOffset.value = 0
-    frozenSwipeCards.value = null
-    swipeCommitting.value = false
-    refreshSwipeTargetIndices()
-  }
-}
-
-function settleSwipe(targetIndex: number | null, direction: -1 | 0 | 1): void {
-  swipeTransitioning.value = true
-  pendingSwipeTargetIndex = targetIndex
-  pendingSwipeDirection = direction
-  const width = collapsedCarouselRef.value?.clientWidth || 448
-  swipeOffset.value = direction === 0 ? 0 : direction < 0 ? width : -width
-  if (ui.reduceMotion) {
-    void finishSwipeTransition()
-    return
-  }
-  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
-  swipeSettleTimer = setTimeout(() => void finishSwipeTransition(), SWIPE_SETTLE_DURATION + 100)
-}
-
-function handleSwipeTransitionEnd(event: TransitionEvent): void {
-  if (event.target === event.currentTarget && event.propertyName === 'transform')
-    void finishSwipeTransition()
-}
-
-function handleSwipePointerUp(event: PointerEvent): void {
-  if (!collapsed.value || swipePointerId !== event.pointerId) return
-  const deltaX = event.clientX - swipeStartX
-  const deltaY = event.clientY - swipeStartY
-  const isHorizontalSwipe =
-    Math.abs(deltaX) >= SWIPE_DISTANCE &&
-    Math.abs(deltaX) > Math.abs(deltaY) * SWIPE_DIRECTION_RATIO
-  const direction = deltaX < 0 ? 1 : -1
-  const targetIndex = getSwipeTargetIndex(direction)
-  const wasDragged = swipeWasDragged
-  resetSwipe()
-  if (!wasDragged) return
-  suppressSwipeClick = true
-  settleSwipe(
-    isHorizontalSwipe ? targetIndex : null,
-    isHorizontalSwipe && targetIndex !== null ? direction : 0
-  )
-  window.setTimeout(() => {
-    suppressSwipeClick = false
-  }, 0)
-}
-
-function handleSwipePointerCancel(event: PointerEvent): void {
-  if (swipePointerId !== event.pointerId) return
-  const wasDragged = swipeWasDragged
-  resetSwipe()
-  if (wasDragged) settleSwipe(null, 0)
-}
-
-function handleFooterClickCapture(event: MouseEvent): void {
-  if (!suppressSwipeClick) return
-  suppressSwipeClick = false
-  event.preventDefault()
-  event.stopPropagation()
-}
-
 function cyclePlayMode(): void {
   player.setPlayMode(((player.playMode + 1) % 4) as PlayMode)
-}
-
-function seek(event: Event): void {
-  void player.seek(Number((event.target as HTMLInputElement).value))
 }
 
 function setVolume(event: Event): void {
@@ -460,13 +244,6 @@ function locateSong(): void {
   eventBus.emit('locateCurrentSong')
   moreVisible.value = false
 }
-function hasUsableLyrics(content: string, format?: LyricFormat): boolean {
-  try {
-    return parseLyrics({ content, format, source: 'database' }).lines.length > 0
-  } catch {
-    return false
-  }
-}
 async function sendToLyricEditor(option?: {
   content: string
   format?: LyricFormat
@@ -485,56 +262,15 @@ async function sendToLyricEditor(option?: {
   lyricSourceVisible.value = false
   moreVisible.value = false
 }
-async function loadLyricSourceOptions(): Promise<
-  Array<{ source: LyricSource; content: string; format?: LyricFormat }>
-> {
-  const song = currentSong.value
-  if (!song) return []
-  const [embedded, local, database, network] = await Promise.all([
-    window.api.lyrics.loadSource(song.audio, 'embedded'),
-    window.api.lyrics.loadSource(song.audio, 'local'),
-    window.api.database.command('getSong', { id: song.id }),
-    window.api.lyrics.searchNetwork({
-      title: song.title,
-      artist: song.artist,
-      album: song.album,
-      preferWordTimed: ui.preferWordTimedNetworkLyrics
-    })
-  ])
-  const databaseSong = database.success
-    ? (database.data as { lrc?: string | null; lyricFormat?: unknown })
-    : null
-  const networkCandidate = network.success ? network.data?.[0] : null
-  const candidates = [
-    {
-      source: 'embedded' as const,
-      content: embedded.success ? embedded.data?.content || '' : '',
-      format: embedded.success ? embedded.data?.format : undefined
-    },
-    {
-      source: 'database' as const,
-      content: databaseSong?.lrc || '',
-      format: isLyricFormat(databaseSong?.lyricFormat) ? databaseSong.lyricFormat : undefined
-    },
-    {
-      source: 'local' as const,
-      content: local.success ? local.data?.content || '' : '',
-      format: local.success ? local.data?.format : undefined
-    },
-    {
-      source: 'network' as const,
-      content: networkCandidate?.lrc || '',
-      format: networkCandidate?.format
-    }
-  ]
-  return candidates.filter((item) => hasUsableLyrics(item.content, item.format))
-}
 async function openInLyricEditor(): Promise<void> {
   if (!currentSong.value || lyricSourcesLoading.value) return
   lyricSourcesLoading.value = true
   moreVisible.value = false
   try {
-    lyricSourceOptions.value = await loadLyricSourceOptions()
+    const song = currentSong.value
+    const options = await loadLyricSourceOptions(song, ui.preferWordTimedNetworkLyrics)
+    if (currentSong.value?.id !== song.id) return
+    lyricSourceOptions.value = options
     if (lyricSourceOptions.value.length <= 1) {
       await sendToLyricEditor(lyricSourceOptions.value[0])
     } else {
@@ -567,21 +303,11 @@ const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
 onMounted(() => {
   eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
   window.addEventListener('click', closeMoreMenu)
-  window.addEventListener('pointermove', onWindowPointerMove, { passive: true })
-  window.addEventListener('pointerout', onWindowPointerOut)
-  hoverQuery.addEventListener('change', onHoverPointerChange)
-  scheduleFooterHide()
 })
 onBeforeUnmount(() => {
   footerLayoutObserver?.disconnect()
   eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   window.removeEventListener('click', closeMoreMenu)
-  window.removeEventListener('pointermove', onWindowPointerMove)
-  window.removeEventListener('pointerout', onWindowPointerOut)
-  hoverQuery.removeEventListener('change', onHoverPointerChange)
-  if (autoHideTimer) clearTimeout(autoHideTimer)
-  if (peekTimer) clearTimeout(peekTimer)
-  if (swipeSettleTimer) clearTimeout(swipeSettleTimer)
 })
 </script>
 
@@ -609,7 +335,7 @@ onBeforeUnmount(() => {
       @click.capture="handleFooterClickCapture"
       @click="openPlayerPanel"
     >
-      <div v-if="collapsed" ref="collapsedCarouselRef" class="collapsed-song-carousel">
+      <div v-if="collapsed" :ref="setCollapsedCarousel" class="collapsed-song-carousel">
         <div
           class="collapsed-song-track"
           :style="collapsedTrackStyle"
@@ -718,16 +444,19 @@ onBeforeUnmount(() => {
         <div
           class="ep-footer-progress flex min-w-0 items-center gap-2 text-[11px] tabular-nums text-text-l"
         >
-          <span class="shrink-0">{{ player.positionFormatted }}</span>
+          <span class="shrink-0">{{ displayPositionFormatted }}</span>
           <BaseRange
             class="ep-range ep-playback-progress h-2 w-full min-w-0 flex-1 cursor-pointer disabled:cursor-default disabled:opacity-45"
             :min="0"
             :max="player.durationMs || 0"
-            :value="player.positionMs"
+            :value="displayPositionMs"
             :disabled="!player.durationMs"
             :aria-label="t('footer.progress')"
             @click.stop
-            @input="seek"
+            @input="previewSeek"
+            @change="commitSeek"
+            @pointercancel="cancelSeek"
+            @blur="cancelSeek"
           />
           <span class="shrink-0">{{ player.durationFormatted }}</span>
         </div>

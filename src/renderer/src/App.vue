@@ -4,6 +4,7 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { useI18n } from 'vue-i18n'
 import BaseMessage from '@/components/ui/BaseMessage.vue'
 import ThemePreviewDialog from '@/components/settings/ThemePreviewDialog.vue'
+import GlobalSearchHost from '@/components/search/GlobalSearchHost.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import router from '@/router'
 import { flushPlayerDataStorage } from '@/stores/persistence'
@@ -54,4 +55,5 @@ onBeforeUnmount(() => {
   </router-view>
   <BaseMessage />
   <ThemePreviewDialog />
+  <GlobalSearchHost />
 </template>

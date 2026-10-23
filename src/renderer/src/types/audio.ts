@@ -74,6 +74,7 @@ export interface TransitionConfig {
   crossfadeEnabled: boolean
   crossfadeMs: number
   crossfadeAuto: boolean
+  crossfadeVocalCue: boolean
   pauseFadeEnabled: boolean
   pauseFadeMs: number
 }

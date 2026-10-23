@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingRow from './SettingRow.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import eventBus from '@/utils/eventBus'
@@ -100,20 +101,18 @@ onBeforeUnmount(() => offProgress?.())
 </script>
 
 <template>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.importSongs') }}</h3>
-      <p>{{ t('settings.importSongsDescription') }}</p>
-    </div>
+  <SettingRow
+    :label="t('settings.importSongs')"
+    :description="t('settings.importSongsDescription')"
+  >
     <button class="btn-hover-base text-sm" type="button" @click="eventBus.emit('importLocalMusic')">
       {{ t('settings.importSongs') }}
     </button>
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.importSingleSong') }}</h3>
-      <p>{{ t('settings.importSingleSongDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.importSingleSong')"
+    :description="t('settings.importSingleSongDescription')"
+  >
     <button
       class="btn-hover-base text-sm disabled:cursor-wait disabled:opacity-50"
       type="button"
@@ -122,14 +121,13 @@ onBeforeUnmount(() => offProgress?.())
     >
       {{ t('settings.importSingleSong') }}
     </button>
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.ignoreShortSongs') }}</h3>
-      <p>{{ t('settings.ignoreShortSongsDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.ignoreShortSongs')"
+    :description="t('settings.ignoreShortSongsDescription')"
+  >
     <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
-  </div>
+  </SettingRow>
   <hr class="mx-5 my-4 border-0 border-t border-border" />
   <div class="setting-row text-nowrap">
     <div>
@@ -145,19 +143,17 @@ onBeforeUnmount(() => offProgress?.())
       />
     </div>
   </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.normalizeArtistSeparator') }}</h3>
-      <p>{{ t('settings.normalizeArtistSeparatorDescription') }}</p>
-    </div>
+  <SettingRow
+    :label="t('settings.normalizeArtistSeparator')"
+    :description="t('settings.normalizeArtistSeparatorDescription')"
+  >
     <BaseSwitch v-model="ui.normalizeArtistSeparator" size="md" />
-  </div>
+  </SettingRow>
   <hr class="mx-5 my-4 border-0 border-t border-border" />
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.libraryBackup') }}</h3>
-      <p>{{ t('settings.libraryBackupDescription') }}</p>
-    </div>
+  <SettingRow
+    :label="t('settings.libraryBackup')"
+    :description="t('settings.libraryBackupDescription')"
+  >
     <div class="actions">
       <button class="btn-hover-base text-sm" type="button" @click="run('exportLibrary')">
         {{ t('settings.exportLibrary') }}
@@ -166,25 +162,23 @@ onBeforeUnmount(() => offProgress?.())
         {{ t('settings.importLibrary') }}
       </button>
     </div>
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.recoverMovedFiles') }}</h3>
-      <p>{{ t('settings.recoverMovedFilesDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.recoverMovedFiles')"
+    :description="t('settings.recoverMovedFilesDescription')"
+  >
     <button class="btn-hover-base text-sm" type="button" @click="run('recoverMovedSongs')">
       {{ t('settings.recover') }}
     </button>
-  </div>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.checkMissingSongs') }}</h3>
-      <p>{{ t('settings.checkMissingSongsDescription') }}</p>
-    </div>
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.checkMissingSongs')"
+    :description="t('settings.checkMissingSongsDescription')"
+  >
     <button class="btn-hover-base text-sm" type="button" @click="checkMissingSongs">
       {{ t('settings.check') }}
     </button>
-  </div>
+  </SettingRow>
   <div v-if="importProgress" class="progress">
     <div>
       <span>{{ t('library.loading') }}</span>

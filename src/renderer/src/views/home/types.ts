@@ -47,6 +47,7 @@ export interface Playlist {
   name: string
   cover: string | null
   description: string | null
+  songCount: number
 }
 
 export type RecommendationGroup = 'recommended' | 'discovery'

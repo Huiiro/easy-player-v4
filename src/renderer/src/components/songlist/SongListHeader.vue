@@ -127,6 +127,7 @@ const moreMenuItems = computed(() => [
             :value="keyword"
             class="input-base h-8 w-52 search-input"
             :placeholder="t('songList.search')"
+            :aria-label="t('songList.search')"
             @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
             @compositionstart="emit('compositionChange', true)"
             @compositionend="finishSearchComposition"

@@ -1,34 +1,22 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
-import type { DatabaseAction } from '../../../../main/ipc/databaseIpcHandlers'
+import { querySongList, type SongListSource } from '@/services/songListQuery'
+import { playSearchResult } from '@/services/searchPlayback'
 import eventBus from '@/utils/eventBus'
 import { createSongTextComparator, songSortText } from '@/utils/songTextSort'
 import SongListHeader from './SongListHeader.vue'
+import { useSongSelection } from './useSongSelection'
 import SongListItem from './SongListItem.vue'
+import SongListActions from './SongListActions.vue'
 import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
-import SongTagDialog from '@/components/tag/SongTagDialog.vue'
-import BatchTagDialog from '@/components/tag/BatchTagDialog.vue'
-import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
+import type { LibrarySong } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
-import SongDetailsDialog from './SongDetailsDialog.vue'
-import DeleteSongsDialog from './DeleteSongsDialog.vue'
-import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
-import MetadataEditDialog from './MetadataEditDialog.vue'
-import type { RecommendationGroup } from '@/views/home/types'
 
-type SongListSource =
-  | { type: 'songs' | 'local' | 'remote' | 'history' | 'liked' }
-  | { type: 'playlist'; id: number }
-  | { type: 'folder'; id: number }
-  | { type: 'album'; album: string; artist?: string }
-  | { type: 'artist'; artist: string }
-  | { type: 'genre'; genre: string }
-  | { type: 'recommendation'; group: RecommendationGroup; generatedFor: string }
 type SortField =
   'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface MusicSourceOption {
@@ -74,27 +62,9 @@ let browsingSort: { field: SortField; order: 'asc' | 'desc' } = {
   order: sortOrder.value
 }
 const showFileName = ref(false)
-const selectionMode = ref(false)
-const selectedIds = ref<Set<number>>(new Set())
-const activeMenuSong = ref<LibrarySong | null>(null)
-const activeMenuQueueIndex = computed(() =>
-  player.queue.findIndex((song) => song.id === activeMenuSong.value?.id)
-)
-const menuElement = ref<HTMLElement | null>(null)
-const menuPosition = ref({ left: '0px', top: '0px' })
-const playlistDialogOpen = ref(false)
-const playlistSongIds = ref<number[]>([])
 const tagManagerOpen = ref(false)
-const songTagDialogOpen = ref(false)
-const batchTagDialogOpen = ref(false)
 const selectedTagIds = ref<number[]>([])
-const tagSongId = ref<number | null>(null)
-const songsPendingDelete = ref<LibrarySong[]>([])
-const songDetailsOpen = ref(false)
-const songDetailsId = ref<number | null>(null)
-const metadataEditOpen = ref(false)
-const metadataEditSongId = ref<number | null>(null)
-const metadataEditCoverUrl = ref<string | null>(null)
+const actions = ref<InstanceType<typeof SongListActions> | null>(null)
 const remoteSources = ref<MusicSourceOption[]>([])
 const canFilterByTags = computed(() =>
   ['songs', 'local', 'remote', 'playlist', 'folder'].includes(props.source.type)
@@ -190,121 +160,25 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
 }
 
 const filteredSongs = computed(() => songs.value.slice().sort(compareSongs))
-const allSelected = computed(
-  () =>
-    filteredSongs.value.length > 0 &&
-    filteredSongs.value.every((song) => selectedIds.value.has(song.id))
-)
+const {
+  selectionMode,
+  selectedIds,
+  allSelected,
+  toggleSelection,
+  toggleSelect,
+  toggleAll,
+  selectNewest
+} = useSongSelection(filteredSongs)
 
-const getSongs = async (): Promise<LibrarySong[]> => {
-  const { source } = props
-  const { type } = source
-  const requiresStatistics = type === 'history' || type === 'recommendation'
-  if (requiresStatistics && !statistics.enabled) return []
-  const statisticsGeneration = statistics.generation
-
-  const getCommand = (): { name: DatabaseAction; params: unknown } => {
-    switch (type) {
-      case 'recommendation':
-        return {
-          name: 'getHomeRecommendationSongs',
-          params: { group: source.group, generatedFor: source.generatedFor }
-        }
-      case 'playlist':
-        return {
-          name: 'queryPlaylistSongs',
-          params: {
-            playlistId: source.id,
-            query: { tags: [...selectedTagIds.value], search: appliedSearch }
-          }
-        }
-      case 'folder':
-        return {
-          name: 'getLocalFolderSongs',
-          params: { folderId: source.id, search: appliedSearch }
-        }
-      case 'album':
-        return {
-          name: 'getSongsByAlbum',
-          params: {
-            album: source.album,
-            artist: source.artist,
-            search: appliedSearch
-          }
-        }
-      case 'artist':
-        return {
-          name: 'getSongsByArtist',
-          params: {
-            artist: source.artist,
-            separator: uiStore.artistSeparator,
-            search: appliedSearch
-          }
-        }
-      case 'genre':
-        return {
-          name: 'getSongsByGenre',
-          params: { genre: source.genre, search: appliedSearch }
-        }
-      case 'history':
-        return {
-          name: 'queryRecentPlayedSongs',
-          params: { search: appliedSearch }
-        }
-      case 'liked':
-        return {
-          name: 'querySongs',
-          params: { preference: 1, tags: [...selectedTagIds.value], search: appliedSearch }
-        }
-      default: {
-        const sourceParam =
-          type === 'local'
-            ? 'local'
-            : type === 'remote'
-              ? 'remote'
-              : sourceFilter.value === 'local'
-                ? 'local'
-                : sourceFilter.value.startsWith('remote:') || sourceFilter.value === 'remote'
-                  ? 'remote'
-                  : 'all'
-
-        return {
-          name: 'querySongs',
-          params: {
-            search: appliedSearch,
-            tags: [...selectedTagIds.value],
-            source: sourceParam,
-            sourceId: sourceFilter.value.startsWith('remote:')
-              ? Number(sourceFilter.value.slice('remote:'.length))
-              : undefined
-          }
-        }
-      }
-    }
-  }
-
-  const { name, params } = getCommand()
-  const response = await window.api.database.command(name, params)
-  if (requiresStatistics && (!statistics.enabled || statisticsGeneration !== statistics.generation))
-    return []
-
-  if (!response.success) throw new Error(response.error)
-  const data = response.data as LibrarySong[] | PagedLibrarySongs
-  const result = Array.isArray(data) ? data : data.data
-  if (type === 'recommendation' && appliedSearch) {
-    // Use the shared search index, then restrict results to this dated collection.
-    const search = await window.api.database.command('querySongs', { search: appliedSearch })
-    if (!statistics.enabled || statisticsGeneration !== statistics.generation) return []
-    if (!search.success) throw new Error(search.error)
-    const matches = new Map(
-      (search.data as PagedLibrarySongs).data.map((song) => [song.id, song.searchScore])
-    )
-    return result
-      .filter((song) => matches.has(song.id))
-      .map((song) => ({ ...song, searchScore: matches.get(song.id) }))
-  }
-  return result
-}
+const getSongs = (): Promise<LibrarySong[]> =>
+  querySongList({
+    source: props.source,
+    search: appliedSearch,
+    tags: [...selectedTagIds.value],
+    sourceFilter: sourceFilter.value,
+    artistSeparator: uiStore.artistSeparator,
+    statistics
+  })
 
 const load = async (): Promise<void> => {
   const revision = ++loadRevision
@@ -336,42 +210,8 @@ const toggleSort = (field: SortField): void => {
   }
   if (field !== 'relevance') browsingSort = { field, order: sortOrder.value }
 }
-const toggleSelection = (): void => {
-  selectionMode.value = !selectionMode.value
-  if (!selectionMode.value) selectedIds.value = new Set()
-}
-const toggleSelect = (id: number): void => {
-  const next = new Set(selectedIds.value)
-  next.has(id) ? next.delete(id) : next.add(id)
-  selectedIds.value = next
-}
-const toggleAll = (): void => {
-  selectedIds.value = allSelected.value
-    ? new Set()
-    : new Set(filteredSongs.value.map((song) => song.id))
-}
-const selectNewest = (): void => {
-  selectedIds.value = new Set(
-    filteredSongs.value.filter((song) => song.isNewest).map((song) => song.id)
-  )
-}
-const openMenu = async (song: LibrarySong, x: number, y: number): Promise<void> => {
-  activeMenuSong.value = song
-  menuPosition.value = { left: `${x}px`, top: `${y}px` }
-  eventBus.emit('songActionsMenuOpened', 'songlist')
-  await nextTick()
-  const menu = menuElement.value
-  if (!menu) return
-  menuPosition.value = {
-    left: `${Math.max(8, Math.min(x, window.innerWidth - menu.offsetWidth - 8))}px`,
-    top: `${Math.max(8, Math.min(y, window.innerHeight - menu.offsetHeight - 8))}px`
-  }
-}
-const closeMenu = (): void => {
-  activeMenuSong.value = null
-}
 const onListScroll = (event: Event): void => {
-  closeMenu()
+  actions.value?.closeMenu()
   showBackTop.value = (event.target as HTMLElement).scrollTop > 320
 }
 const backToTop = (): void => {
@@ -383,12 +223,7 @@ const playSong = async (song: LibrarySong): Promise<void> => {
   // Search is an ad-hoc view, not a new playlist. Insert the selected result
   // into the current queue (or reuse it when already queued) and play it.
   if (keyword.value.trim()) {
-    let queueIndex = player.queue.findIndex((queuedSong) => queuedSong.id === song.id)
-    if (queueIndex < 0) {
-      player.addToQueue([song], true)
-      queueIndex = player.queue.findIndex((queuedSong) => queuedSong.id === song.id)
-    }
-    if (queueIndex >= 0) await player.playQueueItem(queueIndex, -1, 'selected', 'search')
+    await playSearchResult(player, song)
     return
   }
   await player.playCollection(
@@ -416,199 +251,11 @@ async function playAll(): Promise<void> {
     return
   }
   if (
-    !(await player.playCollection(
-      playable,
-      null,
-      collectionPlaylistId.value,
-      playbackOrigin.value
-    ))
+    !(await player.playCollection(playable, null, collectionPlaylistId.value, playbackOrigin.value))
   )
     showError(t('playlist.playFailed'))
 }
 defineExpose({ playAll, loading })
-const addActiveMenuSongToQueue = (): void => {
-  const song = activeMenuSong.value
-  if (song) {
-    if (player.queue.some((queuedSong) => queuedSong.id === song.id)) {
-      warning(t('songList.alreadyInQueue'))
-    } else {
-      player.addToQueue([song], true)
-      success(t('songList.addedToQueue'))
-    }
-  }
-  closeMenu()
-}
-const playActiveMenuSong = (): void => {
-  if (activeMenuSong.value) void playSong(activeMenuSong.value)
-  closeMenu()
-}
-async function removeActiveMenuSongFromQueue(): Promise<void> {
-  const index = activeMenuQueueIndex.value
-  closeMenu()
-  if (index < 0) return
-  try {
-    await player.removeQueueItem(index)
-    success(t('songList.removedFromQueue'))
-  } catch {
-    showError(t('songList.removeFromQueueFailed'))
-  }
-}
-async function setActiveMenuSongPreference(preference: -1 | 1): Promise<void> {
-  const song = activeMenuSong.value
-  closeMenu()
-  if (!song) return
-  const next = song.preference === preference ? 0 : preference
-  if (!(await player.setPreference(song.id, next))) showError(t('recommendation.failed'))
-}
-async function copyActiveMenuSongName(): Promise<void> {
-  const song = activeMenuSong.value
-  closeMenu()
-  const name = song?.title.trim() || (song?.fileName ?? '').trim()
-  if (!name) return
-  try {
-    await navigator.clipboard.writeText(name)
-  } catch {
-    const input = document.createElement('textarea')
-    input.value = name
-    input.style.position = 'fixed'
-    input.style.opacity = '0'
-    document.body.appendChild(input)
-    input.select()
-    const copied = document.execCommand('copy')
-    input.remove()
-    if (!copied) {
-      showError(t('songList.copyNameFailed'))
-      return
-    }
-  }
-  success(t('songList.nameCopied'))
-}
-
-function openPlaylistPicker(songIds: number[]): void {
-  if (!songIds.length) return
-  playlistSongIds.value = [...songIds]
-  playlistDialogOpen.value = true
-}
-async function removeSongsFromCurrentPlaylist(songIds: number[]): Promise<void> {
-  if (props.source.type !== 'playlist' || !songIds.length) return
-  const response = await window.api.database.command('removeSongsFromPlaylist', {
-    playlistId: props.source.id,
-    songIds: [...songIds]
-  })
-  if (response.success) {
-    await removeDeletedSongsFromQueue(songIds)
-    selectedIds.value = new Set()
-    await load()
-    eventBus.emit('playlistsChanged')
-    success(t('songList.removedFromPlaylist'))
-  }
-}
-async function addActiveMenuSongToPlaylist(): Promise<void> {
-  const songId = activeMenuSong.value?.id
-  closeMenu()
-  if (songId) openPlaylistPicker([songId])
-}
-function addSelectedToPlaylist(): void {
-  openPlaylistPicker([...selectedIds.value])
-}
-function removeActiveMenuSong(): void {
-  if (activeMenuSong.value) void removeSongsFromCurrentPlaylist([activeMenuSong.value.id])
-  closeMenu()
-}
-async function openActiveMenuSongFolder(): Promise<void> {
-  const songId = activeMenuSong.value?.id
-  closeMenu()
-  if (!songId) return
-  const response = await window.api.library.showSongInFolder(songId)
-  if (!response.success) showError(response.error || t('songList.openFolderFailed'))
-}
-function requestDeleteActiveMenuSong(): void {
-  const song = activeMenuSong.value
-  closeMenu()
-  if (!song) return
-  songsPendingDelete.value = [song]
-}
-function requestDeleteSelectedSongs(): void {
-  const selectedSongs = filteredSongs.value.filter((song) => selectedIds.value.has(song.id))
-  if (!selectedSongs.length) return
-  songsPendingDelete.value = selectedSongs
-}
-async function removeDeletedSongsFromQueue(songIds: number[]): Promise<void> {
-  const deleted = new Set(songIds)
-  for (let index = player.queue.length - 1; index >= 0; index--) {
-    if (deleted.has(player.queue[index].id)) await player.removeQueueItem(index)
-  }
-}
-async function onSongsDeleted(songIds: number[]): Promise<void> {
-  await removeDeletedSongsFromQueue(songIds)
-  selectedIds.value = new Set()
-  songsPendingDelete.value = []
-  await load()
-  eventBus.emit('playlistsChanged')
-  eventBus.emit('tagsChanged')
-}
-function openSongTags(): void {
-  if (!activeMenuSong.value) return
-  tagSongId.value = activeMenuSong.value.id
-  songTagDialogOpen.value = true
-  closeMenu()
-}
-async function openSongDetails(): Promise<void> {
-  const songId = activeMenuSong.value?.id
-  closeMenu()
-  if (!songId) return
-  songDetailsId.value = songId
-  songDetailsOpen.value = true
-}
-function openMetadataEdit(): void {
-  const song = activeMenuSong.value
-  closeMenu()
-  if (!song) return
-  if (song.sourceId) {
-    warning(t('metadataEdit.remoteNotSupported'))
-    return
-  }
-  metadataEditSongId.value = song.id
-  metadataEditCoverUrl.value = song.cover
-    ? `easy-player-media://cover?path=${encodeURIComponent(song.cover)}`
-    : null
-  metadataEditOpen.value = true
-}
-function onMetadataSaved(): void {
-  void load()
-}
-function openBatchTags(): void {
-  if (!selectedIds.value.size) return
-  batchTagDialogOpen.value = true
-}
-async function reloadSongsFromDisk(songIds: number[]): Promise<void> {
-  if (!songIds.length) return
-  const response = await window.api.metadata.reload(songIds)
-  if (!response.success) {
-    showError(response.error || t('songList.reloadFromDiskFailed'))
-    return
-  }
-  await load()
-  const result = response.data
-  success(t('songList.reloadedFromDisk', { count: result?.reloaded || 0 }))
-  if (result?.failed) warning(t('songList.reloadFromDiskPartial', { count: result.failed }))
-}
-function reloadActiveMenuSongFromDisk(): void {
-  const song = activeMenuSong.value
-  closeMenu()
-  if (!song) return
-  void reloadSongsFromDisk([song.id])
-}
-function reloadSelectedSongsFromDisk(): void {
-  const localIds = filteredSongs.value
-    .filter((song) => selectedIds.value.has(song.id) && song.sourceId === null)
-    .map((song) => song.id)
-  if (!localIds.length) {
-    warning(t('songList.remoteReloadNotSupported'))
-    return
-  }
-  void reloadSongsFromDisk(localIds)
-}
 const onScanFinished = (): void => void load()
 const onTagsChanged = (): void => void load()
 const onSongPreferenceChanged = ({
@@ -625,9 +272,6 @@ const onSongPreferenceChanged = ({
   for (const song of songs.value) {
     if (song.id === songId) song.preference = preference
   }
-}
-const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
-  if (source !== 'songlist') closeMenu()
 }
 const locateCurrentSong = (): void => {
   const id = player.currentQueueSong?.id
@@ -648,10 +292,7 @@ onMounted(() => {
   eventBus.on('scanFinished', onScanFinished)
   eventBus.on('tagsChanged', onTagsChanged)
   eventBus.on('songPreferenceChanged', onSongPreferenceChanged)
-  eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.on('locateCurrentSong', locateCurrentSong)
-  window.addEventListener('click', closeMenu)
-  window.addEventListener('contextmenu', closeMenu)
 })
 onBeforeUnmount(() => {
   disposed = true
@@ -661,10 +302,7 @@ onBeforeUnmount(() => {
   eventBus.off('scanFinished', onScanFinished)
   eventBus.off('tagsChanged', onTagsChanged)
   eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
-  eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
   eventBus.off('locateCurrentSong', locateCurrentSong)
-  window.removeEventListener('click', closeMenu)
-  window.removeEventListener('contextmenu', closeMenu)
 })
 watch(
   () => props.source,
@@ -724,10 +362,10 @@ watch([keyword, composing], () => {
       @toggle-file-name="showFileName = !showFileName"
       @toggle-compact="uiStore.compactSongList = !uiStore.compactSongList"
       @batch-play="playSelected"
-      @batch-add-to-playlist="addSelectedToPlaylist"
-      @batch-edit-tags="openBatchTags"
-      @batch-reload-from-disk="reloadSelectedSongsFromDisk"
-      @batch-delete="requestDeleteSelectedSongs"
+      @batch-add-to-playlist="actions?.addSelectedToPlaylist()"
+      @batch-edit-tags="actions?.openBatchTags()"
+      @batch-reload-from-disk="actions?.reloadSelectedSongsFromDisk()"
+      @batch-delete="actions?.requestDeleteSelectedSongs()"
       @open-tag-manager="tagManagerOpen = true"
       @clear-tag-filters="selectedTagIds = []"
       @update:source-filter="sourceFilter = String($event)"
@@ -759,7 +397,7 @@ watch([keyword, composing], () => {
           :compact="uiStore.compactSongList"
           @play="playSong"
           @toggle-select="toggleSelect"
-          @request-menu="openMenu"
+          @request-menu="(song, x, y) => actions?.openMenu(song, x, y)"
         />
       </template>
       <template #after>
@@ -776,140 +414,15 @@ watch([keyword, composing], () => {
     >
       <svgIcon name="arrow-arrow-up" class-name="size-5" />
     </button>
-    <!-- menu -->
-    <Teleport to="body">
-      <div
-        v-if="activeMenuSong"
-        ref="menuElement"
-        class="fixed z-[9999] w-47 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
-        :style="menuPosition"
-        @click.stop
-        @dblclick.stop
-        @contextmenu.prevent.stop
-      >
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="playActiveMenuSong"
-        >
-          <svgIcon name="play-play" class-name="size-4" />
-          {{ t('songList.play') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="addActiveMenuSongToQueue"
-        >
-          <svgIcon name="common-plus" class-name="size-4" />
-          {{ t('songList.addToQueue') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="activeMenuQueueIndex < 0"
-          @click="removeActiveMenuSongFromQueue"
-        >
-          <svgIcon name="common-minimize" class-name="size-4" />
-          {{ t('songList.removeFromQueue') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="addActiveMenuSongToPlaylist"
-        >
-          <svgIcon name="common-plus" class-name="size-4" />
-          {{ t('songList.addToPlaylist') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          :class="activeMenuSong.preference === 1 ? 'text-primary' : ''"
-          :aria-pressed="activeMenuSong.preference === 1"
-          @click="setActiveMenuSongPreference(1)"
-        >
-          <svgIcon name="play-like" class-name="size-4" />
-          {{ t(activeMenuSong.preference === 1 ? 'songList.cancelLike' : 'songList.like') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          :class="activeMenuSong.preference === -1 ? 'text-red-400' : ''"
-          :aria-pressed="activeMenuSong.preference === -1"
-          @click="setActiveMenuSongPreference(-1)"
-        >
-          <svgIcon name="play-dislike" class-name="size-5" />
-          {{ t(activeMenuSong.preference === -1 ? 'songList.cancelDislike' : 'songList.dislike') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openSongTags"
-        >
-          <svgIcon name="common-tag" class-name="size-4" />
-          {{ t('songList.editTags') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openMetadataEdit"
-        >
-          <svgIcon name="common-edit" class-name="size-4" />
-          {{ t('songList.editMetadata') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openSongDetails"
-        >
-          <svgIcon name="common-detail" class-name="size-4" />
-          {{ t('songList.details') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openActiveMenuSongFolder"
-        >
-          <svgIcon name="common-folder" class-name="size-4" />
-          {{ t('songList.openFolder') }}
-        </button>
-        <button
-          v-if="activeMenuSong.sourceId === null"
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="reloadActiveMenuSongFromDisk"
-        >
-          <svgIcon name="common-refresh" class-name="size-4" />
-          {{ t('songList.reloadFromDisk') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="copyActiveMenuSongName"
-        >
-          <svgIcon name="common-text-case" class-name="size-4" />
-          {{ t('songList.copyName') }}
-        </button>
-        <button
-          v-if="source.type === 'playlist'"
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
-          @click="removeActiveMenuSong"
-        >
-          <svgIcon name="common-delete" class-name="size-4" />
-          {{ t('songList.removeFromPlaylist') }}
-        </button>
-        <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
-          @click="requestDeleteActiveMenuSong"
-        >
-          <svgIcon name="common-delete" class-name="size-4" />
-          {{ t('songList.delete') }}
-        </button>
-      </div>
-    </Teleport>
     <TagManagerDialog v-model="tagManagerOpen" v-model:selected-ids="selectedTagIds" />
-    <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="load" />
-    <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="[...selectedIds]" @changed="load" />
-    <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
-    <MetadataEditDialog
-      v-model="metadataEditOpen"
-      :song-id="metadataEditSongId"
-      :cover-url="metadataEditCoverUrl"
-      @saved="onMetadataSaved"
+    <SongListActions
+      ref="actions"
+      :source="source"
+      :songs="filteredSongs"
+      :selected-ids="selectedIds"
+      :refresh="load"
+      :play-song="playSong"
+      @clear-selection="selectedIds = new Set()"
     />
-    <DeleteSongsDialog
-      :model-value="songsPendingDelete.length > 0"
-      :songs="songsPendingDelete"
-      @update:model-value="!$event && (songsPendingDelete = [])"
-      @deleted="onSongsDeleted"
-    />
-    <AddSongsToPlaylistDialog v-model="playlistDialogOpen" :song-ids="playlistSongIds" />
   </section>
 </template>

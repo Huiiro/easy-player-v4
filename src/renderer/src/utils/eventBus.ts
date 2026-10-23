@@ -12,6 +12,7 @@ type Events = {
   songPreferenceChanged: { songId: number; preference: -1 | 0 | 1 }
   locateCurrentSong: void
   openAudioControls: void
+  openGlobalSearch: void
 }
 
 const eventBus = mitt<Events>()
