@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+import { assertMetadataFileWritable } from './metadataWriteGuard'
 import { logError, logOperation } from './operationLogger'
 import path from 'path'
 import { parseAudioFile } from './audioMetadataService'
@@ -166,6 +168,7 @@ async function dispatchMetadata(
       return false
     }
     if (format === 'FLAC' || format === 'M4A' || format === 'AAC') {
+      assertMetadataFileWritable(filePath)
       return writeNativeMetadata(filePath, input)
     }
     if (format === 'MPEG') {
@@ -175,6 +178,13 @@ async function dispatchMetadata(
     return false
   } catch (err) {
     Logger.error('[Metadata] dispatch write failed', { filePath, format }, logError(err))
-    return false
+    const code = (err as NodeJS.ErrnoException)?.code
+    if (
+      code === 'EBUSY' ||
+      code === 'ETXTBSY' ||
+      (err instanceof Error && /Unable to replace media file \(code (?:32|33)\)/.test(err.message))
+    )
+      throw new Error(t('metadataFileBusy'), { cause: err })
+    throw err
   }
 }

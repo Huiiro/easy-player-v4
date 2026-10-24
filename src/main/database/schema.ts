@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 1
+export const DATABASE_SCHEMA_VERSION = 2
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (

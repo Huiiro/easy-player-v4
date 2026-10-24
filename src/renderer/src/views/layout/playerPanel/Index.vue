@@ -11,6 +11,7 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
+import eventBus from '@/utils/eventBus'
 import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
@@ -120,10 +121,15 @@ const lyricsOffsetLabel = computed(() => {
  * rhythm
  */
 const { rhythmAmount, isPanelVisible } = usePlayerRhythm(player, ui)
+function handleLyricsUpdated(songId: number): void {
+  if (player.currentQueueSong?.id === songId) lyricReloadToken.value += 1
+}
 onMounted(() => {
+  eventBus.on('lyricsUpdated', handleLyricsUpdated)
   window.addEventListener('keydown', handleKeyDown)
 })
 onUnmounted(() => {
+  eventBus.off('lyricsUpdated', handleLyricsUpdated)
   window.removeEventListener('keydown', handleKeyDown)
 })
 
@@ -788,7 +794,7 @@ function changeLyricsOffset(event: WheelEvent): void {
       </div>
       <!-- play queue-->
       <PlayQueueDrawer v-model="showQueue" />
-      <LyricsManagerDialog v-model="showLyricsManager" @saved="lyricReloadToken += 1" />
+      <LyricsManagerDialog v-model="showLyricsManager" />
       <LyricsColorDialog v-model="showLyricsColorDialog" />
       <AddSongsToPlaylistDialog
         v-model="showPlaylistPicker"

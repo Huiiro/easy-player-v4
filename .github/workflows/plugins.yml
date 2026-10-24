@@ -1,0 +1,37 @@
+name: Publish official source plugins
+
+# Source packages are released independently of the desktop application.
+# Publishing remains an explicit maintainer action.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: official-plugins-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run build:plugins
+      - run: npm run test:official-plugins
+      - name: Publish to this repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if ! gh release view plugins >/dev/null 2>&1; then
+            gh release create plugins --title 'Official source plugins' --notes 'Optional source plugins for Easy Player. Install them from Settings → Plugins.' --latest=false
+          fi
+          # Content-addressed names keep packages immutable. Upload the catalog last.
+          gh release upload plugins build/plugins/*.epp --clobber
+          gh release upload plugins build/plugins/catalog.json --clobber

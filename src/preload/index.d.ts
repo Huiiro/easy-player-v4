@@ -21,6 +21,45 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
+      plugins: {
+        catalog(
+          refresh?: boolean
+        ): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/plugins').OfficialPluginEntry[]
+          >
+        >
+        install(pluginId: string): Promise<{ success: boolean; error?: string }>
+        uninstall(pluginId: string): Promise<{ success: boolean; error?: string }>
+        importPackage(): Promise<{ success: boolean; cancelled?: boolean; error?: string }>
+        list(): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/plugins').PluginInfo[]
+          >
+        >
+        setEnabled(
+          pluginId: string,
+          enabled: boolean
+        ): Promise<{ success: boolean; error?: string }>
+        onChanged(callback: () => void): () => void
+      }
+      networkSources: {
+        request<T>(
+          request: import('../shared/networkSources').SourceRequest,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<import('../shared/networkSources').NetworkSourceResult<T>>
+        cancelRequest(requestId: string): Promise<{ success: boolean; cancelled: boolean }>
+        list(): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/networkSources').NetworkSourceInfo[]
+          >
+        >
+        setEnabled(
+          sourceId: string,
+          enabled: boolean
+        ): Promise<{ success: boolean; error?: string }>
+        onChanged(callback: () => void): () => void
+      }
       log: {
         getLevel(): Promise<LogEntry['level']>
         setLevel(level: LogEntry['level']): Promise<{
@@ -256,7 +295,7 @@ declare global {
         history(): Promise<
           Array<{
             id: number
-            platform: 'youtube' | 'bili'
+            platform: string
             resourceId: string
             title: string | null
             filePath: string | null
@@ -269,11 +308,12 @@ declare global {
         thumbnail(url: string): Promise<string>
         showInFolder(filePath: string): Promise<{ success: boolean; error?: string }>
         search(
-          platform: 'youtube' | 'bili',
-          query: string
+          platform: string,
+          query: string,
+          options?: import('../shared/networkSources').SourceRequestOptions
         ): Promise<
           Array<{
-            platform: 'youtube' | 'bili'
+            platform: string
             selected?: boolean
             id: string
             title: string
@@ -284,9 +324,12 @@ declare global {
             uploader: string | null
           }>
         >
-        parse(url: string): Promise<
+        parse(
+          url: string,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<
           Array<{
-            platform: 'youtube' | 'bili'
+            platform: string
             selected?: boolean
             id: string
             title: string
@@ -298,7 +341,7 @@ declare global {
           }>
         >
         start(request: {
-          platform: 'youtube' | 'bili'
+          platform: string
           url: string
           title: string
           resourceId: string
@@ -375,28 +418,14 @@ declare global {
           } | null
           error?: string
         }>
-        searchNetwork(request: {
-          title: string
-          artist?: string | null
-          album?: string | null
-          preferWordTimed?: boolean
-        }): Promise<{
+        searchNetwork(
+          request: import('../shared/networkSources').LyricSearchRequest,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<{
           success: boolean
-          data?: Array<{
-            id: string
-            provider: 'netease' | 'kugou' | 'qqmusic'
-            title: string
-            artist: string
-            album?: string
-            lrc: string
-            format?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
-            supportsWordTiming: boolean
-            translation?: string
-            translationFormat?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
-            romanization?: string
-            romanizationFormat?: 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
-          }>
+          data?: import('../shared/networkSources').NetworkLyricCandidate[]
           error?: string
+          failure?: import('../shared/networkSources').SourceFailure
         }>
       }
       fonts: {
@@ -416,6 +445,44 @@ declare global {
         removePackage(id: string): Promise<{ success: boolean; error?: string }>
       }
       metadata: {
+        listSources(): Promise<
+          import('../shared/sourceMetadata').SourceApiResult<{ id: string; displayName: string }[]>
+        >
+        searchTracks(
+          sourceId: string,
+          query: string,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<
+          import('../shared/sourceMetadata').SourceApiResult<
+            import('../shared/sourceMetadata').SourceTrackSummary[]
+          >
+        >
+        getTrack(
+          resource: import('../shared/networkSources').SourceResourceRef,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<
+          import('../shared/sourceMetadata').SourceApiResult<
+            import('../shared/sourceMetadata').SourceTrackDetail
+          >
+        >
+        getTrackLyrics(
+          resource: import('../shared/networkSources').SourceResourceRef,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<
+          import('../shared/sourceMetadata').SourceApiResult<
+            import('../shared/networkSources').NetworkLyricCandidate | null
+          >
+        >
+        sourceSnapshot(
+          songId: number
+        ): Promise<
+          import('../shared/sourceMetadata').SourceApiResult<
+            import('../shared/sourceMetadata').SourceMetadataSnapshot
+          >
+        >
+        applySource(
+          request: import('../shared/sourceMetadata').ApplySourceMetadataRequest
+        ): Promise<{ success: boolean; error?: string }>
         read(songId: number): Promise<{ success: boolean; data?: unknown; error?: string }>
         write(songId: number, metadata: unknown): Promise<{ success: boolean; error?: string }>
         reload(songIds: number[]): Promise<{
@@ -428,11 +495,14 @@ declare global {
           data?: { filePath: string; dataUrl: string }
           error?: string
         }>
-        searchCovers(request: {
-          title: string
-          artist?: string | null
-          album?: string | null
-        }): Promise<{
+        searchCovers(
+          request: {
+            title: string
+            artist?: string | null
+            album?: string | null
+          },
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<{
           success: boolean
           data?: Array<{
             id: string
@@ -443,11 +513,16 @@ declare global {
             previewUrl: string
           }>
           error?: string
+          failure?: import('../shared/networkSources').SourceFailure
         }>
-        downloadCover(imageUrl: string): Promise<{
+        downloadCover(
+          imageUrl: string,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<{
           success: boolean
           data?: { dataUrl: string }
           error?: string
+          failure?: import('../shared/networkSources').SourceFailure
         }>
       }
       shortcuts: {

@@ -6,16 +6,35 @@ const archive = path.resolve(process.argv[2] || 'dist/win-unpacked/resources/app
 const entries = asar
   .listPackage(archive)
   .map((entry) => entry.replace(/\\/g, '/').replace(/^\//, ''))
-const forbidden = entries.filter((entry) => entry === 'vcpkg' || entry.startsWith('vcpkg/'))
+const developmentRoots = ['vcpkg', 'plugins', 'scripts']
+const sourceSDKs = ['@neteasecloudmusicapienhanced/api', 'kugoumusicapi', 'qrc-decoder']
+const forbidden = entries.filter(
+  (entry) =>
+    developmentRoots.some((root) => entry === root || entry.startsWith(root + '/')) ||
+    sourceSDKs.some(
+      (name) => entry === 'node_modules/' + name || entry.startsWith('node_modules/' + name + '/')
+    ) ||
+    entry.endsWith('.epp')
+)
 console.log(`app.asar size: ${(fs.statSync(archive).size / 1024 ** 2).toFixed(1)} MiB`)
 console.log(
   `app.asar roots: ${[...new Set(entries.map((entry) => entry.split('/')[0]))].join(', ')}`
 )
 if (forbidden.length) {
-  throw new Error(`Build-only vcpkg files were packaged: ${forbidden.slice(0, 10).join(', ')}`)
+  throw new Error(
+    `Optional plugins or development files were packaged: ${forbidden.slice(0, 10).join(', ')}`
+  )
 }
 if (!entries.includes('out/main/index.js')) {
   throw new Error('Packaged application entry point is missing')
+}
+const main = asar.extractFile(archive, 'out/main/index.js').toString('utf8')
+if (
+  ['DoSearchForQQMusicDesktop', 'song_wiki_summary', 'krm_audio'].some((name) =>
+    main.includes(name)
+  )
+) {
+  throw new Error('A source implementation was bundled into the application main process')
 }
 const nativeDir = path.join(path.dirname(archive), 'native')
 const nativeEntries = fs.readdirSync(nativeDir, { withFileTypes: true })

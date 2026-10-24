@@ -1,98 +1,79 @@
 import { t } from '../i18n'
+import {
+  setMetadataPlaybackStatusProvider,
+  type MetadataPlaybackStatusProvider
+} from '../service/metadataWriteGuard'
 import { logError, logOperation, logParams, logUrl } from '../service/operationLogger'
 import { ipcMain, dialog } from 'electron'
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { basename, extname, join } from 'node:path'
-import { randomUUID } from 'node:crypto'
-import { readMetadata, writeMetadata, SongMetadata } from '../service/metadataService'
+import { existsSync, readFileSync } from 'node:fs'
+import type { SongMetadata } from '../service/metadataService'
 import { getSong } from '../database/repository'
-import { getDatabase } from '../database'
-import { getDataPath } from '../utils/pathUtils'
 import { Logger } from '../service/loggerService'
-import { search as searchNetease } from '@neteasecloudmusicapienhanced/api'
+import {
+  writeSongMetadata,
+  applySourceMetadata,
+  getSourceMetadataSnapshot,
+  reloadSongMetadata,
+  readSongMetadataForEditing
+} from '../service/metadataWriteService'
+import {
+  listMetadataSources,
+  searchSourceTracks,
+  getSourceTrack,
+  getSourceTrackLyrics
+} from '../sources/metadata'
+import type { ApplySourceMetadataRequest } from '../../shared/sourceMetadata'
+import type { SourceResourceRef } from '../../shared/networkSources'
+import { searchSourceArtwork } from '../sources/artwork'
+import { fetchArtworkDataUrl as downloadCoverDataUrl } from '../sources/artworkFetch'
+import type { MetadataQuery } from '../../shared/networkSources'
 
-interface CoverSearchRequest {
-  title: string
-  artist?: string | null
-  album?: string | null
-}
-
-function coverSearchKeyword(request: CoverSearchRequest): string {
-  return [request.title, request.artist, request.album].filter(Boolean).join(' ').trim()
-}
-
-function saveCoverDataUrl(dataUrl: string): string {
-  const matched = /^data:image\/(?:jpeg|jpg|png|webp|gif);base64,([a-z0-9+/=]+)$/i.exec(dataUrl)
-  if (!matched) throw new Error(t('invalidCoverData'))
-  const coverDir = join(getDataPath(), 'covers')
-  mkdirSync(coverDir, { recursive: true })
-  const path = join(coverDir, `metadata-${randomUUID()}.jpg`)
-  writeFileSync(path, Buffer.from(matched[1], 'base64'))
-  return path
-}
-
-async function downloadCoverDataUrl(imageUrl: string): Promise<string> {
-  if (!/^https?:\/\//i.test(imageUrl)) throw new Error(t('invalidCoverUrl'))
-  const response = await fetch(imageUrl)
-  const contentType = response.headers.get('content-type') || ''
-  if (!response.ok || !contentType.startsWith('image/')) throw new Error(t('coverDownloadFailed'))
-  const buffer = Buffer.from(await response.arrayBuffer())
-  if (!buffer.length || buffer.length > 20 * 1024 * 1024) throw new Error(t('invalidCover'))
-  return `data:${contentType.split(';')[0]};base64,${buffer.toString('base64')}`
-}
-
-async function reloadSongMetadata(songId: number): Promise<void> {
-  const song = getSong(songId)
-  if (!song || !existsSync(song.audio)) throw new Error(t('songFileNotFound'))
-  if (song.sourceId) throw new Error(t('remoteUnsupported'))
-
-  const metadata = await readMetadata(song.audio)
-  let cover: string | null = null
-  if (metadata.cover) {
-    const coverDir = join(getDataPath(), 'covers')
-    mkdirSync(coverDir, { recursive: true })
-    cover = join(coverDir, `${randomUUID()}.jpg`)
-    writeFileSync(cover, metadata.cover)
-  }
-
-  const fileName = basename(song.audio, extname(song.audio))
-  getDatabase()
-    .prepare(
-      `UPDATE song SET title = @title, artist = @artist, album = @album, duration = @duration,
-       cover = @cover, year = @year, genre = @genre, bitrate = @bitrate,
-       sample_rate = @sampleRate, bit_depth = @bitDepth, channels = @channels, format = @format,
-       file_name = @fileName, file_size = @fileSize, track_no = @trackNo, disk_no = @diskNo,
-       song_status = 1 WHERE id = @id`
-    )
-    .run({
-      id: song.id,
-      title: metadata.title || fileName,
-      artist: metadata.artist || null,
-      album: metadata.album || null,
-      duration: Math.floor(metadata.duration || 0),
-      cover,
-      year: metadata.year ?? null,
-      genre: metadata.genre || null,
-      bitrate: metadata.bitrate ? Math.round(metadata.bitrate / 1000) : null,
-      sampleRate: metadata.sampleRate ?? null,
-      bitDepth: metadata.bitsPerSample ?? null,
-      channels: metadata.channels ?? null,
-      format: metadata.container || metadata.codec || extname(song.audio).slice(1) || null,
-      fileName,
-      fileSize: statSync(song.audio).size,
-      trackNo: metadata.trackNumber ?? null,
-      diskNo: metadata.discNumber ?? null
+export function registerMetadataIpcHandlers(
+  playbackStatus: MetadataPlaybackStatusProvider = () => null
+): void {
+  setMetadataPlaybackStatusProvider(playbackStatus)
+  const sourceHandle = <T>(channel: string, action: (request: T) => unknown): void => {
+    ipcMain.handle(channel, async (_event, request: T) => {
+      try {
+        return { success: true, data: await action(request) }
+      } catch (error) {
+        Logger.warn('[Metadata IPC] source operation failed', { channel }, logError(error))
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : t('metadataReadFailed')
+        }
+      }
     })
-  if (song.cover && song.cover !== cover && existsSync(song.cover)) {
-    try {
-      unlinkSync(song.cover)
-    } catch {
-      // The database has already been synchronized; retain an orphaned cover on cleanup failure.
-    }
   }
-}
-
-export function registerMetadataIpcHandlers(): void {
+  sourceHandle('metadata:source-list', () => listMetadataSources())
+  sourceHandle('metadata:source-search', (request: { sourceId: string; query: string }) =>
+    searchSourceTracks(request.sourceId, request.query)
+  )
+  sourceHandle('metadata:source-track', (resource: SourceResourceRef) => getSourceTrack(resource))
+  sourceHandle('metadata:source-lyrics', (resource: SourceResourceRef) =>
+    getSourceTrackLyrics(resource)
+  )
+  sourceHandle('metadata:source-snapshot', (request: { songId: number }) =>
+    getSourceMetadataSnapshot(request.songId)
+  )
+  ipcMain.handle('metadata:source-apply', async (_event, request: ApplySourceMetadataRequest) => {
+    try {
+      return await applySourceMetadata(request)
+    } catch (error) {
+      Logger.error(
+        '[Metadata IPC] source apply failed',
+        {
+          songId: request?.songId,
+          fields: Object.keys(request?.patch ?? {})
+        },
+        logError(error)
+      )
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : t('metadataWriteFailed')
+      }
+    }
+  })
   ipcMain.handle('metadata:read', async (_event, songId: number) => {
     return logOperation('[IPC] metadata:read', { songId }, async () => {
       try {
@@ -106,7 +87,7 @@ export function registerMetadataIpcHandlers(): void {
         if (song.sourceId) {
           return { success: false, error: t('remoteUnsupported') }
         }
-        const metadata = await readMetadata(song.audio)
+        const metadata = await readSongMetadataForEditing(songId)
         return { success: true, data: metadata }
       } catch (error) {
         Logger.error('[Metadata IPC] read failed', { songId }, logError(error))
@@ -178,43 +159,13 @@ export function registerMetadataIpcHandlers(): void {
     })
   })
 
-  ipcMain.handle('metadata:search-covers', async (_event, request: CoverSearchRequest) => {
+  ipcMain.handle('metadata:search-covers', async (_event, request: MetadataQuery) => {
     return logOperation(
       '[IPC] metadata:search-covers',
       { titleLength: request?.title?.length, hasArtist: Boolean(request?.artist) },
       async () => {
         try {
-          const keyword = coverSearchKeyword(request)
-          if (!keyword) return { success: true, data: [] }
-          const response = (await searchNetease({
-            keywords: keyword,
-            type: 10,
-            limit: 12
-          })) as unknown as {
-            status?: number
-            body?: { result?: { albums?: Array<Record<string, unknown>> } }
-          }
-          if (response.status !== 200) return { success: true, data: [] }
-          const candidates = (response.body?.result?.albums ?? []).flatMap((album) => {
-            const imageUrl =
-              typeof album.picUrl === 'string'
-                ? album.picUrl.replace(/^http:\/\//i, 'https://')
-                : ''
-            if (!imageUrl) return []
-            const artist =
-              typeof (album.artist as { name?: string } | undefined)?.name === 'string'
-                ? (album.artist as { name: string }).name
-                : ''
-            return [
-              {
-                id: String(album.id ?? imageUrl),
-                title: String(album.name ?? ''),
-                artist,
-                album: String(album.name ?? ''),
-                imageUrl
-              }
-            ]
-          })
+          const candidates = await searchSourceArtwork(request)
           // Fetch previews in the main process. NetEase CDN URLs can redirect to HTTP,
           // which the renderer's strict CSP correctly refuses to display directly.
           const data = (
@@ -270,84 +221,7 @@ export function registerMetadataIpcHandlers(): void {
     async (_event, request: { songId: number; metadata: SongMetadata }) => {
       return logOperation('[IPC] metadata:write', logParams(request), async () => {
         try {
-          const { songId, metadata } = request
-          if (!Number.isInteger(songId)) {
-            return { success: false, error: t('invalidSongId') }
-          }
-          const song = getSong(songId)
-          if (!song || !existsSync(song.audio)) {
-            return { success: false, error: t('songFileNotFound') }
-          }
-          if (song.sourceId) {
-            return { success: false, error: t('remoteUnsupported') }
-          }
-
-          const temporaryCover = metadata.coverDataUrl
-            ? saveCoverDataUrl(metadata.coverDataUrl)
-            : null
-          if (temporaryCover) metadata.coverPath = temporaryCover
-          let result: boolean
-          try {
-            result = await writeMetadata(song.audio, song.format || '', metadata)
-          } finally {
-            if (temporaryCover && existsSync(temporaryCover)) unlinkSync(temporaryCover)
-          }
-          if (!result) return { success: false, error: t('metadataWriteFailed') }
-
-          // Re-read file to sync database with updated metadata
-          const updatedMeta = await readMetadata(song.audio)
-          const db = getDatabase()
-
-          const updates: string[] = []
-          const values: unknown[] = []
-
-          if (updatedMeta.title && updatedMeta.title !== song.title) {
-            updates.push('title = ?')
-            values.push(updatedMeta.title)
-          }
-          if (updatedMeta.artist && updatedMeta.artist !== song.artist) {
-            updates.push('artist = ?')
-            values.push(updatedMeta.artist)
-          }
-          if (updatedMeta.album && updatedMeta.album !== song.album) {
-            updates.push('album = ?')
-            values.push(updatedMeta.album)
-          }
-          if (updatedMeta.year !== undefined && updatedMeta.year !== song.year) {
-            updates.push('year = ?')
-            values.push(updatedMeta.year)
-          }
-          if ((updatedMeta.genre || null) !== song.genre) {
-            updates.push('genre = ?')
-            values.push(updatedMeta.genre || null)
-          }
-
-          // Handle cover art: if metadata was written with a cover, re-read and extract it
-          if (metadata.coverPath || metadata.cover) {
-            const picture = updatedMeta.cover
-            if (picture) {
-              const uuid = randomUUID()
-              const coverDir = join(getDataPath(), 'covers')
-              const coverPath = join(coverDir, `${uuid}.jpg`)
-              writeFileSync(coverPath, picture)
-
-              if (song.cover && existsSync(song.cover)) {
-                try {
-                  unlinkSync(song.cover)
-                } catch {
-                  // ignore cleanup failures
-                }
-              }
-              updates.push('cover = ?')
-              values.push(coverPath)
-            }
-          }
-
-          if (updates.length > 0) {
-            db.prepare(`UPDATE song SET ${updates.join(', ')} WHERE id = ?`).run(...values, songId)
-          }
-
-          return { success: true }
+          return await writeSongMetadata(request.songId, request.metadata)
         } catch (error) {
           Logger.error('[Metadata IPC] write failed', logParams(request), logError(error))
           return {

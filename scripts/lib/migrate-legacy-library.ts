@@ -22,12 +22,12 @@ export function needsMigration(db: Database.Database): boolean {
   // The supported starting point is b0947bc3 (V5). Never reinterpret pre-V5
   // play-history timestamps or an unknown future schema as the current baseline.
   if (
-    ![1, 5, 6, 7, 8].includes(version) ||
+    ![1, 2, 5, 6, 7, 8].includes(version) ||
     !columns('play_history').has('played_ms') ||
     !columns('song').has('preference')
   ) {
     throw new Error(
-      'Unsupported database: this tool supports legacy V5–V8 and the current V1 baseline.'
+      'Unsupported database: this tool supports legacy V5–V8 and the current V1/V2 baseline.'
     )
   }
   const hasTable = db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?")

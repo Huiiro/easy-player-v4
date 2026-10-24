@@ -13,6 +13,8 @@ files:
   - '!{.agents,.github,.idea,.tools,.vscode}/**/*'
   - '!**/.git/**'
   - '!src/**/*'
+  - '!plugins{,/**/*}'
+  - '!scripts{,/**/*}'
   - '!resources/**/*'
   - '!resources/tools/yt-dlp{,/**/*}'
   - '!**/.vscode/*'

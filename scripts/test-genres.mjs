@@ -261,11 +261,23 @@ try {
     logParams: (value) => value,
     logUrl: (value) => value
   }
-  const mp3 = load('src/main/service/mp3MetadataService.ts', { '../i18n': { t: (key) => key } })
+  const guard = load('src/main/service/metadataWriteGuard.ts', { '../i18n': { t: (key) => key } })
+  const mp3 = load('src/main/service/mp3MetadataService.ts', {
+    '../i18n': { t: (key) => key },
+    './metadataWriteGuard': guard
+  })
   let parsed = { common: { genre: ['Pop', 'Jazz'], track: {}, disk: {} }, format: {}, native: {} }
   let nativeWriter = () => true
+  let afterProbe = () => {}
   const metadata = load('src/main/service/metadataService.ts', {
-    './audioMetadataService': { parseAudioFile: async () => parsed },
+    '../i18n': { t: (key) => key },
+    './metadataWriteGuard': guard,
+    './audioMetadataService': {
+      parseAudioFile: async () => {
+        afterProbe()
+        return parsed
+      }
+    },
     './mp3MetadataService': mp3,
     '../audioEngine': { writeNativeMetadata: (...args) => nativeWriter(...args) },
     '../../shared/metadataValues': values,
@@ -282,11 +294,62 @@ try {
   nativeWriter = () => assert.fail('raw AAC must be rejected before rewriting')
   assert.equal(await metadata.writeMetadata('test.aac', 'AAC', { genre: 'Pop' }), false)
 
+  nativeWriter = () => assert.fail('loaded files cannot reach the native writer')
+  afterProbe = () =>
+    guard.setMetadataPlaybackStatusProvider(() => ({
+      trackInfo: { filePath: resolve('test.flac') }
+    }))
+  await assert.rejects(
+    metadata.writeMetadata('test.flac', '', { title: 'Skip' }),
+    /metadataPlaybackSkipped/
+  )
+  afterProbe = () => {}
+  guard.setMetadataPlaybackStatusProvider(() => null)
+  for (const code of [32, 33]) {
+    const original = new Error(
+      'Unable to replace media file (code ' + code + '): sharing violation'
+    )
+    nativeWriter = () => {
+      throw original
+    }
+    await assert.rejects(
+      metadata.writeMetadata('test.flac', 'FLAC', { title: 'Busy' }),
+      (error) => {
+        assert.equal(error.message, 'metadataFileBusy')
+        assert.equal(error.cause, original, 'keep original diagnostics for logging')
+        return true
+      }
+    )
+  }
+  nativeWriter = () => {
+    throw Object.assign(new Error('Permission denied'), { code: 'EACCES' })
+  }
+  await assert.rejects(
+    metadata.writeMetadata('test.flac', 'FLAC', { title: 'Denied' }),
+    /Permission denied/
+  )
+  const writer = load('src/main/service/metadataWriteService.ts', {
+    './metadataWriteGuard': guard,
+    '../i18n': { t: (key) => key },
+    'node:fs': { existsSync: () => true },
+    './metadataService': { writeMetadata: async () => true, readMetadata: async () => ({}) },
+    '../database/repository': {
+      getSong: () => ({ audio: 'test.mp3', genre: 'Pop', sourceId: null })
+    },
+    '../database': { getDatabase: () => db },
+    '../utils/pathUtils': {},
+    '../../shared/sourceMetadata': load('src/shared/sourceMetadata.ts')
+  })
   const handlers = new Map()
   const ipc = load('src/main/ipc/metadataIpcHandlers.ts', {
+    '../service/metadataWriteGuard': guard,
     '../i18n': { t: (key) => key },
     electron: { ipcMain: { handle: (name, handler) => handlers.set(name, handler) }, dialog: {} },
     'node:fs': { existsSync: () => true },
+    '../service/metadataWriteService': writer,
+    '../sources/artwork': {},
+    '../sources/artworkFetch': {},
+    '../sources/metadata': {},
     '../service/metadataService': {
       writeMetadata: async () => true,
       readMetadata: async () => ({})
@@ -349,6 +412,8 @@ try {
       )
       assert.equal(result.status, 0, result.stderr)
       const actual = load('src/main/service/metadataService.ts', {
+        '../i18n': { t: (key) => key },
+        './metadataWriteGuard': guard,
         './audioMetadataService': { parseAudioFile: parseFile },
         './mp3MetadataService': mp3,
         '../audioEngine': { writeNativeMetadata: addon.writeMetadata },
@@ -356,6 +421,14 @@ try {
         './loggerService': logger,
         './operationLogger': operations
       })
+      guard.setMetadataPlaybackStatusProvider(() => ({ trackInfo: { filePath: file } }))
+      const beforeSkip = readFileSync(file)
+      await assert.rejects(
+        actual.writeMetadata(file, '', { title: 'Do not write' }),
+        /metadataPlaybackSkipped/
+      )
+      assert.deepEqual(readFileSync(file), beforeSkip, 'loaded audio stays byte-for-byte intact')
+      guard.setMetadataPlaybackStatusProvider(() => null)
       if (extension === 'flac') {
         // Real repeated Vorbis GENRE tags, rather than a single joined text tag.
         const buffer = readFileSync(file)

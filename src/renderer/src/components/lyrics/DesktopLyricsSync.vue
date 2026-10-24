@@ -2,11 +2,13 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { type LyricLine, resolveLyrics } from '@/services/lyrics'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
 
 const player = usePlayerStore()
 const ui = useUIStore()
+const sourceRequests = createSourceRequestScope()
 const lyrics = ref<LyricLine[]>([])
 // Timestamp-only rows mark pauses in the full lyric view, but must not occupy
 // either of the two text slots in the desktop overlay.
@@ -16,19 +18,22 @@ let lyricRevision = 0
 let disposed = false
 
 async function loadLyrics(): Promise<void> {
+  sourceRequests.cancelAll()
   const id = ++requestId
   const song = player.currentQueueSong
   if (!song) {
     lyrics.value = []
     return
   }
+  const call = sourceRequests.start('lyrics')
   const result = await resolveLyrics(
     song,
     ui.lyricSourceOrder,
     ui.lyricSourceMode,
     ui.autoSearchNetworkLyrics,
-    ui.preferWordTimedNetworkLyrics
-  )
+    ui.preferWordTimedNetworkLyrics,
+    { ...call.options, isCurrent: call.isCurrent }
+  ).finally(call.finish)
   if (id === requestId) {
     lyrics.value = result.lines
     lyricRevision += 1
@@ -143,6 +148,7 @@ onMounted(() => {
   )
 })
 onBeforeUnmount(() => {
+  sourceRequests.cancelAll()
   disposed = true
   requestId += 1
   cleanups.forEach((cleanup) => cleanup())

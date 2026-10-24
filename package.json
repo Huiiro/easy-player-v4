@@ -43,22 +43,30 @@
     "perf:song-search": "node scripts/benchmark-song-search.mjs",
     "perf:playback": "node scripts/check-playback-performance.cjs",
     "test:track-switch": "electron scripts/check-track-switch.cjs && electron scripts/check-player-panel-switch.cjs",
-    "perf:app": "electron scripts/check-player-app.cjs"
+    "perf:app": "electron scripts/check-player-app.cjs",
+    "test:network-sources": "node scripts/test-network-sources.mjs && node scripts/test-lyric-providers.mjs",
+    "test:source-metadata": "node scripts/test-source-metadata.mjs",
+    "test:source-metadata:ui": "electron scripts/check-source-metadata.cjs",
+    "test:builtin-plugins": "node scripts/test-builtin-plugins.mjs",
+    "test:qqmusic-source": "node scripts/test-qqmusic-source.mjs",
+    "test:kugou-source": "node scripts/test-kugou-source.mjs",
+    "test:source-runtime": "node scripts/test-source-runtime.mjs",
+    "test:source-management": "node scripts/test-source-management.mjs",
+    "test:source-management:ui": "electron scripts/check-network-sources.cjs",
+    "build:plugins": "node scripts/build-official-plugins.mjs",
+    "test:official-plugins": "node scripts/test-official-plugins.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
-    "@neteasecloudmusicapienhanced/api": "^4.29.17",
     "adm-zip": "^0.6.0",
     "better-sqlite3": "^12.4.1",
     "electron-updater": "^6.6.2",
-    "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
     "kuroshiro": "^1.2.1",
     "kuroshiro-analyzer-kuromoji": "^1.1.0",
     "music-metadata": "^11.14.0",
     "node-id3": "^0.2.9",
     "opencc-js": "^1.4.2",
     "pinyin-pro": "^3.29.5",
-    "qrc-decoder": "1.0.2",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
@@ -94,6 +102,10 @@
     "vue-virtual-scroller": "^3.0.4",
     "vuedraggable": "^4.1.0",
     "vue-eslint-parser": "^10.2.0",
-    "vue-tsc": "^3.1.6"
+    "vue-tsc": "^3.1.6",
+    "@neteasecloudmusicapienhanced/api": "^4.29.17",
+    "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
+    "qrc-decoder": "1.0.2",
+    "esbuild": "0.25.12"
   }
 }

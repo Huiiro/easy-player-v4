@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { spawnSync } from 'node:child_process'
 import fs from 'node:fs/promises'
+import { readFileSync, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import vm from 'node:vm'
@@ -13,8 +14,16 @@ import { parseFile } from 'music-metadata'
 const require = createRequire(import.meta.url)
 const logger = { debug() {}, info() {}, warn() {}, error() {} }
 const common = {
-  '../service/playbackMode': { requireBackgroundWork() {}, onPlaybackModeChanged: () => () => {} },
-  './playbackMode': { requireBackgroundWork() {} },
+  '../service/playbackMode': {
+    requireBackgroundWork() {},
+    isPlaybackOnly: () => false,
+    onPlaybackModeChanged: () => () => {}
+  },
+  './playbackMode': {
+    requireBackgroundWork() {},
+    isPlaybackOnly: () => false,
+    onPlaybackModeChanged: () => () => {}
+  },
   '../service/loggerService': { Logger: logger },
   './loggerService': { Logger: logger },
   '../service/operationLogger': {
@@ -26,24 +35,70 @@ const common = {
   './operationLogger': { logError: String }
 }
 async function load(file, mocks) {
-  const exports = {}
-  const compiled = ts.transpileModule(await fs.readFile(file, 'utf8'), {
-    compilerOptions: {
-      module: ts.ModuleKind.CommonJS,
-      target: ts.ScriptTarget.ES2022,
-      esModuleInterop: true
+  const resolvedMocks = new Map()
+  for (const [name, value] of Object.entries(common)) {
+    if (name.startsWith('.')) {
+      const base = name.startsWith('../')
+        ? 'src/main/ipc/downloadIpcHandlers.ts'
+        : 'src/main/service/downloadAudioService.ts'
+      const target = path.resolve(path.dirname(base), name) + '.ts'
+      resolvedMocks.set(target, { ...resolvedMocks.get(target), ...value })
     }
-  }).outputText
-  vm.runInNewContext(compiled, {
-    exports,
-    Buffer,
-    Error,
-    URL,
-    setTimeout,
-    clearTimeout,
-    process,
-    require: (name) => mocks[name] ?? common[name] ?? require(name)
-  })
+  }
+  for (const [name, value] of Object.entries(mocks)) {
+    if (name.startsWith('.'))
+      resolvedMocks.set(path.resolve(path.dirname(file), name) + '.ts', value)
+  }
+  const cache = new Map()
+  function visit(filename) {
+    filename = path.resolve(filename)
+    if (resolvedMocks.has(filename)) return resolvedMocks.get(filename)
+    if (cache.has(filename)) return cache.get(filename)
+    const exports = {}
+    cache.set(filename, exports)
+    const compiled = ts.transpileModule(readFileSync(filename, 'utf8'), {
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: true
+      }
+    }).outputText
+    vm.runInNewContext(
+      compiled,
+      {
+        exports,
+        Buffer,
+        structuredClone,
+        AbortController,
+        AbortSignal,
+        crypto,
+        Error,
+        URL,
+        setTimeout,
+        clearTimeout,
+        process,
+        require: (name) => {
+          if (mocks[name]) return mocks[name]
+          if (name.startsWith('.')) {
+            const target = path.resolve(path.dirname(filename), name)
+            return visit(
+              existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts')
+            )
+          }
+          return common[name] ?? require(name)
+        }
+      },
+      { filename }
+    )
+    return exports
+  }
+  const exports = visit(file)
+  if (file === 'src/main/ipc/downloadIpcHandlers.ts') {
+    const registry = visit('src/main/sources/index.ts').getNetworkSources()
+    const { biliPlugin, youtubePlugin } = visit('plugins/official/media.ts')
+    for (const plugin of [biliPlugin, youtubePlugin])
+      plugin.activate({ registerSource: (source) => registry.register(source) })
+  }
   return exports
 }
 
@@ -191,6 +246,115 @@ try {
   console.log(
     'Bili download: finalize before completion, cover fetch fallback, failed/truncated/aborted cleanup and video passed'
   )
+
+  // Run the yt-dlp transport through the same source registry and IPC entry point.
+  for (const scenario of ['done', 'exit-failure', 'spawn-failure']) {
+    const handlers = new Map()
+    const events = []
+    const spawnCalls = []
+    let saved
+    let complete
+    const completed = new Promise((resolve) => {
+      complete = resolve
+    })
+    const child = new EventEmitter()
+    child.stdout = new EventEmitter()
+    child.stderr = new EventEmitter()
+    const handler = await load('src/main/ipc/downloadIpcHandlers.ts', {
+      electron: {
+        app: { isPackaged: false, getAppPath: () => root },
+        ipcMain: { handle: (name, action) => handlers.set(name, action) },
+        BrowserWindow: { fromWebContents: () => null }
+      },
+      'node:child_process': {
+        spawn: (command, args, options) => {
+          spawnCalls.push({ command, args, options })
+          setImmediate(() => {
+            if (scenario === 'spawn-failure') child.emit('error', new Error('missing executable'))
+            else {
+              child.stdout.emit('data', Buffer.from('[download] 25.0%\n'))
+              child.stderr.emit('data', Buffer.from('diagnostic'))
+              child.emit('close', scenario === 'done' ? 0 : 1)
+            }
+          })
+          return child
+        }
+      },
+      '../i18n': { t: (key) => key },
+      '../database/repository': {
+        listDownloadTasks: () => [],
+        saveDownloadTask: (task) => {
+          saved = task
+        }
+      }
+    })
+    handler.registerDownloadIpcHandlers()
+    const sender = {
+      send: (_channel, event) => {
+        events.push(event)
+        if (event.status === 'done' || event.status === 'error') complete(event)
+      }
+    }
+    assert.throws(
+      () =>
+        handlers.get('media-download:start')(
+          { sender },
+          {
+            platform: 'bili',
+            url: 'https://www.youtube.com/watch?v=test',
+            resourceId: 'test',
+            title: 'Title',
+            directory: root,
+            downloadType: 'audio',
+            quality: 'high'
+          }
+        ),
+      /does not match/
+    )
+    assert.throws(
+      () =>
+        handlers.get('media-download:start')(
+          { sender },
+          {
+            platform: 'youtube',
+            url: 'https://youtube.com.evil.test/watch?v=test',
+            resourceId: 'test',
+            title: 'Title',
+            directory: root,
+            downloadType: 'audio',
+            quality: 'high'
+          }
+        ),
+      /Unsupported download source/
+    )
+    handlers.get('media-download:start')(
+      { sender },
+      {
+        platform: 'youtube',
+        url: 'https://www.youtube.com/watch?v=test',
+        resourceId: 'test',
+        title: 'Title',
+        directory: root,
+        downloadType: 'audio',
+        quality: 'high'
+      }
+    )
+    const timer = setTimeout(() => complete({ status: 'timeout' }), 5000)
+    const result = await completed
+    clearTimeout(timer)
+    assert.equal(result.status, scenario === 'done' ? 'done' : 'error')
+    assert.equal(spawnCalls.length, 1)
+    assert.equal(spawnCalls[0].options.windowsHide, true)
+    assert(spawnCalls[0].args.includes('--extract-audio'))
+    assert(spawnCalls[0].args.includes('--audio-quality'))
+    assert.equal(spawnCalls[0].args.at(-1), 'https://www.youtube.com/watch?v=test')
+    if (scenario !== 'spawn-failure') {
+      assert(events.some((event) => event.progress === 25))
+      assert.equal(saved.platform, 'youtube')
+      assert.equal(saved.status, scenario === 'done' ? 'done' : 'error')
+    }
+  }
+  console.log('YouTube: source routing, yt-dlp progress, completion and process failures passed')
 
   const directory = path.join(root, 'finalizer')
   await fs.mkdir(directory)

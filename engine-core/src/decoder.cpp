@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <cerrno>
 #ifndef _WIN32
 #include <fstream>
 #endif
@@ -44,6 +45,24 @@ std::wstring utf8_to_wide(const std::string& utf8) {
     MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, &result[0], len);
     result.resize(len - 1); // remove null terminator
     return result;
+}
+
+// Let metadata replacement publish a new file while playback keeps reading the old handle.
+int read_shared_file(void* opaque, uint8_t* buffer, int size) {
+    DWORD received = 0;
+    if (!ReadFile(static_cast<HANDLE>(opaque), buffer, static_cast<DWORD>(size), &received, nullptr))
+        return GetLastError() == ERROR_HANDLE_EOF ? AVERROR_EOF : AVERROR(EIO);
+    return received ? static_cast<int>(received) : AVERROR_EOF;
+}
+int64_t seek_shared_file(void* opaque, int64_t offset, int whence) {
+    const auto handle = static_cast<HANDLE>(opaque);
+    LARGE_INTEGER result;
+    if (whence & AVSEEK_SIZE) return GetFileSizeEx(handle, &result) ? result.QuadPart : AVERROR(EIO);
+    whence &= ~AVSEEK_FORCE;
+    const DWORD method = whence == SEEK_SET ? FILE_BEGIN : whence == SEEK_CUR ? FILE_CURRENT : whence == SEEK_END ? FILE_END : MAXDWORD;
+    if (method == MAXDWORD) return AVERROR(EINVAL);
+    LARGE_INTEGER distance; distance.QuadPart = offset;
+    return SetFilePointerEx(handle, distance, &result, method) ? result.QuadPart : AVERROR(EIO);
 }
 
 // Check if a file exists and is readable using wide-char path (Windows)
@@ -128,6 +147,10 @@ void read_lyrics_metadata(const AVDictionary* dictionary, TrackInfo::Metadata& m
 
 struct Decoder::Impl {
     AVFormatContext* fmt_ctx = nullptr;
+#ifdef _WIN32
+    HANDLE file_handle = INVALID_HANDLE_VALUE;
+    AVIOContext* file_io = nullptr;
+#endif
     AVCodecContext* codec_ctx = nullptr;
     SwrContext* swr_ctx = nullptr;
     AVFrame* frame = nullptr;
@@ -179,31 +202,27 @@ bool Decoder::open(const std::string& file_path, int pcm_rate, int pcm_channels)
     }
 
     LOG_DEBUG("Opening file: " + file_path);
-    int ret = avformat_open_input(&impl_->fmt_ctx, file_path.c_str(), nullptr, nullptr);
-
 #ifdef _WIN32
-    // If UTF-8 path fails, try the system's ANSI code page (e.g., GBK for Chinese Windows)
-    if (ret < 0) {
-        int wlen = MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, nullptr, 0);
-        if (wlen > 0) {
-            std::wstring wpath(wlen, L'\0');
-            MultiByteToWideChar(CP_UTF8, 0, file_path.c_str(), -1, &wpath[0], wlen);
-            // Convert wide to system ANSI code page
-            int alen = WideCharToMultiByte(CP_ACP, 0, wpath.c_str(), -1, nullptr, 0, nullptr, nullptr);
-            if (alen > 0) {
-                std::string ansi_path(alen, '\0');
-                WideCharToMultiByte(CP_ACP, 0, wpath.c_str(), -1, &ansi_path[0], alen, nullptr, nullptr);
-                // Remove null terminator
-                if (!ansi_path.empty() && ansi_path.back() == '\0') ansi_path.pop_back();
-                LOG_DEBUG("Retrying with ANSI path: " + ansi_path);
-                ret = avformat_open_input(&impl_->fmt_ctx, ansi_path.c_str(), nullptr, nullptr);
-            }
-        }
+    impl_->file_handle = CreateFileW(utf8_to_wide(file_path).c_str(), GENERIC_READ,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (impl_->file_handle == INVALID_HANDLE_VALUE) {
+        LOG_ERROR("Unable to open decoder file: win32=" + std::to_string(GetLastError()) + ", path=" + file_path);
+        return false;
     }
+    auto* buffer = static_cast<unsigned char*>(av_malloc(32768));
+    if (!buffer) { close(); return false; }
+    impl_->file_io = avio_alloc_context(buffer, 32768, 0, impl_->file_handle, read_shared_file, nullptr, seek_shared_file);
+    if (!impl_->file_io) { av_free(buffer); close(); return false; }
+    impl_->fmt_ctx = avformat_alloc_context();
+    if (!impl_->fmt_ctx) { close(); return false; }
+    impl_->fmt_ctx->pb = impl_->file_io;
+    impl_->fmt_ctx->flags |= AVFMT_FLAG_CUSTOM_IO;
 #endif
+    int ret = avformat_open_input(&impl_->fmt_ctx, file_path.c_str(), nullptr, nullptr);
 
     if (ret < 0) {
         LOG_ERROR("avformat_open_input failed: code=" + std::to_string(ret) + ", error=" + av_err_str(ret) + ", path=" + file_path);
+        close();
         return false;
     }
 
@@ -388,6 +407,16 @@ void Decoder::close() {
     swr_free(&impl_->swr_ctx);
     avcodec_free_context(&impl_->codec_ctx);
     avformat_close_input(&impl_->fmt_ctx);
+#ifdef _WIN32
+    if (impl_->file_io) {
+        av_freep(&impl_->file_io->buffer);
+        avio_context_free(&impl_->file_io);
+    }
+    if (impl_->file_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(impl_->file_handle);
+        impl_->file_handle = INVALID_HANDLE_VALUE;
+    }
+#endif
     impl_->stream_index = -1;
     impl_->eof = false;
     impl_->swr_flushed = false;

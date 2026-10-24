@@ -14,6 +14,8 @@ import DesktopLyricsSettings from '@/components/settings/DesktopLyricsSettings.v
 import ThemeSettings from '@/components/settings/ThemeSettings.vue'
 import CustomBackgroundSettings from '@/components/settings/CustomBackgroundSettings.vue'
 import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
+import OfficialPluginSettings from '@/components/settings/OfficialPluginSettings.vue'
+import NetworkSourceSettings from '@/components/settings/NetworkSourceSettings.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
 import CacheSettings from '@/components/settings/CacheSettings.vue'
 import LibrarySettings from '@/components/settings/LibrarySettings.vue'
@@ -47,6 +49,8 @@ const sectionIcons = {
   lyrics: { name: 'common-lyrics-music', size: 19.5, navSize: 15 },
   'desktop-lyrics': { name: 'common-lyrics2', size: 23.4, navSize: 18 },
   shortcuts: { name: 'common-shortcuts', size: 23.4, navSize: 18 },
+  plugins: { name: 'common-settings', size: 20.8, navSize: 16 },
+  'network-sources': { name: 'common-link', size: 20.8, navSize: 16 },
   library: { name: 'menu-library', size: 23.4, navSize: 18 },
   cache: { name: 'common-database', size: 23.4, navSize: 18 },
   system: { name: 'common-settings', size: 20.8, navSize: 16 },
@@ -63,6 +67,8 @@ const navigationSections = computed(() =>
     { id: 'lyrics', label: t('settings.lyrics') },
     { id: 'desktop-lyrics', label: t('settings.desktopLyrics') },
     { id: 'shortcuts', label: t('settings.shortcuts') },
+    { id: 'plugins', label: t('plugins.title') },
+    { id: 'network-sources', label: t('networkSources.title') },
     { id: 'library', label: t('settings.library') },
     { id: 'cache', label: t('settings.cacheManagement') },
     { id: 'system', label: t('settings.system') },
@@ -395,6 +401,36 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <ShortcutSettings />
+        </section>
+        <section id="plugins" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons['plugins'].name"
+                  :size="sectionIcons['plugins'].size"
+                  class-name="settings-heading-icon"
+                /><span>{{ t('plugins.title') }}</span>
+              </h2>
+              <p>{{ t('plugins.description') }}</p>
+            </div>
+          </div>
+          <div class="settings-card"><OfficialPluginSettings /></div>
+        </section>
+        <section id="network-sources" class="settings-section">
+          <div class="section-heading">
+            <div>
+              <h2>
+                <SvgIcon
+                  :name="sectionIcons['network-sources'].name"
+                  :size="sectionIcons['network-sources'].size"
+                  class-name="settings-heading-icon"
+                /><span>{{ t('networkSources.title') }}</span>
+              </h2>
+              <p>{{ t('networkSources.description') }}</p>
+            </div>
+          </div>
+          <div class="settings-card"><NetworkSourceSettings /></div>
         </section>
         <!-- library -->
         <section id="library" class="settings-section">

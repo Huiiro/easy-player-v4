@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { TabGroup, TabList, Tab, TabPanels, TabPanel } from '@headlessui/vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useMessage } from '@/components/ui/useMessage'
+import SourceMetadataDialog from './SourceMetadataDialog.vue'
 import CropperDialog from '@/components/cropper/CropperDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import eventBus from '@/utils/eventBus'
+import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 export interface SongMetadata {
@@ -48,6 +51,9 @@ const { t } = useI18n()
 const ui = useUIStore()
 const { success: showSuccess, error: showError } = useMessage()
 
+const coverRequests = createSourceRequestScope()
+onBeforeUnmount(() => coverRequests.cancelAll())
+const sourceDialogVisible = ref(false)
 const loading = ref(false)
 const saving = ref(false)
 const activeTab = ref(0)
@@ -77,8 +83,11 @@ function cloneMetadata(src: SongMetadata): SongMetadata {
   return JSON.parse(JSON.stringify(src))
 }
 
+let metadataLoadId = 0
 async function load(): Promise<void> {
   if (!props.modelValue || !props.songId) return
+  const request = ++metadataLoadId
+  const songId = props.songId
   loading.value = true
   activeTab.value = 0
   metadata.value = {}
@@ -89,21 +98,29 @@ async function load(): Promise<void> {
   coverChanged.value = false
 
   try {
-    const response = await window.api.metadata.read(props.songId)
+    const response = await window.api.metadata.read(songId)
+    if (request !== metadataLoadId || !props.modelValue) return
     if (response.success && response.data) {
       originalMetadata.value = cloneMetadata(response.data as SongMetadata)
       metadata.value = cloneMetadata(response.data as SongMetadata)
+    } else {
+      showError(response.error || t('metadataEdit.loadFailed'))
     }
   } catch {
-    showError(t('metadataEdit.loadFailed'))
+    if (request === metadataLoadId) showError(t('metadataEdit.loadFailed'))
   } finally {
-    loading.value = false
+    if (request === metadataLoadId) loading.value = false
   }
 }
 
 watch(
   () => [props.modelValue, props.songId],
   () => {
+    ++metadataLoadId
+    coverRequests.cancelAll()
+    searchingCovers.value = false
+    coverSearchDialogVisible.value = false
+    sourceDialogVisible.value = false
     if (props.modelValue) {
       void load()
       originalCoverUrl.value = props.coverUrl ?? null
@@ -132,19 +149,35 @@ function applyCrop(dataUrl: string): void {
   coverPreview.value = dataUrl
 }
 
+watch(coverSearchDialogVisible, (open) => {
+  if (!open) {
+    coverRequests.cancelAll()
+    searchingCovers.value = false
+  }
+})
 async function searchCovers(): Promise<void> {
   const title = coverSearch.value.trim() || metadata.value.title || ''
   if (!title) return
+  const call = coverRequests.start('search')
   searchingCovers.value = true
   try {
-    const response = await window.api.metadata.searchCovers({
-      title,
-      artist: metadata.value.artist,
-      album: metadata.value.album
-    })
+    const response = await window.api.metadata.searchCovers(
+      {
+        title,
+        artist: metadata.value.artist,
+        album: metadata.value.album
+      },
+      call.options
+    )
+    if (!call.isCurrent()) return
+    if (!response.success) throw new Error(response.error)
     coverResults.value = response.success ? (response.data ?? []) : []
+  } catch (reason) {
+    if (call.isCurrent())
+      showError(reason instanceof Error ? reason.message : t('metadataEdit.networkSearchFailed'))
   } finally {
-    searchingCovers.value = false
+    if (call.isCurrent()) searchingCovers.value = false
+    call.finish()
   }
 }
 
@@ -158,8 +191,10 @@ async function openCoverSearch(): Promise<void> {
 }
 
 async function selectNetworkCover(imageUrl: string): Promise<void> {
+  const call = coverRequests.start('cover')
   try {
-    const response = await window.api.metadata.downloadCover(imageUrl)
+    const response = await window.api.metadata.downloadCover(imageUrl, call.options)
+    if (!call.isCurrent()) return
     if (!response.success || !response.data) {
       showError(response.error || t('metadataEdit.coverSetFailed'))
       return
@@ -168,7 +203,9 @@ async function selectNetworkCover(imageUrl: string): Promise<void> {
     coverSearchDialogVisible.value = false
     await prepareCrop(response.data.dataUrl)
   } catch {
-    showError(t('metadataEdit.coverSetFailed'))
+    if (call.isCurrent()) showError(t('metadataEdit.coverSetFailed'))
+  } finally {
+    call.finish()
   }
 }
 
@@ -177,6 +214,13 @@ function removeCover(): void {
   rawCoverDataUrl.value = null
   coverPreview.value = originalCoverUrl.value
   coverChanged.value = false
+}
+
+function sourceSaved(): void {
+  if (props.songId !== null) eventBus.emit('lyricsUpdated', props.songId)
+  showSuccess(t('metadataEdit.saveSuccess'))
+  emit('saved')
+  emit('update:modelValue', false)
 }
 
 async function handleSave(): Promise<void> {
@@ -207,6 +251,7 @@ async function handleSave(): Promise<void> {
 
     const response = await window.api.metadata.write(props.songId, payload)
     if (response.success) {
+      if (props.songId !== null) eventBus.emit('lyricsUpdated', props.songId)
       showSuccess(t('metadataEdit.saveSuccess'))
       emit('update:modelValue', false)
       emit('saved')
@@ -374,7 +419,64 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         </TabPanel>
       </TabPanels>
     </TabGroup>
+    <!-- Keep child dialogs inside the parent Dialog context for focus and outside-click handling. -->
+    <SourceMetadataDialog v-model="sourceDialogVisible" :song-id="songId" @saved="sourceSaved" />
+    <CropperDialog
+      v-model="cropDialogVisible"
+      :image-url="rawCoverDataUrl"
+      :size="1000"
+      @confirm="applyCrop"
+    />
+    <BaseDialog
+      :model-value="coverSearchDialogVisible"
+      :title="t('metadataEdit.searchCover')"
+      width="max-w-xl"
+      @update:model-value="coverSearchDialogVisible = $event"
+    >
+      <div class="p-2">
+        <div class="flex gap-2">
+          <BaseInput
+            v-model="coverSearch"
+            :placeholder="t('metadataEdit.searchCoverPlaceholder')"
+            :clearable="false"
+            @keyup.enter="searchCovers"
+          />
+          <BaseButton :disabled="searchingCovers" class="text-nowrap" @click="searchCovers">
+            <svg-icon name="common-search" class-name="size-[14px] mr-1" />
+            {{ t('metadataEdit.searchCover') }}
+          </BaseButton>
+        </div>
+        <div v-if="coverResults.length" class="mt-4 grid grid-cols-4 gap-3">
+          <button
+            v-for="result in coverResults"
+            :key="result.id"
+            class="overflow-hidden rounded-lg border border-border text-left hover:border-primary"
+            :title="[result.title, result.artist].filter(Boolean).join(' · ')"
+            @click="selectNetworkCover(result.imageUrl)"
+          >
+            <img
+              :src="result.previewUrl"
+              class="aspect-square w-full object-cover"
+              :alt="result.title"
+            />
+            <span class="block truncate px-2 py-1 text-xs">{{ result.title }}</span>
+            <span class="block truncate px-2 pb-2 text-[11px] text-text-l">{{
+              result.artist
+            }}</span>
+          </button>
+        </div>
+        <p v-else-if="!searchingCovers" class="mt-4 text-center text-sm text-text-l">
+          {{ t('metadataEdit.searchCoverEmpty') }}
+        </p>
+      </div>
+    </BaseDialog>
     <template #footer>
+      <BaseButton
+        variant="secondary"
+        :disabled="saving || loading"
+        @click="sourceDialogVisible = true"
+        >{{ t('metadataEdit.networkMatch') }}</BaseButton
+      >
       <BaseButton variant="secondary" @click="emit('update:modelValue', false)">
         {{ t('metadataEdit.cancel') }}
       </BaseButton>
@@ -382,52 +484,5 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         {{ saving ? t('metadataEdit.saving') : t('metadataEdit.save') }}
       </BaseButton>
     </template>
-  </BaseDialog>
-  <CropperDialog
-    v-model="cropDialogVisible"
-    :image-url="rawCoverDataUrl"
-    :size="1000"
-    @confirm="applyCrop"
-  />
-  <BaseDialog
-    :model-value="coverSearchDialogVisible"
-    :title="t('metadataEdit.searchCover')"
-    width="max-w-xl"
-    @update:model-value="coverSearchDialogVisible = $event"
-  >
-    <div class="p-2">
-      <div class="flex gap-2">
-        <BaseInput
-          v-model="coverSearch"
-          :placeholder="t('metadataEdit.searchCoverPlaceholder')"
-          :clearable="false"
-          @keyup.enter="searchCovers"
-        />
-        <BaseButton :disabled="searchingCovers" class="text-nowrap" @click="searchCovers">
-          <svg-icon name="common-search" class-name="size-[14px] mr-1" />
-          {{ t('metadataEdit.searchCover') }}
-        </BaseButton>
-      </div>
-      <div v-if="coverResults.length" class="mt-4 grid grid-cols-4 gap-3">
-        <button
-          v-for="result in coverResults"
-          :key="result.id"
-          class="overflow-hidden rounded-lg border border-border text-left hover:border-primary"
-          :title="[result.title, result.artist].filter(Boolean).join(' · ')"
-          @click="selectNetworkCover(result.imageUrl)"
-        >
-          <img
-            :src="result.previewUrl"
-            class="aspect-square w-full object-cover"
-            :alt="result.title"
-          />
-          <span class="block truncate px-2 py-1 text-xs">{{ result.title }}</span>
-          <span class="block truncate px-2 pb-2 text-[11px] text-text-l">{{ result.artist }}</span>
-        </button>
-      </div>
-      <p v-else-if="!searchingCovers" class="mt-4 text-center text-sm text-text-l">
-        {{ t('metadataEdit.searchCoverEmpty') }}
-      </p>
-    </div>
   </BaseDialog>
 </template>

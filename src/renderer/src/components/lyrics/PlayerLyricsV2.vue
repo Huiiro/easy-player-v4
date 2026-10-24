@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
+import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { LyricSpring } from './lyricSpring'
 import { LyricClock } from './lyricClock'
@@ -60,6 +61,7 @@ const groupTextCharacters = (text: string): string[][] =>
   groupCharacters(Array.from(text), (character) => character)
 
 const ui = useUIStore()
+const sourceRequests = createSourceRequestScope()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
 const viewportRef = ref<HTMLElement>()
@@ -217,6 +219,7 @@ function sameIndices(left: number[], right: number[]): boolean {
 }
 
 async function load(): Promise<void> {
+  sourceRequests.cancelAll()
   const loadId = ++lyricLoadId
   stopMotion()
   cancelAnimationFrame(sweepRaf)
@@ -237,6 +240,7 @@ async function load(): Promise<void> {
   lineRefs.value = []
   const song = props.song
   if (!song) return
+  const call = sourceRequests.start('lyrics')
   let result: Awaited<ReturnType<typeof resolveLyrics>>
   try {
     result = await resolveLyrics(
@@ -244,8 +248,9 @@ async function load(): Promise<void> {
       props.sourceOrder,
       props.forcedSource,
       props.autoSearchNetwork,
-      ui.preferWordTimedNetworkLyrics
-    )
+      ui.preferWordTimedNetworkLyrics,
+      { ...call.options, isCurrent: call.isCurrent }
+    ).finally(call.finish)
   } catch (error) {
     if (!isUnmounted && loadId === lyricLoadId) console.warn('Unable to load lyrics', error)
     return
@@ -785,6 +790,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  sourceRequests.cancelAll()
   isUnmounted = true
   lyricLoadId += 1
   const viewport = viewportRef.value

@@ -1,5 +1,6 @@
 export type LyricSource = 'embedded' | 'database' | 'local' | 'network'
-export type LyricFormat = 'lrc' | 'elrc' | 'yrc' | 'krc' | 'ttml' | 'plain'
+import type { LyricFormat } from '../../../shared/networkSources'
+export type { LyricFormat, NetworkLyricCandidate } from '../../../shared/networkSources'
 
 export interface LyricPayload {
   content: string
@@ -76,21 +77,6 @@ export interface LyricRubySegment {
   text: string
   romanization: string
   chars: LyricChar[]
-}
-
-export interface NetworkLyricCandidate {
-  id: string
-  provider: 'netease' | 'kugou' | 'qqmusic'
-  title: string
-  artist: string
-  album?: string
-  lrc: string
-  format?: LyricFormat
-  supportsWordTiming: boolean
-  translation?: string
-  translationFormat?: LyricFormat
-  romanization?: string
-  romanizationFormat?: LyricFormat
 }
 
 interface ParsedLrcTrack {
@@ -958,7 +944,10 @@ export async function resolveLyrics(
   order: LyricSource[],
   forcedSource: LyricSource | 'auto' = 'auto',
   allowAutoNetworkSearch = true,
-  preferWordTimedNetworkLyrics = true
+  preferWordTimedNetworkLyrics = true,
+  request?: import('../../../shared/networkSources').SourceRequestOptions & {
+    isCurrent?: () => boolean
+  }
 ): Promise<{
   lines: LyricLine[]
   source: LyricSource | null
@@ -977,6 +966,7 @@ export async function resolveLyrics(
         ]
       : [forcedSource]
   for (const source of sourceOrder) {
+    if (request?.isCurrent && !request.isCurrent()) return { lines: [], source: null }
     let lrc: string | null | undefined
     let format: LyricFormat | undefined
     let translation: string | null | undefined
@@ -1009,12 +999,16 @@ export async function resolveLyrics(
       // Network lookup is intentionally only an automatic fallback. Manual
       // searches are handled by the lyrics manager and require saving first.
       if (forcedSource !== 'auto' || !allowAutoNetworkSearch) continue
-      const response = await window.api.lyrics.searchNetwork({
-        title: song.title || '',
-        artist: song.artist,
-        album: song.album,
-        preferWordTimed: preferWordTimedNetworkLyrics
-      })
+      const response = await window.api.lyrics.searchNetwork(
+        {
+          title: song.title || '',
+          artist: song.artist,
+          album: song.album,
+          preferWordTimed: preferWordTimedNetworkLyrics
+        },
+        { requestId: request?.requestId }
+      )
+      if (request?.isCurrent && !request.isCurrent()) return { lines: [], source: null }
       const candidate = response.success
         ? response.data?.find((item) =>
             parseLyrics({ content: item.lrc, format: item.format, source: 'network' }).lines.some(
@@ -1034,6 +1028,7 @@ export async function resolveLyrics(
       lrc = response.success ? response.data?.content : null
       format = response.success ? response.data?.format : undefined
     }
+    if (request?.isCurrent && !request.isCurrent()) return { lines: [], source: null }
     if (!lrc) continue
     const lines = parseLyrics({
       content: lrc,

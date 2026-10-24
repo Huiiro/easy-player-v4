@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import vm from 'node:vm'
@@ -9,7 +9,37 @@ import ts from 'typescript'
 const require = createRequire(import.meta.url)
 
 function load(file, mocks = {}, globals = {}, cache = new Map()) {
+  if (file.endsWith('/network.ts')) {
+    const names = [
+      ['netease', 'searchNeteaseLyrics'],
+      ['kugou', 'searchKugouLyrics'],
+      ['qqmusic', 'searchQQMusicLyrics']
+    ]
+    mocks = {
+      ...mocks,
+      [resolve('src/main/i18n/index.ts')]: { t: (key) => key },
+      [resolve('src/main/sources/index.ts')]: {
+        getNetworkSources: () => ({
+          ownerOf: () => undefined,
+          isEnabled: () => true,
+          requireEnabled: (id) => ({
+            id,
+            displayName: id,
+            lyrics: { search: mocks['./providers/' + id][names.find(([key]) => key === id)[1]] }
+          }),
+          list: () =>
+            names.map(([id, method]) => ({
+              id,
+              displayName: id,
+              lyrics: { search: mocks['./providers/' + id][method] }
+            }))
+        })
+      }
+    }
+  }
   const filename = resolve(file)
+  if (filename === resolve('src/main/service/playbackMode.ts')) return policy
+  if (mocks[filename]) return mocks[filename]
   if (cache.has(filename)) return cache.get(filename)
   const exports = {}
   cache.set(filename, exports)
@@ -21,13 +51,24 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
     {
       exports,
       Buffer,
+      structuredClone,
       URLSearchParams,
       AbortSignal,
+      AbortController,
+      Error,
       Date,
       require: (name) => {
         if (name in mocks) return mocks[name]
-        if (name.startsWith('.'))
-          return load(resolve(dirname(filename), `${name}.ts`), mocks, globals, cache)
+        if (name === '../service/playbackMode') return policy
+        if (name.startsWith('.')) {
+          const target = resolve(dirname(filename), name)
+          return load(
+            existsSync(target + '.ts') ? target + '.ts' : resolve(target, 'index.ts'),
+            mocks,
+            globals,
+            cache
+          )
+        }
         return require(name)
       },
       ...globals
@@ -38,9 +79,9 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
 }
 
 let playbackOnly = false
-const policy = { isPlaybackOnly: () => playbackOnly }
+const policy = { isPlaybackOnly: () => playbackOnly, onPlaybackModeChanged: () => () => {} }
 const query = { title: 'Test song', artist: 'Singer', album: 'Album' }
-const qqFile = 'src/main/service/lyrics/providers/qqmusic.ts'
+const qqFile = 'plugins/official/qqmusic/lyrics.ts'
 const calls = []
 const encoded = (value) => Buffer.from(value).toString('base64')
 const qq = load(
@@ -103,7 +144,7 @@ const qq = load(
 )
 const results = await qq.searchQQMusicLyrics(query, false)
 assert.equal(results.length, 1, 'deduplicate songs and isolate invalid or failed lyrics')
-assert.equal(results[0].provider, 'qqmusic')
+assert.equal(results[0].resourceId, 'one')
 assert.equal(results[0].lrc, '[00:01.100]A & B 你')
 assert.equal(results[0].translation, '[00:01.10]Translation')
 assert.equal(results[0].romanization, '[00:01.10]ni')
@@ -162,6 +203,7 @@ assert.equal(fallbackCalls.length, 3, 'desktop search falls back to the referenc
 
 const candidate = (provider, title = query.title) => ({
   id: provider,
+  resourceId: provider,
   provider,
   title,
   artist: query.artist,
@@ -174,7 +216,7 @@ const { encryptQrc } = require('qrc-decoder')
 const qrcSource =
   '<?xml version="1.0"?><QrcInfos><Lyric_1 LyricContent="[offset:100]\n[1000,800]你(1000,300)好(1300,500)\n[2200,600]世(2200,200)界(2400,400)\n"/></QrcInfos>'
 const encryptedQrc = encryptQrc(qrcSource)
-const qrc = load('src/main/service/lyrics/qrc.ts')
+const qrc = load('plugins/official/qqmusic/qrc.ts')
 const convertedQrc = qrc.qrcToYrc(qrc.decodeQQMusicLyric(encryptedQrc))
 assert.equal(
   convertedQrc,
@@ -441,7 +483,7 @@ assert(
 )
 assert(relevanceCalls.some(([provider, word]) => provider === 'qqmusic' && !word))
 
-const netease = load('src/main/service/lyrics/providers/netease.ts', {
+const netease = load('plugins/official/netease/lyrics.ts', {
   '../../playbackMode': policy,
   '@neteasecloudmusicapienhanced/api': {
     default: {
@@ -490,7 +532,7 @@ for (const [actual, expected] of [
   ['', '晴天']
 ])
   assert.equal(isRelatedTitle(actual, expected), false, actual)
-const kugou = load('src/main/service/lyrics/providers/kugou.ts', {
+const kugou = load('plugins/official/kugou/lyrics.ts', {
   '../../playbackMode': policy,
   kugoumusicapi: {
     default: {

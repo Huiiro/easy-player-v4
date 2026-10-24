@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import { assertMetadataFileWritable } from './metadataWriteGuard'
 import fs from 'fs'
 import sharp from 'sharp'
 import NodeID3 from 'node-id3'
@@ -48,6 +49,7 @@ export async function writeMp3Metadata(filePath: string, input: SongMetadata): P
     }
   }
 
+  assertMetadataFileWritable(filePath)
   const result = NodeID3.update(tags, filePath)
   if (result instanceof Error) throw result
   if (result === true && input.genre !== undefined && !input.genre.trim()) {

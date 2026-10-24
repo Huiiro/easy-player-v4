@@ -71,6 +71,7 @@ export default {
       'Pinyin and romaji are ready and will update automatically when song information changes.'
   },
   common: {
+    cancelRequest: 'Cancel request',
     cancel: 'Cancel',
     close: 'Close',
     save: 'Save'
@@ -474,6 +475,43 @@ export default {
     tags: 'Tags'
   },
   metadataEdit: {
+    networkMatch: 'Match online',
+    networkHint:
+      'Choose the correct version, then select fields to update. Only fields selected here will be saved; other unsaved editor changes are excluded.',
+    networkSource: 'Source',
+    networkQuery: 'Search by track, artist or album',
+    networkSearch: 'Search tracks',
+    networkSearching: 'Searching…',
+    networkEmpty: 'No matching tracks found',
+    networkDetailsLoading: 'Loading track details…',
+    networkWriteHint: 'Writes selected fields to the audio file, then synchronizes the library.',
+    networkSelectionHint:
+      'Check the version and select fields. Fetch lyrics and artwork separately if needed.',
+    networkField: 'Select field',
+    networkCurrent: 'Current value',
+    networkIncoming: 'Online candidate',
+    networkSelectAll: 'Select all',
+    networkClearSelection: 'Clear selection',
+    networkSelectedCount: '{count} of {total} selected',
+    networkQueryLabel: 'Search keywords',
+    networkLoadFailed: 'Unable to load online matching',
+    networkSearchFailed: 'Track search failed',
+    networkDetailsFailed: 'Unable to fetch track details',
+    networkLyricsFailed: 'Unable to fetch lyrics',
+    networkCoverFailed: 'Unable to fetch artwork',
+    networkNoSources: 'No online sources available',
+    networkLyricsReady: 'Lyrics fetched',
+    networkCoverReady: 'Artwork fetched',
+    networkCover: 'Cover',
+    networkExistingCover: 'Existing cover',
+    networkBlank: 'Not set',
+    networkNoChanges: 'No differences yet. Fetch lyrics or artwork if needed.',
+    networkGetLyrics: 'Fetch track lyrics',
+    networkGetCover: 'Fetch track cover',
+    networkSaveSelected: 'Write selected fields',
+    networkFailed: 'Unable to load online information',
+    networkNoLyrics: 'No lyrics available for this track',
+    networkSnapshotFailed: 'Unable to read the audio file. Check the file and reopen.',
     basicInfo: 'Basic info',
     dialogTitle: 'Edit metadata',
     loading: 'Loading metadata…',
@@ -606,6 +644,73 @@ export default {
     pause: 'Pause',
     next: 'Next track',
     restore: 'Restore main window'
+  },
+  plugins: {
+    installed: 'Installed',
+    officialSource: 'Official source',
+    import: 'Import package',
+    refresh: 'Refresh source',
+    empty:
+      'No plugins installed. Install lyrics, artwork, metadata and download sources as needed.',
+    browse: 'Browse official plugins',
+    install: 'Install',
+    uninstall: 'Uninstall',
+    update: 'Update',
+    catalogFailed: 'Unable to refresh the official source. Check the network and retry.',
+    installFailed: 'Unable to install the plugin. Please retry.',
+    catalogHint:
+      'Distributed by Huiiro/easy-player-v4. Plugins can be stopped independently; uninstalling keeps their settings.',
+    title: 'Plugins',
+    description: 'Install, update and manage official plugins.',
+    hint: 'The app ships without source plugins. Stopping or uninstalling a plugin prevents new requests; accepted downloads continue.',
+    builtin: 'Official plugin',
+    loading: 'Loading plugins…',
+    loadFailed: 'Unable to load plugins. Please retry.',
+    saveFailed: 'Unable to save plugin settings. Please retry.',
+    retry: 'Retry start',
+    sourceInactive: 'The owning plugin is not running. Enable it in Plugins first.',
+    states: {
+      inactive: 'Disabled',
+      activating: 'Starting',
+      active: 'Running',
+      deactivating: 'Stopping',
+      failed: 'Failed'
+    },
+    errors: {
+      ACTIVATION_FAILED: 'The plugin failed to start. You can retry.',
+      CLEANUP_FAILED: 'The plugin stopped, but some resources could not be released.'
+    }
+  },
+  networkSources: {
+    title: 'Network sources',
+    description: 'Manage sources for lyrics, artwork, metadata and downloads.',
+    changeHint: 'Disabling a source blocks new requests. Downloads already started will continue.',
+    builtin: 'Built-in',
+    enabled: 'Enabled',
+    disabled: 'Disabled',
+    loading: 'Loading network sources…',
+    saving: 'Saving…',
+    loadFailed: 'Unable to load network sources. Retry.',
+    saveFailed: 'Unable to save network source settings. Retry.',
+    retry: 'Retry',
+    empty: 'No sources installed. Install them in Plugins.',
+    noDownloads:
+      'No download sources are available. Install and enable a download plugin in Settings.',
+    unavailable: 'This source is disabled. Enable it and retry.',
+    downloadQuery: 'Enter keywords or a video URL',
+    names: {
+      netease: 'NetEase Cloud Music',
+      kugou: 'KuGou',
+      qqmusic: 'QQ Music',
+      bili: 'Bilibili',
+      youtube: 'YouTube'
+    },
+    capabilities: {
+      lyrics: 'Lyrics',
+      artwork: 'Artwork',
+      metadata: 'Metadata',
+      download: 'Downloads'
+    }
   },
   settings: {
     extremePlaybackActive: 'Lightweight mode is active',

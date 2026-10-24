@@ -1,5 +1,14 @@
+import type { SourceResourceRef } from '../shared/networkSources'
+import type {
+  SourceTrackSummary,
+  SourceTrackDetail,
+  SourceApiResult,
+  SourceMetadataSnapshot,
+  ApplySourceMetadataRequest
+} from '../shared/sourceMetadata'
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+import type { LyricSearchRequest } from '../shared/networkSources'
 
 // ── Audio API exposed to renderer ──
 const audioAPI = {
@@ -240,11 +249,22 @@ const downloadsAPI = {
       success: boolean
       error?: string
     }>,
-  search: (platform: 'youtube' | 'bili', query: string) =>
-    ipcRenderer.invoke('media-download:search', { platform, query }),
-  parse: (url: string) => ipcRenderer.invoke('media-download:parse', { url }),
+  search: (
+    platform: string,
+    query: string,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceValue<import('../shared/networkSources').MediaSearchItem[]>(
+      { operation: 'download.search', sourceId: platform, query },
+      options
+    ),
+  parse: (url: string, options?: import('../shared/networkSources').SourceRequestOptions) =>
+    sourceValue<import('../shared/networkSources').MediaSearchItem[]>(
+      { operation: 'download.parse', url },
+      options
+    ),
   start: (request: {
-    platform: 'youtube' | 'bili'
+    platform: string
     url: string
     title: string
     resourceId: string
@@ -474,6 +494,24 @@ const appUpdateAPI = {
   }
 }
 
+function sourceRequest<T>(
+  request: import('../shared/networkSources').SourceRequest,
+  options?: import('../shared/networkSources').SourceRequestOptions
+): Promise<import('../shared/networkSources').NetworkSourceResult<T>> {
+  return ipcRenderer.invoke('network-sources:invoke', {
+    ...request,
+    requestId: options?.requestId ?? request.requestId
+  })
+}
+async function sourceValue<T>(
+  request: import('../shared/networkSources').SourceRequest,
+  options?: import('../shared/networkSources').SourceRequestOptions
+): Promise<T> {
+  const result = await sourceRequest<T>(request, options)
+  if (!result.success) throw Object.assign(new Error(result.error), { failure: result.failure })
+  return result.data as T
+}
+
 const lyricsAPI = {
   openInEditor: (request: { songId: number; lyrics: string; lyricFormat?: string }) =>
     ipcRenderer.invoke('lyrics:open-in-editor', request) as Promise<{
@@ -482,17 +520,14 @@ const lyricsAPI = {
     }>,
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
-  searchNetwork: ({
-    title,
-    artist,
-    album,
-    preferWordTimed
-  }: {
-    title: string
-    artist?: string | null
-    album?: string | null
-    preferWordTimed?: boolean
-  }) => ipcRenderer.invoke('lyrics:search-network', { title, artist, album, preferWordTimed })
+  searchNetwork: (
+    { title, artist, album, preferWordTimed }: LyricSearchRequest,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceRequest<import('../shared/networkSources').NetworkLyricCandidate[]>(
+      { operation: 'lyrics.search', query: { title, artist, album, preferWordTimed } },
+      options
+    )
 }
 const fontsAPI = {
   list: () => ipcRenderer.invoke('fonts:list'),
@@ -500,6 +535,37 @@ const fontsAPI = {
 }
 
 const metadataAPI = {
+  listSources: () =>
+    ipcRenderer.invoke('metadata:source-list') as Promise<
+      SourceApiResult<{ id: string; displayName: string }[]>
+    >,
+  searchTracks: (
+    sourceId: string,
+    query: string,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceRequest<SourceTrackSummary[]>({ operation: 'metadata.search', sourceId, query }, options),
+  getTrack: (
+    resource: SourceResourceRef,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) => sourceRequest<SourceTrackDetail>({ operation: 'metadata.get', resource }, options),
+  getTrackLyrics: (
+    resource: SourceResourceRef,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceRequest<import('../shared/networkSources').NetworkLyricCandidate | null>(
+      { operation: 'lyrics.get', resource },
+      options
+    ),
+  sourceSnapshot: (songId: number) =>
+    ipcRenderer.invoke('metadata:source-snapshot', { songId }) as Promise<
+      SourceApiResult<SourceMetadataSnapshot>
+    >,
+  applySource: (request: ApplySourceMetadataRequest) =>
+    ipcRenderer.invoke('metadata:source-apply', request) as Promise<{
+      success: boolean
+      error?: string
+    }>,
   read: (songId: number) =>
     ipcRenderer.invoke('metadata:read', songId) as Promise<{
       success: boolean
@@ -523,25 +589,17 @@ const metadataAPI = {
       data?: { filePath: string; dataUrl: string }
       error?: string
     }>,
-  searchCovers: (request: { title: string; artist?: string | null; album?: string | null }) =>
-    ipcRenderer.invoke('metadata:search-covers', request) as Promise<{
-      success: boolean
-      data?: Array<{
-        id: string
-        title: string
-        artist: string
-        album: string
-        imageUrl: string
-        previewUrl: string
-      }>
-      error?: string
-    }>,
-  downloadCover: (imageUrl: string) =>
-    ipcRenderer.invoke('metadata:download-cover', imageUrl) as Promise<{
-      success: boolean
-      data?: { dataUrl: string }
-      error?: string
-    }>
+  searchCovers: (
+    query: { title: string; artist?: string | null; album?: string | null },
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceRequest<
+      Array<import('../shared/networkSources').ArtworkCandidate & { previewUrl: string }>
+    >({ operation: 'artwork.search', query, previews: true }, options),
+  downloadCover: (
+    imageUrl: string,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) => sourceRequest<{ dataUrl: string }>({ operation: 'artwork.fetch', imageUrl }, options)
 }
 const shortcutsAPI = {
   registerGlobal: (shortcuts: Record<string, string>) =>
@@ -601,6 +659,70 @@ const systemAPI = {
 
 // Custom APIs for renderer
 const api = {
+  plugins: {
+    catalog: (refresh = false) =>
+      ipcRenderer.invoke('plugins:catalog', refresh) as Promise<
+        import('../shared/networkSources').NetworkSourceResult<
+          import('../shared/plugins').OfficialPluginEntry[]
+        >
+      >,
+    install: (pluginId: string) =>
+      ipcRenderer.invoke('plugins:install', pluginId) as Promise<{
+        success: boolean
+        error?: string
+      }>,
+    uninstall: (pluginId: string) =>
+      ipcRenderer.invoke('plugins:uninstall', pluginId) as Promise<{
+        success: boolean
+        error?: string
+      }>,
+    importPackage: () =>
+      ipcRenderer.invoke('plugins:import') as Promise<{
+        success: boolean
+        cancelled?: boolean
+        error?: string
+      }>,
+    list: () =>
+      ipcRenderer.invoke('plugins:list') as Promise<
+        import('../shared/networkSources').NetworkSourceResult<
+          import('../shared/plugins').PluginInfo[]
+        >
+      >,
+    setEnabled: (pluginId: string, enabled: boolean) =>
+      ipcRenderer.invoke('plugins:set-enabled', { pluginId, enabled }) as Promise<{
+        success: boolean
+        error?: string
+      }>,
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('plugins:changed', listener)
+      return () => ipcRenderer.removeListener('plugins:changed', listener)
+    }
+  },
+  networkSources: {
+    request: sourceRequest,
+    cancelRequest: (requestId: string) =>
+      ipcRenderer.invoke('network-sources:cancel', requestId) as Promise<{
+        success: boolean
+        cancelled: boolean
+      }>,
+    list: () =>
+      ipcRenderer.invoke('network-sources:list') as Promise<
+        import('../shared/networkSources').NetworkSourceResult<
+          import('../shared/networkSources').NetworkSourceInfo[]
+        >
+      >,
+    setEnabled: (sourceId: string, enabled: boolean) =>
+      ipcRenderer.invoke('network-sources:set-enabled', { sourceId, enabled }) as Promise<{
+        success: boolean
+        error?: string
+      }>,
+    onChanged: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('network-sources:changed', listener)
+      return () => ipcRenderer.removeListener('network-sources:changed', listener)
+    }
+  },
   log: {
     getLevel: () => ipcRenderer.invoke('log:get-level'),
     setLevel: (level: 'debug' | 'info' | 'warn' | 'error') =>

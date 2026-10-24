@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { createSourceRequestScope } from '@/services/sourceRequests'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -17,12 +19,18 @@ const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: '
 const ui = useUIStore()
 const player = usePlayerStore()
 const { t } = useI18n()
-const providerLabelKeys: Record<NetworkLyricCandidate['provider'], string> = {
+const providerLabelKeys: Record<string, string> = {
   netease: 'playerPanel.lyricProviderNetease',
   kugou: 'playerPanel.lyricProviderKugou',
   qqmusic: 'playerPanel.lyricProviderQQMusic'
 }
+const requests = createSourceRequestScope()
 const loading = ref(false)
+function cancelRequest(): void {
+  requests.cancelAll()
+  loading.value = false
+}
+onBeforeUnmount(cancelRequest)
 const error = ref('')
 const candidates = ref<NetworkLyricCandidate[]>([])
 const selected = ref(0)
@@ -48,6 +56,7 @@ const sources = computed(() => [
   { value: 'network', label: t('lyrics.source.network') }
 ])
 async function loadDraft(source = previewSource.value): Promise<void> {
+  requests.cancel('draft')
   const song = player.currentQueueSong
   lyric.value = ''
   translation.value = ''
@@ -57,14 +66,17 @@ async function loadDraft(source = previewSource.value): Promise<void> {
   romanizationFormat.value = undefined
   resolvedSource.value = null
   if (!song || source === 'network') return
+  const call = requests.start('draft')
   if (source === 'auto') {
     const result = await resolveLyrics(
       song,
       ui.lyricSourceOrder,
       'auto',
       ui.autoSearchNetworkLyrics,
-      ui.preferWordTimedNetworkLyrics
+      ui.preferWordTimedNetworkLyrics,
+      { ...call.options, isCurrent: call.isCurrent }
     )
+    if (!call.isCurrent()) return
     resolvedSource.value = result.source
     lyric.value = result.content || ''
     lyricFormat.value = result.format
@@ -72,10 +84,12 @@ async function loadDraft(source = previewSource.value): Promise<void> {
     translationFormat.value = result.translationFormat
     romanization.value = result.romanization || ''
     romanizationFormat.value = result.romanizationFormat
+    call.finish()
     return
   }
   if (source === 'database') {
     const response = await window.api.database.command('getSong', { id: song.id })
+    if (!call.isCurrent()) return
     const data = response.success
       ? (response.data as {
           lrc?: string | null
@@ -92,12 +106,15 @@ async function loadDraft(source = previewSource.value): Promise<void> {
     translationFormat.value = data?.translationFormat
     romanization.value = data?.romanization || ''
     romanizationFormat.value = data?.romanizationFormat
+    call.finish()
     return
   }
   const response = await window.api.lyrics.loadSource(song.audio, source)
+  if (!call.isCurrent()) return
   lyric.value = response.success ? response.data?.content || '' : ''
   lyricFormat.value = response.success ? response.data?.format : undefined
   resolvedSource.value = lyric.value ? source : null
+  call.finish()
 }
 async function initializeDraft(): Promise<void> {
   const metadata = player.trackInfo?.metadata
@@ -117,12 +134,14 @@ function updateVisible(value: boolean): void {
   emit('update:modelValue', value)
 }
 watch(
-  () => props.modelValue,
-  (visible) => {
+  () => [props.modelValue, player.currentQueueSong?.id] as const,
+  ([visible]) => {
+    cancelRequest()
     if (visible) void initializeDraft()
   }
 )
 async function selectSource(source: 'auto' | LyricSource): Promise<void> {
+  cancelRequest()
   previewSource.value = source
   await loadDraft(source)
 }
@@ -130,6 +149,7 @@ function applyPlaybackSource(): void {
   ui.lyricSourceMode = previewSource.value
 }
 function selectCandidate(index: number): void {
+  requests.cancel('draft')
   selected.value = index
   const item = candidates.value[index]
   if (item) {
@@ -145,22 +165,30 @@ function selectCandidate(index: number): void {
 }
 async function search(): Promise<void> {
   if (!query.value.title.trim()) return
+  requests.cancel('draft')
+  const call = requests.start('search')
   loading.value = true
   error.value = ''
   candidates.value = []
   try {
-    const response = await window.api.lyrics.searchNetwork({
-      ...query.value,
-      preferWordTimed: ui.preferWordTimedNetworkLyrics
-    })
+    const response = await window.api.lyrics.searchNetwork(
+      {
+        ...query.value,
+        preferWordTimed: ui.preferWordTimedNetworkLyrics
+      },
+      call.options
+    )
+    if (!call.isCurrent()) return
     if (!response.success) throw new Error(response.error)
     candidates.value = response.data || []
     if (candidates.value.length) selectCandidate(0)
     else error.value = t('playerPanel.lyricSearchEmpty')
   } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : t('playerPanel.lyricSearchFailed')
+    if (call.isCurrent())
+      error.value = reason instanceof Error ? reason.message : t('playerPanel.lyricSearchFailed')
   } finally {
-    loading.value = false
+    if (call.isCurrent()) loading.value = false
+    call.finish()
   }
 }
 async function save(): Promise<void> {
@@ -255,6 +283,9 @@ async function save(): Promise<void> {
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}
           </button>
+          <BaseButton v-if="loading" variant="secondary" class="w-full" @click="cancelRequest">{{
+            t('common.cancelRequest')
+          }}</BaseButton>
         </div>
       </div>
       <div class="flex min-w-0 min-h-0 flex-col gap-3">
@@ -272,7 +303,11 @@ async function save(): Promise<void> {
               "
               @click="selectCandidate(index)"
             >
-              {{ t(providerLabelKeys[candidate.provider]) }}
+              {{
+                providerLabelKeys[candidate.provider]
+                  ? t(providerLabelKeys[candidate.provider])
+                  : candidate.providerName
+              }}
               · {{ candidate.title }} — {{ candidate.artist }}
               <span
                 class="ml-2 inline-flex items-center gap-1 rounded bg-text/10 px-1.5 py-0.5 text-[10px]"

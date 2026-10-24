@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "builtin.netease",
+      "displayName": "NetEase Cloud Music",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "netease",
+          "displayName": "NetEase Cloud Music",
+          "capabilities": [
+            "lyrics",
+            "artwork",
+            "metadata"
+          ]
+        }
+      ],
+      "size": 754673,
+      "sha256": "6062d04fa571798906f8a26158d1b6c377ef734db7f92d5690505311c8a6ddda",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.netease-1.0.0-6062d04fa571.epp"
+    },
+    {
+      "id": "builtin.kugou",
+      "displayName": "KuGou",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "kugou",
+          "displayName": "KuGou",
+          "capabilities": [
+            "lyrics",
+            "artwork",
+            "metadata"
+          ]
+        }
+      ],
+      "size": 319479,
+      "sha256": "66707a491554e9c406df873b3682917ad47b59e69a93d90de5fcc8ba31d51850",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.kugou-1.0.0-66707a491554.epp"
+    },
+    {
+      "id": "builtin.qqmusic",
+      "displayName": "QQ Music",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "qqmusic",
+          "displayName": "QQ Music",
+          "capabilities": [
+            "lyrics",
+            "artwork",
+            "metadata"
+          ]
+        }
+      ],
+      "size": 45173,
+      "sha256": "3fca3742983d2186a4e52ac99261b3a989af6b6d04769f229b24dce402f99209",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.qqmusic-1.0.0-3fca3742983d.epp"
+    },
+    {
+      "id": "builtin.bili",
+      "displayName": "Bilibili",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "bili",
+          "displayName": "Bilibili",
+          "capabilities": [
+            "download"
+          ],
+          "downloadDomains": [
+            "bilibili.com"
+          ]
+        }
+      ],
+      "size": 9117,
+      "sha256": "2563bae85f1955f249da06905a10a8ac1e5cf6ea7288526c40da32b3b15a9db4",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.bili-1.0.0-2563bae85f19.epp"
+    },
+    {
+      "id": "builtin.youtube",
+      "displayName": "YouTube",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "youtube",
+          "displayName": "YouTube",
+          "capabilities": [
+            "download"
+          ],
+          "downloadDomains": [
+            "youtube.com",
+            "youtu.be",
+            "youtube-nocookie.com"
+          ]
+        }
+      ],
+      "size": 9136,
+      "sha256": "c68c4eabc8328e5eb0cc3f815ddcec478e08a971066186277098ed376950f16a",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.youtube-1.0.0-c68c4eabc832.epp"
+    }
+  ]
+}

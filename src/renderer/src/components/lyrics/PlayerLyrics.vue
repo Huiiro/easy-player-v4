@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricChar, LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
+import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { gsap } from 'gsap'
 
@@ -36,6 +37,7 @@ const props = withDefaults(
 const emit = defineEmits<{ seek: [positionMs: number] }>()
 
 const ui = useUIStore()
+const sourceRequests = createSourceRequestScope()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
 const viewportRef = ref<HTMLElement>()
@@ -121,19 +123,22 @@ function findCurrentLineIndex(lyrics: LyricLine[], currentTime: number): number 
 }
 
 async function load(): Promise<void> {
+  sourceRequests.cancelAll()
   const loadId = ++lyricLoadId
   lyrics.value = []
   source.value = null
   lineRefs.value = []
   const song = props.song
   if (!song) return
+  const call = sourceRequests.start('lyrics')
   const result = await resolveLyrics(
     song,
     props.sourceOrder,
     props.forcedSource,
     props.autoSearchNetwork,
-    ui.preferWordTimedNetworkLyrics
-  )
+    ui.preferWordTimedNetworkLyrics,
+    { ...call.options, isCurrent: call.isCurrent }
+  ).finally(call.finish)
   if (isUnmounted || loadId !== lyricLoadId) return
   lyrics.value = result.lines
   source.value = result.source
@@ -374,6 +379,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  sourceRequests.cancelAll()
   isUnmounted = true
   lyricLoadId += 1
   const viewport = viewportRef.value

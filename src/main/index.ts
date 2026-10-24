@@ -35,6 +35,10 @@ import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerThemeIpcHandlers } from './ipc/themeIpcHandlers'
 import { resolveThemeResource } from './service/themePackageService'
+import { registerSourceCallIpcHandlers } from './ipc/sourceCallIpcHandlers'
+import { registerPluginIpcHandlers } from './ipc/pluginIpcHandlers'
+import { shutdownPlugins } from './plugins/runtime'
+import { registerNetworkSourceIpcHandlers } from './ipc/networkSourceIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
 import { registerDownloadIpcHandlers } from './ipc/downloadIpcHandlers'
@@ -166,6 +170,7 @@ function quitApplication(): void {
   globalShortcut.unregisterAll()
   tray?.destroy()
   tray = null
+  shutdownPlugins()
   closeDatabase()
   // Do not let a hidden close-to-tray window intercept this explicit user
   // request. `app.exit` is intentional here; cleanup was completed above.
@@ -829,10 +834,13 @@ app.whenReady().then(() =>
       migrateSourceSecrets()
       registerDatabaseIpcHandlers()
       registerScanIpcHandlers()
+      registerPluginIpcHandlers()
+      registerNetworkSourceIpcHandlers()
+      registerSourceCallIpcHandlers()
       registerLyricsIpcHandlers()
       registerFontIpcHandlers()
       registerThemeIpcHandlers()
-      registerMetadataIpcHandlers()
+      registerMetadataIpcHandlers(() => audioEngine?.getStatus())
       registerFileIpcHandlers()
       registerFileAssociationHandlers(() => mainWindow)
       registerDownloadIpcHandlers()
@@ -1248,5 +1256,6 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()
   searchIndexService?.stop()
+  shutdownPlugins()
   closeDatabase()
 })

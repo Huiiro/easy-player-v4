@@ -1,4 +1,15 @@
 export default {
+  pluginCatalogLoadFailed:
+    'Unable to read the official plugin source. Check the network and retry.',
+  pluginUninstallFailed: 'Unable to uninstall the plugin. Please retry.',
+  pluginDowngrade: 'A newer plugin version is installed. Refresh the official source.',
+  pluginCatalogInvalid: 'The official plugin index is invalid or incompatible.',
+  pluginDownloadFailed: 'Unable to download the plugin. Check the network or retry later.',
+  pluginPackageInvalid: 'The plugin package is invalid or incompatible.',
+  pluginPackageIntegrity:
+    'The package does not match the official index. Refresh the source or download it again.',
+  pluginBusy: 'The plugin is busy. Please retry shortly.',
+  pluginInstallFailed: 'Unable to install the plugin. Please retry.',
   audioFiles: 'Audio files',
   invalidSongId: 'Invalid song id',
   songFileNotFound: 'Song file not found',
@@ -13,6 +24,10 @@ export default {
   chooseCoverFailed: 'Failed to choose cover',
   searchCoverFailed: 'Failed to search covers',
   downloadCoverFailed: 'Failed to download cover',
+  metadataPlaybackSkipped:
+    'This track is still loaded by the player. Writing was skipped. Switch to another track and retry; pausing does not release the file.',
+  metadataFileBusy:
+    'The audio file is in use by another task or application. Nothing was written. Retry after it is released.',
   metadataWriteFailed: 'Failed to write metadata',
   lyricsLoadFailed: 'Unable to load lyrics',
   lyricsSearchFailed: 'Unable to search network lyrics',
@@ -87,5 +102,30 @@ export default {
   downloadCompleted: 'Download completed',
   musicDirectoryMissing: 'Music directory does not exist: {path}',
   fileMissing: 'File does not exist: {path}',
-  unknownAction: 'Unknown action: {action}'
+  unknownAction: 'Unknown action: {action}',
+  pluginInvalid: 'Invalid plugin setting.',
+  pluginUnknown: 'Plugin not found.',
+  pluginActivationFailed: 'Plugin failed to start. Please retry.',
+  pluginsLoadFailed: 'Unable to load built-in plugins.',
+  pluginsSaveFailed: 'Unable to save plugin settings.',
+  pluginSourceInactive: 'The owning plugin is not running. Enable it in Plugins first.',
+  networkSourceUnknown: 'Network source not found.',
+  networkSourceDisabled: '{source} is unavailable. Check its plugin and source settings.',
+  networkSourceInvalid: 'Invalid network source settings.',
+  networkSourcesLoadFailed: 'Unable to load network sources.',
+  networkSourcesSaveFailed: 'Unable to save network source settings.',
+  sourceCallTimeout: 'The network source timed out. Retry.',
+  sourceCallCancelled: 'Request cancelled.',
+  sourceCallUnsupported: 'This source does not support this operation.',
+  sourceCallNetwork: 'Unable to connect. Check the network and retry.',
+  sourceCallAccessDenied: 'Access denied by the source. Check account permissions or retry later.',
+  sourceCallRateLimited: 'Too many requests. Retry later.',
+  sourceCallNotFound: 'The resource was not found or has been removed.',
+  sourceCallInvalidResponse: 'The source returned invalid data.',
+  sourceCallInvalidRequest: 'Invalid network source request.',
+  sourceCallBackgroundPaused: 'Playback-only mode has paused network requests.',
+  sourceCallFailed: 'The network source request failed. Retry later.',
+  sourceMetadataInvalid: 'Invalid metadata fields.',
+  sourceMetadataEmpty: 'Select at least one field to save.',
+  sourceMetadataConflict: 'Song information has changed. Reopen online matching before saving.'
 }

@@ -35,6 +35,10 @@ function migrate(db: Database.Database): void {
       db.exec(searchSchema)
       db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(1)
     }
+    if (version < 2) {
+      // V2 is retained as a compatibility marker; metadata is stored in audio files.
+      db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(2)
+    }
   })()
 }
 

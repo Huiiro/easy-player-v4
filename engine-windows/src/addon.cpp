@@ -79,6 +79,22 @@ static Napi::Value read_property(const Napi::Object& object, const char* field,
     return object.Get(field);
 }
 
+// Replace the path without modifying the file held by an active decoder.
+// Never delete the original as a fallback when replacement fails.
+static void replace_metadata_file(const std::filesystem::path& temporary,
+                                  const std::filesystem::path& source,
+                                  std::error_code& error) {
+#ifdef _WIN32
+    if (ReplaceFileW(source.c_str(), temporary.c_str(), nullptr, REPLACEFILE_IGNORE_MERGE_ERRORS, nullptr, nullptr)) {
+        error.clear();
+    } else {
+        error = std::error_code(GetLastError(), std::system_category());
+    }
+#else
+    std::filesystem::rename(temporary, source, error);
+#endif
+}
+
 static bool rewrite_metadata(const std::string& source, const std::map<std::string, std::string>& tags, const std::string& cover_path, std::string& error) {
     ScopedFFmpegLogContext log_context(source, "rewrite-metadata");
     AVFormatContext* input = nullptr;
@@ -155,9 +171,9 @@ static bool rewrite_metadata(const std::string& source, const std::map<std::stri
     }
     if (av_write_trailer(output) < 0) { error = "Unable to finish metadata output"; goto done; }
     avformat_close_input(&input); if (cover) avformat_close_input(&cover); if (!(output->oformat->flags & AVFMT_NOFILE)) avio_closep(&output->pb); avformat_free_context(output); output = nullptr;
-    std::filesystem::rename(temporary_path, source_path, rename_error);
+    replace_metadata_file(temporary_path, source_path, rename_error);
     if (rename_error) {
-        error = "Unable to replace media file: " + rename_error.message();
+        error = "Unable to replace media file (code " + std::to_string(rename_error.value()) + "): " + rename_error.message();
         std::error_code cleanup_error;
         std::filesystem::remove(temporary_path, cleanup_error);
         return false;

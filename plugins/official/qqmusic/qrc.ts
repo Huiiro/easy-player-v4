@@ -1,5 +1,5 @@
 import { decryptQrc } from 'qrc-decoder'
-import { cleanNetworkLyric } from '../networkLyricNormalizer'
+import { cleanNetworkLyric } from '../../../src/main/service/networkLyricNormalizer'
 
 function decodeEntities(value: string): string {
   const entities: Record<string, string> = {

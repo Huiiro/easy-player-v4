@@ -9,11 +9,10 @@ import sharp from 'sharp'
 import { parseFile } from 'music-metadata'
 
 const require = createRequire(import.meta.url)
-const addon = require(
-  path.resolve(
-    process.env.EASY_PLAYER_METADATA_ADDON || 'build/native-addon/easy_player_native.node'
-  )
+const addonPath = path.resolve(
+  process.env.EASY_PLAYER_METADATA_ADDON || 'build/native-addon/easy_player_native.node'
 )
+const addon = require(addonPath)
 const directory = await fs.mkdtemp(path.resolve('build/native-metadata-test-'))
 const digest = (buffer) => createHash('sha256').update(buffer).digest('hex')
 function ffmpeg(args) {
@@ -121,6 +120,34 @@ try {
         !(await fs.readdir(directory)).some((name) => name.includes('.easy-player-meta-tmp'))
       )
     }
+  }
+  // The playback decoder keeps its input open even after stop. Metadata replacement must still work.
+  for (const extension of ['m4a', 'flac']) {
+    const file = path.join(directory, 'active-' + extension + '.' + extension)
+    ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:sample_rate=44100',
+      '-t',
+      '1',
+      '-c:a',
+      extension === 'm4a' ? 'aac' : 'flac',
+      '-y',
+      file
+    ])
+    const result = spawnSync(
+      process.execPath,
+      [
+        '-e',
+        "const addon=require(process.argv[1]);const engine=new addon.AudioEngine();if(!engine.open(process.argv[2]))process.exit(2);try{if(!addon.writeMetadata(process.argv[2],{title:'Edited while decoder is open'}))process.exit(3);if(!engine.seek(200))process.exit(4);process.exit(0)}catch(error){console.error(error.message);process.exit(1)}",
+        addonPath,
+        file
+      ],
+      { encoding: 'utf8' }
+    )
+    assert.equal(result.status, 0, result.stderr || result.error?.message)
+    assert.equal((await parseFile(file)).common.title, 'Edited while decoder is open')
   }
   console.log(
     'Native metadata: JPEG/PNG cover preservation, repeated tag edits, cover replacement, compressed audio hashes and failure cleanup passed for M4A/FLAC'

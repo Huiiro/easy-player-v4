@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import { useNetworkSources, networkSourceName } from '@/hooks/useNetworkSources'
+import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useMessage } from '@/components/ui/useMessage'
 
-type Platform = 'youtube' | 'bili'
+type Platform = string
 type DownloadStatus = 'idle' | 'downloading' | 'done' | 'error'
 type DownloadType = 'audio' | 'video'
 type DownloadQuality = 'best' | 'high' | 'standard' | 'compact'
@@ -37,11 +40,34 @@ interface DownloadHistoryItem {
 const { t, locale } = useI18n()
 const { success, error } = useMessage()
 const platform = ref<Platform>('youtube')
+const {
+  sources: networkSources,
+  loading: sourcesLoading,
+  error: sourcesError,
+  reload: reloadSources
+} = useNetworkSources()
+const downloadSources = computed(() =>
+  networkSources.value.filter(
+    (source) => source.enabled && source.capabilities.includes('download')
+  )
+)
+watch(downloadSources, (sources) => {
+  if (!sources.some((source) => source.id === platform.value)) platform.value = sources[0]?.id ?? ''
+})
+watch(sourcesError, (value) => {
+  if (value) error(value)
+})
 const query = ref('')
 const directory = ref('')
 const downloadType = ref<DownloadType>('audio')
 const quality = ref<DownloadQuality>('best')
+const requests = createSourceRequestScope()
+function cancelRequest(): void {
+  requests.cancelAll()
+  loading.value = false
+}
 const loading = ref(false)
+watch([platform, query], cancelRequest, { flush: 'sync' })
 const results = ref<ResultItem[]>([])
 const selectedIds = ref<string[]>([])
 const taskToId = new Map<string, string>()
@@ -108,16 +134,22 @@ async function showInFolder(filePath: string | null): Promise<void> {
   if (!result.success) error(result.error || t('download.openFailed'))
 }
 async function loadResults(): Promise<void> {
+  if (sourcesLoading.value || sourcesError.value || !downloadSources.value.length) {
+    error(sourcesError.value || t('networkSources.noDownloads'))
+    return
+  }
   const value = query.value.trim()
   if (!value) {
     error(t('download.inputRequired'))
     return
   }
+  const call = requests.start('results')
   loading.value = true
   try {
     const items = isDirectUrl.value
-      ? await window.api.downloads.parse(value)
-      : await window.api.downloads.search(platform.value, value)
+      ? await window.api.downloads.parse(value, call.options)
+      : await window.api.downloads.search(platform.value, value, call.options)
+    if (!call.isCurrent()) return
     results.value = items.map((item) => ({ ...item, status: 'idle', progress: 0 }))
     thumbnailCache.value = {}
     selectedIds.value = results.value
@@ -125,9 +157,11 @@ async function loadResults(): Promise<void> {
       .map((item) => item.id)
     if (!results.value.length) error(t('download.noResults'))
   } catch (reason) {
-    error(reason instanceof Error ? reason.message : t('download.parseFailed'))
+    if (call.isCurrent())
+      error(reason instanceof Error ? reason.message : t('download.parseFailed'))
   } finally {
-    loading.value = false
+    if (call.isCurrent()) loading.value = false
+    call.finish()
   }
 }
 function thumbnailFor(item: ResultItem): string | null {
@@ -166,6 +200,10 @@ function toggleAll(): void {
   selectedIds.value = allSelected.value ? [] : results.value.map((item) => item.id)
 }
 async function download(item: ResultItem, notifyMissingDirectory = true): Promise<boolean> {
+  if (!downloadSources.value.some((source) => source.id === item.platform)) {
+    error(t('networkSources.unavailable'))
+    return false
+  }
   if (!directory.value) {
     if (notifyMissingDirectory) error(t('download.chooseDirectoryFirst'))
     return false
@@ -224,6 +262,7 @@ onMounted(() => {
   void loadDownloadDirectory()
 })
 onBeforeUnmount(() => {
+  requests.cancelAll()
   removeProgress()
   thumbnailObserver.disconnect()
 })
@@ -242,29 +281,52 @@ onBeforeUnmount(() => {
     <section class="download-surface relative z-20 mb-5 p-5">
       <div class="mb-4 flex flex-wrap gap-2">
         <button
-          v-for="source in [
-            { id: 'bili', label: t('download.sourceBili') },
-            { id: 'youtube', label: t('download.sourceYoutube') }
-          ] as const"
+          v-for="source in downloadSources"
           :key="source.id"
           class="source-button"
           :class="platform === source.id && 'selected'"
           type="button"
           @click="platform = source.id"
         >
-          {{ source.label }}
+          {{ networkSourceName(source, t) }}
         </button>
       </div>
+      <div
+        v-if="sourcesError"
+        role="alert"
+        class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+      >
+        <span>{{ sourcesError }}</span
+        ><BaseButton
+          size="sm"
+          variant="secondary"
+          :loading="sourcesLoading"
+          @click="reloadSources"
+          >{{ t('networkSources.retry') }}</BaseButton
+        >
+      </div>
+      <p v-else-if="!sourcesLoading && !downloadSources.length" class="mb-3 text-sm text-text-l">
+        {{ t('networkSources.noDownloads') }}
+      </p>
       <div class="flex gap-2">
         <input
           v-model="query"
           class="input-base min-w-0 flex-1"
           :placeholder="
-            platform === 'youtube' ? t('download.searchYoutube') : t('download.searchBili')
+            platform === 'youtube'
+              ? t('download.searchYoutube')
+              : platform === 'bili'
+                ? t('download.searchBili')
+                : t('networkSources.downloadQuery')
           "
           @keyup.enter="loadResults"
         />
-        <button class="primary-button" type="button" :disabled="loading" @click="loadResults">
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="loading || sourcesLoading || Boolean(sourcesError) || !downloadSources.length"
+          @click="loadResults"
+        >
           <SvgIcon name="common-search" class-name="size-4" />
           {{
             loading
@@ -275,6 +337,9 @@ onBeforeUnmount(() => {
           }}
         </button>
       </div>
+      <BaseButton v-if="loading" class="mt-2" variant="secondary" @click="cancelRequest">{{
+        t('common.cancelRequest')
+      }}</BaseButton>
       <div class="relative z-20 mt-3 flex flex-wrap gap-2">
         <BaseSelect
           v-model="downloadType"
@@ -374,7 +439,7 @@ onBeforeUnmount(() => {
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium">{{ task.title || t('download.unnamed') }}</p>
             <p class="mt-1 truncate text-xs text-text-l">
-              {{ task.platform === 'youtube' ? 'YouTube' : '哔哩哔哩' }} ·
+              {{ networkSourceName({ id: task.platform, displayName: task.platform }, t) }} ·
               {{ task.quality || t('download.defaultQuality') }} ·
               {{
                 task.status === 'done'
