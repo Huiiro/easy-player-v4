@@ -17,6 +17,8 @@ npm run test:official-plugins
 
 构建产物位于 `build/plugins/`，每个 `.epp` 是 ZIP 包，包含 `manifest.json`、独立的 `index.cjs` 和依赖许可证。平台 SDK 已包含在包内，插件只依赖 Node 内置模块及宿主桥接能力，无需访问应用的 `node_modules`。构建会拒绝遗漏的外部 npm 依赖；不启动 SDK 自带 HTTP 服务。
 
+包的 ZIP 创建平台、权限和时间固定；许可证通过目录枚举匹配文件名，归一化大小写与换行，并按依赖版本分别保留。发布工作流会比较重建的索引与已提交索引，校验值不一致时停止发布，避免应用附带的离线索引指向不存在的包。
+
 修改插件时通过入口的 `defineSourcePlugin(source, create, version)` 递增各自版本，然后重建、测试，将源码和新的 `catalog.json` 一同提交。默认的应用构建不会构建或安装这些插件。
 
 ## 安装与更新

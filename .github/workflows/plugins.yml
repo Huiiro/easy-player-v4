@@ -23,6 +23,8 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run build:plugins
+      - name: Verify reproducible plugin catalog
+        run: git diff --exit-code -- plugins/catalog.json
       - run: npm run test:official-plugins
       - name: Publish to this repository
         env:

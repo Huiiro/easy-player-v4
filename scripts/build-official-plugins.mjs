@@ -147,18 +147,26 @@ exports.${method} = (data = {}) => ${method}Module({ ...data, cookie: typeof dat
       license: pkg.license,
       repository: pkg.repository
     })
-    for (const filename of ['LICENSE', 'LICENSE.md', 'LICENSE.txt', 'LICENCE', 'license']) {
-      if (existsSync(path.join(dir, filename))) {
-        zip.addFile(
-          `licenses/${pkg.name.replaceAll('/', '_')}/${filename}`,
-          readFileSync(path.join(dir, filename))
-        )
-        break
-      }
+    const licenseFiles = readdirSync(dir, { withFileTypes: true })
+      .filter(
+        (file) => file.isFile() && /^(licen[cs]e|copying|copyright)(?:[.-].*)?$/i.test(file.name)
+      )
+      .map((file) => file.name)
+      .sort()
+    for (const filename of licenseFiles) {
+      zip.addFile(
+        `licenses/${pkg.name.replaceAll('/', '_')}@${pkg.version}/${filename.toUpperCase()}`,
+        Buffer.from(readFileSync(path.join(dir, filename), 'utf8').replace(/\r\n/g, '\n'))
+      )
     }
   }
   zip.addFile('licenses/NOTICE.json', Buffer.from(JSON.stringify(notices, null, 2)))
-  for (const entry of zip.getEntries()) entry.header.time = new Date(2020, 0, 1, 0, 0, 0)
+  for (const entry of zip.getEntries()) {
+    // ZIP's creator OS otherwise changes the hash between Windows and Linux.
+    entry.header.made = 0x0314
+    entry.header.attr = (0o100644 << 16) >>> 0
+    entry.header.time = new Date(2020, 0, 1, 0, 0, 0)
+  }
   const bytes = zip.toBuffer()
   const sha256 = createHash('sha256').update(bytes).digest('hex')
   const filename = `${manifest.id}-${manifest.version}-${sha256.slice(0, 12)}.epp`
