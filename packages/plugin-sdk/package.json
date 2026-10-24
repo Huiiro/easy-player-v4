@@ -1,0 +1,17 @@
+{
+  "name": "@easy-player/plugin-sdk",
+  "version": "2.0.0",
+  "description": "Public contracts for Easy Player source plugins",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

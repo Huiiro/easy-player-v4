@@ -1,6 +1,6 @@
 # 网络来源与官方插件架构
 
-当前应用默认不附带来源插件。五个官方来源已移至同仓库 plugins/official，通过独立包按需安装、装载和管理；官方分发使用 Huiiro/easy-player-v4 的 plugins Release。尚不支持不受信任的第三方代码，也不涉及流媒体播放。下方保留各阶段的实现边界和验证记录，旧阶段的目录以第八阶段为准。
+当前应用默认不附带来源插件。五个官方来源的源码、依赖、构建、测试和发布已迁入独立仓库 [Huiiro/easy-player-plugin](https://github.com/Huiiro/easy-player-plugin)，官方分发使用该仓库的 plugins Release。宿主保留 SDK 契约与离线索引，不读取插件源码。尚不支持不受信任的第三方代码，也不涉及流媒体播放。下方保留各阶段记录，当前目录和分发方式以第十阶段为准。
 
 ## 边界与目录
 
@@ -8,8 +8,8 @@
 - src/main/sources/types.ts：NetworkSource 按能力提供 lyrics、artwork、metadata、download；没有实现的能力不注册。
 - src/main/sources/registry.ts：注册、注销、能力查询和 URL 来源匹配。注册重复 ID 会失败，旧注销回调不会删除新注册实例。
 - src/main/sources/index.ts：保留 getNetworkSources 兼容入口，实际注册由 plugins/runtime.ts 和官方插件管理器持有。网易云、酷狗、QQ 音乐提供歌词、封面和元数据；B 站和 YouTube 提供媒体搜索、解析与下载资源解析。
-- plugins/official：各平台插件入口、歌词、封面、元数据和媒体资源解析。
-- plugins/shared：来源流派归一化及平台字典。
+- 独立插件仓库 official/：各平台插件入口、歌词、封面、元数据和媒体资源解析。
+- 独立插件仓库 shared/：来源流派归一化及平台字典。
 - src/main/plugins/packages.ts：官方目录、包完整性与兼容性校验、安装/更新事务、重启恢复及卸载。
 - src/main/service/mediaDownloadService.ts：宿主下载入口与 HTTP、yt-dlp 执行器。
 - src/main/service/mediaDownloadRuntime.ts：宿主网络请求、外部进程和图片获取工具，保留轻量模式中断。
@@ -196,6 +196,27 @@ PluginHostContext 提供 registerSource、own、生命周期 signal、受控 HTT
 
 安装先验证新包，激活成功后原子切换 current.json；激活/持久化失败恢复旧实例与启动指针，不允许退回更旧版本。并发安装和卸载互斥。更新/卸载不打断已接纳的下载；无安装指针或不再使用的版本目录在下次启动时清理。损坏包独立跳过并记录日志。
 
-构建及维护说明见 [plugins/README.md](../../plugins/README.md)。手动 GitHub Actions 工作流 .github/workflows/plugins.yml 构建并验证插件，先发布包，再发布目录；本地实现不触发远程发布。
+构建及维护说明见 [独立插件仓库说明](https://github.com/Huiiro/easy-player-plugin#readme)。手动 GitHub Actions 工作流 .github/workflows/plugins.yml 构建并验证插件，先发布包，再发布目录；本地实现不触发远程发布。
 
 验证：build:plugins 生成五个无外部 npm 依赖的包；test:official-plugins 覆盖默认无插件、实际独立包调用、安装/重启/本地导入、完整性、更新回滚、卸载、损坏隔离与离线目录；test:source-management:ui 覆盖官方目录、刷新与安装失败、安装/卸载联动、空状态、窄窗口和订阅释放。其余来源、歌词、元数据文件写入与下载回归保留。
+
+
+## 第九阶段：源码、SDK 与构建独立维护
+
+packages/plugin-sdk 提供可单独构建的公共契约包；plugins 是拥有独立依赖与锁文件的项目，通过 vendor 中的版本化 SDK 包引用契约。类型及纯工具不再引用 src/main 或 src/shared。应用侧原类型路径改为 SDK 的兼容导出，文件写入请求与数据库身份仍只属于应用。
+
+API v2 不再通过构建器匹配宿主模块路径进行替换。插件从 SourceCallContext.host 取得标准网络和结构化媒体信息查询能力，播放模式与取消由宿主管理，错误仅跨边界传稳定代码。媒体工具参数由宿主生成，不暴露 Electron 请求对象或插件提供的命令/输出路径。旧 API v1 桥接仅用于兼容已发布包，真实旧包作为离线回归夹具。
+
+应用离线索引移至 resources/plugins/catalog.json，应用构建无需 plugins 目录或平台依赖。独立项目构建写入 plugins/dist，根 build:plugins 只是在独立构建后同步产物和应用种子。发布工作流仅安装插件依赖，不安装桌面工程依赖；SDK 源码和版本化分发包分别维护。
+
+验证：插件项目复制到主工程外的系统临时目录后，独立安装依赖、类型检查、构建与测试通过，生成索引及五个包哈希与原目录完全一致。宿主侧继续验证 v1/v2 加载、生命周期取消、媒体工具参数边界、来源元数据、精确歌词、文件写入和下载。详见 plugins/README.md 与 packages/plugin-sdk/README.md。
+
+## 第十阶段：独立仓库维护和分发
+
+插件工程已迁至 Huiiro/easy-player-plugin，原 plugins/ 目录和主仓库插件发布工作流已移除。独立仓库不再保留旧版 DSP、字体或背景插件；Git 历史保持连续。分发索引为 https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/catalog.json，新宿主只接受此官方地址；已安装 API v1 包仍允许其固定旧官方地址以保持恢复兼容。
+
+应用只携带 packages/plugin-sdk 中的公共契约与 resources/plugins/catalog.json 离线种子。插件仓库使用 vendor 中固定版本 SDK 分发包，构建和运行均不需要应用工程。平台 SDK 不再属于应用依赖。
+
+联调时将插件仓库检出到应用的同级 easy-player-plugin 目录，或使用 EASY_PLAYER_PLUGIN_DIR 指定位置。在插件仓库运行 npm ci --ignore-scripts；应用根 build:plugins、typecheck:plugins、test:plugin-project 通过该路径调用独立工程。涉及平台源码的现有集成回归显式使用外部仓库，应用的普通类型检查、构建和运行不需要它。
+
+SDK 源码由宿主仓库维护。npm run build:plugin-sdk 生成 build/easy-player-plugin-sdk-版本.tgz，升级时由插件仓库更新 vendor、包依赖与锁文件。插件的 API v2 版本需要本次更新后的宿主；旧应用继续使用原仓库分发，不会切换到新索引。

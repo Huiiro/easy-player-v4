@@ -1,38 +1,6 @@
-import type { ArtworkCandidate, SourceResourceRef } from './networkSources'
+import type { SourceTrackMetadata } from '../../packages/plugin-sdk/src/sourceMetadata'
+export * from '../../packages/plugin-sdk/src/sourceMetadata'
 
-export const SOURCE_METADATA_FIELDS = [
-  'title',
-  'artist',
-  'album',
-  'albumArtist',
-  'genre',
-  'year',
-  'trackNumber',
-  'discNumber'
-] as const
-export type SourceMetadataField = (typeof SOURCE_METADATA_FIELDS)[number]
-export interface SourceTrackMetadata {
-  title?: string
-  artist?: string
-  album?: string
-  albumArtist?: string
-  genre?: string
-  year?: number
-  trackNumber?: number
-  discNumber?: number
-}
-export interface SourceTrackSummary {
-  resource: SourceResourceRef
-  title: string
-  artist: string
-  album?: string
-  durationMs?: number
-}
-export interface SourceTrackDetail extends SourceTrackSummary {
-  metadata: SourceTrackMetadata
-  releaseDate?: string
-  artwork?: ArtworkCandidate
-}
 export type SourceMetadataPatch = SourceTrackMetadata & { lyrics?: string; coverDataUrl?: string }
 export interface SourceMetadataSnapshot {
   metadata: SourceMetadataPatch

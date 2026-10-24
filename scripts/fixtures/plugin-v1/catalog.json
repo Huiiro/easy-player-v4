@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "plugins": [
+    {
+      "id": "builtin.youtube",
+      "displayName": "YouTube",
+      "version": "1.0.0",
+      "apiVersion": 1,
+      "sources": [
+        {
+          "id": "youtube",
+          "displayName": "YouTube",
+          "capabilities": [
+            "download"
+          ],
+          "downloadDomains": [
+            "youtube.com",
+            "youtu.be",
+            "youtube-nocookie.com"
+          ]
+        }
+      ],
+      "size": 9136,
+      "sha256": "0198616128fe9cc48b64970666318eab17c69108240d604adec2eec905949ec3",
+      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.youtube-1.0.0-0198616128fe.epp"
+    }
+  ]
+}

@@ -1,12 +1,10 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { dirname, resolve } from 'node:path'
 import vm from 'node:vm'
 import ts from 'typescript'
-
-const require = createRequire(import.meta.url)
 
 function load(file, mocks = {}, globals = {}, cache = new Map()) {
   if (file.endsWith('/network.ts')) {
@@ -58,6 +56,7 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
       Error,
       Date,
       require: (name) => {
+        if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
         if (name in mocks) return mocks[name]
         if (name === '../service/playbackMode') return policy
         if (name.startsWith('.')) {
@@ -69,7 +68,7 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
             cache
           )
         }
-        return require(name)
+        return projectRequire(filename, name)
       },
       ...globals
     },
@@ -81,7 +80,7 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
 let playbackOnly = false
 const policy = { isPlaybackOnly: () => playbackOnly, onPlaybackModeChanged: () => () => {} }
 const query = { title: 'Test song', artist: 'Singer', album: 'Album' }
-const qqFile = 'plugins/official/qqmusic/lyrics.ts'
+const qqFile = pluginPath('official/qqmusic/lyrics.ts')
 const calls = []
 const encoded = (value) => Buffer.from(value).toString('base64')
 const qq = load(
@@ -154,10 +153,13 @@ assert.equal(results[0].artist, 'Singer')
 assert.equal(results[0].album, 'Album')
 assert.equal(calls.length, 5)
 await qq.searchQQMusicLyrics({ title: ' ' }, false)
-playbackOnly = true
-await qq.searchQQMusicLyrics(query, false)
-assert.equal(calls.length, 5, 'skip requests for empty queries and playback-only mode')
-playbackOnly = false
+const pausedCall = new AbortController()
+pausedCall.abort(new Error('host policy paused request'))
+await assert.rejects(
+  qq.searchQQMusicLyrics(query, false, { signal: pausedCall.signal }),
+  /host policy paused/
+)
+assert.equal(calls.length, 5, 'empty queries and host-cancelled calls do not request lyrics')
 
 const fallbackCalls = []
 const fallbackQQ = load(
@@ -212,11 +214,11 @@ const candidate = (provider, title = query.title) => ({
   format: 'lrc',
   supportsWordTiming: false
 })
-const { encryptQrc } = require('qrc-decoder')
+const { encryptQrc } = pluginRequire('qrc-decoder')
 const qrcSource =
   '<?xml version="1.0"?><QrcInfos><Lyric_1 LyricContent="[offset:100]\n[1000,800]你(1000,300)好(1300,500)\n[2200,600]世(2200,200)界(2400,400)\n"/></QrcInfos>'
 const encryptedQrc = encryptQrc(qrcSource)
-const qrc = load('plugins/official/qqmusic/qrc.ts')
+const qrc = load(pluginPath('official/qqmusic/qrc.ts'))
 const convertedQrc = qrc.qrcToYrc(qrc.decodeQQMusicLyric(encryptedQrc))
 assert.equal(
   convertedQrc,
@@ -483,7 +485,7 @@ assert(
 )
 assert(relevanceCalls.some(([provider, word]) => provider === 'qqmusic' && !word))
 
-const netease = load('plugins/official/netease/lyrics.ts', {
+const netease = load(pluginPath('official/netease/lyrics.ts'), {
   '../../playbackMode': policy,
   '@neteasecloudmusicapienhanced/api': {
     default: {
@@ -532,7 +534,7 @@ for (const [actual, expected] of [
   ['', '晴天']
 ])
   assert.equal(isRelatedTitle(actual, expected), false, actual)
-const kugou = load('plugins/official/kugou/lyrics.ts', {
+const kugou = load(pluginPath('official/kugou/lyrics.ts'), {
   '../../playbackMode': policy,
   kugoumusicapi: {
     default: {

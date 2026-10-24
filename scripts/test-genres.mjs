@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { join, resolve } from 'node:path'
+import { join, resolve, dirname } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import vm from 'node:vm'
 import ts from 'typescript'
@@ -29,7 +29,20 @@ function load(file, mocks = {}, globals = {}) {
         esModuleInterop: true
       }
     }).outputText,
-    { exports, Error, Buffer, require: (name) => mocks[name] ?? require(name), ...globals }
+    {
+      exports,
+      Error,
+      Buffer,
+      require: (name) => {
+        if (mocks[name]) return mocks[name]
+        if (name.startsWith('.')) {
+          const target = resolve(dirname(file), name)
+          if (existsSync(target + '.ts')) return load(target + '.ts', mocks, globals)
+        }
+        return require(name)
+      },
+      ...globals
+    }
   )
   return exports
 }

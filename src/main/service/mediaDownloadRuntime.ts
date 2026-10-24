@@ -5,6 +5,55 @@ import { join } from 'node:path'
 import { t } from '../i18n'
 import { onPlaybackModeChanged, requireBackgroundWork } from './playbackMode'
 import { logOperation } from './operationLogger'
+import type { MediaInfoRequest } from '../../../packages/plugin-sdk/src/host'
+import { SourceCallError } from '../sources/errors'
+
+/** Public SDK capability: only metadata extraction, no plugin-supplied flags or paths. */
+export async function extractMediaInfo(
+  request: MediaInfoRequest,
+  signal: AbortSignal
+): Promise<Record<string, unknown>> {
+  signal.throwIfAborted()
+  requireBackgroundWork()
+  let target: string
+  if (request?.type === 'search') {
+    const limit = request.limit ?? 12
+    if (
+      typeof request.query !== 'string' ||
+      !request.query.trim() ||
+      request.query.length > 2000 ||
+      !Number.isInteger(limit) ||
+      limit < 1 ||
+      limit > 20
+    )
+      throw new SourceCallError('INVALID_REQUEST')
+    target = `ytsearch${limit}:${request.query.trim()}`
+  } else if (request?.type === 'url' && typeof request.url === 'string') {
+    let url: URL
+    try {
+      url = new URL(request.url)
+    } catch {
+      throw new SourceCallError('INVALID_REQUEST')
+    }
+    if (
+      !['http:', 'https:'].includes(url.protocol) ||
+      url.username ||
+      url.password ||
+      request.url.length > 8192
+    )
+      throw new SourceCallError('INVALID_REQUEST')
+    target = url.href
+  } else throw new SourceCallError('INVALID_REQUEST')
+  const output = await runYtDlp(
+    ['--dump-single-json', '--flat-playlist', '--skip-download', '--no-warnings', '--', target],
+    signal
+  )
+  signal.throwIfAborted()
+  const result: unknown = JSON.parse(output)
+  if (!result || typeof result !== 'object' || Array.isArray(result))
+    throw new SourceCallError('INVALID_RESPONSE')
+  return result as Record<string, unknown>
+}
 export function trackProcess(
   child: ChildProcessWithoutNullStreams,
   signal?: AbortSignal

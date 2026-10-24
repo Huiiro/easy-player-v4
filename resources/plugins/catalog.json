@@ -4,8 +4,8 @@
     {
       "id": "builtin.netease",
       "displayName": "NetEase Cloud Music",
-      "version": "1.0.0",
-      "apiVersion": 1,
+      "version": "1.1.0",
+      "apiVersion": 2,
       "sources": [
         {
           "id": "netease",
@@ -17,15 +17,15 @@
           ]
         }
       ],
-      "size": 758515,
-      "sha256": "83e1b4f285ecdbc0a28f1adcb0abb98fd67d0dd8f9afdafe80c3bc2ad9b12c12",
-      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.netease-1.0.0-83e1b4f285ec.epp"
+      "size": 759257,
+      "sha256": "8308e5534dc56e271c40d41a8378645eebede41cf45e6e6be657675a9155e4f9",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.0-8308e5534dc5.epp"
     },
     {
       "id": "builtin.kugou",
       "displayName": "KuGou",
-      "version": "1.0.0",
-      "apiVersion": 1,
+      "version": "1.1.0",
+      "apiVersion": 2,
       "sources": [
         {
           "id": "kugou",
@@ -37,15 +37,15 @@
           ]
         }
       ],
-      "size": 319845,
-      "sha256": "77d811e3c3014c2734e2ca7636d991cb9df0015e4523308cc97ac746feb80120",
-      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.kugou-1.0.0-77d811e3c301.epp"
+      "size": 320347,
+      "sha256": "ce9767b20eaba4f2882c9499b032ca4560e17daadd7ad35295151b5791c144b7",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.0-ce9767b20eab.epp"
     },
     {
       "id": "builtin.qqmusic",
       "displayName": "QQ Music",
-      "version": "1.0.0",
-      "apiVersion": 1,
+      "version": "1.1.0",
+      "apiVersion": 2,
       "sources": [
         {
           "id": "qqmusic",
@@ -57,15 +57,15 @@
           ]
         }
       ],
-      "size": 45186,
-      "sha256": "ea29efeb98f742dcd220012cdfc5837c2626f532abc6d39775f4e4830721fde8",
-      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.qqmusic-1.0.0-ea29efeb98f7.epp"
+      "size": 46238,
+      "sha256": "39ea247153cca23f86a8e79b5592e30ca26f68eca83e9c4affc7a9df35555f97",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.0-39ea247153cc.epp"
     },
     {
       "id": "builtin.bili",
       "displayName": "Bilibili",
-      "version": "1.0.0",
-      "apiVersion": 1,
+      "version": "1.1.0",
+      "apiVersion": 2,
       "sources": [
         {
           "id": "bili",
@@ -78,15 +78,15 @@
           ]
         }
       ],
-      "size": 9117,
-      "sha256": "dc698f65d733f1d3d69692e12784215f48f7ff5eef14bba6d89568385713c71f",
-      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.bili-1.0.0-dc698f65d733.epp"
+      "size": 5473,
+      "sha256": "e55190dc95198296040a9b6446aada532cbd581e15922886ddbbd6cc5bdd3ff8",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.bili-1.1.0-e55190dc9519.epp"
     },
     {
       "id": "builtin.youtube",
       "displayName": "YouTube",
-      "version": "1.0.0",
-      "apiVersion": 1,
+      "version": "1.1.0",
+      "apiVersion": 2,
       "sources": [
         {
           "id": "youtube",
@@ -101,9 +101,9 @@
           ]
         }
       ],
-      "size": 9136,
-      "sha256": "0198616128fe9cc48b64970666318eab17c69108240d604adec2eec905949ec3",
-      "url": "https://github.com/Huiiro/easy-player-v4/releases/download/plugins/builtin.youtube-1.0.0-0198616128fe.epp"
+      "size": 5492,
+      "sha256": "60b22d960d8a0cd36befe06152dff25dd75c584701c2ad2751984aca3fd3e908",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.0-60b22d960d8a.epp"
     }
   ]
 }

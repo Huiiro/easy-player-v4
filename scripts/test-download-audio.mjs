@@ -1,3 +1,4 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
@@ -78,6 +79,7 @@ async function load(file, mocks) {
         clearTimeout,
         process,
         require: (name) => {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
           if (name.startsWith('.')) {
             const target = path.resolve(path.dirname(filename), name)
@@ -85,7 +87,7 @@ async function load(file, mocks) {
               existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts')
             )
           }
-          return common[name] ?? require(name)
+          return common[name] ?? projectRequire(filename, name)
         }
       },
       { filename }
@@ -94,10 +96,41 @@ async function load(file, mocks) {
   }
   const exports = visit(file)
   if (file === 'src/main/ipc/downloadIpcHandlers.ts') {
-    const registry = visit('src/main/sources/index.ts').getNetworkSources()
-    const { biliPlugin, youtubePlugin } = visit('plugins/official/media.ts')
-    for (const plugin of [biliPlugin, youtubePlugin])
-      plugin.activate({ registerSource: (source) => registry.register(source) })
+    const runtime = visit('src/main/plugins/runtime.ts')
+    runtime.configurePluginHost({
+      readSetting() {
+        return null
+      },
+      writeSetting() {},
+      log() {},
+      fetch: (url, init) =>
+        new Promise((resolve, reject) => {
+          const request = mocks.electron.net.request({ method: 'GET', url })
+          for (const [key, value] of Object.entries(init.headers ?? {}))
+            request.setHeader(key, value)
+          request.on('error', reject)
+          request.on('response', (response) => {
+            const chunks = []
+            response.on('data', (chunk) => chunks.push(chunk))
+            response.on('end', () =>
+              resolve({
+                ok: response.statusCode < 400,
+                status: response.statusCode,
+                text: async () => Buffer.concat(chunks).toString()
+              })
+            )
+            response.on('error', reject)
+          })
+          request.end()
+        }),
+      mediaInfo: visit('src/main/service/mediaDownloadRuntime.ts').extractMediaInfo
+    })
+    const manager = runtime.getPluginManager()
+    const { biliPlugin, youtubePlugin } = visit(pluginPath('official/media.ts'))
+    for (const plugin of [biliPlugin, youtubePlugin]) {
+      manager.load(plugin)
+      manager.activate(plugin.manifest.id)
+    }
   }
   return exports
 }

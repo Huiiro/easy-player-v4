@@ -1,3 +1,4 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync, mkdtempSync, writeFileSync, rmSync, readdirSync } from 'node:fs'
@@ -48,10 +49,11 @@ function load(file, mocks = {}, globals = {}) {
         console,
         ...globals,
         require: (name) => {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
           if (name.startsWith('@/'))
             return visit(path.resolve('src/renderer/src', name.slice(2)) + '.ts')
-          if (!name.startsWith('.')) return require(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
@@ -64,7 +66,7 @@ function load(file, mocks = {}, globals = {}) {
 }
 const plain = (value) => JSON.parse(JSON.stringify(value))
 const { normalizeSourceGenreName, normalizeSourceGenreNames } = load(
-  'plugins/shared/genreNormalization.ts'
+  pluginPath('shared/genreNormalization.ts')
 )
 for (const [original, expected] of [
   ['流行-日本流行', 'Pop-Jpop'],
@@ -102,7 +104,7 @@ assert.deepEqual(
   ),
   ['Pop-Jpop', 'Pop', 'Unknown']
 )
-const genreDictionary = load('plugins/shared/data/neteaseGenreNames.ts').NETEASE_GENRE_NAMES
+const genreDictionary = load(pluginPath('shared/data/neteaseGenreNames.ts')).NETEASE_GENRE_NAMES
 for (const label of Object.keys(genreDictionary)) {
   const canonical = normalizeSourceGenreName(label)
   assert.equal(normalizeSourceGenreName(canonical), canonical)
@@ -225,7 +227,7 @@ const sdk = {
   },
   lyric: async () => assert.fail('unexpected fallback')
 }
-const metadata = load('plugins/official/netease/metadata.ts', {
+const metadata = load(pluginPath('official/netease/metadata.ts'), {
   '@neteasecloudmusicapienhanced/api': sdk,
   [path.resolve('src/main/service/playbackMode.ts')]: { requireBackgroundWork() {} }
 })
@@ -258,7 +260,7 @@ wikiFailure = false
 wikiEmpty = true
 assert.equal((await metadata.getNeteaseTrack('123')).metadata.genre, undefined)
 wikiEmpty = false
-const lyrics = load('plugins/official/netease/lyrics.ts', {
+const lyrics = load(pluginPath('official/netease/lyrics.ts'), {
   '@neteasecloudmusicapienhanced/api': sdk,
   [path.resolve('src/main/service/playbackMode.ts')]: { isPlaybackOnly: () => false }
 })

@@ -1,12 +1,11 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const require = createRequire(import.meta.url)
 function load(file, mocks = {}) {
   const cache = new Map()
   const visit = (filename) => {
@@ -30,7 +29,8 @@ function load(file, mocks = {}) {
         AbortSignal,
         crypto,
         require: (name) => {
-          if (!name.startsWith('.')) return require(name)
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
@@ -57,10 +57,10 @@ assert.equal(registry.list().length, 0)
 
 const mocked = Object.fromEntries(
   [
-    ['plugins/official/netease/lyrics.ts', { searchNeteaseLyrics: async () => [] }],
-    ['plugins/official/kugou/lyrics.ts', { searchKugouLyrics: async () => [] }],
-    ['plugins/official/qqmusic/lyrics.ts', { searchQQMusicLyrics: async () => [] }],
-    ['plugins/official/netease/artwork.ts', { searchNeteaseArtwork: async () => [] }],
+    [pluginPath('official/netease/lyrics.ts'), { searchNeteaseLyrics: async () => [] }],
+    [pluginPath('official/kugou/lyrics.ts'), { searchKugouLyrics: async () => [] }],
+    [pluginPath('official/qqmusic/lyrics.ts'), { searchQQMusicLyrics: async () => [] }],
+    [pluginPath('official/netease/artwork.ts'), { searchNeteaseArtwork: async () => [] }],
     ['src/main/i18n/index.ts', { t: (key) => key }],
     [
       'src/main/service/mediaDownloadRuntime.ts',
@@ -79,7 +79,7 @@ const mocked = Object.fromEntries(
 )
 const sources = load('src/main/sources/index.ts', mocked).getNetworkSources()
 // Explicit fixture activation: production startup contributes no sources.
-for (const plugin of load('plugins/official/index.ts', mocked).officialPlugins) {
+for (const plugin of load(pluginPath('official/index.ts'), mocked).officialPlugins) {
   plugin.activate({ registerSource: (source) => sources.register(source) })
 }
 assert.equal(sources.list().length, 5)
@@ -91,7 +91,19 @@ assert.equal(sources.findDownload('https://youtu.be/video').id, 'youtube')
 assert.throws(() => sources.findDownload('file:///video'), /Unsupported/)
 assert.throws(() => sources.findDownload('https://youtube.com.evil.test/video'), /Unsupported/)
 const youtube = sources.requireDownload('youtube')
-const result = await youtube.search('query')
+const result = await youtube.search('query', {
+  signal: new AbortController().signal,
+  deadline: Date.now() + 10000,
+  operation: 'download.search',
+  host: {
+    media: {
+      extractInfo: async (request) => {
+        assert.equal(request.type, 'search')
+        return { entries: [{ id: 'video', title: 'Title', url: 'https://youtu.be/video' }] }
+      }
+    }
+  }
+})
 assert.equal(result[0].resource.resourceId, 'video')
 assert.equal(result[0].resource.sourceId, 'youtube')
 const plan = await youtube.resolve({

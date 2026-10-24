@@ -53,8 +53,11 @@
     "test:source-runtime": "node scripts/test-source-runtime.mjs",
     "test:source-management": "node scripts/test-source-management.mjs",
     "test:source-management:ui": "electron scripts/check-network-sources.cjs",
-    "build:plugins": "node scripts/build-official-plugins.mjs",
-    "test:official-plugins": "node scripts/test-official-plugins.mjs"
+    "build:plugins": "node scripts/run-plugin-project.mjs run build && node scripts/sync-official-plugins.mjs",
+    "test:official-plugins": "node scripts/test-official-plugins.mjs",
+    "typecheck:plugins": "node scripts/run-plugin-project.mjs run typecheck",
+    "test:plugin-project": "node scripts/test-plugin-project-isolation.mjs",
+    "build:plugin-sdk": "npm --prefix packages/plugin-sdk run build && npm pack ./packages/plugin-sdk --pack-destination ./build --ignore-scripts"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
@@ -103,9 +106,6 @@
     "vuedraggable": "^4.1.0",
     "vue-eslint-parser": "^10.2.0",
     "vue-tsc": "^3.1.6",
-    "@neteasecloudmusicapienhanced/api": "^4.29.17",
-    "kugoumusicapi": "github:MakcRe/KuGouMusicApi",
-    "qrc-decoder": "1.0.2",
     "esbuild": "0.25.12"
   }
 }

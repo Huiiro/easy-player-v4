@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('node:fs')
 const path = require('node:path')
 const asar = require('@electron/asar')
@@ -6,7 +7,7 @@ const archive = path.resolve(process.argv[2] || 'dist/win-unpacked/resources/app
 const entries = asar
   .listPackage(archive)
   .map((entry) => entry.replace(/\\/g, '/').replace(/^\//, ''))
-const developmentRoots = ['vcpkg', 'plugins', 'scripts']
+const developmentRoots = ['vcpkg', 'plugins', 'packages', 'scripts']
 const sourceSDKs = ['@neteasecloudmusicapienhanced/api', 'kugoumusicapi', 'qrc-decoder']
 const forbidden = entries.filter(
   (entry) =>

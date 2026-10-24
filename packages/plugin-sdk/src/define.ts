@@ -1,6 +1,6 @@
-import type { PluginSourceManifest } from '../../src/shared/plugins'
-import type { NetworkSource } from '../../src/main/sources/types'
-import type { PluginDefinition, PluginHostContext } from '../../src/main/plugins/types'
+import type { PluginSourceManifest } from './plugins'
+import type { NetworkSource } from './source'
+import type { PluginDefinition, PluginHostContext } from './host'
 
 export function defineSourcePlugin(
   source: PluginSourceManifest,
@@ -12,7 +12,7 @@ export function defineSourcePlugin(
       id: 'builtin.' + source.id,
       displayName: source.displayName,
       version,
-      apiVersion: 1,
+      apiVersion: 2,
       sources: [source]
     },
     activate(host) {

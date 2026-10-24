@@ -1,11 +1,10 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
-const require = createRequire(import.meta.url)
 function loader(mocks, globals = {}) {
   const cache = new Map()
   function load(file) {
@@ -29,8 +28,9 @@ function loader(mocks, globals = {}) {
         structuredClone,
         ...globals,
         require(name) {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
-          if (!name.startsWith('.')) return require(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
@@ -103,7 +103,7 @@ const tracks = {
     }
   }
 }
-const qrc = require('qrc-decoder').encryptQrc('[1000,500]Word(1000,500)')
+const qrc = pluginRequire('qrc-decoder').encryptQrc('[1000,500]Word(1000,500)')
 const calls = []
 let searchMode = 'normal',
   albumMode = 'normal',
@@ -123,16 +123,16 @@ const mocks = {
     isPlaybackOnly: () => paused,
     onPlaybackModeChanged: () => () => undefined
   },
-  [path.resolve('plugins/official/netease/lyrics.ts')]: {
+  [path.resolve(pluginPath('official/netease/lyrics.ts'))]: {
     searchNeteaseLyrics: async () => []
   },
-  [path.resolve('plugins/official/kugou/lyrics.ts')]: {
+  [path.resolve(pluginPath('official/kugou/lyrics.ts'))]: {
     searchKugouLyrics: async () => []
   },
-  [path.resolve('plugins/official/netease/artwork.ts')]: {
+  [path.resolve(pluginPath('official/netease/artwork.ts'))]: {
     searchNeteaseArtwork: async () => []
   },
-  [path.resolve('plugins/official/media/adapter.ts')]: {
+  [path.resolve(pluginPath('official/media/adapter.ts'))]: {
     biliSource: { id: 'bili', apiVersion: 1 },
     youtubeSource: { id: 'youtube', apiVersion: 1 }
   }
@@ -213,13 +213,13 @@ const load = loader(mocks, {
 })
 const registry = load('src/main/sources/index.ts').getNetworkSources()
 // Explicit fixture activation: production startup contributes no sources.
-for (const plugin of load('plugins/official/index.ts').officialPlugins) {
+for (const plugin of load(pluginPath('official/index.ts')).officialPlugins) {
   plugin.activate({ registerSource: (source) => registry.register(source) })
 }
 const metadata = load('src/main/sources/metadata.ts')
-const qq = load('plugins/official/qqmusic/metadata.ts')
-const lyrics = load('plugins/official/qqmusic/lyrics.ts')
-const shared = load('plugins/official/qqmusic/shared.ts')
+const qq = load(pluginPath('official/qqmusic/metadata.ts'))
+const lyrics = load(pluginPath('official/qqmusic/lyrics.ts'))
+const shared = load(pluginPath('official/qqmusic/shared.ts'))
 assert.equal(calls.length, 0, 'registration never performs a lookup')
 assert.deepEqual(
   Array.from(metadata.listMetadataSources(), (source) => source.id),

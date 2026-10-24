@@ -24,7 +24,7 @@ import type {
 import { comparePluginVersions } from '../../shared/plugins'
 
 export const OFFICIAL_PLUGIN_CATALOG_URL =
-  'https://github.com/Huiiro/easy-player-v4/releases/download/plugins/catalog.json'
+  'https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/catalog.json'
 const maxPackageSize = 16 * 1024 * 1024
 const maxExpandedSize = 64 * 1024 * 1024
 const manifestKeys = ['id', 'displayName', 'version', 'apiVersion', 'sources'] as const
@@ -61,8 +61,15 @@ export function validateCatalog(value: unknown): OfficialPluginCatalog {
       url.password ||
       url.search ||
       url.hash ||
-      !/^\/Huiiro\/easy-player-v4\/releases\/download\/plugins\/[a-zA-Z0-9._-]+\.epp$/.test(
-        url.pathname
+      !(
+        /^\/Huiiro\/easy-player-plugin\/releases\/download\/plugins\/[a-zA-Z0-9._-]+\.epp$/.test(
+          url.pathname
+        ) ||
+        // Previously installed API v1 packages retain their original official URL.
+        (manifest.apiVersion === 1 &&
+          /^\/Huiiro\/easy-player-v4\/releases\/download\/plugins\/[a-zA-Z0-9._-]+\.epp$/.test(
+            url.pathname
+          ))
       )
     )
       throw new Error('pluginCatalogInvalid')

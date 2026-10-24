@@ -48,7 +48,7 @@ assert.equal(
   0,
   'fresh application has no source implementations'
 )
-const seed = JSON.parse(readFileSync('plugins/catalog.json', 'utf8'))
+const seed = JSON.parse(readFileSync('resources/plugins/catalog.json', 'utf8'))
 const plain = (value) => JSON.parse(JSON.stringify(value))
 let transport
 const host = {
@@ -57,7 +57,12 @@ const host = {
   },
   writeSetting() {},
   log() {},
-  fetch: (...args) => transport(...args)
+  fetch: (...args) => transport(...args),
+  mediaInfo: async () => ({
+    id: 'fixture',
+    title: 'Title',
+    webpage_url: 'https://youtu.be/fixture'
+  })
 }
 const bridge = {
   t: (key) => key,
@@ -120,7 +125,17 @@ assert.equal(
   0,
   'installed QQ package uses host transport'
 )
-assert.equal((await app.registry.get('youtube').download.search('Title'))[0].id, 'fixture')
+assert.equal(
+  (
+    await app.registry.get('youtube').download.search('Title', {
+      signal: new AbortController().signal,
+      deadline: Date.now() + 10000,
+      operation: 'download.search',
+      host: app.registry.ownerOf('youtube').host
+    })
+  )[0].id,
+  'fixture'
+)
 await assert.rejects(app.registry.get('netease').metadata.get('../invalid'))
 await assert.rejects(app.registry.get('kugou').metadata.get('../invalid'))
 const restart = instance(app.root)
@@ -140,9 +155,12 @@ await assert.rejects(restart.packages.install('../escape', true), /pluginUnknown
 for (const altered of [
   { ...original, url: 'https://example.com/plugin.epp' },
   { ...original, url: original.url + '?redirect=1' },
+  { ...original, url: original.url.replace('easy-player-plugin', 'easy-player-plugin-fake') },
+  // The legacy official address is retained only for API v1 packages.
+  { ...original, url: original.url.replace('easy-player-plugin', 'easy-player-v4') },
   { ...original, sha256: 'bad' },
   { ...original, size: 999999999 },
-  { ...original, apiVersion: 2 }
+  { ...original, apiVersion: 99 }
 ])
   assert.throws(() => validateCatalog({ schemaVersion: 1, plugins: [altered] }))
 
@@ -251,4 +269,21 @@ assert.equal(
 assert.deepEqual(plain(validateCatalog(seed)), seed)
 console.log(
   'Official plugins: empty startup, five standalone archives, host calls, local import, integrity, restart, update rollback, uninstall, corruption isolation and offline catalog passed'
+)
+
+const legacyCatalog = JSON.parse(readFileSync('scripts/fixtures/plugin-v1/catalog.json', 'utf8'))
+const legacy = instance(path.join(directory, 'legacy-v1'), legacyCatalog)
+legacy.packages.initialize()
+const legacyEntry = legacyCatalog.plugins[0]
+await legacy.packages.install(
+  legacyEntry.id,
+  true,
+  readFileSync(
+    path.join('scripts/fixtures/plugin-v1', new URL(legacyEntry.url).pathname.split('/').at(-1))
+  )
+)
+assert.equal(legacy.manager.get(legacyEntry.id).apiVersion, 1)
+assert.equal((await legacy.registry.get('youtube').download.search('Title'))[0].id, 'fixture')
+console.log(
+  'Published API v1 archive still loads and calls the legacy bridge alongside API v2 support'
 )

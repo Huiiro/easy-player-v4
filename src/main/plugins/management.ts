@@ -5,9 +5,10 @@ import { configurePluginHost, getPluginManager } from './runtime'
 import type { PluginInfo } from '../../shared/plugins'
 import { app } from 'electron'
 import { join } from 'node:path'
-import seedCatalog from '../../../plugins/catalog.json'
+import seedCatalog from '../../../resources/plugins/catalog.json'
 import { OfficialPluginPackages } from './packages'
 import { officialPluginBridge } from './bridge'
+import { extractMediaInfo } from '../service/mediaDownloadRuntime'
 import { initializeSourceSettings } from '../sources/management'
 import type { OfficialPluginCatalog } from '../../shared/plugins'
 
@@ -37,7 +38,8 @@ export function initializePlugins(): void {
     readSetting: getAppSetting,
     writeSetting: setAppSetting,
     log: (pluginId, level, message) => Logger[level]('[Plugin]', { pluginId, message }),
-    fetch: (url, init) => fetch(url, init)
+    fetch: (url, init) => fetch(url, init),
+    mediaInfo: extractMediaInfo
   })
   const disabled = disabledPlugins()
   const manager = getPluginManager()

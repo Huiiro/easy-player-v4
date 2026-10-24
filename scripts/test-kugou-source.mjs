@@ -1,12 +1,11 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type */
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const require = createRequire(import.meta.url)
 function loader(mocks, globals = {}) {
   const cache = new Map()
   function load(file) {
@@ -33,8 +32,9 @@ function loader(mocks, globals = {}) {
         structuredClone,
         ...globals,
         require(name) {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
-          if (!name.startsWith('.')) return require(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
@@ -223,32 +223,32 @@ const mocks = {
   kugoumusicapi: sdk,
   [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
   [path.resolve('src/main/service/playbackMode.ts')]: policy,
-  [path.resolve('plugins/official/netease/lyrics.ts')]: {
+  [path.resolve(pluginPath('official/netease/lyrics.ts'))]: {
     searchNeteaseLyrics: async () => []
   },
-  [path.resolve('plugins/official/qqmusic/lyrics.ts')]: {
+  [path.resolve(pluginPath('official/qqmusic/lyrics.ts'))]: {
     searchQQMusicLyrics: async () => []
   },
-  [path.resolve('plugins/official/netease/artwork.ts')]: {
+  [path.resolve(pluginPath('official/netease/artwork.ts'))]: {
     searchNeteaseArtwork: async () => []
   },
-  [path.resolve('plugins/official/media/adapter.ts')]: {
+  [path.resolve(pluginPath('official/media/adapter.ts'))]: {
     biliSource: { id: 'bili', apiVersion: 1 },
     youtubeSource: { id: 'youtube', apiVersion: 1 }
   }
 }
 const load = loader(mocks)
-const shared = load('plugins/official/kugou/shared.ts')
+const shared = load(pluginPath('official/kugou/shared.ts'))
 assert.equal(shared.trackTitle({ OriSongName: 'Olive', Suffix: '(Live)' }), 'Olive (Live)')
 assert.equal(shared.trackTitle({ SongName: 'Song Live', Suffix: 'Live' }), 'Song Live')
 const registry = load('src/main/sources/index.ts').getNetworkSources()
 // Explicit fixture activation: production startup contributes no sources.
-for (const plugin of load('plugins/official/index.ts').officialPlugins) {
+for (const plugin of load(pluginPath('official/index.ts')).officialPlugins) {
   plugin.activate({ registerSource: (source) => registry.register(source) })
 }
 const metadata = load('src/main/sources/metadata.ts')
-const kugou = load('plugins/official/kugou/metadata.ts')
-const lyrics = load('plugins/official/kugou/lyrics.ts')
+const kugou = load(pluginPath('official/kugou/metadata.ts'))
+const lyrics = load(pluginPath('official/kugou/lyrics.ts'))
 assert.equal(calls.length, 0, 'registration remains lazy')
 assert.deepEqual(
   Array.from(metadata.listMetadataSources(), (source) => source.id),

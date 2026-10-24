@@ -1,13 +1,12 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
-import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const require = createRequire(import.meta.url)
 function loader(mocks = {}, globals = {}) {
   const cache = new Map()
   function load(file) {
@@ -36,8 +35,9 @@ function loader(mocks = {}, globals = {}) {
         crypto,
         ...globals,
         require(name) {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
-          if (!name.startsWith('.')) return require(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
@@ -358,14 +358,47 @@ const transport = loader({
     logOperation: (_name, _data, action) => action()
   }
 })('src/main/service/mediaDownloadRuntime.ts')
+const extractionSignal = new AbortController().signal
+const beforeInvalidMedia = spawned.length
+for (const request of [
+  { type: 'search', query: '', limit: 12 },
+  { type: 'search', query: 'Title', limit: 100 },
+  { type: 'url', url: 'file:///private/audio' },
+  { type: 'url', url: '--exec=command' },
+  { type: 'url', url: 'https://user:password@example.test/video' }
+])
+  await assert.rejects(
+    transport.extractMediaInfo(request, extractionSignal),
+    (error) => error.code === 'INVALID_REQUEST'
+  )
+assert.equal(
+  spawned.length,
+  beforeInvalidMedia,
+  'invalid extraction requests never start a process'
+)
+const extracting = transport.extractMediaInfo(
+  { type: 'search', query: 'Title --exec=untrusted', limit: 3 },
+  extractionSignal
+)
+assert.deepEqual(Array.from(spawned.at(-1).args), [
+  '--dump-single-json',
+  '--flat-playlist',
+  '--skip-download',
+  '--no-warnings',
+  '--',
+  'ytsearch3:Title --exec=untrusted'
+])
+child.stdout.emit('data', Buffer.from('{"id":"fixture"}'))
+child.emit('close', 0)
+assert.equal((await extracting).id, 'fixture')
 const processCancel = new AbortController()
 const processCall = transport.runYtDlp(['private-query'], processCancel.signal)
 processCancel.abort(new Error('cancelled'))
 await assert.rejects(processCall, /cancelled/)
 if (process.platform === 'win32') {
-  assert.equal(spawned[1].command, 'taskkill')
-  assert.deepEqual(Array.from(spawned[1].args), ['/pid', '54321', '/T', '/F'])
-  assert.equal(spawned[1].options.windowsHide, true)
+  assert.equal(spawned.at(-1).command, 'taskkill')
+  assert.deepEqual(Array.from(spawned.at(-1).args), ['/pid', '54321', '/T', '/F'])
+  assert.equal(spawned.at(-1).options.windowsHide, true)
   child.emit('close', null)
 }
 const httpCancel = new AbortController()
@@ -404,7 +437,7 @@ for (const source of ['netease', 'kugou']) {
     ...mocks,
     '@neteasecloudmusicapienhanced/api': sdk,
     kugoumusicapi: sdk
-  })(`plugins/official/${source}/lyrics.ts`)
+  })(pluginPath(`official/${source}/lyrics.ts`))
   const method = source === 'netease' ? 'searchNeteaseLyrics' : 'searchKugouLyrics'
   const call = providerModule[method]({ title: 'Title' }, false, {
     signal: cancelled.signal,

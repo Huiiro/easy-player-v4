@@ -38,7 +38,7 @@ export function validateManifest(manifest: PluginManifest): PluginManifest {
     typeof manifest.version !== 'string' ||
     manifest.version.length > 64 ||
     !/^\d+\.\d+\.\d+(?:-[a-zA-Z0-9.-]+)?$/.test(manifest.version) ||
-    manifest.apiVersion !== 1 ||
+    ![1, 2].includes(manifest.apiVersion) ||
     !Array.isArray(manifest.sources)
   )
     throw new Error('Invalid or incompatible plugin manifest')
@@ -181,6 +181,20 @@ export class PluginManager {
       scope.cleanups.push(dispose)
       return dispose
     }
+    const callSignal = (
+      call?: import('../sources/types').SourceCallContext,
+      signal?: AbortSignal | null,
+      timeoutMs = 30000
+    ): AbortSignal => {
+      const detached = hasDownloadLease(call, id)
+      if (!detached) requireOpen()
+      const signals = [signal, call?.signal, ...(detached ? [] : [scope.controller.signal])].filter(
+        (value): value is AbortSignal => !!value
+      )
+      const combined = AbortSignal.any([...signals, AbortSignal.timeout(timeoutMs)])
+      combined.throwIfAborted()
+      return combined
+    }
     const services = {
       network: {
         fetch: async (
@@ -188,17 +202,18 @@ export class PluginManager {
           init: RequestInit = {},
           call?: import('../sources/types').SourceCallContext
         ): Promise<Response> => {
-          // Accepted media tasks retain their own call context after a plugin is stopped.
-          const detached = hasDownloadLease(call, id)
-          if (!detached) requireOpen()
-          const signals = [
-            init.signal,
-            call?.signal,
-            ...(detached ? [] : [scope.controller.signal])
-          ].filter((signal): signal is AbortSignal => !!signal)
-          const signal = AbortSignal.any([...signals, AbortSignal.timeout(30000)])
-          signal.throwIfAborted()
+          const signal = callSignal(call, init.signal)
           return this.host.fetch(url, { ...init, signal })
+        }
+      },
+      media: {
+        extractInfo: (
+          request: import('../../../packages/plugin-sdk/src/host').MediaInfoRequest,
+          call?: import('../sources/types').SourceCallContext
+        ): Promise<Record<string, unknown>> => {
+          const signal = callSignal(call, undefined, 60000)
+          if (!this.host.mediaInfo) throw new SourceCallError('UNSUPPORTED_CAPABILITY', id)
+          return this.host.mediaInfo(request, signal)
         }
       },
       settings: {

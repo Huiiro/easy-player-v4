@@ -1,3 +1,4 @@
+import { pluginRequire, pluginPath, projectRequire } from './lib/plugin-require.mjs'
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-empty-function */
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
@@ -48,8 +49,9 @@ function loader(mocks = {}, globals = {}) {
         process,
         ...globals,
         require(name) {
+          if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (mocks[name]) return mocks[name]
-          if (!name.startsWith('.')) return require(name)
+          if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           if (name.endsWith('.json')) return require(target)
           return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
@@ -86,12 +88,17 @@ const store = new Map(),
   logs = [],
   fetches = []
 let failLog = false
+const mediaSignals = []
 const manager = new PluginManager(registry, {
   readSetting: (key) => store.get(key) ?? null,
   writeSetting: (key, value) => store.set(key, value),
   log: (...args) => {
     if (failLog) throw new Error('Broken logger')
     logs.push(args)
+  },
+  mediaInfo: async (request, signal) => {
+    mediaSignals.push(signal)
+    return { id: 'media', request }
   },
   fetch: async (url, init) => {
     fetches.push({ url, signal: init.signal })
@@ -116,7 +123,7 @@ const source = (id) => ({
   metadata: { search: async () => [], get: async () => ({ metadata: {} }) }
 })
 for (const bad of [
-  { ...manifest('invalid', []), apiVersion: 2 },
+  { ...manifest('invalid', []), apiVersion: 99 },
   { ...manifest('invalid', []), version: 'future' },
   manifest('../invalid', []),
   manifest('invalid', ['same', 'same']),
@@ -191,6 +198,10 @@ const info = manager.get('test.alpha')
 structuredClone(info)
 info.sources[0].capabilities.push('download')
 assert.equal(manager.get('test.alpha').sources[0].capabilities.length, 1)
+assert.equal(
+  (await context.media.extractInfo({ type: 'url', url: 'https://alpha.test/video' })).id,
+  'media'
+)
 context.settings.set('answer', { value: 42 })
 const stored = context.settings.get('answer')
 stored.value = 0
@@ -213,6 +224,11 @@ manager.deactivate('test.alpha')
 await assert.rejects(running, (error) => error.code === 'SOURCE_DISABLED')
 assert.equal(fetches[0].signal.aborted, true, 'plugin stop aborts owned HTTP signals')
 assert.equal(oldContext.signal.aborted, true)
+assert.equal(mediaSignals[0].aborted, true, 'plugin stop aborts public media capability')
+assert.throws(
+  () => oldContext.media.extractInfo({ type: 'url', url: 'https://alpha.test/video' }),
+  /closed/
+)
 assert.equal(registry.list().length, 0)
 assert.equal(registry.listDescriptors().length, 2, 'inactive sources stay manageable')
 assert.throws(
@@ -414,7 +430,7 @@ const appManager = appRuntime.getPluginManager(),
 assert.equal(appManager.list().length, 0, 'application startup has no preinstalled plugins')
 function installFixture(loadRuntime, runtime) {
   const manager = runtime.getPluginManager()
-  for (const plugin of loadRuntime('plugins/official/index.ts').officialPlugins) {
+  for (const plugin of loadRuntime(pluginPath('official/index.ts')).officialPlugins) {
     manager.load(plugin)
     manager.activate(plugin.manifest.id)
   }
