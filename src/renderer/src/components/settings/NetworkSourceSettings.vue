@@ -8,7 +8,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import { useNetworkSources, networkSourceName } from '@/hooks/useNetworkSources'
 
 const { t } = useI18n()
-const { error: showError } = useMessage()
+const { error: showError, success: showSuccess } = useMessage()
 const { sources, loading, error, reload } = useNetworkSources()
 const busy = ref('')
 const saveError = ref('')
@@ -19,6 +19,7 @@ watch(error, (value) => {
 async function retryLoad(): Promise<void> {
   saveError.value = ''
   await reload()
+  if (!error.value) showSuccess(t('networkSources.refreshSuccess'))
 }
 async function change(sourceId: string, enabled: boolean | string | number): Promise<void> {
   if (busy.value || typeof enabled !== 'boolean') return
@@ -27,6 +28,12 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
   try {
     const response = await window.api.networkSources.setEnabled(sourceId, enabled)
     if (!response.success) throw new Error(response.error || t('networkSources.saveFailed'))
+    const source = sources.value.find((source) => source.id === sourceId)
+    showSuccess(
+      t(enabled ? 'networkSources.enableSuccess' : 'networkSources.disableSuccess', {
+        name: source ? networkSourceName(source, t) : sourceId
+      })
+    )
     await reload()
   } catch (reason) {
     saveError.value = reason instanceof Error ? reason.message : t('networkSources.saveFailed')
@@ -50,8 +57,9 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
       <span>{{ failure }}</span>
       <BaseButton
         v-if="error && !saveError"
+        class="reset-button"
         size="sm"
-        variant="secondary"
+        variant="ghost"
         :loading="loading"
         :disabled="Boolean(busy)"
         @click="retryLoad"
@@ -92,15 +100,12 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
       </template>
       <template #default="{ labelId, descriptionId }">
         <div class="flex shrink-0 items-center gap-2">
-          <span class="text-xs text-text-l" aria-live="polite"
-            ><span
-              v-if="busy === source.id"
-              class="ep-spinner inline-block"
-              :aria-label="t('networkSources.saving')"
-            /><template v-else>{{
-              source.enabled ? t('networkSources.enabled') : t('networkSources.disabled')
-            }}</template></span
-          >
+          <span
+            v-if="busy === source.id"
+            class="ep-spinner inline-block"
+            role="status"
+            :aria-label="t('networkSources.saving')"
+          />
           <BaseSwitch
             :model-value="source.enabled"
             :aria-labelledby="labelId"

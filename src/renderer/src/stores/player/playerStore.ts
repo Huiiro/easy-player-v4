@@ -345,6 +345,20 @@ export const usePlayerStore = defineStore('player', () => {
     return true
   }
 
+  async function clearLessRecommended(): Promise<boolean> {
+    const result = await window.api.database.command('clearLessRecommended')
+    if (!result.success) return false
+    const songIds = result.data as number[]
+    const cleared = new Set(songIds)
+    for (const song of queue.value) if (cleared.has(song.id)) song.preference = 0
+    for (const songId of songIds) recommendationScores.delete(songId)
+    shuffleNavigationRevision.value++
+    eventBus.emit('songPreferencesCleared', { songIds })
+    success(t('recommendation.lessRecommendedCleared'))
+    await loadRecommendationScores()
+    return true
+  }
+
   async function loadSmartShuffleConfig(): Promise<void> {
     try {
       const response = await window.api.database.command('getSetting', {
@@ -2180,6 +2194,7 @@ export const usePlayerStore = defineStore('player', () => {
     setSmartShuffleEnabled,
     setPreference,
     resetSongRecommendation,
+    clearLessRecommended,
     getSongPreference,
     finishHistoryOnUnload,
     addToQueue,

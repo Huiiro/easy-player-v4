@@ -15,7 +15,16 @@ let accepted = false
 let release
 let hold = false
 let calls = 0
+let bulkCalls = 0
 const player = {
+  clearLessRecommended: async () => {
+    bulkCalls++
+    if (hold)
+      await new Promise((resolve) => {
+        release = resolve
+      })
+    return accepted
+  },
   resetSongRecommendation: async () => {
     calls++
     if (hold)
@@ -38,7 +47,8 @@ const mocks = {
 }
 vm.runInNewContext(
   ts.transpileModule(
-    script + '\nexports.fixture = { resetRecommendation, groups, totals, resettingSongIds }',
+    script +
+      '\nexports.fixture = { resetRecommendation, clearLessRecommended, groups, totals, resettingSongIds, clearingLessRecommended }',
     {
       compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
     }
@@ -95,4 +105,33 @@ assert.equal(view.totals.value.lessRecommended, 0)
 assert.equal(view.resettingSongIds.value.size, 0)
 console.log(
   'Recommendation reset UI: success, failure, refresh and duplicate-click handling passed.'
+)
+
+view.groups.value.lessRecommended = [song]
+view.totals.value.lessRecommended = 125
+accepted = false
+hold = false
+await view.clearLessRecommended()
+assert.equal(
+  view.groups.value.lessRecommended.length,
+  1,
+  'failed bulk reset preserves visible songs'
+)
+assert.equal(view.totals.value.lessRecommended, 125)
+assert.equal(view.clearingLessRecommended.value, false)
+accepted = true
+hold = true
+const bulk = view.clearLessRecommended()
+await view.clearLessRecommended()
+await view.resetRecommendation(song)
+assert.equal(bulkCalls, 2, 'duplicate clear clicks cannot start another bulk reset')
+assert.equal(calls, 2, 'per-song reset is blocked during bulk clearing')
+assert.equal(view.clearingLessRecommended.value, true)
+release()
+await bulk
+assert.equal(view.groups.value.lessRecommended.length, 0)
+assert.equal(view.totals.value.lessRecommended, 0)
+assert.equal(view.clearingLessRecommended.value, false)
+console.log(
+  'Bulk recommendation feedback: failure preservation, all-item clear and concurrent-click protection passed.'
 )

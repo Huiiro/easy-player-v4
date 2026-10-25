@@ -10,6 +10,7 @@ type Events = {
   lyricsUpdated: number
   songActionsMenuOpened: 'footer' | 'songlist'
   songPreferenceChanged: { songId: number; preference: -1 | 0 | 1 }
+  songPreferencesCleared: { songIds: number[] }
   locateCurrentSong: void
   openAudioControls: void
   openGlobalSearch: void

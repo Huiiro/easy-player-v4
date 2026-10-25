@@ -392,6 +392,7 @@ onMounted(() => {
   void load()
   eventBus.on('playlistsChanged', loadPlaylists)
   eventBus.on('songPreferenceChanged', loadPlaylists)
+  eventBus.on('songPreferencesCleared', loadPlaylists)
   eventBus.on('scanFinished', loadPlaylists)
 })
 useVisibleInterval(() => {
@@ -408,6 +409,7 @@ onBeforeUnmount(() => {
   uiStore.homeLayoutOpen = false
   eventBus.off('playlistsChanged', loadPlaylists)
   eventBus.off('songPreferenceChanged', loadPlaylists)
+  eventBus.off('songPreferencesCleared', loadPlaylists)
   eventBus.off('scanFinished', loadPlaylists)
 })
 </script>

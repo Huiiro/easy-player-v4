@@ -672,15 +672,34 @@ export function setSongPreference(songId: number, preference: -1 | 0 | 1): void 
 }
 
 /** Reset personal recommendation evidence without deleting listening statistics. */
-export function resetSongRecommendation(songId: number): void {
-  if (!Number.isInteger(songId) || songId <= 0) throw new Error('Invalid song ID')
+function resetSongRecommendations(songIds: number[]): void {
   const db = getDatabase()
   db.transaction(() => {
-    const updated = db.prepare('UPDATE song SET preference = 0 WHERE id = ?').run(songId)
-    if (!updated.changes) throw new Error('Song not found')
-    db.prepare(
+    const update = db.prepare('UPDATE song SET preference = 0 WHERE id = ?')
+    const reset = db.prepare(
       `INSERT INTO app_setting (key, value_json) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json`
-    ).run(`recommendation.reset.${songId}`, JSON.stringify(Date.now()))
+    )
+    const resetAt = JSON.stringify(Date.now())
+    for (const songId of songIds) {
+      if (!update.run(songId).changes) throw new Error('Song not found')
+      reset.run(`recommendation.reset.${songId}`, resetAt)
+    }
+  })()
+}
+
+export function resetSongRecommendation(songId: number): void {
+  if (!Number.isInteger(songId) || songId <= 0) throw new Error('Invalid song ID')
+  resetSongRecommendations([songId])
+}
+
+export function clearLessRecommended(): number[] {
+  return getDatabase().transaction(() => {
+    // Use the full score set rather than the paginated (and capped) UI lists.
+    const songIds = getRecommendationScores()
+      .filter((score) => score.preference === -1 || score.reason === 'skipped')
+      .map((score) => score.songId)
+    resetSongRecommendations(songIds)
+    return songIds
   })()
 }

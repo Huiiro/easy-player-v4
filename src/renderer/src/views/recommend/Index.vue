@@ -57,6 +57,7 @@ const moreLoading = ref<Record<Group, boolean>>({
 })
 const playbackPending = ref(false)
 const resettingSongIds = ref(new Set<number>())
+const clearingLessRecommended = ref(false)
 let loadRevision = 0
 
 function todayKey(): string {
@@ -92,7 +93,7 @@ async function load(): Promise<void> {
 }
 
 async function showMore(group: Group): Promise<void> {
-  if (!statistics.enabled) return
+  if (!statistics.enabled || clearingLessRecommended.value) return
   const revision = loadRevision
   const offset = groups.value[group].length
   moreLoading.value[group] = true
@@ -122,6 +123,7 @@ async function showMore(group: Group): Promise<void> {
 }
 
 async function setPreference(song: RecommendedSong, preference: -1 | 0 | 1): Promise<void> {
+  if (clearingLessRecommended.value) return
   if (!(await player.setPreference(song.id, preference))) {
     error(t('recommendation.failed'))
     return
@@ -130,7 +132,7 @@ async function setPreference(song: RecommendedSong, preference: -1 | 0 | 1): Pro
 }
 
 async function resetRecommendation(song: RecommendedSong): Promise<void> {
-  if (resettingSongIds.value.has(song.id)) return
+  if (clearingLessRecommended.value || resettingSongIds.value.has(song.id)) return
   resettingSongIds.value.add(song.id)
   try {
     if (!(await player.resetSongRecommendation(song.id))) {
@@ -149,6 +151,26 @@ async function resetRecommendation(song: RecommendedSong): Promise<void> {
     error(t('recommendation.failed'))
   } finally {
     resettingSongIds.value.delete(song.id)
+  }
+}
+
+async function clearLessRecommended(): Promise<void> {
+  if (!statistics.enabled || clearingLessRecommended.value || resettingSongIds.value.size) return
+  clearingLessRecommended.value = true
+  ++loadRevision
+  loading.value = false
+  try {
+    if (!(await player.clearLessRecommended())) {
+      error(t('recommendation.failed'))
+      return
+    }
+    groups.value.lessRecommended = []
+    totals.value.lessRecommended = 0
+    await load()
+  } catch {
+    error(t('recommendation.failed'))
+  } finally {
+    clearingLessRecommended.value = false
   }
 }
 
@@ -227,32 +249,49 @@ useVisibleInterval(() => {
       </div>
       <button
         class="btn-hover rounded-lg px-3 py-2 text-sm"
-        :disabled="loading || !statistics.enabled"
+        :disabled="loading || clearingLessRecommended || !statistics.enabled"
         @click="load"
       >
         {{ t('recommendation.refresh') }}
       </button>
     </header>
     <section v-for="group in statistics.enabled ? groupOrder : []" :key="group" class="mb-8">
-      <h2 class="mb-3">
+      <div class="mb-3 flex items-center gap-3">
+        <h2 class="min-w-0 flex-1">
+          <button
+            type="button"
+            class="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-lg font-medium hover:bg-hover"
+            :aria-expanded="expandedGroups[group]"
+            :aria-controls="`recommendation-group-${group}`"
+            :title="t(expandedGroups[group] ? 'recommendation.collapse' : 'recommendation.expand')"
+            @click="expandedGroups[group] = !expandedGroups[group]"
+          >
+            <SvgIcon
+              :name="expandedGroups[group] ? 'common-expand-up' : 'common-expand-down'"
+              class-name="size-5 text-text-l"
+            />
+            <span>
+              {{ t(`recommendation.${group}`) }}
+              <span class="text-sm text-text-l">({{ totals[group] }})</span>
+            </span>
+          </button>
+        </h2>
         <button
+          v-if="group === 'lessRecommended'"
           type="button"
-          class="flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left text-lg font-medium hover:bg-hover"
-          :aria-expanded="expandedGroups[group]"
-          :aria-controls="`recommendation-group-${group}`"
-          :title="t(expandedGroups[group] ? 'recommendation.collapse' : 'recommendation.expand')"
-          @click="expandedGroups[group] = !expandedGroups[group]"
+          class="btn-hover shrink-0 rounded-lg px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+          :title="t('recommendation.clearLessRecommendedHelp')"
+          :disabled="
+            loading ||
+            clearingLessRecommended ||
+            resettingSongIds.size > 0 ||
+            totals.lessRecommended === 0
+          "
+          @click="clearLessRecommended"
         >
-          <SvgIcon
-            :name="expandedGroups[group] ? 'common-expand-up' : 'common-expand-down'"
-            class-name="size-5 text-text-l"
-          />
-          <span>
-            {{ t(`recommendation.${group}`) }}
-            <span class="text-sm text-text-l">({{ totals[group] }})</span>
-          </span>
+          {{ t('recommendation.clearLessRecommended') }}
         </button>
-      </h2>
+      </div>
       <div v-show="expandedGroups[group]" :id="`recommendation-group-${group}`">
         <div v-if="groups[group].length" class="grid gap-2 lg:grid-cols-2">
           <article
@@ -284,12 +323,14 @@ useVisibleInterval(() => {
             <div class="flex shrink-0 items-center gap-1">
               <button
                 v-if="group === 'lessRecommended'"
-                class="btn-hover rounded-md px-2 py-1 text-xs text-text-l"
+                type="button"
+                class="btn-hover inline-flex size-8 items-center justify-center rounded-md text-text-l disabled:opacity-50"
                 :title="t('recommendation.resetScoreHelp')"
-                :disabled="resettingSongIds.has(song.id)"
+                :aria-label="t('recommendation.removeAndReset')"
+                :disabled="clearingLessRecommended || resettingSongIds.has(song.id)"
                 @click="resetRecommendation(song)"
               >
-                {{ t('recommendation.removeAndReset') }}
+                <span aria-hidden="true" class="text-xl leading-none">−</span>
               </button>
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
@@ -314,7 +355,7 @@ useVisibleInterval(() => {
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
                 :class="song.preference === 1 ? 'text-primary' : ''"
-                :disabled="resettingSongIds.has(song.id)"
+                :disabled="clearingLessRecommended || resettingSongIds.has(song.id)"
                 :title="
                   song.preference === 1 ? t('recommendation.reset') : t('recommendation.like')
                 "
@@ -328,7 +369,7 @@ useVisibleInterval(() => {
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
                 :class="song.preference === -1 ? 'text-red-400' : ''"
-                :disabled="resettingSongIds.has(song.id)"
+                :disabled="clearingLessRecommended || resettingSongIds.has(song.id)"
                 :title="
                   song.preference === -1 ? t('recommendation.reset') : t('recommendation.dislike')
                 "
@@ -342,7 +383,7 @@ useVisibleInterval(() => {
         <button
           v-if="groups[group].length < totals[group]"
           class="btn-hover mt-3 rounded-lg px-3 py-2 text-sm"
-          :disabled="loading || moreLoading[group]"
+          :disabled="loading || clearingLessRecommended || moreLoading[group]"
           @click="showMore(group)"
         >
           {{ t('recommendation.showMore') }} ({{ totals[group] - groups[group].length }})

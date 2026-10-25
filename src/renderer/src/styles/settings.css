@@ -285,15 +285,28 @@
 }
 
 .settings-page .reset-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 0;
   border-radius: 7px;
+  background: transparent;
   padding: 0.35rem 0.5rem;
   color: var(--color-text-l);
   font-size: 0.78rem;
+  font-weight: 400;
   transition:
     background-color var(--motion-duration-standard) var(--motion-ease-standard),
     color var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
-.settings-page .reset-button:hover {
+.settings-page .reset-button:where(:enabled):hover {
   background: var(--color-hover);
+  color: var(--color-text-l);
+}
+
+.settings-page .reset-button[aria-pressed='true'] {
+  background: var(--color-hover);
+  color: var(--color-text);
 }

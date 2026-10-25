@@ -137,20 +137,12 @@ eventBus.on('openAudioControls', openAudioControls)
         class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
         >EY
       </span>
-      <span class="text-[16px] font-semibold tracking-tight">{{
-        ui.customThemeText.appTitle ?? ui.logoText
-      }}</span>
+      <span class="text-[16px] font-semibold tracking-tight">
+        {{ ui.customThemeText.appTitle ?? ui.logoText }}
+      </span>
       <span class="text-[9px] mt-2">V {{ VERSION }}</span>
     </div>
-    <button
-      v-if="!ui.useCardView"
-      class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
-      :title="t('header.back')"
-      :aria-label="t('header.back')"
-      @click="router.back()"
-    >
-      <svgIcon name="common-back" class-name="size-4" />
-    </button>
+    <div class="w-2" />
     <button
       v-if="!ui.useCardView"
       type="button"
@@ -165,6 +157,15 @@ eventBus.on('openAudioControls', openAudioControls)
         :name="ui.sidebarExpanded ? 'common-menu-collapsed' : 'common-menu-expand'"
         class-name="size-4"
       />
+    </button>
+    <button
+      v-if="!ui.useCardView"
+      class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text [-webkit-app-region:no-drag]"
+      :title="t('header.back')"
+      :aria-label="t('header.back')"
+      @click="router.back()"
+    >
+      <svgIcon name="common-back" class-name="size-4" />
     </button>
     <button
       type="button"

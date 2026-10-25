@@ -40,9 +40,9 @@
   padding-inline: 0;
   aspect-ratio: 1;
 }
+/* Inputs use a border-only focus indicator in components.css. */
 :is(
   .ep-button,
-  .ep-input,
   .ep-select,
   .ep-focusable,
   .ep-range,
@@ -58,9 +58,6 @@
 }
 .ep-input[aria-invalid='true'] {
   border-color: var(--color-danger);
-}
-.ep-input[aria-invalid='true']:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-danger) 25%, transparent);
 }
 .ep-switch-thumb {
   background: var(--ep-switch-thumb);

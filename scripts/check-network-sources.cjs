@@ -10,6 +10,19 @@ app.disableHardwareAcceleration()
 async function runFixture() {
   const { Vue, createI18n, Settings, Plugins, Downloads, Message, zh } = window.Fixture
   const { createApp, h, nextTick, ref } = Vue
+  const notices = window.Fixture.useMessage()
+  const expectMessage = (type, text) => {
+    if (
+      !notices.messages.value.some(
+        (message) => message.type === type && message.message.includes(text)
+      )
+    )
+      throw Error('Missing global message: ' + type + ' ' + text)
+  }
+  const expectNoSuccess = () => {
+    if (notices.messages.value.some((message) => message.type === 'success'))
+      throw Error('Cancelled or failed operations must not report success')
+  }
   window.api = {
     networkSources: window.sourceBridge,
     plugins: window.pluginBridge,
@@ -90,16 +103,22 @@ async function runFixture() {
     !row.textContent.includes('v1.0.0')
   )
     throw Error('Capabilities and versions must be visible')
+  notices.clear()
   netease.click()
   await window.uiWait()
   if (netease.getAttribute('aria-checked') !== 'true')
     throw Error('Failed persistence must retain the switch state')
   if (!document.querySelector('#settings [role=alert]')?.textContent.includes('模拟保存失败'))
     throw Error('Save failure must be visible')
+  expectMessage('error', '模拟保存失败')
+  expectNoSuccess()
   netease.click()
   await window.uiWait()
   if (netease.getAttribute('aria-checked') !== 'false')
     throw Error('Retry must apply the switch state')
+  expectMessage('success', '来源“网易云音乐”已停用')
+  if (row.textContent.includes('已启用') || row.textContent.includes('已停用'))
+    throw Error('Source rows must convey state through their switches without repeated text')
   window.switchFor('YouTube').click()
   await window.uiWait()
   if (
@@ -158,19 +177,24 @@ async function runFixture() {
   await window.api.plugins.install('example.aurora')
   await window.uiWait()
   if (!pluginSwitch('极光')) throw Error('Plugin changes must update the active type filter')
-  await selectType('来源（Provider）')
+  await selectType(zh.plugins.provider)
   if (document.querySelectorAll('#plugins .setting-row').length !== 5 || pluginSwitch('极光'))
     throw Error('Provider filter must include legacy source manifests without a kind field')
   await selectType('全部类型')
   const kugou = pluginSwitch('酷狗音乐')
+  notices.clear()
   kugou.click()
   await window.uiWait()
   if (kugou.getAttribute('aria-checked') !== 'false' || !window.switchFor('酷狗音乐').disabled)
     throw Error('Stopping a plugin must suspend its source')
+  expectMessage('success', '插件“酷狗音乐”已停用')
+  if (kugou.closest('.setting-row').querySelector('.plugin-actions').textContent.includes('已停用'))
+    throw Error('Plugin rows must not display repeated lifecycle state text')
   if (!window.switchFor('酷狗音乐').closest('.setting-row').textContent.includes('所属插件未运行'))
     throw Error('Source must explain why it is unavailable')
   kugou.click()
   await window.uiWait()
+  expectMessage('success', '插件“酷狗音乐”已启用')
   await window.sourceBridge.setEnabled('kugou', false)
   await window.uiWait()
   kugou.click()
@@ -180,12 +204,15 @@ async function runFixture() {
   if (window.switchFor('酷狗音乐').getAttribute('aria-checked') !== 'false')
     throw Error('Plugin restart must retain individual source preferences')
   await window.pluginBridge.failNext('save')
+  notices.clear()
   kugou.click()
   await window.uiWait()
   if (kugou.getAttribute('aria-checked') !== 'true')
     throw Error('Persistence failure must retain the plugin state')
   if (!document.querySelector('#plugins [role=alert]')?.textContent.includes('模拟插件保存失败'))
     throw Error('Plugin save failure must remain visible')
+  expectMessage('error', '模拟插件保存失败')
+  expectNoSuccess()
   kugou.click()
   await window.uiWait()
   await window.pluginBridge.failNext('activate')
@@ -237,27 +264,63 @@ async function runFixture() {
     !document.querySelector('#plugins').textContent.includes('极光')
   )
     throw Error('The theme filter must persist when switching to the official catalog')
-  await selectType('来源（Provider）')
+  await selectType(zh.plugins.provider)
   if (document.querySelectorAll('#plugins .setting-row').length !== 5)
     throw Error('The official catalog must also support provider filtering')
   await selectType('全部类型')
   if (document.querySelectorAll('#plugins .setting-row').length !== 6)
     throw Error('Official catalog must list six optional packages')
+  notices.clear()
   action('刷新官方源').click()
   await window.uiWait()
   if (!document.querySelector('#plugins [role=alert]')?.textContent.includes('模拟官方源刷新失败'))
     throw Error('Official source refresh failures must be visible')
   if (document.querySelectorAll('#plugins .setting-row').length !== 6)
     throw Error('Failed refresh must retain catalog')
+  expectMessage('error', '模拟官方源刷新失败')
+  expectNoSuccess()
+  action('刷新官方源').click()
+  await window.uiWait()
+  expectMessage('success', '官方源已刷新')
   action('已安装').click()
   await window.uiWait()
   const qqRow = [...document.querySelectorAll('#plugins .setting-row')].find(
     (row) => row.querySelector('h3').textContent.trim() === 'QQ 音乐'
   )
-  ;[...qqRow.querySelectorAll('button')]
-    .find((button) => button.textContent.trim() === '卸载')
-    .click()
+  const uninstall = [...qqRow.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === '卸载'
+  )
+  const dialogAction = (text) =>
+    [...document.querySelectorAll('[role=dialog] button')].find(
+      (button) => button.textContent.trim() === text
+    )
+  notices.clear()
+  uninstall.click()
   await window.uiWait()
+  if (!(await window.api.plugins.list()).data.some((plugin) => plugin.id === 'builtin.qqmusic'))
+    throw Error('Opening uninstall confirmation must not remove the plugin')
+  if (!document.querySelector('[role=dialog]')?.textContent.includes('builtin.qqmusic'))
+    throw Error('Uninstall confirmation must identify the exact package')
+  dialogAction('取消').click()
+  await window.uiWait()
+  expectNoSuccess()
+  if (!(await window.api.plugins.list()).data.some((plugin) => plugin.id === 'builtin.qqmusic'))
+    throw Error('Cancelling uninstall must preserve the plugin')
+  uninstall.click()
+  await window.uiWait()
+  await window.pluginBridge.failNext('uninstall')
+  dialogAction('卸载').click()
+  await window.uiWait()
+  expectMessage('error', '模拟插件卸载失败')
+  expectNoSuccess()
+  if (
+    !document.querySelector('[role=dialog]') ||
+    !(await window.api.plugins.list()).data.some((plugin) => plugin.id === 'builtin.qqmusic')
+  )
+    throw Error('A failed uninstall must keep the dialog and plugin available for retry')
+  dialogAction('卸载').click()
+  await window.uiWait()
+  expectMessage('success', '插件“QQ 音乐”已卸载')
   if (
     document.querySelectorAll('#plugins [role=switch]').length !== 5 ||
     window.switchFor('QQ 音乐')
@@ -266,17 +329,38 @@ async function runFixture() {
   action('官方源').click()
   await window.uiWait()
   await window.pluginBridge.failNext('install')
+  notices.clear()
   action('安装').click()
   await window.uiWait()
   if (!document.querySelector('#plugins [role=alert]')?.textContent.includes('模拟插件安装失败'))
     throw Error('Install failures must remain visible')
+  expectMessage('error', '模拟插件安装失败')
+  expectNoSuccess()
   action('安装').click()
   await window.uiWait()
   if (action('安装')) throw Error('Installed catalog entries must change to installed state')
+  expectMessage('success', '插件“QQ 音乐”安装成功')
+  notices.clear()
   action('导入本地包').click()
   await window.uiWait()
   if ((await window.api.plugins.list()).data.length !== 6)
     throw Error('Cancelling import must preserve installed plugins')
+  expectNoSuccess()
+  await window.pluginBridge.failNext('import')
+  action('导入本地包').click()
+  await window.uiWait()
+  expectMessage('error', '模拟插件导入失败')
+  expectNoSuccess()
+  await window.pluginBridge.failNext('import-success')
+  action('导入本地包').click()
+  await window.uiWait()
+  expectMessage('success', '插件导入成功')
+  await window.pluginBridge.failNext('update-available')
+  action('官方源').click()
+  await window.uiWait()
+  action('更新').click()
+  await window.uiWait()
+  expectMessage('success', '插件“QQ 音乐”更新成功')
   for (const plugin of (await window.api.plugins.list()).data)
     await window.api.plugins.uninstall(plugin.id)
   await window.uiWait()
@@ -340,10 +424,14 @@ app.whenReady().then(async () => {
       sha256: 'a'.repeat(64),
       url: 'https://github.com/Huiiro/easy-player-v4/releases/download/plugins/fixture.epp'
     }))
-    let catalogRequests = 0
+    let catalogRequests = 0,
+      failRefresh = true
     ipcMain.handle('plugins:catalog', (_event, refresh) => {
       catalogRequests++
-      if (refresh) return { success: false, error: '模拟官方源刷新失败' }
+      if (refresh && failRefresh) {
+        failRefresh = false
+        return { success: false, error: '模拟官方源刷新失败' }
+      }
       return { success: true, data: catalog }
     })
     ipcMain.handle('plugins:install', (event, id) => {
@@ -352,12 +440,18 @@ app.whenReady().then(async () => {
         return { success: false, error: '模拟插件安装失败' }
       }
       const entry = catalog.find((plugin) => plugin.id === id)
-      plugins.push({ ...entry, enabled: true, state: 'active' })
+      const installed = plugins.findIndex((plugin) => plugin.id === id)
+      if (installed >= 0) plugins.splice(installed, 1, { ...entry, enabled: true, state: 'active' })
+      else plugins.push({ ...entry, enabled: true, state: 'active' })
       event.sender.send('plugins:changed')
       event.sender.send('network-sources:changed')
       return { success: true }
     })
     ipcMain.handle('plugins:uninstall', (event, id) => {
+      if (pluginFault === 'uninstall') {
+        pluginFault = ''
+        return { success: false, error: '模拟插件卸载失败' }
+      }
       plugins.splice(
         plugins.findIndex((plugin) => plugin.id === id),
         1
@@ -366,7 +460,17 @@ app.whenReady().then(async () => {
       event.sender.send('network-sources:changed')
       return { success: true }
     })
-    ipcMain.handle('plugins:import', () => ({ success: true, cancelled: true }))
+    ipcMain.handle('plugins:import', () => {
+      if (pluginFault === 'import') {
+        pluginFault = ''
+        return { success: false, error: '模拟插件导入失败' }
+      }
+      if (pluginFault === 'import-success') {
+        pluginFault = ''
+        return { success: true }
+      }
+      return { success: true, cancelled: true }
+    })
     const sourceView = () =>
       definitions
         .filter((source) => plugins.some((plugin) => plugin.id === 'builtin.' + source.id))
@@ -389,6 +493,10 @@ app.whenReady().then(async () => {
       return { success: true, data: plugins }
     })
     ipcMain.handle('plugins:fixture-failure', (_event, fault) => {
+      if (fault === 'update-available') {
+        catalog.find((plugin) => plugin.id === 'builtin.qqmusic').version = '1.0.1'
+        return
+      }
       pluginFault = fault
     })
     ipcMain.handle('plugins:set-enabled', (event, request) => {
@@ -540,7 +648,9 @@ app.whenReady().then(async () => {
       0,
       'rendering installed settings must not fetch the official source'
     )
-    await window.webContents.executeJavaScript('(' + runFixture.toString() + ')()')
+    await window.webContents.executeJavaScript(
+      '(' + runFixture.toString() + ')().catch(error => { throw new Error(error.stack) })'
+    )
     assert(catalogRequests > 0, 'catalog is read only after browsing')
     await window.webContents.executeJavaScript(
       'window.Fixture.useMessage().clear(); document.querySelector("nav").style.display="none"; window.uiWait()'

@@ -274,6 +274,10 @@ const onSongPreferenceChanged = ({
     if (song.id === songId) song.preference = preference
   }
 }
+const onSongPreferencesCleared = ({ songIds }: { songIds: number[] }): void => {
+  const cleared = new Set(songIds)
+  for (const song of songs.value) if (cleared.has(song.id)) song.preference = 0
+}
 const locateCurrentSong = (): void => {
   const id = player.currentQueueSong?.id
   if (!id) return
@@ -293,6 +297,7 @@ onMounted(() => {
   eventBus.on('scanFinished', onScanFinished)
   eventBus.on('tagsChanged', onTagsChanged)
   eventBus.on('songPreferenceChanged', onSongPreferenceChanged)
+  eventBus.on('songPreferencesCleared', onSongPreferencesCleared)
   eventBus.on('locateCurrentSong', locateCurrentSong)
 })
 onBeforeUnmount(() => {
@@ -303,6 +308,7 @@ onBeforeUnmount(() => {
   eventBus.off('scanFinished', onScanFinished)
   eventBus.off('tagsChanged', onTagsChanged)
   eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
+  eventBus.off('songPreferencesCleared', onSongPreferencesCleared)
   eventBus.off('locateCurrentSong', locateCurrentSong)
 })
 watch(

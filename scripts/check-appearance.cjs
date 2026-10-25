@@ -341,7 +341,7 @@ app.whenReady().then(async () => {
       const sameName={...midnight,pluginId:'other.midnight',author:{name:'Fixture Author'}};
       activeThemes=[blackhole,midnight,sameName];themeListener();await wait();
       const duplicates=[...document.querySelectorAll('[role=radio]')].filter(button=>button.textContent.includes('午夜'));
-      check(duplicates.length===2&&duplicates.every(button=>button.textContent.includes('Fixture Author')),'Duplicate theme names show their author');
+      check(duplicates.length===2&&duplicates.every(button=>button.title.includes('Fixture Author')),'Duplicate theme names retain their author in the tooltip');
       check(duplicates.some(button=>button.textContent.includes('example.midnight'))&&duplicates.some(button=>button.textContent.includes('other.midnight')),'Same-name same-author themes show their distinct IDs');
       duplicates.find(button=>button.textContent.includes('other.midnight')).click();await wait();
       check(ui.systemBackground==='plugin:other.midnight','A duplicate display name still selects its own plugin ID');

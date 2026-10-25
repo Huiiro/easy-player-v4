@@ -77,11 +77,13 @@ async function resetCover(): Promise<void> {
 onMounted(() => {
   void loadCover()
   eventBus.on('songPreferenceChanged', loadCover)
+  eventBus.on('songPreferencesCleared', loadCover)
   eventBus.on('scanFinished', loadCover)
 })
 onBeforeUnmount(() => {
   clearCropImage()
   eventBus.off('songPreferenceChanged', loadCover)
+  eventBus.off('songPreferencesCleared', loadCover)
   eventBus.off('scanFinished', loadCover)
 })
 watch(cropDialogVisible, (visible) => {

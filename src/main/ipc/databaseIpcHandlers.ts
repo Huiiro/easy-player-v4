@@ -2,6 +2,7 @@ import { t } from '../i18n'
 import { ipcMain } from 'electron'
 import * as library from '../database/repository'
 import {
+  clearLessRecommended,
   getRecommendationScores,
   recordPlayEvent,
   resetSongRecommendation,
@@ -154,6 +155,7 @@ const handlers = {
   setSongPreference: ({ songId, preference }: { songId: number; preference: -1 | 0 | 1 }) =>
     setSongPreference(songId, preference),
   resetSongRecommendation: ({ songId }: { songId: number }) => resetSongRecommendation(songId),
+  clearLessRecommended,
 
   listPlaylists: () => library.listPlaylists(),
   getPlaylist: ({ id }: { id: number }) => library.getPlaylist(id),

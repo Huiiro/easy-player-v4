@@ -170,11 +170,18 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
       </SettingRow>
       <div class="setting-row theme-background-row">
         <div>
-          <h3>{{ t('settings.themeBackground') }}</h3>
+          <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+            <h3>{{ t('settings.themeBackground') }}</h3>
+            <BaseButton
+              class="reset-button"
+              size="sm"
+              variant="ghost"
+              @click="emit('navigate', 'plugins')"
+            >
+              {{ t('plugins.manageThemes') }}
+            </BaseButton>
+          </div>
           <p>{{ t('settings.themeBackgroundDescription') }}</p>
-          <BaseButton class="mt-2" size="sm" variant="ghost" @click="emit('navigate', 'plugins')">{{
-            t('plugins.manageThemes')
-          }}</BaseButton>
         </div>
         <div
           class="theme-options system-background-options"
@@ -211,17 +218,17 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
               class="preview-window"
               :class="background.preview && 'plugin-theme-preview'"
               :style="background.preview ? { background: background.preview } : undefined"
-              ><i /><b
-            /></span>
+            >
+              <i />
+              <b />
+            </span>
             <span>{{ background.label }}</span>
-            <span v-if="background.pluginId" class="block break-words text-xs text-text-l">{{
-              background.author || t('plugins.authorUnknown')
-            }}</span>
             <span
               v-if="background.pluginId && background.duplicate"
               class="block break-all text-xs text-text-l"
-              >{{ background.pluginId }}</span
             >
+              {{ background.pluginId }}
+            </span>
           </button>
         </div>
       </div>

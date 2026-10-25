@@ -54,17 +54,20 @@ const databaseDirectory = fs.mkdtempSync(path.join(tmpdir(), 'easy-player-schema
 const databasePath = path.join(databaseDirectory, 'player.db')
 try {
   const initialized = databaseApi.initDatabase(databasePath)
-  assert.equal(DATABASE_SCHEMA_VERSION, 1)
-  assert.deepEqual(initialized.prepare('SELECT version FROM schema_migration').all(), [
-    { version: 1 }
-  ])
+  assert.deepEqual(
+    initialized.prepare('SELECT version FROM schema_migration ORDER BY version').all(),
+    Array.from({ length: DATABASE_SCHEMA_VERSION }, (_, index) => ({ version: index + 1 }))
+  )
   assert.ok(
     initialized.prepare("SELECT 1 FROM sqlite_master WHERE name = 'song_sort_reading'").get()
   )
   initialized.prepare("INSERT INTO app_setting (key, value_json) VALUES ('test', 'true')").run()
   databaseApi.closeDatabase()
   const reopened = databaseApi.initDatabase(databasePath)
-  assert.deepEqual(reopened.prepare('SELECT version FROM schema_migration').all(), [{ version: 1 }])
+  assert.deepEqual(
+    reopened.prepare('SELECT version FROM schema_migration ORDER BY version').all(),
+    Array.from({ length: DATABASE_SCHEMA_VERSION }, (_, index) => ({ version: index + 1 }))
+  )
   assert.equal(
     reopened.prepare("SELECT value_json FROM app_setting WHERE key = 'test'").get().value_json,
     'true'
@@ -195,6 +198,7 @@ const {
   recordPlayEvent,
   setSongPreference,
   resetSongRecommendation,
+  clearLessRecommended,
   diversifyByArtist,
   selectRecommendationGroups
 } = loadTypeScript(path.join(__dirname, '../src/main/database/recommendations.ts'), {
@@ -617,6 +621,67 @@ insertHistory.run(2, resetAt + 1, 170000, 180000, 'ended')
 const relearned = getRecommendationScores(resetAt + 200000).find((score) => score.songId === 2)
 assert.equal(relearned.recentEngagedPlays, 1)
 assert.ok(relearned.factors.behavior > 0)
+
+// Bulk clearing includes songs beyond both the page size and the 100-song cap.
+for (let id = 1000; id < 1105; id++) {
+  songs.run(id, `Reduced ${id}`, `/test/${id}`, null, null, null, null, 0, 180)
+  setSongPreference(id, -1)
+}
+setSongPreference(3, 1)
+const beforeBulk = getRecommendationScores()
+const expectedCleared = beforeBulk
+  .filter((score) => score.preference === -1 || score.reason === 'skipped')
+  .map((score) => score.songId)
+assert.ok(expectedCleared.length > 100)
+assert.ok(
+  beforeBulk.some((score) => score.preference === 0 && score.reason === 'skipped'),
+  'bulk fixture includes automatically reduced songs'
+)
+const historyBeforeBulk = db.prepare('SELECT * FROM play_history ORDER BY id').all()
+const startsBeforeBulk = db.prepare('SELECT id, play_times FROM song ORDER BY id').all()
+db.exec(`CREATE TRIGGER reject_bulk_reset BEFORE UPDATE OF preference ON song
+  WHEN OLD.id = 1104 AND NEW.preference = 0
+  BEGIN SELECT RAISE(ABORT, 'test reset failure'); END;`)
+assert.throws(() => clearLessRecommended(), /test reset failure/)
+assert.equal(
+  db.prepare('SELECT preference FROM song WHERE id = 1000').get().preference,
+  -1,
+  'bulk failure rolls back earlier songs'
+)
+assert.equal(
+  db
+    .prepare("SELECT COUNT(*) AS count FROM app_setting WHERE key = 'recommendation.reset.1000'")
+    .get().count,
+  0,
+  'bulk failure rolls back reset markers'
+)
+db.exec('DROP TRIGGER reject_bulk_reset')
+const cleared = clearLessRecommended()
+assert.deepEqual(
+  [...cleared].sort((a, b) => a - b),
+  [...expectedCleared].sort((a, b) => a - b)
+)
+assert.equal(
+  db.prepare('SELECT preference FROM song WHERE id = 3').get().preference,
+  1,
+  'likes are preserved'
+)
+assert.equal(
+  getRecommendationScores().filter((score) => score.preference === -1 || score.reason === 'skipped')
+    .length,
+  0
+)
+assert.deepEqual(
+  db.prepare('SELECT * FROM play_history ORDER BY id').all(),
+  historyBeforeBulk,
+  'bulk reset preserves listening history'
+)
+assert.deepEqual(
+  db.prepare('SELECT id, play_times FROM song ORDER BY id').all(),
+  startsBeforeBulk,
+  'bulk reset preserves playback statistics'
+)
+assert.equal(clearLessRecommended().length, 0, 'clearing an empty group is safe')
 
 db.prepare('DELETE FROM song WHERE id = 1').run()
 assert.equal(
