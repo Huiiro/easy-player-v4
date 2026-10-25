@@ -1,3 +1,5 @@
+import { isSystemBackground } from '@/components/background/systemBackgroundRegistry'
+
 /** Migrate the former artist/genre switches before Pinia picks persisted fields. */
 export function deserializeUIPreferences(value: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(value)
@@ -8,6 +10,9 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    systemBackground: isSystemBackground(preferences.systemBackground)
+      ? preferences.systemBackground
+      : 'none',
     normalizeMetadataSeparator:
       typeof preferences.normalizeMetadataSeparator === 'boolean'
         ? preferences.normalizeMetadataSeparator

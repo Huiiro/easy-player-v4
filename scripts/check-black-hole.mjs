@@ -1,3 +1,4 @@
+import { pluginPath } from './lib/plugin-require.mjs'
 /* eslint @typescript-eslint/explicit-function-return-type: off -- Native Node.js test script. */
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
@@ -6,10 +7,7 @@ import ts from 'typescript'
 
 // Run with node scripts/check-black-hole.mjs; no extra test runtime required.
 const source = await readFile(
-  new URL(
-    '../src/renderer/src/components/background/themes/blackHoleGeodesics.ts',
-    import.meta.url
-  ),
+  pluginPath('themes/blackhole/geodesics.ts'),
   'utf8'
 )
 const compiled = ts.transpileModule(source, {

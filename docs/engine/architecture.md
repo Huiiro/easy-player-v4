@@ -10,7 +10,7 @@ src/               Existing Electron/Vue desktop application
 mobile/            Reserved Flutter application
 ```
 
-`src/main/native/CMakeLists.txt` remains the Windows Electron build entry point
+`resources/lib/CMakeLists.txt` remains the Windows Electron build entry point
 because `npm run build:native` invokes it. It links `engine-core` with
 `engine-windows`; it contains no engine implementation files itself.
 

@@ -11,7 +11,7 @@ echo === Setting up CMake ===
 set "PATH=D:\application\VisualStudio\IDE\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%PATH%"
 
 echo === Compiling native addon ===
-call npx cmake-js compile --directory src/main/native --out build/native-addon
+call npx cmake-js compile --directory resources/lib --out build/native-addon
 if %ERRORLEVEL% neq 0 (
     echo ERROR: cmake-js compile failed
     exit /b 1
@@ -21,7 +21,7 @@ echo === Copying .node and FFmpeg DLLs ===
 del /f build\native-addon\easy_player_native.node 2>nul
 copy /y build\native-addon\Release\easy_player_native.dll build\native-addon\easy_player_native.node
 
-set "FFMPEG_BIN=src\main\native\deps\ffmpeg\bin"
+set "FFMPEG_BIN=resources\lib\ffmpeg\bin"
 for %%f in (avcodec-63.dll avformat-63.dll avutil-61.dll swresample-7.dll) do (
     copy /y "%FFMPEG_BIN%\%%f" build\native-addon\
 )

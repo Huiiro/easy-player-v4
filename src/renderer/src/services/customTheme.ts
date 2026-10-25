@@ -1,4 +1,10 @@
 import {
+  themeSelectorPattern as selectorPattern,
+  themeTokenPattern as tokenPattern,
+  safeThemeValue as safeValue
+} from '../../../shared/themeStyles'
+import type { InstalledPluginTheme } from '../../../shared/themePlugins'
+import {
   isPackageId,
   parseThemeManifest,
   THEME_SLOTS,
@@ -13,25 +19,12 @@ export interface CustomTheme {
   background?: 'replace' | 'inherit'
   tokens: Record<string, string>
   rules: Record<string, Record<string, string>>
+  /** Runtime only; never read from user JSON or persisted. */
+  plugin?: InstalledPluginTheme
   package?: InstalledThemePackage
 }
 
 export const MAX_THEME_BYTES = 128 * 1024
-const selectorPattern =
-  /^\.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?(?: \.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?)*$/
-const tokenPattern = /^--(?:color|btn|scrollbar|app|ep|lrc|motion)-[a-z0-9-]+$/
-// Keep theme files declarative and local: no imports, URLs, escaping or CSS injection.
-function safeValue(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= 500 &&
-    !/[;{}<>@\\!]/.test(value) &&
-    !Array.from(value).some((char) => char.charCodeAt(0) < 32) &&
-    !/(?:url|image-set|expression)\s*\(/i.test(value) &&
-    !/\/\*/.test(value)
-  )
-}
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
 }
@@ -95,7 +88,7 @@ export function customThemeCSS(theme: CustomTheme): string {
     .join(';')
   return (
     `:root{${tokens}}\n` +
-    packageCSS(theme.package) +
+    runtimePackages(theme).map(packageCSS).join('\n') +
     Object.entries(theme.rules)
       .map(
         ([selector, declarations]) =>
@@ -107,7 +100,38 @@ export function customThemeCSS(theme: CustomTheme): string {
   )
 }
 
-function packageCSS(installed?: InstalledThemePackage): string {
+interface RuntimePackage {
+  id: string
+  manifest: Pick<InstalledThemePackage['manifest'], 'resources' | 'slots'>
+  url: (path: string) => string
+}
+function runtimePackages(theme: CustomTheme): RuntimePackage[] {
+  const packages: RuntimePackage[] = []
+  const plugin = theme.plugin
+  if (plugin?.data.assets)
+    packages.push({
+      id: plugin.pluginId + '-' + plugin.revision,
+      manifest: plugin.data.assets,
+      url: (path) =>
+        'easy-player-media://plugin-theme/' + plugin.pluginId + '/' + plugin.revision + '/' + path
+    })
+  if (theme.package)
+    packages.push({
+      id: theme.package.id,
+      manifest: {
+        resources: theme.package.manifest.resources,
+        // Selecting a plugin background keeps custom fonts/slots, but suppresses its old background.
+        slots: Object.fromEntries(
+          Object.entries(theme.package.manifest.slots).filter(
+            ([slot]) => !plugin || slot !== 'appBackground'
+          )
+        )
+      },
+      url: (path) => themeResourceURL(theme.package!.id, path)
+    })
+  return packages
+}
+function packageCSS(installed?: RuntimePackage): string {
   if (!installed) return ''
   return Object.entries(installed.manifest.slots)
     .map(([slot, assignment]) => {
@@ -123,10 +147,12 @@ function packageCSS(installed?: InstalledThemePackage): string {
       if (assignment.image) {
         const resource = installed.manifest.resources[assignment.image]
         if (slot === 'playbackThumb') {
-          return `${target.selector}{--ep-range-thumb-image:url("${themeResourceURL(installed.id, resource.path)}")}`
+          return `${target.selector}{--ep-range-thumb-image:url("${installed.url(resource.path)}")}`
         }
         declarations.push(
-          `background-image:url("${themeResourceURL(installed.id, resource.path)}")`,
+          slot === 'appBackground'
+            ? `background-image:var(--ep-background-image-overlay,linear-gradient(transparent,transparent)),url("${installed.url(resource.path)}")`
+            : `background-image:url("${installed.url(resource.path)}")`,
           'background-size:cover',
           'background-position:center',
           'background-repeat:no-repeat'
@@ -137,39 +163,41 @@ function packageCSS(installed?: InstalledThemePackage): string {
     .join('\n')
 }
 
-let activePackageId: string | undefined
+let activePackageKey = ''
 let fontGeneration = 0
 const packageFonts = new Set<FontFace>()
-function loadPackageFonts(installed?: InstalledThemePackage): void {
-  if (installed?.id === activePackageId) return
-  activePackageId = installed?.id
+function loadPackageFonts(packages: RuntimePackage[]): void {
+  const key = packages.map((installed) => installed.id).join('|')
+  if (key === activePackageKey) return
+  activePackageKey = key
   const generation = ++fontGeneration
   for (const font of packageFonts) document.fonts.delete(font)
   packageFonts.clear()
-  if (!installed) return
-  for (const [id, resource] of Object.entries(installed.manifest.resources)) {
-    if (resource.type !== 'font') continue
-    const face = new FontFace(
-      `EPTheme-${installed.id}-${id}`,
-      `url("${themeResourceURL(installed.id, resource.path)}")`,
-      {
-        weight: resource.weight ?? '400',
-        style: resource.style ?? 'normal'
-      }
-    )
-    void face
-      .load()
-      .then((loaded) => {
-        if (generation !== fontGeneration) return
-        document.fonts.add(loaded)
-        packageFonts.add(loaded)
-      })
-      .catch((error) => console.warn('[Theme] Font could not be loaded', resource.path, error))
+  for (const installed of packages) {
+    for (const [id, resource] of Object.entries(installed.manifest.resources)) {
+      if (resource.type !== 'font') continue
+      const face = new FontFace(
+        `EPTheme-${installed.id}-${id}`,
+        `url("${installed.url(resource.path)}")`,
+        {
+          weight: resource.weight ?? '400',
+          style: resource.style ?? 'normal'
+        }
+      )
+      void face
+        .load()
+        .then((loaded) => {
+          if (generation !== fontGeneration) return
+          document.fonts.add(loaded)
+          packageFonts.add(loaded)
+        })
+        .catch((error) => console.warn('[Theme] Font could not be loaded', resource.path, error))
+    }
   }
 }
 
 export function applyCustomTheme(theme: CustomTheme | null): void {
-  loadPackageFonts(theme?.package)
+  loadPackageFonts(theme ? runtimePackages(theme) : [])
   const existing = document.getElementById('ep-custom-theme')
   if (!theme) {
     existing?.remove()

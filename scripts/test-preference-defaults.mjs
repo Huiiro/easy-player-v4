@@ -36,7 +36,13 @@ const appearance = load('src/renderer/src/services/appearance.ts', {
 const controller = load('src/renderer/src/services/appearanceController.ts', {
   '@/components/background/songThemeColors': colors
 })
-const uiPreferenceMigration = load('src/renderer/src/stores/ui/uiPreferences.ts')
+const backgroundRegistry = load(
+  'src/renderer/src/components/background/systemBackgroundRegistry.ts',
+  { vue: Vue }
+)
+const uiPreferenceMigration = load('src/renderer/src/stores/ui/uiPreferences.ts', {
+  '@/components/background/systemBackgroundRegistry': backgroundRegistry
+})
 let savedUiPreferences = null
 const uiPreferenceStorage = {
   getItem: () => savedUiPreferences,
@@ -56,10 +62,12 @@ const uiModule = load(
     './uiPreferences': uiPreferenceMigration,
     '@/services/customTheme': {},
     '@/services/themePreview': themePreview,
+    '@/services/pluginThemes': { connectPluginThemes: () => () => {} },
     '@/services/appearance': appearance,
     '@/services/appearanceController': controller,
     '@/stores/persistence': { playerDataStorage: uiPreferenceStorage },
     '@/components/background/systemBackgroundRegistry': {
+      ...backgroundRegistry,
       getSystemBackgroundTheme: () => ({ accentColor: '#00ff00' })
     },
     '@/consts': {
@@ -242,6 +250,45 @@ for (const [preferences, expectedNormalization] of [
 }
 console.log(
   'Shared separator preference: legacy hydration, explicit value precedence, persistence and reset passed'
+)
+for (const background of [
+  'aurora',
+  'ocean',
+  'sunset',
+  'forest',
+  'matrix',
+  'blackhole',
+  'rainy',
+  'starfield',
+  'startrails',
+  'dna',
+  'unknown-background',
+  'none',
+  'solid',
+  'plugin:builtin.theme.aurora'
+]) {
+  savedUiPreferences = JSON.stringify({ systemBackground: background, appearanceRulesVersion: 1 })
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  const expected = ['none', 'solid', 'plugin:builtin.theme.aurora'].includes(background)
+    ? background
+    : 'none'
+  assert.equal(
+    hydrated.systemBackground,
+    expected,
+    'removed background names hydrate to the default'
+  )
+  hydrated.$persist()
+  assert.equal(
+    JSON.parse(savedUiPreferences).systemBackground,
+    expected,
+    'fallback is persisted without a legacy alias'
+  )
+  Pinia.disposePinia(pinia)
+}
+console.log(
+  'Removed scene names hydrate and persist as the default; current background IDs are retained'
 )
 console.log(
   'Initial preference defaults, repeat resets, resource preservation and configuration-only persistence passed'

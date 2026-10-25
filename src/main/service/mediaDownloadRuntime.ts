@@ -106,12 +106,9 @@ export function ytdlpCommand(): string {
       : process.platform === 'darwin'
         ? 'mac'
         : join('linux', process.arch)
-  const bundled = join(
-    app.isPackaged ? process.resourcesPath : app.getAppPath(),
-    'tools',
-    'yt-dlp',
-    ...(app.isPackaged ? [executable] : [sourceDirectory, executable])
-  )
+  const bundled = app.isPackaged
+    ? join(process.resourcesPath, 'lib', 'yt-dlp', executable)
+    : join(app.getAppPath(), 'resources', 'lib', 'yt-dlp', sourceDirectory, executable)
   if (existsSync(bundled)) return bundled
   return process.env.EASY_PLAYER_YTDLP_PATH || 'yt-dlp'
 }

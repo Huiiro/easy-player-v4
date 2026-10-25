@@ -73,25 +73,26 @@ app.whenReady().then(async () => {
       check(!dialog.open&&cancelled===3,'restore button cancels');
       await start();app.unmount();
       check(!ui.customThemePreviewActive&&cancelled===4,'root unmount cancels preview');
-      Object.assign(ui,{useDarkMode:true,useCustomBg:false,systemBackground:'none',followSystemTheme:false,useMica:false,micaAvailable:false,customThemeColor:'#abc'});
+      Object.assign(ui,{customThemes:[],useDarkMode:true,useCustomBg:false,systemBackground:'none',followSystemTheme:false,useMica:false,micaAvailable:false,customThemeColor:'#abc',availableWindowMaterials:['none'],nativeWindowMaterial:'none',colorMode:'dark',accentSource:'auto',appearancePreferences:{background:{type:'none'}},resolvedAppearance:{background:{type:'none'},reasons:[],dark:true}});
       ui.selectThemeBackground=(choice)=>{
         ui.cancelCustomThemePreview();
-        ui.useDarkMode=choice!=='light';ui.useCustomBg=choice==='custom';ui.systemBackground=choice==='rainy'?'rainy':'none';
+        ui.useDarkMode=choice!=='light';ui.useCustomBg=choice==='custom';ui.systemBackground=choice==='solid'?'solid':'none';
         return true;
       };
       const settingsModule={};(function(exports,require){${settingsComponent}})(settingsModule,(id)=>{
         if(id==='vue')return Vue;
-        if(id==='vue-i18n')return {useI18n:()=>({t:(key)=>key})};
+        if(id==='vue-i18n')return {useI18n:()=>({t:(key)=>key,locale:Vue.ref('zh')})};
+        if(id.includes('useMessage'))return {useMessage:()=>({error(){}})};
         if(id.includes('uiStore'))return {useUIStore:()=>ui};
-        if(id.includes('systemBackgroundRegistry'))return {systemBackgroundThemes:[{id:'none'},{id:'rainy',labelKey:'Rainy'}]};
+        if(id.includes('systemBackgroundRegistry'))return {availableBackgroundThemes:{value:[{id:'none'},{id:'solid',labelKey:'Solid'}]},getSystemBackgroundTheme:id=>({id})};
         if(id.includes('consts/color'))return {presetColors:[]};
-        return {__esModule:true,default:{render:()=>null}};
+        return {__esModule:true,default:{setup(_props,{slots}){return ()=>Vue.h('div',slots.default?.())}}};
       });
       const page=Vue.createApp({render:()=>Vue.h('div',[Vue.h(module.default),Vue.h(settingsModule.default)])});page.mount('#app');
-      document.querySelector('.theme-option.light-preview').click();await Vue.nextTick();
-      check(!document.querySelector('dialog').open&&!ui.useDarkMode,'settings light theme card switches without confirmation');
-      document.querySelector('.system-background-preview--rainy').click();await Vue.nextTick();
-      check(!document.querySelector('dialog').open&&ui.systemBackground==='rainy','settings dynamic background switches without confirmation');
+      ui.selectThemeBackground('light');await Vue.nextTick();
+      check(!document.querySelector('dialog').open&&!ui.useDarkMode,'color mode switches without confirmation');
+      document.querySelector('.system-background-preview--solid').click();await Vue.nextTick();
+      check(!document.querySelector('dialog').open&&ui.systemBackground==='solid','settings dynamic background switches without confirmation');
       page.unmount();
       return 'Import confirmation dialog and real 10-second timeout passed; settings theme cards switch without confirmation';
     })()`)

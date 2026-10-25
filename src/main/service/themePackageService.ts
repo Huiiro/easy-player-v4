@@ -1,8 +1,9 @@
+import { verifyResource } from '../utils/themeResources'
 import AdmZip from 'adm-zip'
 import { randomUUID } from 'node:crypto'
 import { inflateRawSync } from 'node:zlib'
 import { mkdir, readFile, writeFile, rm, lstat, realpath } from 'node:fs/promises'
-import { resolve, relative, isAbsolute, dirname, extname } from 'node:path'
+import { resolve, relative, isAbsolute, dirname } from 'node:path'
 import { getDataPath } from '../utils/pathUtils'
 import {
   isPackageId,
@@ -17,30 +18,6 @@ const directory = (): string => resolve(getDataPath(), 'themes')
 function packageDirectory(id: string): string {
   if (!isPackageId(id)) throw new Error('Invalid installed theme id')
   return resolve(directory(), id)
-}
-function verifyResource(bytes: Buffer, path: string): void {
-  const extension = extname(path).toLowerCase()
-  const hex = bytes.subarray(0, 12).toString('hex')
-  const signature = bytes.subarray(0, 4).toString('ascii')
-  const valid =
-    extension === '.png'
-      ? hex.startsWith('89504e470d0a1a0a')
-      : ['.jpg', '.jpeg'].includes(extension)
-        ? hex.startsWith('ffd8ff')
-        : extension === '.webp'
-          ? signature === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
-          : extension === '.gif'
-            ? ['GIF87a', 'GIF89a'].includes(bytes.subarray(0, 6).toString())
-            : extension === '.woff'
-              ? signature === 'wOFF'
-              : extension === '.woff2'
-                ? signature === 'wOF2'
-                : extension === '.otf'
-                  ? signature === 'OTTO'
-                  : extension === '.ttf'
-                    ? hex.startsWith('00010000') || signature === 'true'
-                    : false
-  if (!valid) throw new Error(`Resource content does not match format: ${path}`)
 }
 
 export async function importThemePackage(
@@ -70,10 +47,6 @@ export async function importThemePackage(
       throw new Error('Unsupported ZIP compression')
     if (entry.header.method === 8)
       inflateRawSync(entry.getCompressedData(), { maxOutputLength: max })
-    if (entry.header.method !== 0 && entry.header.method !== 8)
-      throw new Error('Unsupported ZIP compression')
-    if (entry.header.method === 8)
-      inflateRawSync(entry.getCompressedData(), { maxOutputLength: max })
     const bytes = entry.getData()
     if (bytes.length > max || bytes.length !== entry.header.size)
       throw new Error('Invalid ZIP size')
@@ -81,7 +54,6 @@ export async function importThemePackage(
   }
   const manifestBytes = readEntry('manifest.json', 128 * 1024)
   const manifest = parseThemeManifest(JSON.parse(manifestBytes.toString('utf8')))
-  if (manifest.theme === 'manifest.json') throw new Error('Theme path is reserved')
   if (manifest.theme === 'manifest.json') throw new Error('Theme path is reserved')
   const source = readEntry(manifest.theme, 128 * 1024).toString('utf8')
   const theme = JSON.parse(source)

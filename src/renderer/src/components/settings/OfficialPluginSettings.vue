@@ -6,14 +6,34 @@ import { comparePluginVersions } from '../../../../shared/plugins'
 import SettingRow from './SettingRow.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import { networkSourceName } from '@/hooks/useNetworkSources'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { error: showError } = useMessage()
 const plugins = ref<PluginInfo[]>([])
 const catalog = ref<OfficialPluginEntry[]>([])
 const tab = ref<'installed' | 'official'>('installed')
+const kindFilter = ref('all')
+const kindOptions = computed(() => [
+  { value: 'all', label: t('plugins.allTypes') },
+  { value: 'provider', label: t('plugins.provider') },
+  { value: 'theme', label: t('plugins.theme') }
+])
+function matchesKind(plugin: PluginInfo | OfficialPluginEntry): boolean {
+  return (
+    kindFilter.value === 'all' ||
+    (plugin.kind === 'theme' ? 'theme' : 'provider') === kindFilter.value
+  )
+}
+const filteredPlugins = computed(() => plugins.value.filter(matchesKind))
+const filteredCatalog = computed(() => catalog.value.filter(matchesKind))
+function capabilities(plugin: PluginInfo | OfficialPluginEntry): string {
+  return [...new Set(plugin.sources.flatMap((source) => source.capabilities))]
+    .map((capability) => t('networkSources.capabilities.' + capability))
+    .join(' / ')
+}
 const catalogLoading = ref(false)
 const loading = ref(true),
   busy = ref(''),
@@ -24,6 +44,10 @@ let revision = 0,
   disposed = false
 let unsubscribe: (() => void) | undefined
 function name(plugin: PluginInfo | OfficialPluginEntry): string {
+  if (plugin.theme)
+    return (
+      plugin.theme.names?.[locale.value.startsWith('zh') ? 'zh' : 'en'] || plugin.theme.displayName
+    )
   return plugin.sources.length === 1 ? networkSourceName(plugin.sources[0], t) : plugin.displayName
 }
 async function browse(refresh = false): Promise<void> {
@@ -127,9 +151,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div>
-    <p class="px-5 pt-4 text-xs leading-relaxed text-text-l">{{ t('plugins.hint') }}</p>
-    <div class="flex flex-wrap items-center gap-2 px-5 pt-4">
+  <div class="plugin-settings">
+    <div class="flex flex-wrap items-center gap-2 px-5 py-3">
       <BaseButton
         size="sm"
         :variant="tab === 'installed' ? 'secondary' : 'ghost'"
@@ -145,6 +168,14 @@ onBeforeUnmount(() => {
         @click="browse()"
         >{{ t('plugins.officialSource') }}</BaseButton
       >
+      <BaseSelect
+        v-model="kindFilter"
+        class="ml-auto w-40"
+        size="sm"
+        :options="kindOptions"
+        :aria-label="t('plugins.typeFilter')"
+        teleport
+      />
       <BaseButton size="sm" variant="ghost" :disabled="Boolean(busy)" @click="manage('import')">{{
         t('plugins.import')
       }}</BaseButton>
@@ -158,10 +189,13 @@ onBeforeUnmount(() => {
         >{{ t('plugins.refresh') }}</BaseButton
       >
     </div>
+    <p class="px-5 pb-2 text-xs leading-relaxed text-text-l">
+      {{ t(tab === 'official' ? 'plugins.catalogHint' : 'plugins.hint') }}
+    </p>
     <div
       v-if="error"
       role="alert"
-      class="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+      class="mx-5 my-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
     >
       <span>{{ error }}</span>
       <BaseButton
@@ -176,7 +210,7 @@ onBeforeUnmount(() => {
     <p
       v-if="loading && !plugins.length"
       role="status"
-      class="flex items-center gap-2 px-5 py-6 text-sm text-text-l"
+      class="flex items-center gap-2 px-5 py-4 text-sm text-text-l"
     >
       <span class="ep-spinner" />{{ t('plugins.loading') }}
     </p>
@@ -189,29 +223,44 @@ onBeforeUnmount(() => {
         t('plugins.browse')
       }}</BaseButton>
     </div>
+    <p
+      v-if="tab === 'installed' && !loading && plugins.length && !filteredPlugins.length"
+      role="status"
+      class="px-5 py-4 text-sm text-text-l"
+    >
+      {{ t('plugins.noTypeMatches') }}
+    </p>
     <template v-if="tab === 'installed'">
-      <SettingRow v-for="plugin in plugins" :key="plugin.id" :label="name(plugin)">
+      <SettingRow
+        v-for="plugin in filteredPlugins"
+        :key="plugin.id"
+        class="plugin-row"
+        :label="name(plugin)"
+      >
         <template #description>
-          <span class="flex flex-wrap items-center gap-x-2 gap-y-1"
-            ><span>{{ t('plugins.builtin') }}</span
-            ><span class="tabular-nums">v{{ plugin.version }}</span></span
-          >
-          <span class="mt-2 flex flex-wrap gap-1.5">
+          <span class="plugin-meta">
+            <span class="plugin-kind">{{
+              t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider')
+            }}</span>
+            <span class="tabular-nums">v{{ plugin.version }}</span>
+            <span>{{
+              t(plugin.origin === 'third-party' ? 'plugins.thirdParty' : 'plugins.builtin')
+            }}</span>
             <span
-              v-for="capability in [
-                ...new Set(plugin.sources.flatMap((source) => source.capabilities))
-              ]"
-              :key="capability"
-              class="rounded-md border border-border bg-bg px-2 py-0.5 text-xs text-text-l"
-              >{{ t('networkSources.capabilities.' + capability) }}</span
+              >{{ t('plugins.author')
+              }}{{ plugin.author?.name || t('plugins.authorUnknown') }}</span
             >
           </span>
-          <span v-if="plugin.error" role="alert" class="mt-2 block text-danger">{{
+          <span class="plugin-meta">
+            <span class="plugin-id" :title="plugin.id">{{ plugin.id }}</span>
+            <span v-if="plugin.sources.length">{{ capabilities(plugin) }}</span>
+          </span>
+          <span v-if="plugin.error" role="alert" class="mt-1 block text-danger">{{
             t('plugins.errors.' + plugin.error)
           }}</span>
         </template>
         <template #default="{ labelId, descriptionId }">
-          <div class="flex shrink-0 items-center gap-3">
+          <div class="plugin-actions flex shrink-0 items-center gap-2">
             <BaseButton
               size="sm"
               variant="ghost"
@@ -246,25 +295,45 @@ onBeforeUnmount(() => {
       </SettingRow>
     </template>
     <template v-else>
-      <p class="px-5 py-3 text-xs text-text-l">{{ t('plugins.catalogHint') }}</p>
-      <SettingRow v-for="plugin in catalog" :key="plugin.id" :label="name(plugin)">
+      <p
+        v-if="catalogLoading && !catalog.length"
+        role="status"
+        class="flex items-center gap-2 px-5 py-4 text-sm text-text-l"
+      >
+        <span class="ep-spinner" />{{ t('plugins.loading') }}
+      </p>
+      <p
+        v-else-if="!catalogLoading && !error && !filteredCatalog.length"
+        role="status"
+        class="px-5 py-4 text-sm text-text-l"
+      >
+        {{ t('plugins.noTypeMatches') }}
+      </p>
+      <SettingRow
+        v-for="plugin in filteredCatalog"
+        :key="plugin.id"
+        class="plugin-row"
+        :label="name(plugin)"
+      >
         <template #description>
-          <span
-            >{{ t('plugins.builtin') }} · v{{ plugin.version }} ·
-            {{ Math.ceil(plugin.size / 1024) }} KB</span
-          >
-          <span class="mt-2 flex flex-wrap gap-1.5">
+          <span class="plugin-meta">
+            <span class="plugin-kind">{{
+              t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider')
+            }}</span>
+            <span class="tabular-nums">v{{ plugin.version }}</span>
+            <span>{{ Math.ceil(plugin.size / 1024) }} KB</span>
             <span
-              v-for="capability in [
-                ...new Set(plugin.sources.flatMap((source) => source.capabilities))
-              ]"
-              :key="capability"
-              class="rounded-md border border-border bg-bg px-2 py-0.5 text-xs text-text-l"
-              >{{ t('networkSources.capabilities.' + capability) }}</span
+              >{{ t('plugins.author')
+              }}{{ plugin.author?.name || t('plugins.authorUnknown') }}</span
             >
+          </span>
+          <span class="plugin-meta">
+            <span class="plugin-id" :title="plugin.id">{{ plugin.id }}</span>
+            <span v-if="plugin.sources.length">{{ capabilities(plugin) }}</span>
           </span>
         </template>
         <BaseButton
+          class="plugin-actions"
           size="sm"
           variant="secondary"
           :loading="busy === plugin.id"
@@ -282,3 +351,46 @@ onBeforeUnmount(() => {
     </template>
   </div>
 </template>
+
+<style scoped>
+.plugin-settings {
+  container-type: inline-size;
+}
+.plugin-settings .plugin-row {
+  min-height: 0;
+  gap: 1rem;
+  padding: 0.7rem 1.25rem;
+}
+.plugin-row :deep(h3) {
+  overflow-wrap: anywhere;
+}
+.plugin-settings .plugin-row :deep(p) {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.plugin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+}
+.plugin-kind {
+  color: var(--color-text);
+}
+.plugin-id {
+  overflow-wrap: anywhere;
+}
+@container (max-width: 400px) {
+  .plugin-settings .plugin-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .plugin-row > :deep(.min-w-0) {
+    width: 100%;
+  }
+  .plugin-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+}
+</style>

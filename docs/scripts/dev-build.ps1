@@ -16,14 +16,14 @@ $cmakePath = "D:\application\VisualStudio\IDE\Common7\IDE\CommonExtensions\Micro
 $env:Path = "$cmakePath;$env:Path"
 
 Write-Host "=== Compiling native addon ===" -ForegroundColor Cyan
-npx cmake-js compile --directory src/main/native --out build/native-addon
+npx cmake-js compile --directory resources/lib --out build/native-addon
 if ($LASTEXITCODE -ne 0) { throw "cmake-js compile failed" }
 
 Write-Host "=== Copying .node and FFmpeg DLLs ===" -ForegroundColor Cyan
 Remove-Item -Force build/native-addon/easy_player_native.node -ErrorAction SilentlyContinue
 Copy-Item build/native-addon/Release/easy_player_native.dll build/native-addon/easy_player_native.node
 
-$ffmpegBin = "src/main/native/deps/ffmpeg/bin"
+$ffmpegBin = "resources/lib/ffmpeg/bin"
 @("avcodec-63.dll", "avformat-63.dll", "avutil-61.dll", "swresample-7.dll") | ForEach-Object {
     Copy-Item "$ffmpegBin/$_" build/native-addon/
 }

@@ -30,8 +30,13 @@ const compile = (file) =>
     }
   }).outputText
 const shared = {}
-const sharedSource = compile('src/shared/themePackage.ts')
+const sharedSource = compile('src/shared/themePackage.ts') + compile('src/shared/themeStyles.ts')
 vm.runInNewContext(sharedSource, { exports: shared })
+vm.runInNewContext(compile('src/main/utils/themeResources.ts'), {
+  exports: shared,
+  Buffer,
+  require
+})
 const packages = {}
 vm.runInNewContext(compile('src/main/service/themePackageService.ts'), {
   exports: packages,
@@ -40,7 +45,7 @@ vm.runInNewContext(compile('src/main/service/themePackageService.ts'), {
   require: (id) =>
     id === '../utils/pathUtils'
       ? { getDataPath: () => path.join(temporary, 'data') }
-      : id === '../../shared/themePackage'
+      : id === '../../shared/themePackage' || id === '../utils/themeResources'
         ? shared
         : require(id)
 })
@@ -111,9 +116,9 @@ app.whenReady().then(async () => {
     })
     window.webContents.on('console-message', (event) => console.log(event.message))
     await window.loadURL('data:text/html,<html><head></head><body></body></html>')
-    const entry = fs.readFileSync('out/theme-validation/renderer/index.html', 'utf8')
+    const entry = fs.readFileSync('out/renderer/index.html', 'utf8')
     const css = [...entry.matchAll(/href="\.\/(assets\/[^"]+\.css)"/g)]
-      .map((match) => fs.readFileSync(path.join('out/theme-validation/renderer', match[1]), 'utf8'))
+      .map((match) => fs.readFileSync(path.join('out/renderer', match[1]), 'utf8'))
       .join('\n')
     const renderer = compile('src/renderer/src/services/customTheme.ts')
     const source = JSON.stringify({ ...JSON.parse(installed.source), package: installed.package })

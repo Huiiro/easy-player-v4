@@ -1,4 +1,5 @@
 import type { NetworkSourceCapability } from './networkSources'
+import type { PluginThemeManifest } from './themes'
 
 export type PluginState = 'inactive' | 'activating' | 'active' | 'deactivating' | 'failed'
 export interface PluginSourceManifest {
@@ -7,16 +8,25 @@ export interface PluginSourceManifest {
   capabilities: NetworkSourceCapability[]
   downloadDomains?: string[]
 }
+/** Declared package maintainer; display metadata, not proof of identity. */
+export interface PluginAuthor {
+  name: string
+  url?: string
+}
 export interface PluginManifest {
   id: string
   displayName: string
+  author?: PluginAuthor
   version: string
   apiVersion: 1 | 2
   sources: PluginSourceManifest[]
+  /** Absent on historical source plugins. Theme plugins are declarative only. */
+  kind?: 'theme'
+  theme?: PluginThemeManifest
 }
 export type PluginFailureCode = 'ACTIVATION_FAILED' | 'CLEANUP_FAILED'
 export interface PluginInfo extends PluginManifest {
-  origin: 'official'
+  origin: 'official' | 'third-party'
   enabled: boolean
   state: PluginState
   error?: PluginFailureCode

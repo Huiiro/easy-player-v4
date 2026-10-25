@@ -1,6 +1,6 @@
 # 网络来源与官方插件架构
 
-当前应用默认不附带来源插件。五个官方来源的源码、依赖、构建、测试和发布已迁入独立仓库 [Huiiro/easy-player-plugin](https://github.com/Huiiro/easy-player-plugin)，官方分发使用该仓库的 plugins Release。宿主保留 SDK 契约与离线索引，不读取插件源码。尚不支持不受信任的第三方代码，也不涉及流媒体播放。下方保留各阶段记录，当前目录和分发方式以第十阶段为准。
+当前应用默认不附带来源插件。五个官方来源的源码、依赖、构建、测试和发布已迁入独立仓库 [Huiiro/easy-player-plugin](https://github.com/Huiiro/easy-player-plugin)，官方分发使用该仓库的 plugins Release。宿主保留 SDK 契约与离线索引，不读取插件源码。尚不支持不受信任的第三方代码，也不涉及流媒体播放。完整实现、主题接入及发布维护见 [插件系统总览](../plugin-system.md)。下方保留各阶段记录，部分旧路径仅用于说明当时实现。
 
 ## 边界与目录
 
@@ -185,7 +185,6 @@ PluginHostContext 提供 registerSource、own、生命周期 signal、受控 HTT
 
 验证：npm run test:builtin-plugins 覆盖多来源插件、真实五插件目录、清单校验、激活原子性、所有权、失败与重试、清理失败隔离、过期上下文、来源偏好、宿主网络取消、下载许可、真实 SQLite 重启/持久化回滚、IPC、真实预加载 DTO 和退出清理。test:source-management:ui 现在额外覆盖真实 Electron 中的插件加载/保存失败、启动失败与重试、来源偏好保留、下载选项联动及订阅释放；预览为 build/builtin-plugins-settings.png。原三平台元数据、歌词、文件写入和下载回归继续通过。
 
-
 ## 第八阶段：同仓库官方分发与默认空应用
 
 应用运行时不再静态导入任何来源。平台代码已迁至 plugins/official，网易云、酷狗及 QRC SDK 改为开发依赖，随插件独立打包；electron-builder 排除 plugins 和 scripts 目录。应用只携带轻量官方索引以支持离线浏览、包校验，本地播放器、文件写入、下载任务和通用下载工具继续由宿主负责。
@@ -199,7 +198,6 @@ PluginHostContext 提供 registerSource、own、生命周期 signal、受控 HTT
 构建及维护说明见 [独立插件仓库说明](https://github.com/Huiiro/easy-player-plugin#readme)。手动 GitHub Actions 工作流 .github/workflows/plugins.yml 构建并验证插件，先发布包，再发布目录；本地实现不触发远程发布。
 
 验证：build:plugins 生成五个无外部 npm 依赖的包；test:official-plugins 覆盖默认无插件、实际独立包调用、安装/重启/本地导入、完整性、更新回滚、卸载、损坏隔离与离线目录；test:source-management:ui 覆盖官方目录、刷新与安装失败、安装/卸载联动、空状态、窄窗口和订阅释放。其余来源、歌词、元数据文件写入与下载回归保留。
-
 
 ## 第九阶段：源码、SDK 与构建独立维护
 
@@ -220,3 +218,17 @@ API v2 不再通过构建器匹配宿主模块路径进行替换。插件从 Sou
 联调时将插件仓库检出到应用的同级 easy-player-plugin 目录，或使用 EASY_PLAYER_PLUGIN_DIR 指定位置。在插件仓库运行 npm ci --ignore-scripts；应用根 build:plugins、typecheck:plugins、test:plugin-project 通过该路径调用独立工程。涉及平台源码的现有集成回归显式使用外部仓库，应用的普通类型检查、构建和运行不需要它。
 
 SDK 源码由宿主仓库维护。npm run build:plugin-sdk 生成 build/easy-player-plugin-sdk-版本.tgz，升级时由插件仓库更新 vendor、包依赖与锁文件。插件的 API v2 版本需要本次更新后的宿主；旧应用继续使用原仓库分发，不会切换到新索引。
+
+## 第十一阶段：主题贡献
+
+插件清单新增 kind: theme 和 theme 元信息，来源声明必须为空。官方黑洞主题与来源共用包校验、安装指针、版本更新事务和启停状态，第三方只开放数据式主题的本地导入；第三方 JavaScript 来源仍被拒绝。主题的主题色、窗口配色、颜色变量及背景通过独立的插件主题 DTO 提供，资源协议只允许当前启用版本声明的纹理、图片与字体，停用或卸载立即停止提供资源。
+
+黑洞物理模型、着色器及构建时轨道查表已移入独立插件仓库 themes/blackhole。应用只保留通用 WebGL 背景执行器；旧 blackhole 选择映射到 builtin.theme.blackhole，缺少或停用时使用默认背景并保留选择。主题选择仍随现有外观偏好持久化，着色器、资源及运行状态不写入偏好。显式自定义主题颜色优先，原生窗口材质和自定义主题背景仍按既有策略覆盖背景。
+
+验证入口：npm run test:theme-plugins、npm run test:official-plugins、npm run test:appearance 和独立插件仓库 npm test。制作格式见独立仓库 THEMES.md；例子 examples/midnight 可用 pack-theme.mjs 独立生成 .epp。
+
+主题资源沿用原第三方主题的资源清单、槽位、文本和 CSS 语法；SDK 2.1 分发相应类型与 Schema，独立插件仓库固定契约快照。开发、同步和回归流程见 [主题插件维护约定](../theme-plugins.md)。
+
+雨夜街景已迁入独立仓库 themes/rainy，图片与着色器不再随应用源码构建。通用主题加载器支持 image 图片纹理、mipmap、尺寸校验及 shader.fps，旧 rainy 选择保留映射与缺失回退。
+
+其余八个个性化背景已迁入官方主题包，通过官方专用沙箱 renderer 保留 Canvas/SVG/CSS 实现。第三方主题的 JS 禁止规则继续生效，详见 [背景迁移说明](../themes/official-scenes.md)。

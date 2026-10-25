@@ -22,6 +22,9 @@ export default {
     reset: 'Restore defaults'
   },
   customTheme: {
+    existingTitle: 'Previously imported themes',
+    existingDescription:
+      'Disable or remove existing themes here. Install new themes in Plugin Management.',
     thirdPartyTitle: 'Third-party theme and resource risks',
     thirdPartyRisk:
       'Third-party themes come from external authors and may make the interface unusable or include problematic fonts and images. Use trusted sources only; validation is not a security certification.',
@@ -47,8 +50,7 @@ export default {
     default: 'Default (no overrides)',
     remove: 'Delete',
     deleteTitle: 'Delete custom theme',
-    confirmDelete:
-      'Delete “{name}” and its bundled resources? You will need to import the theme again to use it.',
+    confirmDelete: 'Delete “{name}” and its bundled resources?',
     importFailed: 'Theme import failed'
   },
   searchIndex: {
@@ -646,6 +648,19 @@ export default {
     restore: 'Restore main window'
   },
   plugins: {
+    allTypes: 'All types',
+    provider: 'Provider',
+    typeFilter: 'Plugin type',
+    noTypeMatches: 'No plugins of this type.',
+    author: 'Author: ',
+    authorUnknown: 'Author not provided',
+    theme: 'Theme',
+    manageThemes: 'Manage theme plugins',
+    thirdParty: 'Third-party theme',
+    themeRenderFailed: 'The animated theme could not run. A static background is shown instead.',
+    themeLoadFailed: 'Unable to load theme plugins. Retry in Plugins.',
+    themeMissing:
+      'The selected theme plugin is missing or disabled. The default background is shown until it is enabled again.',
     installed: 'Installed',
     officialSource: 'Official source',
     import: 'Import package',
@@ -659,10 +674,10 @@ export default {
     catalogFailed: 'Unable to refresh the official source. Check the network and retry.',
     installFailed: 'Unable to install the plugin. Please retry.',
     catalogHint:
-      'Distributed by Huiiro/easy-player-v4. Plugins can be stopped independently; uninstalling keeps their settings.',
+      'Distributed by Huiiro/easy-player-plugin. Import third-party themes from local packages. Uninstalling keeps settings.',
     title: 'Plugins',
-    description: 'Install, update and manage official plugins.',
-    hint: 'The app ships without source plugins. Stopping or uninstalling a plugin prevents new requests; accepted downloads continue.',
+    description: 'Manage sources and themes, including imported third-party themes.',
+    hint: 'Choose enabled themes in Appearance. Disabling or uninstalling a theme restores the default background. Accepted source downloads continue.',
     builtin: 'Official plugin',
     loading: 'Loading plugins…',
     loadFailed: 'Unable to load plugins. Please retry.',
@@ -777,10 +792,11 @@ export default {
     appearanceModeDark: 'Dark',
     appearanceModeCustom: 'Custom',
     systemBackground: 'Built-in Background',
-    systemBackgroundDescription: 'Choose a built-in backdrop for the whole player.',
+    systemBackgroundDescription:
+      'Choose a built-in background or an enabled theme plugin. Install or import more in Plugins.',
     themeBackground: 'Global background',
     themeBackgroundDescription:
-      'Choose a scene or local media without changing your color mode or theme palette.',
+      'Choose a built-in scene, an enabled theme plugin or local media. Set color mode separately.',
     accentSource: 'Accent source',
     accentSourceDescription:
       'Auto uses scene colors when active, otherwise your custom color. Theme color declarations take priority.',
@@ -804,16 +820,6 @@ export default {
     appearanceReason_songUnavailable: 'No artwork color is available. Using your custom color.',
     appearanceReason_sceneUnavailable: 'No scene is selected. Using your custom color.',
     systemBackgroundNone: 'None',
-    systemBackgroundAurora: 'Aurora',
-    systemBackgroundOcean: 'Ocean',
-    systemBackgroundSunset: 'Sunset',
-    systemBackgroundForest: 'Forest',
-    systemBackgroundMatrix: 'Matrix',
-    systemBackgroundBlackHole: 'Black Hole',
-    systemBackgroundRainy: 'Rainy Evening',
-    systemBackgroundStarTrails: 'Star Trails',
-    systemBackgroundDna: 'DNA Helix',
-    systemBackgroundStarfield: 'Starfield',
     themeColor: 'Custom accent color',
     themeColorDescription:
       'Used by the custom source and as the fallback for progress, selections and primary actions.',

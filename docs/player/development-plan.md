@@ -401,7 +401,7 @@ interface AudioAPI {
 ## Phase 0-1 文件清单
 
 ```
-src/main/native/
+resources/lib/
 ├── CMakeLists.txt
 └── src/
     ├── addon.cpp                  # N-API 注册

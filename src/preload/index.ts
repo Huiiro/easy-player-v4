@@ -660,6 +660,12 @@ const systemAPI = {
 // Custom APIs for renderer
 const api = {
   plugins: {
+    themes: () =>
+      ipcRenderer.invoke('plugins:themes') as Promise<
+        import('../shared/networkSources').NetworkSourceResult<
+          import('../shared/themePlugins').InstalledPluginTheme[]
+        >
+      >,
     catalog: (refresh = false) =>
       ipcRenderer.invoke('plugins:catalog', refresh) as Promise<
         import('../shared/networkSources').NetworkSourceResult<
@@ -744,8 +750,6 @@ const api = {
   lyrics: lyricsAPI,
   fonts: fontsAPI,
   themes: {
-    importPackage: (data: Uint8Array) => ipcRenderer.invoke('themes:import', data),
-    exportPackage: (id: string) => ipcRenderer.invoke('themes:export', id),
     removePackage: (id: string) => ipcRenderer.invoke('themes:remove', id)
   },
   metadata: metadataAPI,

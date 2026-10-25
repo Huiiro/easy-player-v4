@@ -58,9 +58,13 @@ app.whenReady().then(async () => {
       .filter((file) => file.endsWith('.css'))
       .map((file) => readFileSync(path.join(assets, file), 'utf8'))
       .join('\n')
-    const shared = ts.transpileModule(readFileSync('src/shared/themePackage.ts', 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
-    }).outputText
+    const shared = ts.transpileModule(
+      readFileSync('src/shared/themePackage.ts', 'utf8') +
+        readFileSync('src/shared/themeStyles.ts', 'utf8'),
+      {
+        compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+      }
+    ).outputText
     const service = ts.transpileModule(
       readFileSync('src/renderer/src/services/customTheme.ts', 'utf8'),
       {

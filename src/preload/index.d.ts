@@ -22,6 +22,11 @@ declare global {
     electron: ElectronAPI
     api: {
       plugins: {
+        themes(): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/themePlugins').InstalledPluginTheme[]
+          >
+        >
         catalog(
           refresh?: boolean
         ): Promise<
@@ -436,12 +441,6 @@ declare global {
         openDirectory(): Promise<{ success: boolean; error?: string }>
       }
       themes: {
-        importPackage(data: Uint8Array): Promise<{
-          success: boolean
-          data?: { source: string; package: import('../shared/themePackage').InstalledThemePackage }
-          error?: string
-        }>
-        exportPackage(id: string): Promise<{ success: boolean; data?: Uint8Array; error?: string }>
         removePackage(id: string): Promise<{ success: boolean; error?: string }>
       }
       metadata: {

@@ -26,9 +26,16 @@ const transpile = (source) =>
       esModuleInterop: true
     }
   }).outputText
-const sharedSource = transpile(fs.readFileSync('src/shared/themePackage.ts', 'utf8'))
+const sharedSource =
+  transpile(fs.readFileSync('src/shared/themePackage.ts', 'utf8')) +
+  transpile(fs.readFileSync('src/shared/themeStyles.ts', 'utf8'))
 const shared = {}
 vm.runInNewContext(sharedSource, { exports: shared })
+vm.runInNewContext(transpile(fs.readFileSync('src/main/utils/themeResources.ts', 'utf8')), {
+  exports: shared,
+  Buffer,
+  require
+})
 const packages = {}
 vm.runInNewContext(transpile(fs.readFileSync('src/main/service/themePackageService.ts', 'utf8')), {
   exports: packages,
@@ -37,7 +44,7 @@ vm.runInNewContext(transpile(fs.readFileSync('src/main/service/themePackageServi
   require: (id) =>
     id === '../utils/pathUtils'
       ? { getDataPath: () => path.join(temporary, 'data') }
-      : id === '../../shared/themePackage'
+      : id === '../../shared/themePackage' || id === '../utils/themeResources'
         ? shared
         : require(id)
 })
@@ -77,9 +84,9 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript(
       fs.readFileSync('node_modules/vue/dist/vue.global.prod.js', 'utf8')
     )
-    const entry = fs.readFileSync('out/theme-validation/renderer/index.html', 'utf8')
+    const entry = fs.readFileSync('out/renderer/index.html', 'utf8')
     const css = [...entry.matchAll(/href="\.\/(assets\/[^"]+\.css)"/g)]
-      .map((match) => fs.readFileSync(path.join('out/theme-validation/renderer', match[1]), 'utf8'))
+      .map((match) => fs.readFileSync(path.join('out/renderer', match[1]), 'utf8'))
       .join('\n')
     const renderer = transpile(fs.readFileSync('src/renderer/src/services/customTheme.ts', 'utf8'))
     const descriptor = parse(

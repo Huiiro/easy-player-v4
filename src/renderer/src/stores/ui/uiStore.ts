@@ -3,6 +3,7 @@ import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
+import { connectPluginThemes } from '@/services/pluginThemes'
 import type { InstalledThemePackage } from '../../../../shared/themePackage'
 import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
@@ -212,14 +213,24 @@ export const useUIStore = defineStore(
       pendingCustomTheme.value = null
       releaseThemePackage(previousPackage)
     }
-    const customThemeText = computed(() => effectiveCustomTheme.value?.package?.manifest.text ?? {})
+    const customThemeText = computed(() => ({
+      ...appliedCustomTheme.value?.plugin?.data.assets?.text,
+      ...effectiveCustomTheme.value?.package?.manifest.text
+    }))
     const customThemeOverridesBackground = computed(() => {
       return resolvedAppearance.value.background.type === 'theme'
     })
     function refreshCustomTheme(): void {
-      const theme = effectiveCustomTheme.value
+      const theme = appliedCustomTheme.value
       try {
-        applyCustomTheme(theme ? parseCustomTheme(JSON.stringify(theme)) : null)
+        applyCustomTheme(
+          theme
+            ? {
+                ...parseCustomTheme(JSON.stringify({ ...theme, plugin: undefined })),
+                plugin: theme.plugin
+              }
+            : null
+        )
       } catch {
         if (customThemePreviewActive.value) {
           cancelCustomThemePreview()
@@ -333,8 +344,8 @@ export const useUIStore = defineStore(
       colorMode: colorMode.value,
       background: useCustomBg.value
         ? { type: customBg.kind }
-        : systemBackground.value !== 'none'
-          ? { type: 'preset', id: systemBackground.value }
+        : getSystemBackgroundTheme(systemBackground.value).id !== 'none'
+          ? { type: 'preset', id: getSystemBackgroundTheme(systemBackground.value).id }
           : { type: 'none' },
       accentSource: accentSource.value,
       accentColor: customThemeColor.value,
@@ -345,16 +356,58 @@ export const useUIStore = defineStore(
         border: customBg.chromeBorder
       }
     }))
+    const appliedCustomTheme = computed<CustomTheme | undefined>(() => {
+      const custom = effectiveCustomTheme.value
+      const scene = getSystemBackgroundTheme(systemBackground.value).pluginTheme
+      if (
+        useCustomBg.value ||
+        nativeWindowMaterial.value !== 'none' ||
+        !scene ||
+        scene.data.colorMode !==
+          (colorMode.value === 'system'
+            ? systemDarkMode.value
+              ? 'dark'
+              : 'light'
+            : colorMode.value) ||
+        (custom && themeBackgroundEnabled.value && custom.background !== 'inherit')
+      )
+        return custom
+      return {
+        version: 1,
+        name: custom?.name ?? scene.displayName.slice(0, 80),
+        background: custom?.background ?? 'inherit',
+        rules: Object.fromEntries(
+          [
+            ...new Set([
+              ...Object.keys(scene.data.rules ?? {}),
+              ...Object.keys(custom?.rules ?? {})
+            ])
+          ].map((selector) => [
+            selector,
+            { ...scene.data.rules?.[selector], ...custom?.rules[selector] }
+          ])
+        ),
+        plugin: scene,
+        package: custom?.package,
+        tokens: { ...scene.data.tokens, ...custom?.tokens }
+      }
+    })
     const resolvedAppearance = computed(() =>
       resolveAppearance(appearancePreferences.value, {
         systemDark: systemDarkMode.value,
         material: nativeWindowMaterial.value,
         scene: getSystemBackgroundTheme(systemBackground.value),
         songColor: songThemeColor.value,
-        theme: effectiveCustomTheme.value
+        theme: appliedCustomTheme.value
       })
     )
     const activeThemeColor = computed(() => resolvedAppearance.value.accentColor)
+    const pluginThemeLoadFailed = ref(false)
+    onScopeDispose(
+      connectPluginThemes((failed) => {
+        pluginThemeLoadFailed.value = failed
+      })
+    )
     const nativeMaterialEnabled = computed(() => resolvedAppearance.value.nativeMaterialEnabled)
     function setColorMode(mode: ColorMode): void {
       followSystemTheme.value = mode === 'system'
@@ -368,12 +421,16 @@ export const useUIStore = defineStore(
         useDarkMode.value = previous.useDarkMode
         followSystemTheme.value = previous.followSystemTheme
         useCustomBg.value = previous.useCustomBg
-        systemBackground.value = previous.systemBackground
+        systemBackground.value = isSystemBackground(previous.systemBackground)
+          ? previous.systemBackground
+          : 'none'
       } else if (themeBeforeFollowingSystem.value) {
         const prior = themeBeforeFollowingSystem.value
         useDarkMode.value = prior.useDarkMode
         useCustomBg.value = prior.useCustomBg
-        systemBackground.value = prior.systemBackground
+        systemBackground.value = isSystemBackground(prior.systemBackground)
+          ? prior.systemBackground
+          : 'none'
       }
       themeBeforeMica.value = null
       themeBeforeFollowingSystem.value = null
@@ -514,7 +571,7 @@ export const useUIStore = defineStore(
     function applyTheme(): void {
       const root = document.documentElement
       const appearance = resolvedAppearance.value
-      const themeTokens = effectiveCustomTheme.value?.tokens
+      const themeTokens = appliedCustomTheme.value?.tokens
       const themePaletteKey = JSON.stringify([
         themeTokens?.['--color-bg'],
         themeTokens?.['--color-bg-l'],
@@ -924,6 +981,7 @@ export const useUIStore = defineStore(
       customFonts,
       customThemeColor,
       activeThemeColor,
+      pluginThemeLoadFailed,
       songThemeColor,
       systemBackground,
       customBg,

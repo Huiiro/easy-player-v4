@@ -23,7 +23,7 @@ function loadNativeAddon(): boolean {
   if (nativeAddon) return true
 
   try {
-    // In development: load from out/main/native/
+    // In development: load from build/native-addon/
     // In production: load from extraResources/native/
     const isDev = !app.isPackaged
 

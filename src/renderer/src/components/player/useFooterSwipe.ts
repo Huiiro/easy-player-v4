@@ -1,6 +1,12 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import type { usePlayerStore } from '@/stores/player/playerStore'
 import type { LibrarySong } from '@/types/library'
+
+export interface CollapsedSongCard {
+  slot: 'previous' | 'current' | 'next'
+  song: LibrarySong | null
+}
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function useFooterSwipe(
   player: ReturnType<typeof usePlayerStore>,
@@ -36,11 +42,6 @@ export function useFooterSwipe(
 
   function getSwipeTargetIndex(direction: -1 | 1): number | null {
     return direction < 0 ? swipePreviousIndex.value : swipeNextIndex.value
-  }
-
-  interface CollapsedSongCard {
-    slot: 'previous' | 'current' | 'next'
-    song: LibrarySong | null
   }
 
   const frozenSwipeCards = ref<CollapsedSongCard[] | null>(null)

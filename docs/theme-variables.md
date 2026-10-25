@@ -237,3 +237,12 @@ JSON 的双引号转义发生在解析阶段，下面 `areas` 的实际 CSS 值�
 - 任意新 `--ep-*` 名称通过语法检查，不表示已成为支持接口；以本文和实际组件消费为准。
 
 查证默认值：[theme.css](../src/renderer/src/styles/theme.css)、[components.css](../src/renderer/src/styles/components.css)、[motion.css](../src/renderer/src/styles/motion.css)。新增变量时请同步此表、作用范围与覆盖限制。
+
+## 插件背景回退与遮罩
+
+| 变量                          | 默认值                            | 用途                                                              |
+| ----------------------------- | --------------------------------- | ----------------------------------------------------------------- |
+| --ep-background-image-overlay | 透明渐变                          | appBackground 图片槽位上方的渐变；shader 画布就绪后覆盖该静态回退 |
+| --ep-background-scrim         | 与 --color-bg 混合 62% 的透明遮罩 | 深色系统/插件背景的可读性遮罩；浅色模式使用宿主统一策略           |
+
+值沿用安全 CSS 规则，不允许手写资源 URL。雨夜插件通过这两个变量保留原静态回退和遮罩效果。

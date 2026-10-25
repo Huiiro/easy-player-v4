@@ -102,6 +102,13 @@ export function registerPluginIpcHandlers(): void {
       return { success: false, error: t('pluginsLoadFailed') }
     }
   })
+  ipcMain.handle('plugins:themes', () => {
+    try {
+      return { success: true, data: getOfficialPluginPackages().listThemes() }
+    } catch {
+      return { success: false, error: t('pluginsLoadFailed') }
+    }
+  })
   ipcMain.handle(
     'plugins:set-enabled',
     (_event, request: { pluginId: string; enabled: boolean }) => {

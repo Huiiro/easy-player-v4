@@ -1,3 +1,4 @@
+import { parsePluginAuthor } from '../../shared/plugins'
 import { NETWORK_SOURCE_CAPABILITIES } from '../../shared/networkSources'
 import type {
   PluginManifest,
@@ -10,6 +11,7 @@ import type { SourceRegistry } from '../sources/registry'
 import type { NetworkSource } from '../sources/types'
 import type { PluginDefinition, PluginHostContext, PluginHostDependencies } from './types'
 import { hasDownloadLease } from './callLeases'
+import { parsePluginThemeManifest } from '../../shared/themePlugins'
 
 export class PluginLifecycleError extends Error {
   constructor(readonly code: PluginFailureCode) {
@@ -42,7 +44,14 @@ export function validateManifest(manifest: PluginManifest): PluginManifest {
     !Array.isArray(manifest.sources)
   )
     throw new Error('Invalid or incompatible plugin manifest')
+  if (manifest.author !== undefined)
+    manifest = { ...manifest, author: parsePluginAuthor(manifest.author) }
   const seen = new Set<string>()
+  if (manifest.kind !== undefined || manifest.theme !== undefined) {
+    if (manifest.kind !== 'theme' || manifest.apiVersion !== 2 || manifest.sources.length)
+      throw new Error('Invalid plugin theme declaration')
+    manifest = { ...manifest, theme: parsePluginThemeManifest(manifest.theme) }
+  }
   for (const source of manifest.sources) {
     if (
       !source ||
@@ -102,7 +111,7 @@ export class PluginManager {
     private readonly registry: SourceRegistry,
     private readonly host: PluginHostDependencies
   ) {}
-  load(definition: PluginDefinition): void {
+  load(definition: PluginDefinition, origin: PluginInfo['origin'] = 'official'): void {
     if (this.closed) throw new Error('Plugin manager is closed')
     const manifest = validateManifest(definition.manifest)
     if (
@@ -115,7 +124,7 @@ export class PluginManager {
     this.plugins.set(manifest.id, {
       definition: { ...definition, manifest },
       undeclare,
-      info: { ...manifest, origin: 'official', enabled: false, state: 'inactive' }
+      info: { ...manifest, origin, enabled: false, state: 'inactive' }
     })
   }
   list(): PluginInfo[] {

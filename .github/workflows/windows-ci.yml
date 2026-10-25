@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Prepare yt-dlp
+        run: npm run prepare:ytdlp
       - name: Install native dependencies
         shell: pwsh
         run: |

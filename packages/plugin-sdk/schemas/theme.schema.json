@@ -1,0 +1,428 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Easy Player theme data (format 1, SDK 2.1)",
+  "description": "Authoring hints; host additionally validates CSS support, resource signatures, slot references, texture byte counts and all archive bounds.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "colorMode",
+    "accentColor",
+    "headerBackground",
+    "footerBackground",
+    "chromeBorder",
+    "background"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "const": 1
+    },
+    "colorMode": {
+      "enum": ["light", "dark"]
+    },
+    "accentColor": {
+      "$ref": "#/definitions/color"
+    },
+    "headerBackground": {
+      "$ref": "#/definitions/color"
+    },
+    "footerBackground": {
+      "$ref": "#/definitions/color"
+    },
+    "chromeBorder": {
+      "$ref": "#/definitions/color"
+    },
+    "background": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "pattern": "^[a-zA-Z0-9#().,% /+-]+$",
+      "not": {
+        "pattern": "(?:[uU][rR][lL]|[vV][aA][rR]|[eE][xX][pP][rR][eE][sS][sS][iI][oO][nN]|[iI][mM][aA][gG][eE]-[sS][eE][tT]|[pP][aA][iI][nN][tT])\\s*\\("
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "maxProperties": 64,
+      "propertyNames": {
+        "pattern": "^--(?:color|btn|scrollbar|app|ep|lrc|motion)-[a-z0-9-]+$"
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/cssValue"
+      }
+    },
+    "rules": {
+      "type": "object",
+      "maxProperties": 128,
+      "propertyNames": {
+        "pattern": "^\\.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?(?: \\.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "maxProperties": 64,
+        "propertyNames": {
+          "pattern": "^[a-z][a-z-]*$"
+        },
+        "additionalProperties": {
+          "$ref": "#/definitions/cssValue"
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "required": ["resources", "slots"],
+      "additionalProperties": false,
+      "properties": {
+        "resources": {
+          "type": "object",
+          "maxProperties": 64,
+          "additionalProperties": {
+            "type": "object",
+            "required": ["type", "path"],
+            "properties": {
+              "type": {
+                "enum": ["font", "image"]
+              },
+              "path": {
+                "type": "string",
+                "maxLength": 160,
+                "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+[.][a-zA-Z0-9]+$"
+              },
+              "weight": {
+                "type": "string",
+                "pattern": "^(?:[1-9]00|[1-9]00 [1-9]00)$"
+              },
+              "style": {
+                "enum": ["normal", "italic"]
+              }
+            },
+            "additionalProperties": false,
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "font"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "path": {
+                      "pattern": "\\.(?:[wW][oO][fF][fF]2?|[tT][tT][fF]|[oO][tT][fF])$",
+                      "type": "string"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "path": {
+                      "pattern": "\\.(?:[pP][nN][gG]|[jJ][pP][eE]?[gG]|[wW][eE][bB][pP]|[gG][iI][fF])$",
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          }
+        },
+        "slots": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appBackground": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                }
+              }
+            },
+            "home": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "sidebar": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "header": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "footer": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "button": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "dialog": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "drawer": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "menu": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                },
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "global": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "font": {
+                  "type": "string"
+                }
+              }
+            },
+            "playbackThumb": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "image": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "text": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "appTitle": {
+              "type": "string",
+              "maxLength": 200
+            },
+            "homeWelcome": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        },
+        "licenses": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "string",
+            "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+[.]txt$",
+            "maxLength": 160
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "shader": {
+      "type": "object",
+      "required": ["fragment", "textures"],
+      "additionalProperties": false,
+      "properties": {
+        "fragment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+\\.glsl$"
+        },
+        "textures": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "required": ["uniform", "path", "width", "height", "format"],
+            "additionalProperties": false,
+            "properties": {
+              "uniform": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 66,
+                "pattern": "^u_[a-z][a-z0-9_]{0,63}$",
+                "not": {
+                  "enum": ["u_resolution", "u_time", "u_pointer"]
+                }
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160,
+                "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+\\.(?:bin|png|jpe?g|webp|gif)$"
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2048
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2048
+              },
+              "format": {
+                "enum": ["rg32f", "image"]
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "format": {
+                      "const": "rg32f"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "\\.bin$"
+                    }
+                  }
+                },
+                "else": {
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "\\.(?:png|jpe?g|webp|gif)$"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30
+        }
+      }
+    },
+    "renderer": {
+      "type": "object",
+      "required": ["entry"],
+      "additionalProperties": false,
+      "description": "Official catalog themes only; arbitrary third-party renderer code is rejected by the host.",
+      "properties": {
+        "entry": {
+          "type": "string",
+          "maxLength": 160,
+          "pattern": "^(?:[a-zA-Z0-9_-]+/)*[a-zA-Z0-9_-]+\\.js$"
+        }
+      }
+    }
+  },
+  "definitions": {
+    "color": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^(?:#[0-9a-fA-F]{3,8}|[a-zA-Z]+|(?:rgb|rgba|hsl|hsla|oklch|oklab)\\([0-9.,% /+-]+\\))$",
+      "not": {
+        "pattern": "(?:[uU][rR][lL]|[vV][aA][rR]|[eE][xX][pP][rR][eE][sS][sS][iI][oO][nN]|[iI][mM][aA][gG][eE]-[sS][eE][tT]|[pP][aA][iI][nN][tT])\\s*\\("
+      }
+    },
+    "cssValue": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "allOf": [
+        {
+          "not": {
+            "pattern": "[;{}<>@\\\\!\\u0000-\\u001f]"
+          }
+        },
+        {
+          "not": {
+            "pattern": "(?:[uU][rR][lL]|[iI][mM][aA][gG][eE]-[sS][eE][tT]|[eE][xX][pP][rR][eE][sS][sS][iI][oO][nN])\\s*\\("
+          }
+        },
+        {
+          "not": {
+            "pattern": "/\\*"
+          }
+        }
+      ]
+    }
+  },
+  "not": {
+    "required": ["shader", "renderer"],
+    "properties": {
+      "shader": {},
+      "renderer": {}
+    }
+  }
+}

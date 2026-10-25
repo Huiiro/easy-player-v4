@@ -58,10 +58,10 @@ if(SAMPLERATE_INCLUDE_DIR AND SAMPLERATE_LIBRARY AND SOUNDTOUCH_INCLUDE_DIR AND 
   add_test(NAME dsp_pipeline_order COMMAND dsp_pipeline_order_test)
 
   find_path(FFMPEG_TEST_INCLUDE libavcodec/avcodec.h
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/native/deps/ffmpeg/include)
+    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../resources/lib/ffmpeg/include)
   foreach(component avcodec avformat avutil swresample)
     find_library(FFMPEG_TEST_${component} NAMES ${component}
-      PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../src/main/native/deps/ffmpeg/lib)
+      PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../resources/lib/ffmpeg/lib)
   endforeach()
   if(FFMPEG_TEST_INCLUDE AND FFMPEG_TEST_avcodec AND FFMPEG_TEST_avformat AND FFMPEG_TEST_avutil AND FFMPEG_TEST_swresample)
     include(../../engine-core/engine_core_sources.cmake)

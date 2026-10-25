@@ -1,5 +1,9 @@
 # 带资源的主题包规范
 
+> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请制作 .epp 并通过插件管理安装，见 [主题插件约定](theme-plugins.md)。已有旧主题仅保留选择和删除操作。
+
+本文描述原 JSON/ZIP 自定义主题。通过插件管理安装的 .epp 主题，见 [主题插件开发与维护约定](theme-plugins.md)；原资源、插槽和 CSS 规则继续兼容。
+
 资源包使用 `.theme.zip`，入口为 **设置 → 主题 → 自定义主题**。纯配色 JSON 仍可单独导入，见 [开发规范](custom-themes.md)；所有变量见 [变量参考](theme-variables.md)。清单格式可参考 [JSON Schema](themes/manifest.schema.json)，最终以运行时校验为准，Schema 不能代替资源类型、引用及 ZIP 内容检查。
 
 ## 目录与最小文件

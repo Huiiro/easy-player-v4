@@ -38,14 +38,14 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
 </script>
 
 <template>
-  <div>
-    <p class="px-5 pt-4 text-xs leading-relaxed text-text-l">
+  <div class="network-source-settings">
+    <p class="px-5 pt-3 pb-1 text-xs leading-relaxed text-text-l">
       {{ t('networkSources.changeHint') }}
     </p>
     <div
       v-if="failure"
       role="alert"
-      class="mx-5 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
+      class="mx-5 my-2 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
     >
       <span>{{ failure }}</span>
       <BaseButton
@@ -61,35 +61,37 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
     <p
       v-if="loading && !sources.length"
       role="status"
-      class="flex items-center gap-2 px-5 py-6 text-sm text-text-l"
+      class="flex items-center gap-2 px-5 py-4 text-sm text-text-l"
     >
       <span class="ep-spinner" aria-hidden="true" />{{ t('networkSources.loading') }}
     </p>
-    <p v-else-if="!sources.length && !failure" class="px-5 py-6 text-sm text-text-l">
+    <p v-else-if="!sources.length && !failure" class="px-5 py-4 text-sm text-text-l">
       {{ t('networkSources.empty') }}
     </p>
-    <SettingRow v-for="source in sources" :key="source.id" :label="networkSourceName(source, t)">
+    <SettingRow
+      v-for="source in sources"
+      :key="source.id"
+      class="network-source-row"
+      :label="networkSourceName(source, t)"
+    >
       <template #description>
-        <span class="flex flex-wrap items-center gap-x-2 gap-y-1"
-          ><span>{{ t('networkSources.builtin') }}</span
-          ><span v-if="source.version" class="tabular-nums">v{{ source.version }}</span></span
-        >
-        <span class="mt-2 flex flex-wrap gap-1.5"
-          ><span
-            v-for="capability in source.capabilities"
-            :key="capability"
-            class="rounded-md border border-border bg-bg px-2 py-0.5 text-xs text-text-l"
-            >{{ t('networkSources.capabilities.' + capability) }}</span
-          ></span
-        >
+        <span class="network-source-meta">
+          <span>{{ t('networkSources.builtin') }}</span>
+          <span v-if="source.version" class="tabular-nums">v{{ source.version }}</span>
+          <span>{{
+            source.capabilities
+              .map((capability) => t('networkSources.capabilities.' + capability))
+              .join(' / ')
+          }}</span>
+        </span>
         <span
           v-if="source.pluginState && source.pluginState !== 'active'"
-          class="mt-2 block text-text-l"
+          class="mt-0.5 block text-text-l"
           >{{ t('plugins.sourceInactive') }}</span
         >
       </template>
       <template #default="{ labelId, descriptionId }">
-        <div class="flex shrink-0 items-center gap-3">
+        <div class="flex shrink-0 items-center gap-2">
           <span class="text-xs text-text-l" aria-live="polite"
             ><span
               v-if="busy === source.id"
@@ -115,3 +117,25 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
     </SettingRow>
   </div>
 </template>
+
+<style scoped>
+.network-source-settings .network-source-row {
+  min-height: 0;
+  gap: 1rem;
+  padding: 0.7rem 1.25rem;
+}
+.network-source-row :deep(h3) {
+  overflow-wrap: anywhere;
+}
+.network-source-settings .network-source-row :deep(p) {
+  font-size: 0.75rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.network-source-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem 0.6rem;
+}
+</style>

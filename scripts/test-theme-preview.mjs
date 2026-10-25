@@ -27,6 +27,12 @@ vm.runInNewContext(
 for (const key of ['pendingCustomTheme', 'customThemePreviewSeconds'])
   assert.ok(!keys.UI_PREFERENCE_KEYS.includes(key))
 const shared = {}
+vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/shared/themeStyles.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  { exports: shared }
+)
 vm.runInNewContext(compile(readFileSync('src/shared/themePackage.ts', 'utf8')), { exports: shared })
 const themes = {}
 vm.runInNewContext(compile(readFileSync('src/renderer/src/services/customTheme.ts', 'utf8')), {
@@ -65,7 +71,8 @@ function harness() {
     followSystemTheme: vue.ref(false),
     useMica: vue.ref(false),
     getSystemBackgroundTheme: (id) => ({ labelKey: `background.${id}`, colorMode: 'dark' }),
-    isSystemBackground: (id) => ['none', 'rainy', 'aurora', 'solid'].includes(id),
+    isSystemBackground: (id) =>
+      ['none', 'plugin:builtin.theme.rainy', 'plugin:builtin.theme.aurora', 'solid'].includes(id),
     parseCustomTheme: themes.parseCustomTheme,
     applyCustomTheme: () => {},
     window: {
@@ -82,7 +89,8 @@ function harness() {
   }
   vm.runInNewContext(
     compile(
-      region +
+      'const appliedCustomTheme = computed(() => effectiveCustomTheme.value);\n' +
+        region +
         '\nglobalThis.state = {customThemes,activeCustomThemeName,effectiveCustomThemeName,effectiveCustomTheme,customThemePreviewActive,customThemePreviewSeconds,selectCustomTheme,confirmCustomThemePreview,cancelCustomThemePreview,importCustomTheme,removeCustomTheme,selectThemeBackground,themeBackgroundEnabled,useDarkMode,useCustomBg,systemBackground,followSystemTheme,useMica};'
     ),
     context
@@ -204,8 +212,8 @@ assert.equal(
 )
 h.advance(10000)
 assert.equal(s.useDarkMode.value, false, 'built-in selection is permanent immediately')
-s.selectThemeBackground('rainy')
-assert.equal(s.systemBackground.value, 'rainy')
+s.selectThemeBackground('plugin:builtin.theme.rainy')
+assert.equal(s.systemBackground.value, 'plugin:builtin.theme.rainy')
 assert.equal(s.useDarkMode.value, false, 'background selection does not change color mode')
 assert.equal(s.themeBackgroundEnabled.value, false)
 s.selectThemeBackground('custom')

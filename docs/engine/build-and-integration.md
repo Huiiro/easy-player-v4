@@ -10,7 +10,7 @@ npm run dev
 ```
 
 The Windows build needs FFmpeg, libsamplerate and SoundTouch as configured by
-`src/main/native/CMakeLists.txt`. That CMake file builds `easy_player_engine_core`
+`resources/lib/CMakeLists.txt`. That CMake file builds `easy_player_engine_core`
 first, then links it into the Electron N-API module with `engine-windows`.
 
 ## Android

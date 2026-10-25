@@ -7,11 +7,9 @@ import ts from 'typescript'
 // Exercise the actual SFC cleanup callbacks with a context that checks whether
 // its canvas is still visible when resources are released. Vue retains that
 // canvas in the DOM throughout the parent's leave transition.
-for (const name of ['Solid', 'BlackHole', 'Rainy']) {
+for (const name of ['Solid', 'DeclarativeTheme']) {
   const path = new URL(
-    `../src/renderer/src/components/background/${
-      name === 'Solid' ? '' : 'themes/'
-    }${name}Background.vue`,
+    `../src/renderer/src/components/background/${name}Background.vue`,
     import.meta.url
   )
   const source = readFileSync(path, 'utf8').match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
@@ -55,8 +53,15 @@ for (const name of ['Solid', 'BlackHole', 'Rainy']) {
   runInNewContext(outputText, {
     exports: {},
     require: (id) => (id === 'vue' ? vue : {}),
-    defineProps: () => ({ primary: '60 90 140', active: true, reducedMotion: false }),
+    defineProps: () => ({
+      primary: '60 90 140',
+      active: true,
+      reducedMotion: false,
+      theme: { data: {} }
+    }),
     withDefaults: (props, defaults) => ({ ...defaults, ...props }),
+    defineEmits: () => () => {},
+    AbortController,
     fakeCanvas: canvas,
     fakeGl,
     document: events,

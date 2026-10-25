@@ -120,6 +120,7 @@ export function parseThemeManifest(value: unknown): ThemeManifest {
   if (
     !Array.isArray(licenses) ||
     licenses.length > 8 ||
+    new Set(licenses).size !== licenses.length ||
     !licenses.every((file) => isThemeResourcePath(file) && file.endsWith('.txt'))
   )
     throw new Error('Invalid theme license files')

@@ -20,6 +20,11 @@ const compile = (file) =>
   }).outputText
 const shared = {}
 vm.runInNewContext(compile('src/shared/themePackage.ts'), { exports: shared })
+vm.runInNewContext(compile('src/main/utils/themeResources.ts'), {
+  exports: shared,
+  Buffer,
+  require
+})
 const service = {}
 vm.runInNewContext(compile('src/main/service/themePackageService.ts'), {
   exports: service,
@@ -28,7 +33,7 @@ vm.runInNewContext(compile('src/main/service/themePackageService.ts'), {
   require: (id) =>
     id === '../utils/pathUtils'
       ? { getDataPath: () => target }
-      : id === '../../shared/themePackage'
+      : id === '../../shared/themePackage' || id === '../utils/themeResources'
         ? shared
         : require(id)
 })

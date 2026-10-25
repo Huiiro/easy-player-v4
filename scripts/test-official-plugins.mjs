@@ -102,9 +102,9 @@ function instance(root = path.join(directory, 'installed'), catalog = seed, fetc
 const app = instance()
 app.packages.initialize()
 assert.equal(calls, 0, 'startup never contacts GitHub or installs a source')
-assert.equal(app.packages.listCatalog().length, 5)
+assert.equal(app.packages.listCatalog().length, seed.plugins.length)
 for (const entry of seed.plugins) await app.packages.install(entry.id, true)
-assert.equal(app.manager.list().length, 5)
+assert.equal(app.manager.list().length, seed.plugins.length)
 assert.equal(app.registry.list().length, 5)
 assert(app.manager.list().every((entry) => entry.origin === 'official'))
 transport = async (_url, init) => {
@@ -141,7 +141,11 @@ await assert.rejects(app.registry.get('kugou').metadata.get('../invalid'))
 const restart = instance(app.root)
 restart.packages.initialize()
 restart.packages.initialize()
-assert.equal(restart.manager.list().length, 5, 'installed archives are restored once on restart')
+assert.equal(
+  restart.manager.list().length,
+  seed.plugins.length,
+  'installed archives are restored once on restart'
+)
 assert.equal(restart.errors.length, 0)
 for (const entry of restart.manager.list()) restart.manager.activate(entry.id)
 assert.equal(restart.registry.list().length, 5)
@@ -253,7 +257,7 @@ await assert.rejects(
 writeFileSync(path.join(app.root, original.id, original.sha256, 'package.epp'), 'damaged')
 const partial = instance(app.root)
 partial.packages.initialize()
-assert.equal(partial.manager.list().length, 4)
+assert.equal(partial.manager.list().length, seed.plugins.length - 1)
 assert.deepEqual(partial.errors, [original.id])
 const failedFetch = instance(
   path.join(directory, 'offline'),
@@ -263,7 +267,7 @@ const failedFetch = instance(
 await assert.rejects(failedFetch.packages.refreshCatalog(), /pluginDownloadFailed/)
 assert.equal(
   failedFetch.packages.listCatalog().length,
-  5,
+  seed.plugins.length,
   'refresh failure preserves cached catalog'
 )
 assert.deepEqual(plain(validateCatalog(seed)), seed)

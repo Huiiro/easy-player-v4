@@ -35,6 +35,7 @@ import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerThemeIpcHandlers } from './ipc/themeIpcHandlers'
 import { resolveThemeResource } from './service/themePackageService'
+import { themeResourceResponse } from './plugins/themeProtocol'
 import { registerSourceCallIpcHandlers } from './ipc/sourceCallIpcHandlers'
 import { registerPluginIpcHandlers } from './ipc/pluginIpcHandlers'
 import { shutdownPlugins } from './plugins/runtime'
@@ -77,22 +78,25 @@ const icon = app.isPackaged
   ? join(
       process.resourcesPath,
       'resources',
+      'icons',
       process.platform === 'win32' ? 'easy-player.ico' : 'easy-player.png'
     )
   : join(
       __dirname,
       '../..',
-      process.platform === 'win32' ? 'resources/easy-player.ico' : 'resources/easy-player.png'
+      process.platform === 'win32'
+        ? 'resources/icons/easy-player.ico'
+        : 'resources/icons/easy-player.png'
     )
 const trayIcon =
   process.platform === 'darwin'
     ? app.isPackaged
-      ? join(process.resourcesPath, 'resources', 'easy-playerTemplate.png')
-      : join(__dirname, '../..', 'resources/easy-playerTemplate.png')
+      ? join(process.resourcesPath, 'resources', 'icons', 'easy-playerTemplate.png')
+      : join(__dirname, '../..', 'resources/icons/easy-playerTemplate.png')
     : icon
 const dockIcon = app.isPackaged
   ? join(process.resourcesPath, 'icon.icns')
-  : join(__dirname, '../..', 'resources/easy-player.icns')
+  : join(__dirname, '../..', 'resources/icons/easy-player.icns')
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -394,6 +398,16 @@ function scheduleDesktopLyricsWindowStateSave(): void {
 function registerMediaProtocol(): void {
   protocol.handle('easy-player-media', async (request) => {
     const url = new URL(request.url)
+    if (url.hostname === 'plugin-theme') {
+      try {
+        const { getOfficialPluginPackages } = await import('./plugins/management')
+        return themeResourceResponse(url, (id, hash, path) =>
+          getOfficialPluginPackages().themeResource(id, hash, path)
+        )
+      } catch {
+        return new Response('Not Found', { status: 404 })
+      }
+    }
     if (url.hostname === 'theme') {
       try {
         const [, id, ...parts] = url.pathname.split('/')

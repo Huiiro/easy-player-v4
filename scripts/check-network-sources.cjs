@@ -4,7 +4,7 @@ const fs = require('node:fs'),
   path = require('node:path'),
   assert = require('node:assert/strict')
 const esbuild = require('esbuild'),
-  { parse, compileScript } = require('@vue/compiler-sfc')
+  { parse, compileScript, compileStyle } = require('@vue/compiler-sfc')
 app.setPath('userData', fs.mkdtempSync(path.resolve('build/network-sources-ui-')))
 app.disableHardwareAcceleration()
 async function runFixture() {
@@ -138,8 +138,30 @@ async function runFixture() {
     [...document.querySelectorAll('#plugins .setting-row')]
       .find((row) => row.querySelector('h3').textContent.trim() === name)
       ?.querySelector('[role=switch]')
-  if (document.querySelectorAll('#plugins [role=switch]').length !== 5)
-    throw Error('Five plugins must be listed')
+  if (document.querySelectorAll('#plugins [role=switch]').length !== 6)
+    throw Error('Five providers and one theme must be listed')
+  const selectType = async (label) => {
+    document.querySelector('#plugins .ep-select[aria-label="插件类型"]').click()
+    await window.uiWait()
+    ;[...document.querySelectorAll('[role=option]')]
+      .find((option) => option.textContent.trim() === label)
+      .click()
+    await window.uiWait()
+  }
+  await selectType('主题')
+  if (document.querySelectorAll('#plugins .setting-row').length !== 1 || !pluginSwitch('极光'))
+    throw Error('Theme filter must show only theme packages')
+  await window.api.plugins.uninstall('example.aurora')
+  await window.uiWait()
+  if (!document.querySelector('#plugins').textContent.includes('暂无此类型的插件'))
+    throw Error('Filtered empty state must not claim that no plugins are installed')
+  await window.api.plugins.install('example.aurora')
+  await window.uiWait()
+  if (!pluginSwitch('极光')) throw Error('Plugin changes must update the active type filter')
+  await selectType('来源（Provider）')
+  if (document.querySelectorAll('#plugins .setting-row').length !== 5 || pluginSwitch('极光'))
+    throw Error('Provider filter must include legacy source manifests without a kind field')
+  await selectType('全部类型')
   const kugou = pluginSwitch('酷狗音乐')
   kugou.click()
   await window.uiWait()
@@ -207,15 +229,25 @@ async function runFixture() {
     [...document.querySelectorAll('#plugins button')].find(
       (button) => button.textContent.trim() === text
     )
+  await selectType('主题')
   action('官方源').click()
   await window.uiWait()
+  if (
+    document.querySelectorAll('#plugins .setting-row').length !== 1 ||
+    !document.querySelector('#plugins').textContent.includes('极光')
+  )
+    throw Error('The theme filter must persist when switching to the official catalog')
+  await selectType('来源（Provider）')
   if (document.querySelectorAll('#plugins .setting-row').length !== 5)
-    throw Error('Official catalog must list five optional packages')
+    throw Error('The official catalog must also support provider filtering')
+  await selectType('全部类型')
+  if (document.querySelectorAll('#plugins .setting-row').length !== 6)
+    throw Error('Official catalog must list six optional packages')
   action('刷新官方源').click()
   await window.uiWait()
   if (!document.querySelector('#plugins [role=alert]')?.textContent.includes('模拟官方源刷新失败'))
     throw Error('Official source refresh failures must be visible')
-  if (document.querySelectorAll('#plugins .setting-row').length !== 5)
+  if (document.querySelectorAll('#plugins .setting-row').length !== 6)
     throw Error('Failed refresh must retain catalog')
   action('已安装').click()
   await window.uiWait()
@@ -227,7 +259,7 @@ async function runFixture() {
     .click()
   await window.uiWait()
   if (
-    document.querySelectorAll('#plugins [role=switch]').length !== 4 ||
+    document.querySelectorAll('#plugins [role=switch]').length !== 5 ||
     window.switchFor('QQ 音乐')
   )
     throw Error('Uninstall removes plugin and contributed source')
@@ -243,7 +275,7 @@ async function runFixture() {
   if (action('安装')) throw Error('Installed catalog entries must change to installed state')
   action('导入本地包').click()
   await window.uiWait()
-  if ((await window.api.plugins.list()).data.length !== 5)
+  if ((await window.api.plugins.list()).data.length !== 6)
     throw Error('Cancelling import must preserve installed plugins')
   for (const plugin of (await window.api.plugins.list()).data)
     await window.api.plugins.uninstall(plugin.id)
@@ -289,6 +321,19 @@ app.whenReady().then(async () => {
         { id: source.id, displayName: source.displayName, capabilities: source.capabilities }
       ]
     }))
+    plugins.push({
+      id: 'example.aurora',
+      displayName: 'Aurora',
+      version: '1.0.0',
+      apiVersion: 2,
+      sources: [],
+      kind: 'theme',
+      theme: { displayName: 'Aurora', names: { zh: '极光' } },
+      author: { name: 'Easy Player' },
+      origin: 'third-party',
+      enabled: true,
+      state: 'active'
+    })
     const catalog = plugins.map((plugin) => ({
       ...plugin,
       size: 4096,
@@ -388,6 +433,7 @@ app.whenReady().then(async () => {
       event.sender.send('network-sources:changed')
       return { success: true }
     })
+    const componentStyles = []
     const bundle = await esbuild.build({
       stdin: {
         contents:
@@ -414,8 +460,32 @@ app.whenReady().then(async () => {
           setup(build) {
             build.onLoad({ filter: /\.vue$/ }, ({ path: filename }) => {
               const { descriptor } = parse(fs.readFileSync(filename, 'utf8'), { filename })
+              const id =
+                'test-' +
+                require('node:crypto')
+                  .createHash('sha256')
+                  .update(filename)
+                  .digest('hex')
+                  .slice(0, 8)
+              for (const style of descriptor.styles) {
+                const result = compileStyle({
+                  source: style.content,
+                  filename,
+                  id: 'data-v-' + id,
+                  scoped: style.scoped
+                })
+                if (result.errors.length) throw result.errors[0]
+                componentStyles.push(result.code)
+              }
               return {
-                contents: compileScript(descriptor, { id: filename, inlineTemplate: true }).content,
+                contents:
+                  compileScript(descriptor, { id, inlineTemplate: true }).content.replace(
+                    'export default',
+                    'const component ='
+                  ) +
+                  '\ncomponent.__scopeId=' +
+                  JSON.stringify('data-v-' + id) +
+                  ';export default component;',
                 loader: 'ts',
                 resolveDir: path.dirname(filename)
               }
@@ -445,6 +515,11 @@ app.whenReady().then(async () => {
     fs.writeFileSync(fixture, '<html><body><div id="app"></div></body></html>')
     await window.loadFile(fixture)
     await window.webContents.executeJavaScript(bundle.outputFiles[0].text)
+    await window.webContents.executeJavaScript(
+      'const componentStyle=document.createElement("style");componentStyle.textContent=' +
+        JSON.stringify(componentStyles.join('\n')) +
+        ';document.head.append(componentStyle);void 0'
+    )
     const cssFile = fs
       .readdirSync('out/renderer/assets')
       .find((file) => /^main-.*\.css$/.test(file))
@@ -471,6 +546,13 @@ app.whenReady().then(async () => {
       'window.Fixture.useMessage().clear(); document.querySelector("nav").style.display="none"; window.uiWait()'
     )
     await window.webContents.executeJavaScript('new Promise(resolve => setTimeout(resolve, 400))')
+    const heights = await window.webContents.executeJavaScript(
+      "[...document.querySelectorAll('#plugins .setting-row')].map(row=>row.getBoundingClientRect().height)"
+    )
+    assert(
+      heights.every((height) => height <= 100),
+      'Plugin metadata uses compact rows'
+    )
     fs.writeFileSync(
       path.resolve('build/official-plugins-settings.png'),
       (await window.webContents.capturePage()).toPNG()
@@ -495,6 +577,10 @@ app.whenReady().then(async () => {
         'document.documentElement.scrollWidth <= innerWidth'
       ),
       true
+    )
+    fs.writeFileSync(
+      path.resolve('build/official-plugins-narrow.png'),
+      (await window.webContents.capturePage()).toPNG()
     )
     await window.webContents.executeJavaScript('window.unmountFixture(); window.uiWait()')
     assert.equal(await window.webContents.executeJavaScript('window.sourceBridge.listeners()'), 0)

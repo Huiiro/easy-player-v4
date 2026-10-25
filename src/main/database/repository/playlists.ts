@@ -17,6 +17,8 @@ import type {
 import { getAppSetting, setAppSetting } from './settings'
 import { attachTags, songColumnsFor, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 
+const likedPlaylistCoverSetting = 'playlist.liked.customCover'
+
 export function listPlaylists(): PlaylistSummary[] {
   return getDatabase()
     .prepare(
@@ -83,8 +85,6 @@ export function setPlaylistCustomCover(id: number, path: string | null, dataUrl?
     return changed
   })()
 }
-
-const likedPlaylistCoverSetting = 'playlist.liked.customCover'
 
 export function getLikedPlaylistCover(): {
   cover: string | null

@@ -16,6 +16,9 @@ build/
 *.so
 *.exp
 *.lib
-src/main/native/deps/ffmpeg/
-src/main/native/deps/libsamplerate/
+resources/lib/ffmpeg/
+resources/lib/libsamplerate/
 engine-android/deps/
+
+# Local yt-dlp executables
+resources/lib/yt-dlp/

@@ -104,6 +104,226 @@
       "size": 5492,
       "sha256": "60b22d960d8a0cd36befe06152dff25dd75c584701c2ad2751984aca3fd3e908",
       "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.0-60b22d960d8a.epp"
+    },
+    {
+      "id": "builtin.theme.blackhole",
+      "displayName": "Black Hole",
+      "version": "1.0.1",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Black Hole",
+        "names": {
+          "zh": "黑洞",
+          "en": "Black Hole"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "b6b895da530772fd74365dd6a7e11b85e23f8782ca48f7e09d85a93bfee87f7d",
+      "size": 1077579,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.blackhole-1.0.1-b6b895da5307.epp"
+    },
+    {
+      "id": "builtin.theme.rainy",
+      "displayName": "Rainy Evening",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Rainy Evening",
+        "names": {
+          "zh": "雨夜街景",
+          "en": "Rainy Evening"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "19d10ce95dfbe50e033793fbca8c5c4d90561e59959d29f7ccce542d9da5791e",
+      "size": 134367,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.rainy-1.0.0-19d10ce95dfb.epp"
+    },
+    {
+      "id": "builtin.theme.aurora",
+      "displayName": "Aurora",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Aurora",
+        "names": {
+          "zh": "极光",
+          "en": "Aurora"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "1fb0874b4a6fbe39b40309a308b9fbb526b2098b82760a734831f951ca87fc7a",
+      "size": 28778,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.aurora-1.0.0-1fb0874b4a6f.epp"
+    },
+    {
+      "id": "builtin.theme.ocean",
+      "displayName": "Deep Ocean",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Deep Ocean",
+        "names": {
+          "zh": "深海",
+          "en": "Deep Ocean"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "f897e37d6a3e8ba555a072500f0130f5df53981e5b83a2625f9cc471dc474765",
+      "size": 29920,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.ocean-1.0.0-f897e37d6a3e.epp"
+    },
+    {
+      "id": "builtin.theme.sunset",
+      "displayName": "Sunset",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Sunset",
+        "names": {
+          "zh": "日落",
+          "en": "Sunset"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "0c492979705aba6053385b26d8653038664738a034449ea0c00bc7f968d8a628",
+      "size": 30585,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.sunset-1.0.0-0c492979705a.epp"
+    },
+    {
+      "id": "builtin.theme.forest",
+      "displayName": "Forest",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Forest",
+        "names": {
+          "zh": "森林",
+          "en": "Forest"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "b797b3fd17ff30b32ac521eef9b39455a097bea1ab6bc65094d2bd932fd3992a",
+      "size": 31222,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.forest-1.0.0-b797b3fd17ff.epp"
+    },
+    {
+      "id": "builtin.theme.matrix",
+      "displayName": "Matrix",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Matrix",
+        "names": {
+          "zh": "矩阵",
+          "en": "Matrix"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "b33fb85bd89862f8d95c411a99ed832d2709e4c1f9ad84a4ddc1e3f273d9fa1a",
+      "size": 28925,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.matrix-1.0.0-b33fb85bd898.epp"
+    },
+    {
+      "id": "builtin.theme.starfield",
+      "displayName": "Starfield",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Starfield",
+        "names": {
+          "zh": "星空",
+          "en": "Starfield"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "60199d50117763c7d8693eba9a5958d75aff8c29b771cec13b20741f0aa5fa32",
+      "size": 28501,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.starfield-1.0.0-60199d501177.epp"
+    },
+    {
+      "id": "builtin.theme.startrails",
+      "displayName": "Star Trails",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "Star Trails",
+        "names": {
+          "zh": "星轨",
+          "en": "Star Trails"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "2c5f3e4655064b68281da6424ef131e738dff85a89bcf1ec2a1ecd6c6d3be9d3",
+      "size": 29319,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.startrails-1.0.0-2c5f3e465506.epp"
+    },
+    {
+      "id": "builtin.theme.dna",
+      "displayName": "DNA Double Helix",
+      "version": "1.0.0",
+      "apiVersion": 2,
+      "sources": [],
+      "kind": "theme",
+      "theme": {
+        "displayName": "DNA Double Helix",
+        "names": {
+          "zh": "DNA 双螺旋",
+          "en": "DNA Double Helix"
+        }
+      },
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "sha256": "d4e6cdae2922abd0a2b0a94285fa62c22d0ed447e5fc0ad29869fce81af63342",
+      "size": 28519,
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.theme.dna-1.0.0-d4e6cdae2922.epp"
     }
   ]
 }

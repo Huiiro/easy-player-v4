@@ -1,0 +1,58 @@
+[
+  {
+    "id": "builtin.theme.aurora",
+    "version": "1.0.0",
+    "file": "builtin.theme.aurora-1.0.0-1fb0874b4a6f.epp",
+    "sha256": "1fb0874b4a6fbe39b40309a308b9fbb526b2098b82760a734831f951ca87fc7a",
+    "size": 28778
+  },
+  {
+    "id": "builtin.theme.ocean",
+    "version": "1.0.0",
+    "file": "builtin.theme.ocean-1.0.0-f897e37d6a3e.epp",
+    "sha256": "f897e37d6a3e8ba555a072500f0130f5df53981e5b83a2625f9cc471dc474765",
+    "size": 29920
+  },
+  {
+    "id": "builtin.theme.sunset",
+    "version": "1.0.0",
+    "file": "builtin.theme.sunset-1.0.0-0c492979705a.epp",
+    "sha256": "0c492979705aba6053385b26d8653038664738a034449ea0c00bc7f968d8a628",
+    "size": 30585
+  },
+  {
+    "id": "builtin.theme.forest",
+    "version": "1.0.0",
+    "file": "builtin.theme.forest-1.0.0-b797b3fd17ff.epp",
+    "sha256": "b797b3fd17ff30b32ac521eef9b39455a097bea1ab6bc65094d2bd932fd3992a",
+    "size": 31222
+  },
+  {
+    "id": "builtin.theme.matrix",
+    "version": "1.0.0",
+    "file": "builtin.theme.matrix-1.0.0-b33fb85bd898.epp",
+    "sha256": "b33fb85bd89862f8d95c411a99ed832d2709e4c1f9ad84a4ddc1e3f273d9fa1a",
+    "size": 28925
+  },
+  {
+    "id": "builtin.theme.starfield",
+    "version": "1.0.0",
+    "file": "builtin.theme.starfield-1.0.0-60199d501177.epp",
+    "sha256": "60199d50117763c7d8693eba9a5958d75aff8c29b771cec13b20741f0aa5fa32",
+    "size": 28501
+  },
+  {
+    "id": "builtin.theme.startrails",
+    "version": "1.0.0",
+    "file": "builtin.theme.startrails-1.0.0-2c5f3e465506.epp",
+    "sha256": "2c5f3e4655064b68281da6424ef131e738dff85a89bcf1ec2a1ecd6c6d3be9d3",
+    "size": 29319
+  },
+  {
+    "id": "builtin.theme.dna",
+    "version": "1.0.0",
+    "file": "builtin.theme.dna-1.0.0-d4e6cdae2922.epp",
+    "sha256": "d4e6cdae2922abd0a2b0a94285fa62c22d0ed447e5fc0ad29869fce81af63342",
+    "size": 28519
+  }
+]

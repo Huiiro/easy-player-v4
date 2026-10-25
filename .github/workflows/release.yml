@@ -40,6 +40,8 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Prepare yt-dlp
+        run: npm run prepare:ytdlp
       - name: Install native dependencies
         shell: pwsh
         run: |
@@ -86,6 +88,8 @@ jobs:
         run: brew install ffmpeg libsamplerate sound-touch
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Prepare yt-dlp
+        run: npm run prepare:ytdlp
       - name: Build macOS package
         run: npm run build:mac -- --publish never
       - uses: actions/upload-artifact@v4
@@ -111,6 +115,8 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Prepare yt-dlp
+        run: npm run prepare:ytdlp
       - name: Build Linux packages
         run: npm run build:linux -- --publish never
       - uses: actions/upload-artifact@v4

@@ -1,5 +1,9 @@
 # 自定义主题开发规范
 
+> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请制作 .epp 并通过插件管理安装，见 [主题插件约定](theme-plugins.md)。已有旧主题仅保留选择和删除操作。
+
+本文描述原 JSON/ZIP 自定义主题。通过插件管理安装的 .epp 主题，见 [主题插件开发与维护约定](theme-plugins.md)；原资源、插槽和 CSS 规则继续兼容。
+
 本文对应主题格式 `version: 1`，面向主题作者与样式维护者。完整属性见 [主题变量参考](theme-variables.md)，图片、字体与文字清单见 [资源包规范](theme-packages.md) 和 [manifest JSON Schema](themes/manifest.schema.json)。
 
 ## 入口与发布形式

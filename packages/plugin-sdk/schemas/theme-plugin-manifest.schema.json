@@ -1,0 +1,99 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Easy Player theme plugin manifest (SDK 2.1, API 2)",
+  "description": "Authoring schema. Third parties must not use builtin. IDs. Import also validates the full archive.",
+  "type": "object",
+  "required": ["id", "displayName", "version", "apiVersion", "sources", "kind", "theme"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 96,
+      "pattern": "^[a-z][a-z0-9._-]{0,95}$"
+    },
+    "displayName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "\\S"
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[a-zA-Z0-9.-]+)?$"
+    },
+    "apiVersion": {
+      "const": 2
+    },
+    "sources": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "kind": {
+      "const": "theme"
+    },
+    "theme": {
+      "type": "object",
+      "required": ["displayName"],
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "\\S"
+        },
+        "names": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "zh": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "\\S"
+            },
+            "en": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120,
+              "pattern": "\\S"
+            }
+          }
+        }
+      }
+    },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "allOf": [
+            {
+              "pattern": "\\S"
+            },
+            {
+              "not": {
+                "pattern": "[\\u0000-\\u001f]"
+              }
+            }
+          ]
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048,
+          "pattern": "^https://[^\\s<>]+$"
+        }
+      }
+    }
+  }
+}

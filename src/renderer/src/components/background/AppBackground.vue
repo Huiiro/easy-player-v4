@@ -143,42 +143,31 @@ onBeforeUnmount(() => {
       >
         <component
           :is="activeTheme.component"
+          :key="
+            activeTheme.pluginTheme
+              ? activeTheme.pluginTheme.pluginId + ':' + activeTheme.pluginTheme.revision
+              : activeTheme.id
+          "
           v-bind="
-            activeTheme.id === 'solid'
+            activeTheme.pluginTheme
               ? {
-                  primary: ui.songThemeColor ?? ui.activeThemeColor,
-                  active: isBackgroundActive && !ui.showPlayer,
-                  reducedMotion: ui.reduceMotion
+                  theme: activeTheme.pluginTheme,
+                  paused: !isBackgroundActive || ui.showPlayer || ui.reduceMotion
                 }
-              : activeTheme.id === 'matrix' ||
-                  activeTheme.id === 'forest' ||
-                  activeTheme.id === 'ocean' ||
-                  activeTheme.id === 'sunset' ||
-                  activeTheme.id === 'aurora' ||
-                  activeTheme.id === 'blackhole' ||
-                  activeTheme.id === 'rainy' ||
-                  activeTheme.id === 'starfield' ||
-                  activeTheme.id === 'startrails' ||
-                  activeTheme.id === 'dna'
-                ? { paused: !isBackgroundActive || ui.showPlayer || ui.reduceMotion }
+              : activeTheme.id === 'solid'
+                ? {
+                    primary: ui.songThemeColor ?? ui.activeThemeColor,
+                    active: isBackgroundActive && !ui.showPlayer,
+                    reducedMotion: ui.reduceMotion
+                  }
                 : {}
           "
+          @failure="showError(t('plugins.themeRenderFailed'))"
         />
       </div>
       <div
         v-if="!isSolidTheme || !ui.resolvedAppearance.dark"
         class="app-background-scrim app-background-scrim--system"
-        :class="{
-          'app-background-scrim--matrix': ui.systemBackground === 'matrix',
-          'app-background-scrim--ocean': ui.systemBackground === 'ocean',
-          'app-background-scrim--forest': ui.systemBackground === 'forest',
-          'app-background-scrim--sunset': ui.systemBackground === 'sunset',
-          'app-background-scrim--aurora': ui.systemBackground === 'aurora',
-          'app-background-scrim--rainy': ui.systemBackground === 'rainy',
-          'app-background-scrim--startrails': ui.systemBackground === 'startrails',
-          'app-background-scrim--dna': ui.systemBackground === 'dna',
-          'app-background-scrim--starfield': ui.systemBackground === 'starfield'
-        }"
       />
     </div>
   </div>
@@ -220,48 +209,7 @@ onBeforeUnmount(() => {
 }
 
 .app-background-scrim--system {
-  background: color-mix(in srgb, var(--color-bg) 62%, transparent);
-}
-
-.app-background-scrim--matrix {
-  background: color-mix(in srgb, var(--color-bg) 42%, transparent);
-}
-
-.app-background-scrim--ocean {
-  background: color-mix(in srgb, var(--color-bg) 52%, transparent);
-}
-
-.app-background-scrim--forest {
-  background: color-mix(in srgb, var(--color-bg) 56%, transparent);
-}
-
-.app-background-scrim--sunset {
-  background: color-mix(in srgb, var(--color-bg) 72%, transparent);
-}
-
-.app-background-scrim--aurora {
-  background: color-mix(in srgb, var(--color-bg) 32%, transparent);
-}
-
-.app-background-scrim--rainy {
-  background: color-mix(in srgb, var(--color-bg) 48%, transparent);
-}
-
-.app-background-scrim--starfield {
-  background: color-mix(in srgb, var(--color-bg) 22%, transparent);
-}
-
-.app-background-scrim--startrails {
-  background: rgb(7 14 24 / 12%);
-}
-
-.app-background-scrim--dna {
-  background: linear-gradient(
-    90deg,
-    rgb(8 18 26 / 24%),
-    rgb(8 18 26 / 18%) 50%,
-    rgb(8 18 26 / 24%)
-  );
+  background: var(--ep-background-scrim, color-mix(in srgb, var(--color-bg) 62%, transparent));
 }
 
 /* All scene canvases may contain near-black pixels, including solid artwork.

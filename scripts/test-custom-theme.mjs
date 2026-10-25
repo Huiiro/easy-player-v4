@@ -6,6 +6,12 @@ import ts from 'typescript'
 
 const shared = {}
 vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/shared/themeStyles.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  { exports: shared }
+)
+vm.runInNewContext(
   ts.transpileModule(readFileSync('src/shared/themePackage.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText,
@@ -116,4 +122,40 @@ await Promise.resolve()
 assert.equal(fonts.size, 1, 'current theme font attached')
 applyCustomTheme(null)
 assert.equal(fonts.size, 0, 'font removed on deactivation')
-console.log('Custom theme validation, switching and cleanup passed')
+const mixed = {
+  ...packageTheme,
+  package: {
+    ...packageTheme.package,
+    manifest: {
+      ...packageTheme.package.manifest,
+      slots: { ...packageTheme.package.manifest.slots, appBackground: { image: 'wall' } }
+    }
+  },
+  plugin: {
+    pluginId: 'example.nyan-cat',
+    revision: 'revision',
+    data: {
+      assets: {
+        resources: {
+          cute: { type: 'font', path: 'fonts/cute.ttf' },
+          sky: { type: 'image', path: 'images/sky.png' }
+        },
+        slots: { global: { font: 'cute' }, appBackground: { image: 'sky' } }
+      }
+    }
+  }
+}
+const mixedCSS = customThemeCSS(mixed)
+assert.match(mixedCSS, /plugin-theme\/example.nyan-cat\/revision\/images\/sky.png/)
+assert.doesNotMatch(mixedCSS, /\.ep-app-background\{[^}]*images\/wall.png/)
+assert(
+  mixedCSS.indexOf('revision-cute') < mixedCSS.indexOf('123456789abc-body'),
+  'custom font assignment retains precedence over plugin assignment'
+)
+applyCustomTheme(mixed)
+while (pendingFonts.length) pendingFonts.shift()()
+await Promise.resolve()
+assert.equal(fonts.size, 2, 'plugin and custom resource fonts both load')
+applyCustomTheme(null)
+assert.equal(fonts.size, 0, 'all active fonts are removed together')
+console.log('Custom theme validation, switching, mixed plugin resources and cleanup passed')

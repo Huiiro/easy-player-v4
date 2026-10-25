@@ -17,7 +17,6 @@ files:
   - '!packages{,/**/*}'
   - '!scripts{,/**/*}'
   - '!resources/**/*'
-  - '!resources/tools/yt-dlp{,/**/*}'
   - '!**/.vscode/*'
   - '!src/*'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
@@ -36,7 +35,7 @@ extraResources:
     to: 'resources/'
     filter:
       - '**/*'
-      - '!tools/yt-dlp{,/**/*}'
+      - '!lib{,/**/*}'
 asarUnpack:
   - 'node_modules/kuromoji/dict/**'
   - resources/**
@@ -44,7 +43,7 @@ asarUnpack:
   - 'build/native-addon/**/*.node'
 win:
   executableName: easy-player
-  icon: resources/easy-player.ico
+  icon: resources/icons/easy-player.ico
   extraResources:
     - from: 'build/native-addon/'
       to: 'native/'
@@ -54,15 +53,15 @@ win:
         - 'easy_player_native.node'
         - '*.dll'
         - '!easy_player_native.dll'
-    - from: 'resources/tools/yt-dlp/win/yt-dlp.exe'
-      to: 'tools/yt-dlp/yt-dlp.exe'
+    - from: 'resources/lib/yt-dlp/win/yt-dlp.exe'
+      to: 'lib/yt-dlp/yt-dlp.exe'
 nsis:
   include: scripts/file-associations.nsh
   artifactName: ${name}-${version}-setup.${ext}
   # Prefer a compact solid archive for the full installer.
   differentialPackage: false
-  installerIcon: resources/easy-player.ico
-  uninstallerIcon: resources/easy-player.ico
+  installerIcon: resources/icons/easy-player.ico
+  uninstallerIcon: resources/icons/easy-player.ico
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -71,7 +70,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: true
 mac:
-  icon: resources/easy-player.icns
+  icon: resources/icons/easy-player.icns
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:
     - from: 'build/native-addon/easy_player_native.node'
@@ -80,8 +79,8 @@ mac:
       to: 'native/deps/'
       filter:
         - '**/*.dylib'
-    - from: 'resources/tools/yt-dlp/mac/yt-dlp'
-      to: 'tools/yt-dlp/yt-dlp'
+    - from: 'resources/lib/yt-dlp/mac/yt-dlp'
+      to: 'lib/yt-dlp/yt-dlp'
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -90,10 +89,10 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
-  icon: resources/easy-player.png
+  icon: resources/icons/easy-player.png
   extraResources:
-    - from: 'resources/tools/yt-dlp/linux/${arch}/yt-dlp'
-      to: 'tools/yt-dlp/yt-dlp'
+    - from: 'resources/lib/yt-dlp/linux/${arch}/yt-dlp'
+      to: 'lib/yt-dlp/yt-dlp'
   target:
     - AppImage
     - deb
