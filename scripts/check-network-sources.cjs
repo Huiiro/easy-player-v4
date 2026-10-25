@@ -375,6 +375,75 @@ async function runFixture() {
   await window.uiWait()
   action('已安装').click()
   await window.uiWait()
+  await window.pluginBridge.failNext('pagination-fixture')
+  await window.uiWait()
+  const rows = () => [...document.querySelectorAll('#plugins .plugin-row')]
+  const pager = () => document.querySelector('#plugins nav[aria-label="插件分页"]')
+  const pageButton = (text) =>
+    [...pager().querySelectorAll('button')].find((button) => button.textContent.trim() === text)
+  const nextPage = async () => {
+    pageButton('下一页').click()
+    await window.uiWait()
+  }
+  if (rows().length !== 10 || !pageButton('上一页').disabled)
+    throw Error('Installed page one must show ten records with previous disabled')
+  await nextPage()
+  if (rows().length !== 10 || !rows()[0].textContent.includes('example.pagination.05'))
+    throw Error('Installed page two must show the next ten records')
+  await nextPage()
+  if (rows().length !== 3 || !pageButton('下一页').disabled)
+    throw Error('The last installed page must show only its remaining records')
+  action('官方源').click()
+  await window.uiWait()
+  if (rows().length !== 10 || !pageButton('上一页').disabled)
+    throw Error('Official catalog must have an independent first page')
+  if (
+    !rows().every((row) =>
+      [...row.querySelectorAll('button')].some(
+        (button) => button.textContent.trim() === '已安装' && button.disabled
+      )
+    )
+  )
+    throw Error(
+      'Catalog install status must use the entire installed collection, including off-page records'
+    )
+  await nextPage()
+  action('已安装').click()
+  await window.uiWait()
+  if (rows().length !== 3) throw Error('Switching tabs must preserve the installed page')
+  action('官方源').click()
+  await window.uiWait()
+  if (!pager().textContent.includes('第 2 / 3 页'))
+    throw Error('Switching tabs must preserve the catalog page')
+  action('已安装').click()
+  await window.uiWait()
+  await selectType(zh.plugins.theme)
+  if (rows().length !== 10 || !pageButton('上一页').disabled)
+    throw Error('Changing the type filter must reset to the first page')
+  await nextPage()
+  if (rows().length !== 8) throw Error('Filtering must happen before pagination')
+  await selectType(zh.plugins.provider)
+  if (rows().length !== 5 || pager())
+    throw Error('A single page of filtered results must not show redundant pagination')
+  await selectType(zh.plugins.allTypes)
+  await nextPage()
+  await nextPage()
+  for (let index = 0; index < 3; index++) {
+    ;[...rows().at(-1).querySelectorAll('button')]
+      .find((button) => button.textContent.trim() === '卸载')
+      .click()
+    await window.uiWait()
+    dialogAction('卸载').click()
+    await window.uiWait()
+  }
+  if (rows().length !== 10 || !pager().textContent.includes('第 2 / 2 页'))
+    throw Error(
+      'Removing the final page must clamp to the previous page without leaving an empty list'
+    )
+  await window.pluginBridge.failNext('pagination-clear')
+  await window.uiWait()
+  if (rows().length !== 6 || pager())
+    throw Error('A refreshed shorter list must clamp its page and preserve the original entries')
 }
 app.whenReady().then(async () => {
   try {
@@ -492,7 +561,39 @@ app.whenReady().then(async () => {
       }
       return { success: true, data: plugins }
     })
-    ipcMain.handle('plugins:fixture-failure', (_event, fault) => {
+    ipcMain.handle('plugins:fixture-failure', (event, fault) => {
+      if (fault === 'pagination-fixture') {
+        for (let index = 1; index <= 17; index++) {
+          const plugin = {
+            id: 'example.pagination.' + String(index).padStart(2, '0'),
+            displayName: 'Page theme ' + index,
+            version: '1.0.0',
+            apiVersion: 2,
+            sources: [],
+            kind: 'theme',
+            theme: { displayName: 'Page theme ' + index },
+            origin: 'third-party',
+            enabled: true,
+            state: 'active'
+          }
+          plugins.push(plugin)
+          catalog.push({
+            ...plugin,
+            size: 4096,
+            sha256: 'a'.repeat(64),
+            url: 'https://example.test/theme.epp'
+          })
+        }
+        event.sender.send('plugins:changed')
+        return
+      }
+      if (fault === 'pagination-clear') {
+        for (const entries of [plugins, catalog])
+          for (let index = entries.length - 1; index >= 0; index--)
+            if (entries[index].id.startsWith('example.pagination.')) entries.splice(index, 1)
+        event.sender.send('plugins:changed')
+        return
+      }
       if (fault === 'update-available') {
         catalog.find((plugin) => plugin.id === 'builtin.qqmusic').version = '1.0.1'
         return
@@ -679,6 +780,18 @@ app.whenReady().then(async () => {
       path.resolve('build/official-plugin-catalog.png'),
       (await window.webContents.capturePage()).toPNG()
     )
+    await window.webContents.executeJavaScript(
+      "window.pluginBridge.failNext('pagination-fixture').then(()=>window.uiWait())"
+    )
+    await window.webContents.executeJavaScript(
+      "[...document.querySelectorAll('#plugins button')].find(button=>button.textContent.trim()==='已安装').click(); window.uiWait()"
+    )
+    assert.equal(
+      await window.webContents.executeJavaScript(
+        "document.querySelectorAll('#plugins .plugin-row').length"
+      ),
+      10
+    )
     window.setSize(520, 900)
     await window.webContents.executeJavaScript("window.showPage('plugins'); window.uiWait()")
     await window.webContents.executeJavaScript('window.uiWait()')
@@ -706,7 +819,7 @@ app.whenReady().then(async () => {
       ]
     )
     console.log(
-      'Plugin/source management UI: lifecycle, plugin retry, independent source preferences, live download changes, capabilities, shared controls, load/save failures, state preservation, download filtering, empty state, live updates, narrow layout and subscription cleanup passed'
+      'Plugin/source management UI: lifecycle, plugin retry, independent source preferences, live download changes, capabilities, shared controls, load/save failures, state preservation, download filtering, empty state, live updates, ten-row pagination, independent tab pages, filter reset, off-page install status, deletion/refresh page clamping, narrow layout and subscription cleanup passed'
     )
     console.log('Preview: ' + path.resolve('build/network-sources-settings.png'))
     window.destroy()

@@ -107,6 +107,16 @@ for (const entry of seed.plugins) await app.packages.install(entry.id, true)
 assert.equal(app.manager.list().length, seed.plugins.length)
 assert.equal(app.registry.list().length, 5)
 assert(app.manager.list().every((entry) => entry.origin === 'official'))
+for (const plugin of app.manager.list().filter((entry) => entry.kind !== 'theme')) {
+  assert.deepEqual(
+    plugin.author,
+    {
+      name: 'Easy Player',
+      url: 'https://github.com/Huiiro/easy-player-plugin'
+    },
+    'installed source authors are retained in the settings DTO'
+  )
+}
 transport = async (_url, init) => {
   assert.equal(JSON.parse(init.body).req_1.method, 'DoSearchForQQMusicDesktop')
   return new Response(
@@ -147,6 +157,12 @@ assert.equal(
   'installed archives are restored once on restart'
 )
 assert.equal(restart.errors.length, 0)
+for (const plugin of restart.manager.list().filter((entry) => entry.kind !== 'theme'))
+  assert.deepEqual(
+    plugin.author,
+    app.manager.list().find((entry) => entry.id === plugin.id).author,
+    'source authors survive restart'
+  )
 for (const entry of restart.manager.list()) restart.manager.activate(entry.id)
 assert.equal(restart.registry.list().length, 5)
 await restart.packages.refreshCatalog()

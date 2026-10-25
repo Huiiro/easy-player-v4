@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { PluginInfo, OfficialPluginEntry } from '../../../../shared/plugins'
-import { comparePluginVersions } from '../../../../shared/plugins'
-import SettingRow from './SettingRow.vue'
+import PluginList from './PluginList.vue'
 import PluginLogDialog from './PluginLogDialog.vue'
-import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
@@ -18,6 +16,12 @@ const plugins = ref<PluginInfo[]>([])
 const catalog = ref<OfficialPluginEntry[]>([])
 const tab = ref<'installed' | 'official'>('installed')
 const kindFilter = ref('all')
+const installedPage = ref(1)
+const officialPage = ref(1)
+watch(kindFilter, () => {
+  installedPage.value = 1
+  officialPage.value = 1
+})
 const logsOpen = ref(false)
 const logsPlugin = ref<string>()
 function viewLogs(id?: string): void {
@@ -48,11 +52,6 @@ function matchesKind(plugin: PluginInfo | OfficialPluginEntry): boolean {
 }
 const filteredPlugins = computed(() => plugins.value.filter(matchesKind))
 const filteredCatalog = computed(() => catalog.value.filter(matchesKind))
-function capabilities(plugin: PluginInfo | OfficialPluginEntry): string {
-  return [...new Set(plugin.sources.flatMap((source) => source.capabilities))]
-    .map((capability) => t('networkSources.capabilities.' + capability))
-    .join(' / ')
-}
 const catalogLoading = ref(false)
 const loading = ref(true),
   busy = ref(''),
@@ -131,10 +130,6 @@ async function manage(action: 'install' | 'uninstall' | 'import', id = ''): Prom
 }
 function installedVersion(id: string): string | undefined {
   return plugins.value.find((plugin) => plugin.id === id)?.version
-}
-function isCurrent(plugin: OfficialPluginEntry): boolean {
-  const current = installedVersion(plugin.id)
-  return !!current && comparePluginVersions(current, plugin.version) >= 0
 }
 async function reload(): Promise<void> {
   const token = ++revision
@@ -289,79 +284,7 @@ onBeforeUnmount(() => {
     >
       {{ t('plugins.noTypeMatches') }}
     </p>
-    <template v-if="tab === 'installed'">
-      <SettingRow
-        v-for="plugin in filteredPlugins"
-        :key="plugin.id"
-        class="plugin-row"
-        :label="name(plugin)"
-      >
-        <template #description>
-          <span class="plugin-meta">
-            <span class="plugin-kind">{{
-              t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider')
-            }}</span>
-            <span class="tabular-nums">v{{ plugin.version }}</span>
-            <span>{{
-              t(plugin.origin === 'third-party' ? 'plugins.thirdParty' : 'plugins.builtin')
-            }}</span>
-            <span
-              >{{ t('plugins.author')
-              }}{{ plugin.author?.name || t('plugins.authorUnknown') }}</span
-            >
-          </span>
-          <span class="plugin-meta">
-            <span class="plugin-id" :title="plugin.id">{{ plugin.id }}</span>
-            <span v-if="plugin.sources.length">{{ capabilities(plugin) }}</span>
-          </span>
-          <span v-if="plugin.error" role="alert" class="mt-1 block text-danger">{{
-            t('plugins.errors.' + plugin.error)
-          }}</span>
-        </template>
-        <template #default="{ labelId, descriptionId }">
-          <div class="plugin-actions flex shrink-0 items-center gap-2">
-            <BaseButton
-              class="reset-button"
-              size="sm"
-              variant="ghost"
-              :disabled="loading || Boolean(busy)"
-              @click="requestUninstall(plugin)"
-              >{{ t('plugins.uninstall') }}</BaseButton
-            >
-            <BaseButton
-              class="reset-button"
-              size="sm"
-              variant="ghost"
-              @click="viewLogs(plugin.id)"
-              >{{ t('plugins.logs') }}</BaseButton
-            >
-            <BaseButton
-              v-if="plugin.state === 'failed'"
-              class="reset-button"
-              variant="ghost"
-              size="sm"
-              :disabled="loading || Boolean(busy)"
-              @click="change(plugin.id, true)"
-              >{{ t('plugins.retry') }}</BaseButton
-            >
-            <span
-              v-if="busy === plugin.id"
-              class="ep-spinner inline-block"
-              role="status"
-              :aria-label="t('networkSources.saving')"
-            />
-            <BaseSwitch
-              :model-value="plugin.enabled"
-              :aria-labelledby="labelId"
-              :aria-describedby="descriptionId"
-              :disabled="loading || Boolean(busy)"
-              @change="change(plugin.id, $event)"
-            />
-          </div>
-        </template>
-      </SettingRow>
-    </template>
-    <template v-else>
+    <template v-if="tab === 'official'">
       <p
         v-if="catalogLoading && !catalog.length"
         role="status"
@@ -376,46 +299,31 @@ onBeforeUnmount(() => {
       >
         {{ t('plugins.noTypeMatches') }}
       </p>
-      <SettingRow
-        v-for="plugin in filteredCatalog"
-        :key="plugin.id"
-        class="plugin-row"
-        :label="name(plugin)"
-      >
-        <template #description>
-          <span class="plugin-meta">
-            <span class="plugin-kind">{{
-              t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider')
-            }}</span>
-            <span class="tabular-nums">v{{ plugin.version }}</span>
-            <span>{{ Math.ceil(plugin.size / 1024) }} KB</span>
-            <span
-              >{{ t('plugins.author')
-              }}{{ plugin.author?.name || t('plugins.authorUnknown') }}</span
-            >
-          </span>
-          <span class="plugin-meta">
-            <span class="plugin-id" :title="plugin.id">{{ plugin.id }}</span>
-            <span v-if="plugin.sources.length">{{ capabilities(plugin) }}</span>
-          </span>
-        </template>
-        <BaseButton
-          class="reset-button plugin-actions"
-          size="sm"
-          variant="ghost"
-          :loading="busy === plugin.id"
-          :disabled="loading || Boolean(busy) || catalogLoading || isCurrent(plugin)"
-          @click="manage('install', plugin.id)"
-          >{{
-            isCurrent(plugin)
-              ? t('plugins.installed')
-              : installedVersion(plugin.id)
-                ? t('plugins.update')
-                : t('plugins.install')
-          }}</BaseButton
-        >
-      </SettingRow>
     </template>
+    <PluginList
+      v-if="tab === 'installed'"
+      v-model:page="installedPage"
+      mode="installed"
+      :items="filteredPlugins"
+      :installed="plugins"
+      :plugin-label="name"
+      :loading="loading"
+      :busy="busy"
+      @uninstall="requestUninstall"
+      @toggle="change"
+      @logs="viewLogs"
+    />
+    <PluginList
+      v-else
+      v-model:page="officialPage"
+      mode="official"
+      :items="filteredCatalog"
+      :installed="plugins"
+      :plugin-label="name"
+      :loading="loading || catalogLoading"
+      :busy="busy"
+      @install="manage('install', $event)"
+    />
     <PluginLogDialog v-model="logsOpen" :plugins="plugins" :plugin-id="logsPlugin" />
     <BaseConfirmDialog
       v-model="uninstallVisible"
@@ -433,46 +341,3 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.plugin-settings {
-  container-type: inline-size;
-}
-.plugin-settings .plugin-row {
-  min-height: 0;
-  gap: 1rem;
-  padding: 0.7rem 1.25rem;
-}
-.plugin-row :deep(h3) {
-  overflow-wrap: anywhere;
-}
-.plugin-settings .plugin-row :deep(p) {
-  font-size: 0.75rem;
-  line-height: 1.5;
-}
-.plugin-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.15rem 0.6rem;
-}
-.plugin-kind {
-  color: var(--color-text);
-}
-.plugin-id {
-  overflow-wrap: anywhere;
-}
-@container (max-width: 400px) {
-  .plugin-settings .plugin-row {
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-  .plugin-row > :deep(.min-w-0) {
-    width: 100%;
-  }
-  .plugin-actions {
-    margin-left: auto;
-    flex-wrap: wrap;
-  }
-}
-</style>

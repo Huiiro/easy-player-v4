@@ -4,7 +4,11 @@
     {
       "id": "builtin.netease",
       "displayName": "NetEase Cloud Music",
-      "version": "1.1.0",
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "version": "1.1.1",
       "apiVersion": 2,
       "sources": [
         {
@@ -17,14 +21,18 @@
           ]
         }
       ],
-      "size": 759257,
-      "sha256": "8308e5534dc56e271c40d41a8378645eebede41cf45e6e6be657675a9155e4f9",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.0-8308e5534dc5.epp"
+      "size": 759405,
+      "sha256": "7ccf20bb870882b4e0e831b82003d075c75311ce544b3d028d4bf1b35585e0da",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.1-7ccf20bb8708.epp"
     },
     {
       "id": "builtin.kugou",
       "displayName": "KuGou",
-      "version": "1.1.0",
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "version": "1.1.1",
       "apiVersion": 2,
       "sources": [
         {
@@ -37,14 +45,18 @@
           ]
         }
       ],
-      "size": 320347,
-      "sha256": "ce9767b20eaba4f2882c9499b032ca4560e17daadd7ad35295151b5791c144b7",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.0-ce9767b20eab.epp"
+      "size": 320494,
+      "sha256": "1aa735bd879a18e68744d0b54539ed54a8ab4578cb09a198e70235a6a298bc9e",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.1-1aa735bd879a.epp"
     },
     {
       "id": "builtin.qqmusic",
       "displayName": "QQ Music",
-      "version": "1.1.0",
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "version": "1.1.1",
       "apiVersion": 2,
       "sources": [
         {
@@ -57,14 +69,18 @@
           ]
         }
       ],
-      "size": 46238,
-      "sha256": "39ea247153cca23f86a8e79b5592e30ca26f68eca83e9c4affc7a9df35555f97",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.0-39ea247153cc.epp"
+      "size": 46383,
+      "sha256": "2e748b7df534181c8c6cab9a0b36c00158a1f11fdb34ac37e2e492334cab5460",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.1-2e748b7df534.epp"
     },
     {
       "id": "builtin.bili",
       "displayName": "Bilibili",
-      "version": "1.1.0",
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "version": "1.1.1",
       "apiVersion": 2,
       "sources": [
         {
@@ -78,14 +94,18 @@
           ]
         }
       ],
-      "size": 5473,
-      "sha256": "e55190dc95198296040a9b6446aada532cbd581e15922886ddbbd6cc5bdd3ff8",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.bili-1.1.0-e55190dc9519.epp"
+      "size": 5613,
+      "sha256": "af395fe171d3ecd70c9facf132b45bb6ed5d985d9a89fb64cf56f4a4e26ad4eb",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.bili-1.1.1-af395fe171d3.epp"
     },
     {
       "id": "builtin.youtube",
       "displayName": "YouTube",
-      "version": "1.1.0",
+      "author": {
+        "name": "Easy Player",
+        "url": "https://github.com/Huiiro/easy-player-plugin"
+      },
+      "version": "1.1.1",
       "apiVersion": 2,
       "sources": [
         {
@@ -101,9 +121,9 @@
           ]
         }
       ],
-      "size": 5492,
-      "sha256": "60b22d960d8a0cd36befe06152dff25dd75c584701c2ad2751984aca3fd3e908",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.0-60b22d960d8a.epp"
+      "size": 5632,
+      "sha256": "9ea769876b55ad8ed13e087287012cfeaf312132a2d4cb881f9a6f6c2a6d4969",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.1-9ea769876b55.epp"
     },
     {
       "id": "builtin.theme.blackhole",

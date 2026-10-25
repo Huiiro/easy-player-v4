@@ -638,6 +638,10 @@ export default {
     restore: '恢复主窗口'
   },
   plugins: {
+    pagination: '插件分页',
+    pageSummary: '共 {total} 条 · 第 {page} / {pages} 页',
+    previousPage: '上一页',
+    nextPage: '下一页',
     logs: '插件日志',
     logsAll: '全部插件',
     logsAllLevels: '全部级别',

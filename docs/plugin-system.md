@@ -14,11 +14,11 @@
 
 | 插件 ID                                                                    | 版本     | 来源 ID / 能力                             |
 | -------------------------------------------------------------------------- | -------- | ------------------------------------------ |
-| builtin.netease                                                            | 1.1.0    | netease：lyrics、artwork、metadata         |
-| builtin.kugou                                                              | 1.1.0    | kugou：lyrics、artwork、metadata           |
-| builtin.qqmusic                                                            | 1.1.0    | qqmusic：lyrics、artwork、metadata         |
-| builtin.bili                                                               | 1.1.0    | bili：download                             |
-| builtin.youtube                                                            | 1.1.0    | youtube：download                          |
+| builtin.netease                                                            | 1.1.1    | netease：lyrics、artwork、metadata         |
+| builtin.kugou                                                              | 1.1.1    | kugou：lyrics、artwork、metadata           |
+| builtin.qqmusic                                                            | 1.1.1    | qqmusic：lyrics、artwork、metadata         |
+| builtin.bili                                                               | 1.1.1    | bili：download                             |
+| builtin.youtube                                                            | 1.1.1    | youtube：download                          |
 | builtin.theme.blackhole                                                    | 1.0.1    | 主题，sources 为空                         |
 | builtin.theme.rainy                                                        | 1.0.0    | shader 主题，sources 为空                  |
 | builtin.theme.{aurora,ocean,sunset,forest,matrix,starfield,startrails,dna} | 各 1.0.0 | 八个独立的官方 renderer 主题，sources 为空 |

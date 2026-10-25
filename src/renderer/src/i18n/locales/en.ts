@@ -650,6 +650,10 @@ export default {
     restore: 'Restore main window'
   },
   plugins: {
+    pagination: 'Plugin pagination',
+    pageSummary: '{total} plugins · Page {page} of {pages}',
+    previousPage: 'Previous',
+    nextPage: 'Next',
     logs: 'Plugin logs',
     logsAll: 'All plugins',
     logsAllLevels: 'All levels',
