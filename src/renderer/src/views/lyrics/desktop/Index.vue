@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { notifyWindowReady } from '@/services/windowReady'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch, type CSSProperties } from 'vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
@@ -322,6 +323,7 @@ const removeUpdate = window.api.desktopLyrics.onUpdate((data) => {
     window.api.desktopLyrics.resizeForFont(state.value.styles.fontSize)
   if (fontSizeCameFromWindow) lastReportedFontSize = undefined
   hasReceivedState = true
+  void notifyWindowReady()
   if (needsOverflowCheck) void checkOverflow()
 })
 const removeBounds = window.api.desktopLyrics.onBounds((bounds) => {

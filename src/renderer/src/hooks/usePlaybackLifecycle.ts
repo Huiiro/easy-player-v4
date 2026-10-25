@@ -4,6 +4,7 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import i18n from '@/i18n'
 import { useShortcuts } from '@/hooks/useShortcuts'
 import { useMessage } from '@/components/ui/useMessage'
+import { notifyWindowReady } from '@/services/windowReady'
 
 export function usePlaybackLifecycle(): {
   ui: ReturnType<typeof useUIStore>
@@ -35,35 +36,39 @@ export function usePlaybackLifecycle(): {
   )
 
   onMounted(async () => {
-    await player.setExtremePlayback(ui.extremePlayback, false)
-    if (!ui.extremePlayback) await ui.initializeTheme()
-    player.subscribeToEvents()
-    await player.loadSmartShuffleConfig()
-    await player.loadRhythmVisualConfig()
-    await player.initializePersistentState()
-    const hasPendingFiles = await window.api.system.hasPendingAudioFiles()
-    await player.restorePlaybackSession(ui.autoPlayOnRestore && !hasPendingFiles)
-    await player.attachRenderer()
-    stopFileListener = window.api.system.onOpenAudioFiles((songs) => {
-      filePlayback = filePlayback
-        .then(async () => {
-          if (!songs.length) return
-          player.addToQueue(songs, true)
-          const index = player.queue.findIndex((song) => song.id === songs[0].id)
-          if (index < 0 || !(await player.playQueueItem(index))) {
+    try {
+      await player.setExtremePlayback(ui.extremePlayback, false)
+      if (!ui.extremePlayback) await ui.initializeTheme()
+      player.subscribeToEvents()
+      await player.loadSmartShuffleConfig()
+      await player.loadRhythmVisualConfig()
+      await player.initializePersistentState()
+      const hasPendingFiles = await window.api.system.hasPendingAudioFiles()
+      await player.restorePlaybackSession(ui.autoPlayOnRestore && !hasPendingFiles)
+      await player.attachRenderer()
+      stopFileListener = window.api.system.onOpenAudioFiles((songs) => {
+        filePlayback = filePlayback
+          .then(async () => {
+            if (!songs.length) return
+            player.addToQueue(songs, true)
+            const index = player.queue.findIndex((song) => song.id === songs[0].id)
+            if (index < 0 || !(await player.playQueueItem(index))) {
+              showError(i18n.global.t('settings.openAudioFailed'))
+            }
+          })
+          .catch(() => {
             showError(i18n.global.t('settings.openAudioFailed'))
-          }
-        })
-        .catch(() => {
-          showError(i18n.global.t('settings.openAudioFailed'))
-        })
-    })
-    stopFileErrorListener = window.api.system.onOpenFilesError(() =>
-      showError(i18n.global.t('settings.openAudioFailed'))
-    )
-    window.api.system.audioFilesReady(true)
-    window.addEventListener('beforeunload', player.finishHistoryOnUnload)
-    window.addEventListener('beforeunload', player.savePlaybackSessionSync)
+          })
+      })
+      stopFileErrorListener = window.api.system.onOpenFilesError(() =>
+        showError(i18n.global.t('settings.openAudioFailed'))
+      )
+      window.api.system.audioFilesReady(true)
+      window.addEventListener('beforeunload', player.finishHistoryOnUnload)
+      window.addEventListener('beforeunload', player.savePlaybackSessionSync)
+    } finally {
+      void notifyWindowReady()
+    }
   })
   onBeforeUnmount(() => {
     window.api.system.audioFilesReady(false)

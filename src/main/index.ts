@@ -54,6 +54,7 @@ import {
 } from './service/updateService'
 import { getDataPath } from './utils/pathUtils'
 import { createWindowMaterialManager } from './service/windowMaterialService'
+import { createWindowPresentation } from './service/windowPresentation'
 import { createDir } from './utils/pathUtils'
 import { Logger } from './service/loggerService'
 import sharp from 'sharp'
@@ -157,11 +158,30 @@ function setPlayerWindowControlsVisible(visible: boolean): void {
   }, 300)
 }
 
+const windowPresentations = new WeakMap<
+  BrowserWindow,
+  ReturnType<typeof createWindowPresentation>
+>()
+
+function prepareWindow(
+  window: BrowserWindow,
+  present: () => void
+): ReturnType<typeof createWindowPresentation> {
+  const presentation = createWindowPresentation(window, present)
+  windowPresentations.set(window, presentation)
+  return presentation
+}
+
+ipcMain.on('window:ready', (event) => {
+  if (event.senderFrame !== event.sender.mainFrame) return
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (window) windowPresentations.get(window)?.rendererReady()
+})
+
 function showMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) return
   if (mainWindow.isMinimized()) mainWindow.restore()
-  mainWindow.show()
-  mainWindow.focus()
+  windowPresentations.get(mainWindow)?.show()
 }
 
 function quitApplication(): void {
@@ -591,6 +611,7 @@ function createWindow(
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      backgroundThrottling: false,
       spellcheck: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -607,13 +628,19 @@ function createWindow(
     extremeView ? '#151515' : '#111614'
   )
 
-  mainWindow.on('ready-to-show', () => {
+  let firstPresentation = true
+  const presentation = prepareWindow(createdWindow, () => {
     // On macOS show() can return before the native window emits "show".
     // Keep the outgoing renderer alive until that event, including maximize().
-    if (onShown) createdWindow.once('show', onShown)
-    if (restoredState.maximized) createdWindow.maximize()
+    if (firstPresentation) {
+      firstPresentation = false
+      if (onShown) createdWindow.once('show', onShown)
+      if (restoredState.maximized) createdWindow.maximize()
+    }
     createdWindow.show()
+    createdWindow.focus()
   })
+  presentation.show()
 
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
   const scheduleWindowStateSave = (): void => {
@@ -706,6 +733,7 @@ function createMiniPlayerWindow(): BrowserWindow {
     backgroundColor: '#111614',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
@@ -713,12 +741,18 @@ function createMiniPlayerWindow(): BrowserWindow {
   })
   observeWindow(miniWindow, 'mini-player')
   miniWindow.setAlwaysOnTop(true, 'floating')
-  miniWindow.on('ready-to-show', () => miniWindow?.show())
+  const createdWindow = miniWindow
+  prepareWindow(createdWindow, () => {
+    const hideMainWindow = (): void => mainWindow?.hide()
+    if (createdWindow.isVisible()) hideMainWindow()
+    else createdWindow.once('show', hideMainWindow)
+    createdWindow.show()
+    createdWindow.focus()
+  })
   miniWindow.on('closed', () => {
     miniWindow = null
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-      mainWindow.show()
-      mainWindow.focus()
+      showMainWindow()
     }
   })
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
@@ -747,6 +781,7 @@ function createDesktopLyricsWindow(): BrowserWindow {
     backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
+      backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
@@ -758,7 +793,8 @@ function createDesktopLyricsWindow(): BrowserWindow {
   observeWindow(desktopLyricsWindow, 'desktop-lyrics')
   desktopLyricsWindow.setAlwaysOnTop(true, 'screen-saver')
   desktopLyricsWindow.setIgnoreMouseEvents(true, { forward: true })
-  desktopLyricsWindow.on('ready-to-show', () => desktopLyricsWindow?.showInactive())
+  const createdWindow = desktopLyricsWindow
+  prepareWindow(createdWindow, () => createdWindow.showInactive())
   desktopLyricsWindow.on('move', scheduleDesktopLyricsWindowStateSave)
   desktopLyricsWindow.on('close', () => {
     if (desktopLyricsBoundsTimer) {
@@ -1099,9 +1135,7 @@ app.whenReady().then(() =>
         if (isPlaybackOnly()) return { success: false }
         return logOperation('[IPC] mini-player:enter', {}, () => {
           const mini = createMiniPlayerWindow()
-          mainWindow?.hide()
-          mini.show()
-          mini.focus()
+          windowPresentations.get(mini)?.show()
           if (!mini.webContents.isLoading())
             mainWindow?.webContents.send('mini-player:request-state')
           return { success: true }
@@ -1109,11 +1143,9 @@ app.whenReady().then(() =>
       })
       ipcMain.handle('mini-player:restore', () => {
         return logOperation('[IPC] mini-player:restore', {}, () => {
+          if (miniWindow) windowPresentations.get(miniWindow)?.cancel()
           miniWindow?.hide()
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.show()
-            mainWindow.focus()
-          }
+          showMainWindow()
           return { success: true }
         })
       })
@@ -1130,7 +1162,7 @@ app.whenReady().then(() =>
         if (isPlaybackOnly()) return { success: false }
         return logOperation('[IPC] desktop-lyrics:open', {}, () => {
           const window = createDesktopLyricsWindow()
-          window.showInactive()
+          windowPresentations.get(window)?.show()
           return { success: true }
         })
       })

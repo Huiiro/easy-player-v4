@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
     <title>Easy Player</title>
+    <style>
+      html:not([data-window-ready]) {
+        background: #111614;
+        color-scheme: dark;
+      }
+      html:not([data-window-ready]) body {
+        margin: 0;
+        background: inherit;
+      }
+    </style>
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"

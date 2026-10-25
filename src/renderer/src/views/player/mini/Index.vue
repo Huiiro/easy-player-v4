@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { notifyWindowReady } from '@/services/windowReady'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -59,6 +60,7 @@ const removeUpdateListener = window.api.miniPlayer.onUpdate((data) => {
     if (next.theme.border) root.style.setProperty('--color-border', next.theme.border)
     else root.style.removeProperty('--color-border')
   }
+  void notifyWindowReady()
 })
 
 function action(type: 'previous' | 'toggle' | 'next'): void {

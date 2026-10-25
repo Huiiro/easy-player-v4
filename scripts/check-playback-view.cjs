@@ -61,6 +61,50 @@ async function run() {
     fs.existsSync(path.join(process.env.EASY_PLAYER_DATA_DIR, 'player_data/player.db')),
     'Application must initialize the isolated library'
   )
+  assert.equal(
+    await window.webContents.executeJavaScript('document.documentElement.dataset.windowReady'),
+    'true',
+    'main window waits for its first application frame'
+  )
+  const waitForAuxiliary = async (hash) => {
+    for (let i = 0; i < 150; i++) {
+      const auxiliary = BrowserWindow.getAllWindows().find(
+        (other) => other.isVisible() && other.webContents.getURL().endsWith(hash)
+      )
+      if (auxiliary) return auxiliary
+      await wait(50)
+    }
+    throw Error('Auxiliary window did not become ready: ' + hash)
+  }
+  await window.webContents.executeJavaScript('window.api.miniPlayer.enter()')
+  const mini = await waitForAuxiliary('#/mini')
+  assert.equal(
+    await mini.webContents.executeJavaScript('document.documentElement.dataset.windowReady'),
+    'true'
+  )
+  const miniShown = trace.find((entry) => entry.id === mini.id && entry.event === 'show')
+  assert(
+    miniShown.visible.includes(window.id),
+    'main window stays visible until Mini has actually shown'
+  )
+  assert.equal(window.isVisible(), false)
+  await mini.webContents.executeJavaScript('window.api.miniPlayer.restore()')
+  assert.equal(window.isVisible(), true)
+  assert.equal(mini.isVisible(), false)
+  await window.webContents.executeJavaScript('window.api.miniPlayer.enter()')
+  await waitForAuxiliary('#/mini')
+  await mini.webContents.executeJavaScript('window.api.miniPlayer.restore()')
+  await window.webContents.executeJavaScript(`${ui}.useDesktopLyrics = true`)
+  const lyrics = await waitForAuxiliary('#/lyric')
+  const lyricAppearance = await lyrics.webContents.executeJavaScript(
+    `({ready:document.documentElement.dataset.windowReady, backgrounds:[document.documentElement,document.body,document.getElementById('app')].map(element=>getComputedStyle(element).backgroundColor)})`
+  )
+  assert.equal(lyricAppearance.ready, 'true')
+  assert(
+    lyricAppearance.backgrounds.every((background) => background === 'rgba(0, 0, 0, 0)'),
+    'desktop lyrics are transparent on their first visible frame'
+  )
+  await window.webContents.executeJavaScript(`${ui}.useDesktopLyrics = false`)
   // Keep the fixture inside the work area: macOS clamps newly created windows
   // below the menu bar/above the Dock, unlike a later setBounds call.
   const area = screen.getDisplayMatching(window.getBounds()).workArea
@@ -103,6 +147,11 @@ async function run() {
       assert.equal(outgoing.changedView, false, 'Outgoing page changed layout before the handoff')
       assert.equal(outgoing.afterImmersive, outgoing.immersive, 'Outgoing immersive page collapsed')
       window = await ready(enabled, previous)
+      assert.equal(
+        await window.webContents.executeJavaScript('document.documentElement.dataset.windowReady'),
+        'true',
+        'replacement waits for its application frame'
+      )
       if (enabled) {
         const regions = await window.webContents.executeJavaScript(`({
           drag: getComputedStyle(document.querySelector('.extreme-drag-region')).getPropertyValue('-webkit-app-region'),

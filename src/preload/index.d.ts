@@ -615,6 +615,7 @@ declare global {
         onStatus(callback: (status: unknown) => void): () => void
       }
       window: {
+        ready(): void
         command(command: 'minimize' | 'toggle-maximize' | 'close'): Promise<{ maximized: boolean }>
         setTrafficLightVisible(visible: boolean): void
         onState(callback: (state: { maximized: boolean }) => void): () => void
