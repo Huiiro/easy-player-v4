@@ -661,6 +661,9 @@ const systemAPI = {
 // Custom APIs for renderer
 const api = {
   plugins: {
+    logs: () => ipcRenderer.invoke('plugins:logs'),
+    reportThemeFailure: (pluginId: string, revision: string, code: string, detail: string) =>
+      ipcRenderer.send('plugins:theme-failure', { pluginId, revision, code, detail }),
     themes: () =>
       ipcRenderer.invoke('plugins:themes') as Promise<
         import('../shared/networkSources').NetworkSourceResult<
@@ -737,6 +740,7 @@ const api = {
     write: (level: 'debug' | 'info' | 'warn' | 'error', message: string) =>
       ipcRenderer.send('log:write', { level, message }),
     recent: () => ipcRenderer.invoke('log:recent'),
+    openDirectory: () => ipcRenderer.invoke('log:open-directory'),
     onEntry: (callback: (entry: unknown) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, entry: unknown): void => callback(entry)
       ipcRenderer.on('log:entry', listener)

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { reportThemeFailure } from '@/services/pluginLogs'
 import type { InstalledPluginTheme } from '../../../../shared/themePlugins'
 const vertexShader =
   '#version 300 es\nin vec2 a_position;\nvoid main() { gl_Position = vec4(a_position, 0.0, 1.0); }'
@@ -16,12 +17,13 @@ const emit = defineEmits<{ failure: [] }>()
 const loading = new AbortController()
 const textureData = new Map<string, Float32Array | ImageBitmap>()
 let failed = false
+let shaderError = ''
 let resourcesLoaded = false
 function failure(reason: string, detail?: unknown): void {
   if (!failed && !disposed) {
     failed = true
     releaseResources()
-    console.warn('[ThemePlugin] Background failed', props.theme.pluginId, reason, detail ?? '')
+    reportThemeFailure(props.theme, reason, detail)
     emit('failure')
   }
 }
@@ -83,7 +85,7 @@ function compile(type: number, source: string): WebGLShader | null {
   gl.shaderSource(shader, source)
   gl.compileShader(shader)
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.warn('[ThemePlugin] Shader compilation failed:', gl.getShaderInfoLog(shader))
+    shaderError = gl.getShaderInfoLog(shader) ?? 'Shader compilation failed'
     gl.deleteShader(shader)
     return null
   }
@@ -256,7 +258,7 @@ function initialize(): void {
   if (!vertex || !fragment) {
     if (vertex) gl.deleteShader(vertex)
     if (fragment) gl.deleteShader(fragment)
-    failure('SHADER_COMPILE')
+    failure('SHADER_COMPILE', shaderError)
     return
   }
   program = gl.createProgram()

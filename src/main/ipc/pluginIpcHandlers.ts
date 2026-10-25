@@ -1,3 +1,4 @@
+import { Logger } from '../service/loggerService'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { t } from '../i18n'
 import {
@@ -24,6 +25,23 @@ function changed(): void {
 }
 export function registerPluginIpcHandlers(): void {
   initializePlugins()
+  ipcMain.handle('plugins:logs', () => ({ success: true, data: Logger.recentPlugins() }))
+  ipcMain.on('plugins:theme-failure', (_event, request: unknown) => {
+    if (!request || typeof request !== 'object') return
+    const { pluginId, revision, code, detail } = request as Record<string, unknown>
+    if (typeof pluginId !== 'string' || typeof code !== 'string' || !/^[A-Z_]{1,64}$/.test(code))
+      return
+    const plugin = getOfficialPluginPackages()
+      .listThemes()
+      .find((plugin) => plugin.pluginId === pluginId && plugin.revision === revision)
+    if (!plugin) return
+    Logger.plugin(
+      'error',
+      { pluginId, version: plugin.version, operation: 'theme.render', code },
+      typeof detail === 'string' ? detail : code,
+      'renderer'
+    )
+  })
   const failure = (
     reason: unknown,
     fallback:

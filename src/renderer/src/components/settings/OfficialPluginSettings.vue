@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { PluginInfo, OfficialPluginEntry } from '../../../../shared/plugins'
 import { comparePluginVersions } from '../../../../shared/plugins'
 import SettingRow from './SettingRow.vue'
+import PluginLogDialog from './PluginLogDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -17,6 +18,12 @@ const plugins = ref<PluginInfo[]>([])
 const catalog = ref<OfficialPluginEntry[]>([])
 const tab = ref<'installed' | 'official'>('installed')
 const kindFilter = ref('all')
+const logsOpen = ref(false)
+const logsPlugin = ref<string>()
+function viewLogs(id?: string): void {
+  logsPlugin.value = id
+  logsOpen.value = true
+}
 const uninstallVisible = ref(false)
 const uninstallTarget = ref<PluginInfo | null>(null)
 function requestUninstall(plugin: PluginInfo): void {
@@ -210,6 +217,9 @@ onBeforeUnmount(() => {
         @click="browse()"
         >{{ t('plugins.officialSource') }}</BaseButton
       >
+      <BaseButton class="reset-button" size="sm" variant="ghost" @click="viewLogs()">{{
+        t('plugins.logs')
+      }}</BaseButton>
       <BaseSelect
         v-model="kindFilter"
         class="ml-auto w-40"
@@ -319,6 +329,13 @@ onBeforeUnmount(() => {
               >{{ t('plugins.uninstall') }}</BaseButton
             >
             <BaseButton
+              class="reset-button"
+              size="sm"
+              variant="ghost"
+              @click="viewLogs(plugin.id)"
+              >{{ t('plugins.logs') }}</BaseButton
+            >
+            <BaseButton
               v-if="plugin.state === 'failed'"
               class="reset-button"
               variant="ghost"
@@ -399,6 +416,7 @@ onBeforeUnmount(() => {
         >
       </SettingRow>
     </template>
+    <PluginLogDialog v-model="logsOpen" :plugins="plugins" :plugin-id="logsPlugin" />
     <BaseConfirmDialog
       v-model="uninstallVisible"
       :title="t('plugins.uninstallTitle')"

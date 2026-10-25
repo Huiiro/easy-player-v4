@@ -156,6 +156,7 @@ export interface ImpulseResponseConfig {
 }
 
 export interface LogEntry {
+  plugin?: import('../../../shared/pluginLogs').PluginLogContext
   id?: number
   level: 'debug' | 'info' | 'warn' | 'error'
   source?: 'main' | 'native' | 'renderer' | 'preload'

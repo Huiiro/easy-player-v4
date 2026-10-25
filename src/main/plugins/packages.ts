@@ -140,6 +140,14 @@ function atomicJson(filename: string, value: unknown): void {
   }
 }
 
+export interface PluginPackageEvent {
+  pluginId: string
+  version: string
+  level: 'info' | 'error'
+  operation: string
+  message: string
+}
+
 /** Only catalog-approved archives are evaluated. This is not a third-party sandbox. */
 export class OfficialPluginPackages {
   private catalog: OfficialPluginCatalog
@@ -154,10 +162,23 @@ export class OfficialPluginPackages {
     private readonly bridge: object,
     seed: OfficialPluginCatalog,
     private readonly fetcher: typeof fetch = fetch,
-    private readonly onFailure: (id: string) => void = () => undefined
+    private readonly onFailure: (id: string, reason?: unknown) => void = () => undefined,
+    private readonly onEvent: (event: PluginPackageEvent) => void = () => undefined
   ) {
     this.bundled = validateCatalog(seed)
     this.catalog = this.bundled
+  }
+  private report(
+    entry: OfficialPluginEntry,
+    operation: string,
+    level: 'info' | 'error',
+    message: string
+  ): void {
+    try {
+      this.onEvent({ pluginId: entry.id, version: entry.version, operation, level, message })
+    } catch {
+      /* Logging never changes a transaction. */
+    }
   }
   listCatalog(): OfficialPluginEntry[] {
     return structuredClone(this.catalog.plugins)
@@ -271,9 +292,9 @@ export class OfficialPluginPackages {
         this.manager.load(this.loadDefinition(bytes, entry), entry.origin ?? 'official')
         this.installed.set(entry.id, entry)
         this.prune(entry.id, entry.sha256)
-      } catch {
+      } catch (reason) {
         try {
-          this.onFailure(file.name)
+          this.onFailure(file.name, reason)
         } catch {
           /* Other installed packages still load. */
         }
@@ -308,6 +329,8 @@ export class OfficialPluginPackages {
     if (current && comparePluginVersions(entry.version, current.version) < 0)
       throw new Error('pluginDowngrade')
     this.busy.add(id)
+    const operation = current ? 'update' : 'install'
+    this.report(entry, operation, 'info', 'STARTED')
     try {
       const bytes =
         localBytes ??
@@ -331,6 +354,7 @@ export class OfficialPluginPackages {
         if (enabled) this.manager.activate(id)
         atomicJson(join(this.root, id, 'current.json'), entry)
         this.installed.set(id, entry)
+        this.report(entry, operation, 'info', 'COMMITTED')
         if (previous && previous.sha256 !== entry.sha256) this.themes.delete(previous.sha256)
       } catch (reason) {
         this.manager.unload(id)
@@ -341,6 +365,15 @@ export class OfficialPluginPackages {
         }
         throw reason
       }
+    } catch (reason) {
+      this.report(
+        entry,
+        operation,
+        'error',
+        (this.installed.has(id) ? 'FAILED_PREVIOUS_RETAINED: ' : 'FAILED: ') +
+          (reason instanceof Error ? reason.message : String(reason))
+      )
+      throw reason
     } finally {
       this.busy.delete(id)
     }
@@ -417,7 +450,9 @@ export class OfficialPluginPackages {
     unlinkSync(join(this.root, id, 'current.json'))
     this.manager.unload(id)
     this.themes.delete(this.installed.get(id)!.sha256)
+    const removed = this.installed.get(id)!
     this.installed.delete(id)
+    this.report(removed, 'uninstall', 'info', 'COMMITTED')
     // Version archives are retained for this process's accepted download leases.
     // They are inert without current.json; reinstall reuses the content-addressed version.
   }

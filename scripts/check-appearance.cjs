@@ -435,12 +435,51 @@ app.whenReady().then(async () => {
       const pluginView=createApp(OfficialPluginSettings).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));pluginView.mount(pluginHost);await wait();
       check(pluginHost.textContent.includes('Alice')&&pluginHost.textContent.includes('Bob')&&pluginHost.textContent.includes('alice.midnight')&&pluginHost.textContent.includes('bob.midnight'),'Plugin manager displays both authors and IDs for same-name plugins');
       check(pluginHost.textContent.includes('作者未提供'),'Legacy packages retain an explicit missing-author fallback');
-      pluginView.unmount();pluginHost.remove();
+      const logListeners=new Set();
+      const logHistory=[
+        {id:1,timestamp:Date.now(),level:'info',source:'main',message:'ALICE_INITIAL',plugin:{pluginId:'alice.midnight',version:'1.0.0',operation:'install'}},
+        {id:2,timestamp:Date.now(),level:'error',source:'main',message:'BOB_FAILURE',plugin:{pluginId:'bob.midnight',version:'1.0.0',operation:'theme.render'}}
+      ];
+      window.api.log={onEntry:callback=>{logListeners.add(callback);return()=>logListeners.delete(callback)},openDirectory:async()=>({success:true})};
+      window.api.plugins.logs=async()=>({success:true,data:logHistory});
+      const aliceRow=[...pluginHost.querySelectorAll('.setting-row')].find(row=>row.textContent.includes('alice.midnight'));
+      [...aliceRow.querySelectorAll('button')].find(button=>button.textContent.includes('插件日志')).click();await wait();
+      let logDialog=document.querySelector('[role=dialog]');
+      check(!!logDialog&&logDialog.textContent.includes('ALICE_INITIAL')&&!logDialog.textContent.includes('BOB_FAILURE'),'Per-plugin logs isolate same-name plugins by ID');
+      const live={id:3,timestamp:Date.now(),level:'error',source:'main',message:'ALICE_LIVE',plugin:{pluginId:'alice.midnight',version:'1.0.0',operation:'metadata.get',elapsedMs:25,code:'NETWORK'}};
+      for(const listener of logListeners){listener(live);listener(live)}await wait();
+      check(logDialog.textContent.split('ALICE_LIVE').length===2&&logDialog.textContent.includes('25ms'),'Live logs retain call metadata and deduplicate events');
+      const logSearch=logDialog.querySelector('input[aria-label="搜索日志"]');logSearch.value='LIVE';logSearch.dispatchEvent(new Event('input',{bubbles:true}));await wait();
+      check(logDialog.textContent.includes('ALICE_LIVE')&&!logDialog.textContent.includes('ALICE_INITIAL'),'Plugin log search filters entries');
+      const levelControl=logDialog.querySelector('[aria-label="筛选级别"]');levelControl.click();await wait();
+      [...document.querySelectorAll('[role=option]')].find(option=>option.textContent==='INFO').click();await wait();
+      check(!logDialog.textContent.includes('ALICE_LIVE'),'Plugin log level filter is independent of recording level');
+      check(logListeners.size===1,'An open log dialog owns one subscription');
+      window.pluginLogsPreview=async()=>{
+        const host=document.createElement('div');document.body.append(host);
+        const view=createApp(OfficialPluginSettings).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));view.mount(host);await wait();
+        [...host.querySelectorAll('button')].find(button=>button.textContent.includes('插件日志')).click();await wait();
+        window.closePluginLogsPreview=()=>{view.unmount();host.remove()};
+      };
+      pluginView.unmount();pluginHost.remove();await wait();
+      check(logListeners.size===0,'Closing plugin settings releases its log subscription');
       window.previewNyan=async()=>{ui.selectThemeBackground('plugin:example.nyan-cat');await wait()};
       window.previewBlackhole=async()=>{ui.selectThemeBackground('plugin:builtin.theme.blackhole');await wait()};
       ui.selectThemeBackground('plugin:builtin.theme.blackhole');await wait();
       return {passed:checks.length,checks};
     })()`)
+    await window.webContents.executeJavaScript('window.pluginLogsPreview()')
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    const logPreview = await window.webContents.executeJavaScript(
+      `(()=>{const dialog=document.querySelector('[role=dialog]');return dialog ? {text:dialog.textContent,opacity:getComputedStyle(dialog).opacity,rect:dialog.getBoundingClientRect().toJSON()} : null})()`
+    )
+    if (!logPreview || !logPreview.text.includes('ALICE_INITIAL'))
+      throw new Error('Plugin log preview must be visible and contain its history')
+    fs.writeFileSync(
+      'build/plugin-logs-dialog.png',
+      (await window.webContents.capturePage()).toPNG()
+    )
+    await window.webContents.executeJavaScript('window.closePluginLogsPreview()')
     result.officialScenes = []
     for (const theme of rendererFixtures) {
       const id = theme.pluginId.replace('builtin.theme.', '')

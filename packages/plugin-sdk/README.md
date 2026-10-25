@@ -31,3 +31,5 @@ PluginManifest.author 可声明 PluginAuthor（name、可选 HTTPS url），作�
 主题 shader 纹理支持 rg32f 查表与 image 图片，均声明 width/height；宿主对图片解码尺寸校验并提供 mipmap。shader.fps 可选 1–30，默认 30。制作雨夜等图片背景需要相应新版宿主，原浮点纹理主题保持兼容。
 
 官方主题可选 renderer: { entry }，与 shader 互斥。此字节入口只在官方索引/种子认证后提供，在无 Node、preload、宿主 API 的不透明来源框架中运行；第三方主题拒绝该入口。InstalledPluginTheme.rendererUrl 由宿主生成，客户端不得自行指定任意页面。
+
+插件主动诊断使用现有 host.log(level, message)；宿主绑定插件身份与激活版本。日志查看、脱敏和维护约定见 [插件日志](../../docs/plugin-logging.md)。

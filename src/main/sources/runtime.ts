@@ -21,6 +21,8 @@ export interface SourceCallOptions {
 }
 interface CallLog {
   id: number
+  pluginId?: string
+  version?: string
   sourceId?: string
   operation: string
   elapsedMs: number
@@ -55,7 +57,8 @@ async function execute<T>(
   sourceId: string | undefined,
   operation: string,
   task: (context: SourceCallContext) => Promise<T>,
-  options: SourceCallOptions
+  options: SourceCallOptions,
+  identity?: { pluginId: string; version?: string }
 ): Promise<T> {
   const id = ++nextId,
     started = Date.now()
@@ -120,6 +123,7 @@ async function execute<T>(
     active.delete(call)
     try {
       logCall({
+        ...identity,
         id,
         sourceId,
         operation,
@@ -161,6 +165,9 @@ export function invokeSource<T>(
 ): Promise<T> {
   const registry = getNetworkSources()
   const owner = registry.ownerOf(sourceId)
+  const identity = owner
+    ? { pluginId: owner.pluginId, version: registry.get(sourceId)?.version }
+    : undefined
   const accepted =
     operation === 'download.resolve' && registry.isEnabled(sourceId)
       ? registry.get(sourceId)
@@ -194,7 +201,8 @@ export function invokeSource<T>(
         release?.()
       }
     },
-    { ...options, signal }
+    { ...options, signal },
+    identity
   )
 }
 export function invokeArtworkFetch<T>(

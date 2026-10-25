@@ -21,7 +21,18 @@ export function getOfficialPluginPackages(): OfficialPluginPackages {
       officialPluginBridge,
       seedCatalog as OfficialPluginCatalog,
       fetch,
-      (id) => Logger.error('[Plugin]', { pluginId: id, message: 'PACKAGE_LOAD_FAILED' })
+      (id, reason) =>
+        Logger.plugin(
+          'error',
+          { pluginId: id, operation: 'load', code: 'PACKAGE_LOAD_FAILED' },
+          reason instanceof Error ? reason.message : 'PACKAGE_LOAD_FAILED'
+        ),
+      (event) =>
+        Logger.plugin(
+          event.level,
+          { pluginId: event.pluginId, version: event.version, operation: event.operation },
+          event.message
+        )
     )
   return packages
 }
@@ -37,7 +48,8 @@ export function initializePlugins(): void {
   configurePluginHost({
     readSetting: getAppSetting,
     writeSetting: setAppSetting,
-    log: (pluginId, level, message) => Logger[level]('[Plugin]', { pluginId, message }),
+    log: (pluginId, level, message, version, operation) =>
+      Logger.plugin(level, { pluginId, version, operation: operation ?? 'plugin' }, message),
     fetch: (url, init) => fetch(url, init),
     mediaInfo: extractMediaInfo
   })

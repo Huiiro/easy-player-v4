@@ -134,15 +134,27 @@ export class PluginManager {
     const info = this.plugins.get(id)?.info
     return info ? structuredClone(info) : undefined
   }
-  private log(id: string, level: 'debug' | 'info' | 'warn' | 'error', message: string): void {
+  private log(
+    id: string,
+    level: 'debug' | 'info' | 'warn' | 'error',
+    message: string,
+    version?: string,
+    operation = 'lifecycle'
+  ): void {
     try {
-      this.host.log(id, level, message)
+      this.host.log(id, level, message, version ?? this.plugins.get(id)?.info.version, operation)
     } catch {
       /* Logging cannot interrupt cleanup or activation rollback. */
     }
   }
   private state(plugin: LoadedPlugin, state: PluginState): void {
     plugin.info.state = state
+    this.log(
+      plugin.info.id,
+      state === 'failed' ? 'error' : 'info',
+      'STATE_' + state.toUpperCase(),
+      plugin.info.version
+    )
     this.registry.setPluginState(plugin.info.id, state)
   }
   private release(plugin: LoadedPlugin): boolean {
@@ -152,7 +164,13 @@ export class PluginManager {
     for (const cleanup of scope.cleanups.splice(0).reverse()) {
       try {
         cleanup()
-      } catch {
+      } catch (reason) {
+        this.log(
+          plugin.info.id,
+          'warn',
+          'Cleanup: ' + (reason instanceof Error ? reason.message : String(reason)),
+          plugin.info.version
+        )
         success = false
       }
     }
@@ -236,7 +254,7 @@ export class PluginManager {
         }
       },
       log: (level: 'debug' | 'info' | 'warn' | 'error', message: string): void => {
-        this.log(id, level, message)
+        this.log(id, level, message, plugin.info.version, 'plugin')
       }
     }
     const context: PluginHostContext = {
@@ -306,7 +324,13 @@ export class PluginManager {
       }
       plugin.info.enabled = true
       this.state(plugin, 'active')
-    } catch {
+    } catch (reason) {
+      this.log(
+        id,
+        'error',
+        'Activation: ' + (reason instanceof Error ? reason.message : String(reason)),
+        plugin.info.version
+      )
       scope.controller.abort(new SourceCallError('SOURCE_DISABLED'))
       this.release(plugin)
       plugin.info.enabled = false

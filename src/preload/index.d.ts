@@ -22,6 +22,12 @@ declare global {
     electron: ElectronAPI
     api: {
       plugins: {
+        logs(): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/pluginLogs').PluginLogEntry[]
+          >
+        >
+        reportThemeFailure(pluginId: string, revision: string, code: string, detail: string): void
         themes(): Promise<
           import('../shared/networkSources').NetworkSourceResult<
             import('../shared/themePlugins').InstalledPluginTheme[]
@@ -74,6 +80,7 @@ declare global {
         }>
         write(level: LogEntry['level'], message: string): void
         recent(): Promise<LogEntry[]>
+        openDirectory(): Promise<{ success: boolean; error?: string }>
         onEntry(callback: (entry: LogEntry) => void): () => void
       }
       audio: {

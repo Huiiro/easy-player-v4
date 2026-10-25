@@ -1,3 +1,4 @@
+import { reportThemeFailure } from './pluginLogs'
 import {
   themeSelectorPattern as selectorPattern,
   themeTokenPattern as tokenPattern,
@@ -101,6 +102,7 @@ export function customThemeCSS(theme: CustomTheme): string {
 }
 
 interface RuntimePackage {
+  theme?: Pick<InstalledPluginTheme, 'pluginId' | 'revision'>
   id: string
   manifest: Pick<InstalledThemePackage['manifest'], 'resources' | 'slots'>
   url: (path: string) => string
@@ -110,6 +112,7 @@ function runtimePackages(theme: CustomTheme): RuntimePackage[] {
   const plugin = theme.plugin
   if (plugin?.data.assets)
     packages.push({
+      theme: plugin,
       id: plugin.pluginId + '-' + plugin.revision,
       manifest: plugin.data.assets,
       url: (path) =>
@@ -191,7 +194,16 @@ function loadPackageFonts(packages: RuntimePackage[]): void {
           document.fonts.add(loaded)
           packageFonts.add(loaded)
         })
-        .catch((error) => console.warn('[Theme] Font could not be loaded', resource.path, error))
+        .catch((error: unknown) => {
+          if (generation !== fontGeneration) return
+          if (installed.theme)
+            reportThemeFailure(
+              installed.theme,
+              'FONT_LOAD',
+              resource.path + ': ' + (error instanceof Error ? error.message : 'Font decode failed')
+            )
+          else console.warn('[Theme] Font could not be loaded', resource.path, error)
+        })
     }
   }
 }

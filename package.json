@@ -61,7 +61,8 @@
     "build:plugin-sdk": "npm --prefix packages/plugin-sdk run build && npm pack ./packages/plugin-sdk --pack-destination ./build --ignore-scripts",
     "test:theme-plugins": "node scripts/test-theme-plugins.mjs",
     "sync:theme-contract": "node scripts/sync-theme-contract.mjs",
-    "test:theme-contract": "node scripts/sync-theme-contract.mjs --check && node scripts/test-theme-contract.mjs"
+    "test:theme-contract": "node scripts/sync-theme-contract.mjs --check && node scripts/test-theme-contract.mjs",
+    "test:plugin-logs": "node scripts/test-plugin-logs.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

@@ -351,3 +351,5 @@ npm run pack:theme -- examples/nyan-cat dist/examples
 ## 官方背景框架补充
 
 八个既有 Canvas/SVG/CSS 主题按 [迁移约定](themes/official-scenes.md) 使用 renderer，而黑洞/雨夜继续使用 shader。包管理共用安装事务，但 renderer 字节仅向经官方索引/种子认证的包开放；第三方本地主题仍拒绝脚本。宿主生成固定 HTML，框架不启用 allow-same-origin、Node 或 preload，CSP 禁止网络连接，无法读取父文档或调用宿主 API。该 DOM/能力隔离不等于通用第三方代码沙箱或独立进程配额机制。
+
+插件日志的查看入口、字段、记录策略与开发约定见 [插件日志](plugin-logging.md)。

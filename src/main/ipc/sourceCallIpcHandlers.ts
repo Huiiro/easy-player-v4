@@ -69,6 +69,25 @@ async function dispatch(request: SourceRequest, signal: AbortSignal): Promise<un
 }
 export function registerSourceCallIpcHandlers(): void {
   setSourceCallLogger((entry) => {
+    if (entry.pluginId) {
+      const cancelled =
+        entry.status === 'cancelled' ||
+        ['CANCELLED', 'SOURCE_DISABLED', 'BACKGROUND_PAUSED'].includes(entry.failure?.code ?? '')
+      Logger.plugin(
+        entry.failure && !cancelled ? 'warn' : 'debug',
+        {
+          pluginId: entry.pluginId,
+          version: entry.version,
+          sourceId: entry.sourceId,
+          operation: entry.operation,
+          code: entry.failure?.code,
+          elapsedMs: entry.elapsedMs,
+          callId: entry.id
+        },
+        cancelled ? 'CALL_CANCELLED' : entry.failure ? 'CALL_FAILED' : 'CALL_COMPLETED'
+      )
+      return
+    }
     if (entry.status === 'failed') Logger.warn('[Source call]', entry)
     else Logger.debug('[Source call]', entry)
   })

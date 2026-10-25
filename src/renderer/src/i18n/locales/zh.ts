@@ -638,6 +638,21 @@ export default {
     restore: '恢复主窗口'
   },
   plugins: {
+    logs: '插件日志',
+    logsAll: '全部插件',
+    logsAllLevels: '全部级别',
+    logsPlugin: '筛选插件',
+    logsLevel: '筛选级别',
+    logsSearch: '搜索日志',
+    logsHint:
+      '显示当前会话最近 1000 条插件日志，包含已卸载插件；遵循系统日志记录级别。详细调用需在系统设置中开启 Debug，轻量播放模式仅记录 Error。历史日志保存在日志目录。',
+    logsEmpty: '暂无匹配的插件日志。',
+    logsLoadFailed: '读取插件日志失败，请重试。',
+    logsDirectory: '打开日志目录',
+    logsDirectoryFailed: '无法打开日志目录。',
+    logsCopy: '复制筛选结果',
+    logsCopied: '日志已复制。',
+    logsCopyFailed: '无法复制日志。',
     enableSuccess: '插件“{name}”已启用。',
     disableSuccess: '插件“{name}”已停用。',
     installSuccess: '插件“{name}”安装成功。',

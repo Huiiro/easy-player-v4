@@ -650,6 +650,21 @@ export default {
     restore: 'Restore main window'
   },
   plugins: {
+    logs: 'Plugin logs',
+    logsAll: 'All plugins',
+    logsAllLevels: 'All levels',
+    logsPlugin: 'Filter plugin',
+    logsLevel: 'Filter level',
+    logsSearch: 'Search logs',
+    logsHint:
+      'Shows the latest 1000 plugin entries in this session, including removed plugins. Uses the system log level; enable Debug in System settings for detailed calls. Playback-only mode records errors only. History is saved in the log directory.',
+    logsEmpty: 'No matching plugin logs.',
+    logsLoadFailed: 'Could not load plugin logs. Retry to reconnect.',
+    logsDirectory: 'Open log directory',
+    logsDirectoryFailed: 'Could not open the log directory.',
+    logsCopy: 'Copy filtered logs',
+    logsCopied: 'Logs copied.',
+    logsCopyFailed: 'Could not copy logs.',
     enableSuccess: 'Plugin “{name}” enabled.',
     disableSuccess: 'Plugin “{name}” disabled.',
     installSuccess: 'Plugin “{name}” installed.',

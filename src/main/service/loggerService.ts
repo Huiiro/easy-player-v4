@@ -1,8 +1,14 @@
+import {
+  pluginLogContext,
+  redactPluginLog,
+  type PluginLogContext,
+  type PluginLogEntry
+} from '../../shared/pluginLogs'
 import { t } from '../i18n'
 import { isPlaybackOnly } from './playbackMode'
 import fs from 'node:fs'
 import path from 'node:path'
-import { BrowserWindow, ipcMain } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import { getLogPath } from '../utils/pathUtils'
 import { getAppSetting, setAppSetting } from '../database/repository'
 
@@ -14,9 +20,11 @@ export interface LogEntry {
   level: LogLevel
   source: LogSource
   message: string
+  plugin?: PluginLogContext
 }
 
 const recent: LogEntry[] = []
+const pluginRecent: PluginLogEntry[] = []
 const MAX_RECENT = 1000
 const LEVELS: LogLevel[] = ['debug', 'info', 'warn', 'error']
 const LEVEL_SETTING_KEY = 'logging.level'
@@ -39,6 +47,35 @@ function format(value: unknown): string {
 
 export class Logger {
   static write(level: LogLevel, source: LogSource, message: string, ...params: unknown[]): void {
+    this.publish(level, source, [message, ...params.map(format)].join(' '))
+  }
+
+  static plugin(
+    level: LogLevel,
+    context: PluginLogContext,
+    message: unknown,
+    source: LogSource = 'main'
+  ): void {
+    const plugin = pluginLogContext(context)
+    if (!plugin || !isLogLevel(level)) return
+    this.publish(
+      level,
+      source,
+      '[Plugin] ' + plugin.pluginId + ' ' + redactPluginLog(message),
+      plugin
+    )
+  }
+
+  static recentPlugins(): PluginLogEntry[] {
+    return structuredClone(pluginRecent)
+  }
+
+  private static publish(
+    level: LogLevel,
+    source: LogSource,
+    message: string,
+    plugin?: PluginLogContext
+  ): void {
     if (isPlaybackOnly() && level !== 'error') return
     if (LEVELS.indexOf(level) < LEVELS.indexOf(minimumLevel)) return
     const entry: LogEntry = {
@@ -46,12 +83,17 @@ export class Logger {
       timestamp: Date.now(),
       level,
       source,
-      message: [message, ...params.map(format)].join(' ').replace(/\r?\n/g, '\\n')
+      message: message.replace(/\r?\n/g, '\\n'),
+      ...(plugin ? { plugin } : {})
+    }
+    if (plugin) {
+      pluginRecent.push({ ...entry, plugin })
+      if (pluginRecent.length > MAX_RECENT) pluginRecent.shift()
     }
     recent.push(entry)
     if (recent.length > MAX_RECENT) recent.shift()
 
-    const line = `[${new Date(entry.timestamp).toISOString()}] [${level.toUpperCase()}] [${source}] ${entry.message}`
+    const line = `[${new Date(entry.timestamp).toISOString()}] [${level.toUpperCase()}] [${source}] ${entry.message}${entry.plugin ? ' ' + JSON.stringify(entry.plugin) : ''}`
     try {
       const directory = getLogPath()
       fs.mkdirSync(directory, { recursive: true })
@@ -64,7 +106,12 @@ export class Logger {
     const output = level === 'warn' ? console.warn : level === 'error' ? console.error : console.log
     output(line)
     for (const window of BrowserWindow.getAllWindows()) {
-      if (!window.isDestroyed()) window.webContents.send('log:entry', entry)
+      try {
+        if (!window.isDestroyed() && !window.webContents.isDestroyed())
+          window.webContents.send('log:entry', entry)
+      } catch {
+        /* A closing window must not interrupt the logged operation. */
+      }
     }
   }
 
@@ -110,6 +157,16 @@ export class Logger {
       this.write(entry.level as LogLevel, 'renderer', entry.message.slice(0, 8192))
     })
     ipcMain.handle('log:recent', () => recent)
+    ipcMain.handle('log:open-directory', async () => {
+      try {
+        const directory = getLogPath()
+        fs.mkdirSync(directory, { recursive: true })
+        const error = await shell.openPath(directory)
+        return error ? { success: false, error } : { success: true }
+      } catch {
+        return { success: false, error: 'LOG_DIRECTORY_OPEN_FAILED' }
+      }
+    })
     ipcMain.on('log:preload', (_event, message: unknown) => {
       if (typeof message === 'string') this.write('error', 'preload', message.slice(0, 8192))
     })

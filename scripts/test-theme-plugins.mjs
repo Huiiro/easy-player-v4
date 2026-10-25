@@ -25,6 +25,7 @@ const { OfficialPluginPackages, PluginManager, SourceRegistry } = createRequire(
 )
 const catalog = JSON.parse(readFileSync('resources/plugins/catalog.json', 'utf8'))
 const settings = new Map()
+const events = []
 function instance(directory = path.join(root, 'installed')) {
   const manager = new PluginManager(new SourceRegistry(), {
     readSetting: (key) => settings.get(key),
@@ -32,7 +33,15 @@ function instance(directory = path.join(root, 'installed')) {
     fetch: () => assert.fail('Unexpected network'),
     log() {}
   })
-  const packages = new OfficialPluginPackages(directory, manager, {}, catalog)
+  const packages = new OfficialPluginPackages(
+    directory,
+    manager,
+    {},
+    catalog,
+    undefined,
+    undefined,
+    (event) => events.push(event)
+  )
   packages.initialize()
   return { manager, packages, directory }
 }
@@ -482,6 +491,13 @@ assert.equal(
   restoredNyan.packages.themeResource(dto.pluginId, dto.revision, 'images/nyan-cat.png'),
   undefined
 )
+assert(events.some((event) => event.operation === 'install' && event.message === 'COMMITTED'))
+assert(
+  events.some(
+    (event) => event.operation === 'update' && event.message.includes('FAILED_PREVIOUS_RETAINED')
+  )
+)
+assert(events.some((event) => event.operation === 'uninstall' && event.message === 'COMMITTED'))
 console.log(
   'Theme plugins: third-party install/update/restart, lifecycle, downgrade, malformed/code rejection, official Black Hole and gated resources passed'
 )

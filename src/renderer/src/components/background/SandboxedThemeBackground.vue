@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { reportThemeFailure } from '@/services/pluginLogs'
 import type { InstalledPluginTheme } from '../../../../shared/themePlugins'
 
 const props = withDefaults(defineProps<{ theme: InstalledPluginTheme; paused?: boolean }>(), {
@@ -20,11 +21,12 @@ function sendState(): void {
     '*'
   )
 }
-function fail(): void {
+function fail(reason = 'FRAME_FAILED'): void {
   if (failed.value) return
   clearTimeout(timer)
   failed.value = true
   ready.value = false
+  reportThemeFailure(props.theme, reason)
   emit('failure')
 }
 function message(event: MessageEvent): void {
@@ -39,8 +41,8 @@ function message(event: MessageEvent): void {
 watch(() => props.paused, sendState)
 onMounted(() => {
   window.addEventListener('message', message)
-  if (!source.value) fail()
-  else timer = setTimeout(fail, 10000)
+  if (!source.value) fail('FRAME_URL_INVALID')
+  else timer = setTimeout(() => fail('FRAME_TIMEOUT'), 10000)
 })
 onBeforeUnmount(() => {
   clearTimeout(timer)
@@ -69,7 +71,7 @@ onBeforeUnmount(() => {
       referrerpolicy="no-referrer"
       tabindex="-1"
       @load="sendState"
-      @error="fail"
+      @error="fail('FRAME_LOAD')"
     />
   </div>
 </template>

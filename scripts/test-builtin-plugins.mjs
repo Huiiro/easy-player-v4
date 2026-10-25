@@ -419,7 +419,10 @@ const dependencies = {
   [path.resolve('src/main/database/index.ts')]: { getDatabase: () => db },
   [path.resolve('src/main/service/loggerService.ts')]: {
     Logger: Object.fromEntries(
-      ['debug', 'info', 'warn', 'error'].map((level) => [level, (...args) => logs2.push(args)])
+      ['debug', 'info', 'warn', 'error', 'plugin', 'recentPlugins'].map((level) => [
+        level,
+        (...args) => logs2.push(args)
+      ])
     )
   }
 }
@@ -509,7 +512,10 @@ for (const args of [
 const handlers = new Map(),
   notifications = []
 dependencies.electron = {
-  ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+  ipcMain: {
+    handle: (channel, handler) => handlers.set(channel, handler),
+    on: (channel, handler) => handlers.set(channel, handler)
+  },
   BrowserWindow: {
     getAllWindows: () => [
       {

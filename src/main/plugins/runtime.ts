@@ -25,7 +25,8 @@ function getRuntime(): NonNullable<typeof runtime> {
     const manager = new PluginManager(registry, {
       readSetting: (key) => dependencies.readSetting(key),
       writeSetting: (key, value) => dependencies.writeSetting(key, value),
-      log: (id, level, message) => dependencies.log(id, level, message),
+      log: (id, level, message, version, operation) =>
+        dependencies.log(id, level, message, version, operation),
       fetch: (url, init) => dependencies.fetch(url, init),
       mediaInfo: (request, signal) => {
         if (!dependencies.mediaInfo) throw new SourceCallError('UNSUPPORTED_CAPABILITY')
