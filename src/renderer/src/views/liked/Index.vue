@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
-import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { useRouter } from 'vue-router'
+import PlaylistHeader from '@/components/playlist/PlaylistHeader.vue'
 import SongListView from '@/components/songlist/SongListView.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import type { PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
@@ -12,6 +15,10 @@ import CropperDialog from '@/components/cropper/CropperDialog.vue'
 
 const { t } = useI18n()
 const player = usePlayerStore()
+const router = useRouter()
+const { playlistHeaderCollapsed: headerCollapsed } = storeToRefs(useUIStore())
+const playing = ref(false)
+const songListSource = { type: 'liked' as const }
 const { success, warning, error: showError } = useMessage()
 const coverInput = ref<HTMLInputElement | null>(null)
 const cropDialogVisible = ref(false)
@@ -91,65 +98,58 @@ watch(cropDialogVisible, (visible) => {
 })
 
 async function playLikedSongs(): Promise<void> {
-  const response = await window.api.database.command('querySongs', { preference: 1 })
-  if (!response.success) {
-    showError(response.error || t('playlist.playFailed'))
-    return
+  if (playing.value) return
+  playing.value = true
+  try {
+    const response = await window.api.database.command('querySongs', { preference: 1 })
+    if (!response.success) {
+      showError(response.error || t('playlist.playFailed'))
+      return
+    }
+    const songs = (response.data as PagedLibrarySongs).data.filter((song) => song.songStatus !== 0)
+    if (!songs.length) {
+      warning(t('playlist.empty'))
+      return
+    }
+    if (!(await player.playCollection(songs, null, LIKED_PLAYLIST_ID)))
+      showError(t('playlist.playFailed'))
+  } finally {
+    playing.value = false
   }
-  const songs = (response.data as PagedLibrarySongs).data.filter((song) => song.songStatus !== 0)
-  if (!songs.length) {
-    warning(t('playlist.empty'))
-    return
-  }
-  if (!(await player.playCollection(songs, null, LIKED_PLAYLIST_ID)))
-    showError(t('playlist.playFailed'))
 }
 </script>
 
 <template>
   <section class="flex h-full min-h-0 flex-col text-text">
-    <header class="flex shrink-0 items-center gap-5 px-6 py-6">
-      <button
-        class="group relative grid size-40 shrink-0 place-items-center overflow-hidden rounded-2xl bg-bg-l shadow-lg"
-        :title="t('playlist.setCover')"
-        @click="coverInput?.click()"
-      >
-        <img
-          v-if="coverUrl"
-          :src="coverUrl"
-          class="size-full object-cover"
-          :alt="t('playlist.likedSongs')"
+    <PlaylistHeader
+      v-model:collapsed="headerCollapsed"
+      :title="t('playlist.likedSongs')"
+      :cover-url="coverUrl"
+      icon="play-like-fill"
+      :playing="playing"
+      @select-cover="coverInput?.click()"
+      @play="playLikedSongs"
+      @back="router.back()"
+    >
+      <template #cover-input>
+        <input
+          ref="coverInput"
+          class="hidden"
+          type="file"
+          accept="image/*"
+          @change="selectCustomCover"
         />
-        <SvgIcon v-else name="play-like-fill" class-name="size-12 text-text-l" />
-        <span
-          class="absolute inset-0 grid place-items-center bg-black/45 text-xs text-white opacity-0 transition-opacity group-hover:opacity-100"
-        >
-          {{ t('playlist.changeCover') }}
-        </span>
-      </button>
-      <input
-        ref="coverInput"
-        class="hidden"
-        type="file"
-        accept="image/*"
-        @change="selectCustomCover"
-      />
-      <div class="min-w-0">
-        <p class="text-xs font-semibold tracking-[.12em] text-text-l">{{ t('playlist.label') }}</p>
-        <h1 class="mt-2 text-3xl font-bold">{{ t('playlist.likedSongs') }}</h1>
+      </template>
+      <template #details>
         <p class="mt-2 text-sm text-text-l">{{ t('playlist.likedDescription') }}</p>
-        <button v-if="customCover" class="btn-hover mt-2 px-2 py-1.5 text-xs" @click="resetCover">
+      </template>
+      <template #actions>
+        <button v-if="customCover" class="btn-hover px-2 py-1.5 text-xs" @click="resetCover">
           {{ t('playlist.resetCover') }}
         </button>
-        <button
-          class="btn-hover-base mt-4 rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:text-white"
-          @click="playLikedSongs"
-        >
-          {{ t('playlist.play') }}
-        </button>
-      </div>
-    </header>
-    <SongListView class="min-h-0 flex-1" :source="{ type: 'liked' }" />
+      </template>
+    </PlaylistHeader>
+    <SongListView class="min-h-0 flex-1" :source="songListSource" />
   </section>
   <CropperDialog v-model="cropDialogVisible" :image-url="cropImageUrl" @confirm="applyCoverCrop" />
 </template>
