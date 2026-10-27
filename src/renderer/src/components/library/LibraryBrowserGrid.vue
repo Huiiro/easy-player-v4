@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -32,7 +32,7 @@ const cardSize = computed<number>({
     ui.libraryCardSize[props.kind] = value
   }
 })
-const loading = ref(false)
+const loading = ref(true)
 let loadRevision = 0
 const items = ref<GridItem[]>([])
 const visibleCoverKeys = ref(new Set<string>())
@@ -79,7 +79,7 @@ function observeCover(element: unknown, item: GridItem): void {
   element.setAttribute('data-cover-key', key)
   coverObserver?.observe(element)
 }
-async function load(restoreScroll = false): Promise<void> {
+async function load(restoreScroll = false, resetScroll = false): Promise<void> {
   loading.value = true
   const revision = ++loadRevision
   try {
@@ -90,11 +90,20 @@ async function load(restoreScroll = false): Promise<void> {
       separator.value,
       t('library.unknown')
     )
-    if (revision === loadRevision) items.value = result
+    if (revision === loadRevision) {
+      const keys = new Set(result.map(itemKey))
+      visibleCoverKeys.value = new Set([...visibleCoverKeys.value].filter((key) => keys.has(key)))
+      items.value = result
+      if (resetScroll) {
+        await nextTick()
+        if (revision === loadRevision) scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
+      } else if (restoreScroll) {
+        await restoreScrollPosition()
+      }
+    }
   } finally {
     if (revision === loadRevision) {
       loading.value = false
-      if (restoreScroll) await restoreScrollPosition()
     }
   }
 }
@@ -112,17 +121,14 @@ function open(item: GridItem): void {
 }
 function refresh(): void {
   saveScrollPosition()
-  visibleCoverKeys.value = new Set()
   void load(true)
 }
 
 watch([keyword, order, separator], () => {
-  visibleCoverKeys.value = new Set()
   clearSavedScrollPosition()
-  void load()
+  void load(false, true)
 })
 watch(cardSize, () => {
-  visibleCoverKeys.value = new Set()
   clearSavedScrollPosition()
   scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
 })
@@ -151,7 +157,7 @@ onActivated(() => {
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col pt-6 text-text">
+  <section class="flex h-full min-h-0 flex-col pt-6 text-text" :aria-busy="loading">
     <header class="mb-5 flex flex-wrap items-center justify-between gap-3 px-6">
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">{{ title }}</h1>
@@ -219,34 +225,40 @@ onActivated(() => {
         />
       </div>
     </header>
-    <p v-if="loading" class="py-8 text-sm text-text-l">{{ t('library.loading') }}</p>
-    <p v-else-if="!items.length" class="py-8 text-sm text-text-l">
-      {{ t('library.empty') }}
-    </p>
-    <div
-      v-else
-      ref="scrollContainer"
-      class="custom-scrollbar grid min-h-0 flex-1 auto-rows-min content-start gap-4 overflow-y-auto pb-24 pr-1"
-      :style="gridStyle"
-      @scroll.passive="scheduleScrollPositionSave"
-    >
-      <button
-        v-for="item in items"
-        :key="itemKey(item)"
-        :ref="(element) => observeCover(element, item)"
-        type="button"
-        class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
-        @click="open(item)"
+    <div class="relative min-h-0 flex-1 overflow-hidden">
+      <p
+        v-if="!loading && !items.length"
+        class="absolute inset-0 flex items-center justify-center px-6 py-8 text-center text-sm text-text-l"
+        role="status"
       >
-        <LibraryItemCard
-          :name="item.name"
-          :subtitle="item.subtitle"
-          :cover="shouldLoadCover(item) ? coverUrl(item.cover) : null"
-          :icon="icon"
-          :circle="kind === 'artist'"
-          :badge="t('library.songCount', { count: item.count })"
-        />
-      </button>
+        {{ t('library.empty') }}
+      </p>
+      <div
+        ref="scrollContainer"
+        class="custom-scrollbar absolute inset-0 grid auto-rows-min content-start gap-4 overflow-y-auto pb-24 pr-1"
+        :class="{ invisible: loading || !items.length }"
+        :inert="loading || !items.length"
+        :style="gridStyle"
+        @scroll.passive="scheduleScrollPositionSave"
+      >
+        <button
+          v-for="item in items"
+          :key="itemKey(item)"
+          :ref="(element) => observeCover(element, item)"
+          type="button"
+          class="group min-w-0 rounded-xl p-2 text-left transition-colors hover:bg-hover"
+          @click="open(item)"
+        >
+          <LibraryItemCard
+            :name="item.name"
+            :subtitle="item.subtitle"
+            :cover="shouldLoadCover(item) ? coverUrl(item.cover) : null"
+            :icon="icon"
+            :circle="kind === 'artist'"
+            :badge="t('library.songCount', { count: item.count })"
+          />
+        </button>
+      </div>
     </div>
   </section>
 </template>

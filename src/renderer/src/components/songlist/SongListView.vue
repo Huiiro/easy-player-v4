@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -46,7 +46,7 @@ const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
 const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
 const showBackTop = ref(false)
-const loading = ref(false)
+const loading = ref(true)
 const keyword = ref('')
 const composing = ref(false)
 let appliedSearch = ''
@@ -181,12 +181,21 @@ const getSongs = (): Promise<LibrarySong[]> =>
     statistics
   })
 
-const load = async (): Promise<void> => {
+const load = async (resetScroll = false): Promise<void> => {
   const revision = ++loadRevision
   loading.value = true
   try {
     const result = await getSongs()
-    if (!disposed && revision === loadRevision) songs.value = result
+    if (!disposed && revision === loadRevision) {
+      songs.value = result
+      if (resetScroll) {
+        await nextTick()
+        if (!disposed && revision === loadRevision) {
+          scroller.value?.scrollToItem?.(0)
+          showBackTop.value = false
+        }
+      }
+    }
   } catch (error) {
     if (!disposed && revision === loadRevision) showError(String(error))
   } finally {
@@ -220,7 +229,7 @@ const backToTop = (): void => {
   showBackTop.value = false
 }
 const playSong = async (song: LibrarySong): Promise<void> => {
-  if (song.songStatus === 0) return
+  if (loading.value || song.songStatus === 0) return
   // Search is an ad-hoc view, not a new playlist. Insert the selected result
   // into the current queue (or reuse it when already queued) and play it.
   if (keyword.value.trim()) {
@@ -235,6 +244,7 @@ const playSong = async (song: LibrarySong): Promise<void> => {
   )
 }
 const playSelected = (): void => {
+  if (loading.value) return
   const selectedSongs = filteredSongs.value.filter((song) => selectedIds.value.has(song.id))
   if (selectedSongs[0])
     void player.playCollection(
@@ -313,11 +323,11 @@ onBeforeUnmount(() => {
 })
 watch(
   () => props.source,
-  () => void load(),
+  () => void load(true),
   { deep: true }
 )
-watch(selectedTagIds, () => canFilterByTags.value && void load())
-watch(sourceFilter, () => canFilterBySource.value && void load())
+watch(selectedTagIds, () => canFilterByTags.value && void load(true))
+watch(sourceFilter, () => canFilterBySource.value && void load(true))
 watch(
   () =>
     props.source.type === 'genre'
@@ -325,7 +335,7 @@ watch(
       : props.source.type === 'artist'
         ? uiStore.artistSeparator
         : undefined,
-  () => void load()
+  () => void load(true)
 )
 watch([keyword, composing], () => {
   ++loadRevision
@@ -345,13 +355,13 @@ watch([keyword, composing], () => {
     }
     appliedSearch = nextSearch
     hasSearch.value = Boolean(appliedSearch)
-    void load()
+    void load(true)
   }, 200)
 })
 </script>
 
 <template>
-  <section class="relative flex h-full min-h-0 flex-col text-text">
+  <section class="relative flex h-full min-h-0 flex-col text-text" :aria-busy="loading">
     <SongListHeader
       v-model:keyword="keyword"
       :total="songs.length"
@@ -386,40 +396,44 @@ watch([keyword, composing], () => {
       @clear-tag-filters="selectedTagIds = []"
       @update:source-filter="sourceFilter = String($event)"
     />
-    <div v-if="loading" class="p-6 text-sm text-text-l">
-      {{ t('songList.loading') }}
+    <div class="relative min-h-0 flex-1 overflow-hidden">
+      <div
+        v-if="!loading && !filteredSongs.length"
+        class="absolute inset-0 flex items-center justify-center p-6 text-center text-sm text-text-l"
+        role="status"
+      >
+        {{ t('songList.empty') }}
+      </div>
+      <RecycleScroller
+        ref="scroller"
+        class="song-list-scroller custom-scrollbar overflow-y-auto"
+        :class="{ invisible: loading || !filteredSongs.length }"
+        :inert="loading || !filteredSongs.length"
+        :items="filteredSongs"
+        :item-size="uiStore.compactSongList ? 56 : 64"
+        key-field="id"
+        @scroll.passive="onListScroll"
+      >
+        <template #default="{ item, index }">
+          <SongListItem
+            :song="item"
+            :index="index"
+            :selection-mode="selectionMode"
+            :selected="selectedIds.has(item.id)"
+            :current="player.currentQueueSong?.id === item.id"
+            :keyword="keyword"
+            :show-file-name="showFileName"
+            :compact="uiStore.compactSongList"
+            @play="playSong"
+            @toggle-select="toggleSelect"
+            @request-menu="(song, x, y) => actions?.openMenu(song, x, y)"
+          />
+        </template>
+        <template #after>
+          <div class="h-28" aria-hidden="true" />
+        </template>
+      </RecycleScroller>
     </div>
-    <div v-else-if="filteredSongs.length === 0" class="p-6 text-sm text-text-l">
-      {{ t('songList.empty') }}
-    </div>
-    <RecycleScroller
-      v-else
-      ref="scroller"
-      class="custom-scrollbar min-h-0 flex-1 overflow-y-auto"
-      :items="filteredSongs"
-      :item-size="uiStore.compactSongList ? 56 : 64"
-      key-field="id"
-      @scroll.passive="onListScroll"
-    >
-      <template #default="{ item, index }">
-        <SongListItem
-          :song="item"
-          :index="index"
-          :selection-mode="selectionMode"
-          :selected="selectedIds.has(item.id)"
-          :current="player.currentQueueSong?.id === item.id"
-          :keyword="keyword"
-          :show-file-name="showFileName"
-          :compact="uiStore.compactSongList"
-          @play="playSong"
-          @toggle-select="toggleSelect"
-          @request-menu="(song, x, y) => actions?.openMenu(song, x, y)"
-        />
-      </template>
-      <template #after>
-        <div class="h-28" aria-hidden="true" />
-      </template>
-    </RecycleScroller>
     <button
       v-if="showBackTop && !loading && filteredSongs.length"
       type="button"
@@ -444,6 +458,10 @@ watch([keyword, composing], () => {
 </template>
 
 <style scoped>
+.song-list-scroller {
+  position: absolute;
+  inset: 0;
+}
 .song-list-backtop {
   bottom: var(--song-list-backtop-bottom, 7rem);
   isolation: isolate;

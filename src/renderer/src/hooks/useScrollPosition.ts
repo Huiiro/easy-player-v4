@@ -6,7 +6,7 @@ export function useScrollPosition(
   storageKey: Readonly<Ref<string>>
 ) {
   let scrollSaveFrame = 0
-  let restoreFrame = 0
+  let restoreRevision = 0
   let disposed = false
 
   function savedScrollTop(): number {
@@ -34,7 +34,7 @@ export function useScrollPosition(
     })
   }
   function clearSavedScrollPosition(): void {
-    cancelAnimationFrame(restoreFrame)
+    restoreRevision++
     if (scrollSaveFrame) {
       cancelAnimationFrame(scrollSaveFrame)
       scrollSaveFrame = 0
@@ -46,19 +46,17 @@ export function useScrollPosition(
     }
   }
   async function restoreScrollPosition(): Promise<void> {
+    const revision = ++restoreRevision
     const top = savedScrollTop()
     if (!top) return
     await nextTick()
-    if (disposed) return
-    restoreFrame = requestAnimationFrame(() =>
-      scrollContainer.value?.scrollTo({ top, behavior: 'auto' })
-    )
+    if (disposed || revision !== restoreRevision) return
+    scrollContainer.value?.scrollTo({ top, behavior: 'auto' })
   }
 
   onBeforeUnmount(() => {
     disposed = true
     cancelAnimationFrame(scrollSaveFrame)
-    cancelAnimationFrame(restoreFrame)
     saveScrollPosition()
   })
   return {
