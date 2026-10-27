@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import LibraryItemCard from './LibraryItemCard.vue'
 import { queryLibraryItems, type LibraryKind, type GridItem } from '@/services/libraryBrowser'
 import { useScrollPosition } from '@/hooks/useScrollPosition'
@@ -155,22 +156,23 @@ onActivated(() => {
       <div class="flex items-center gap-3">
         <h1 class="text-xl font-bold">{{ title }}</h1>
         <div
-          class="group relative block h-8 transition-[width] duration-[var(--motion-duration-standard)]"
-          :class="keyword ? 'w-56' : 'w-8 hover:w-56 focus-within:w-56'"
+          class="group relative block h-[var(--ep-control-height-sm)] transition-[width] duration-[var(--motion-duration-standard)]"
+          :class="keyword ? 'w-56' : 'w-[var(--ep-control-height-sm)] hover:w-56 focus-within:w-56'"
         >
           <SvgIcon
             name="common-search"
-            class-name="pointer-events-none absolute left-2.5 top-1/2 z-10 size-3.5 -translate-y-1/2 text-text-l"
+            class-name="pointer-events-none absolute left-1.5 top-1/2 z-10 size-4 -translate-y-1/2 text-text-l"
           />
           <input
             v-model="keyword"
-            class="input-base library-search absolute inset-0 h-8 w-full transition-opacity duration-[var(--motion-duration-fast)]"
+            class="ep-input ep-control--sm library-search absolute inset-0 w-full border text-xs outline-none transition-opacity duration-[var(--motion-duration-fast)]"
             :class="
               keyword
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
             "
             :placeholder="t('library.search', { type: title })"
+            :aria-label="t('library.search', { type: title })"
           />
           <button
             v-if="keyword"
@@ -183,29 +185,36 @@ onActivated(() => {
           </button>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button
-          class="btn-hover grid size-8 place-items-center"
+      <div class="flex flex-wrap items-center gap-2">
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          icon-only
           :title="t('library.refresh')"
           :aria-label="t('library.refresh')"
           @click="refresh"
         >
           <SvgIcon name="common-refresh" class-name="size-4" />
-        </button>
-        <button
-          class="btn-hover grid size-8 place-items-center"
+        </BaseButton>
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          icon-only
           :title="t('library.sort')"
+          :aria-label="t('library.sort')"
           @click="order = order === 'asc' ? 'desc' : 'asc'"
         >
           <SvgIcon
             :name="order === 'asc' ? 'common-sort' : 'common-sort-converse'"
             class-name="size-4"
           />
-        </button>
+        </BaseButton>
         <BaseSelect
           v-model="cardSize"
           :options="cardSizeOptions"
           :title="t('library.cardSize')"
+          :aria-label="t('library.cardSize')"
+          size="sm"
           class="w-30"
         />
       </div>

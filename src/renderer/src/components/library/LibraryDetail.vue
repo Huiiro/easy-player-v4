@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 
 type LibraryKind = 'album' | 'artist' | 'genre'
 const props = defineProps<{ kind: LibraryKind }>()
@@ -68,7 +69,9 @@ watch(coverUrl, () => {
           {{ subtitle }}
         </p>
       </div>
-      <button class="btn-hover text-sm" @click="router.back()">{{ t('library.back') }}</button>
+      <BaseButton variant="ghost" size="sm" @click="router.back()">
+        {{ t('library.back') }}
+      </BaseButton>
     </header>
     <SongListView class="min-h-0 flex-1" :source="source" />
   </section>

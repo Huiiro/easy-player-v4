@@ -35,6 +35,11 @@
 .ep-select {
   border-radius: var(--ep-control-radius);
 }
+.ep-menu-item,
+.ep-select-option,
+.ep-select-empty {
+  min-height: var(--ep-control-height, 32px);
+}
 .ep-button--icon {
   width: var(--ep-control-height);
   padding-inline: 0;

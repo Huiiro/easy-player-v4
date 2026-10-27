@@ -3,7 +3,7 @@ import { Listbox, ListboxButton, ListboxOption, ListboxOptions } from '@headless
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FloatingPanel from './FloatingPanel.vue'
-import type { ControlSize } from './types'
+import { controlSizeClasses, type ControlSize } from './types'
 
 defineOptions({
   name: 'BaseSelect'
@@ -76,15 +76,7 @@ const isPlaceholder = computed(() => {
 })
 
 // ==================== 尺寸 ====================
-const buttonSizeClass = computed(() => {
-  const map: Record<string, string> = {
-    xs: 'px-2 py-0.5 text-xs',
-    sm: 'px-2.5 py-1 text-xs',
-    md: 'px-3 py-1.5 text-sm',
-    lg: 'px-4 py-2 text-base'
-  }
-  return map[props.size]
-})
+const sizeClass = computed(() => controlSizeClasses[props.size])
 
 // ==================== 清除 ====================
 function onClear(): void {
@@ -112,7 +104,7 @@ function onClear(): void {
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
           'hover:border-primary',
           disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer',
-          buttonSizeClass,
+          sizeClass,
           `ep-control--${size}`,
           clearable && !isPlaceholder ? 'pr-8' : ''
         ]"
@@ -126,7 +118,7 @@ function onClear(): void {
 
         <!-- chevron -->
         <svg
-          class="w-4 h-4 shrink-0 text-text-l transition-transform duration-[var(--motion-duration-standard)]"
+          class="size-[1em] shrink-0 text-text-l transition-transform duration-[var(--motion-duration-standard)]"
           :class="{ 'rotate-180': open }"
           viewBox="0 0 24 24"
           fill="none"
@@ -158,9 +150,7 @@ function onClear(): void {
         leave-to-class="opacity-0 scale-95"
       >
         <ListboxOptions
-          :class="[
-            'ep-select-options w-full overflow-y-auto custom-scrollbar rounded-xl border border-border bg-bg p-1 shadow-lg focus:outline-none'
-          ]"
+          class="ep-select-options w-full overflow-y-auto custom-scrollbar rounded-xl border p-1 shadow-lg focus:outline-none"
           style="max-height: min(15rem, var(--ep-floating-available-height, 15rem))"
         >
           <ListboxOption
@@ -173,7 +163,9 @@ function onClear(): void {
           >
             <li
               :class="[
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm cursor-pointer transition-colors select-none',
+                'ep-select-option flex min-w-0 items-center gap-2 rounded-lg cursor-pointer transition-colors select-none',
+                sizeClass,
+                `ep-control--${size}`,
                 opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
                 isSelected
                   ? 'bg-primary/30 font-medium text-primary'
@@ -185,7 +177,7 @@ function onClear(): void {
               <!-- checkmark -->
               <svg
                 v-if="isSelected"
-                class="w-4 h-4 shrink-0 text-primary"
+                class="size-[1em] shrink-0 text-primary"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -193,16 +185,20 @@ function onClear(): void {
               >
                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
               </svg>
-              <span v-else class="w-4 shrink-0" />
+              <span v-else class="size-[1em] shrink-0" />
 
               <slot name="option" :option="opt" :selected="isSelected" :active="active"
-                ><span class="flex-1 truncate">{{ opt.label }}</span></slot
+                ><span class="min-w-0 flex-1 truncate">{{ opt.label }}</span></slot
               >
             </li>
           </ListboxOption>
 
           <!-- empty -->
-          <div v-if="options.length === 0" class="px-3 py-2 text-sm text-text-l2 text-center">
+          <div
+            v-if="options.length === 0"
+            class="ep-select-empty flex items-center justify-center text-text-l2 text-center"
+            :class="[sizeClass, `ep-control--${size}`]"
+          >
             <slot name="empty">{{ t('ui.empty') }}</slot>
           </div>
         </ListboxOptions>

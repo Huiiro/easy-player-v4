@@ -95,6 +95,10 @@ Dialog/Drawer 共用 `useModalClose`：Esc 与遮罩关闭分别由 `closeOnEsc/
 
 Select 的宽度契约：`class="w-64"`、`class="w-full"`、`style="width: 20rem"` 等均作用于外层，内部实际按钮跟随；`min-w-*` 仍由调用方决定最小宽度。不要通过覆盖内部按钮宽度弥补外层布局。`.ep-select-root` 是外层公开类，`.ep-select` 是交互按钮，`.ep-select-options` 是选项面板。
 
+Select 的下拉项和空状态跟随 `size`：最小高度共用 `--ep-control-height-xs/sm/md/lg`（默认 24/28/32/40px），字号、水平内边距与触发器一致，图标随字号缩放；自定义选项插槽可以按内容撑高。
+
+Menu 支持相同的 `size` 参数（默认 `md`），普通项、分组项与 Select 共用高度、字号、水平内边距规则，图标随字号缩放。触发器由 `trigger` 插槽负责布局，插槽提供当前 `size`。歌曲列表头统一使用 `sm`，菜单项与工具栏控件默认高度均为 28px。
+
 音频主面板目前保留 DSP 链路编排、运行状态、EQ 编辑区和预设管理；底栏保留布局与菜单展示。拆分以独立业务变化为边界，未将全部视图强制改成纯展示组件。
 
 ## 验证与入口

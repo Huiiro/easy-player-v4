@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import FloatingPanel from './FloatingPanel.vue'
 import ObserveOpen from './ObserveOpen.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { controlSizeClasses, type ControlSize } from './types'
 
 defineOptions({
   name: 'BaseMenu'
@@ -37,13 +38,15 @@ const props = withDefaults(
     width?: string
     teleport?: boolean
     maxHeight?: number | string
+    size?: ControlSize
   }>(),
   {
     items: () => [],
     align: 'end',
     side: 'auto',
     width: 'w-48',
-    maxHeight: 300
+    maxHeight: 300,
+    size: 'md'
   }
 )
 
@@ -54,6 +57,7 @@ const emit = defineEmits<{
 }>()
 
 const triggerRef = ref<HTMLElement | null>(null)
+const sizeClass = computed(() => controlSizeClasses[props.size])
 const maxHeightStyle = computed(() => {
   const value = props.maxHeight ?? '60vh'
 
@@ -63,7 +67,7 @@ const maxHeightStyle = computed(() => {
   }
 })
 
-const defaultIconClass = 'w-4 h-4 text-current'
+const defaultIconClass = 'size-[1em] shrink-0 text-current'
 
 function iconClass(item: MenuItemType): string[] {
   return [defaultIconClass, item.iconClass ?? '']
@@ -89,7 +93,7 @@ function handleClick(item: MenuItemType): void {
     <!-- trigger -->
     <div ref="triggerRef" class="">
       <MenuButton as="div">
-        <slot name="trigger" />
+        <slot name="trigger" :size="size" />
       </MenuButton>
     </div>
 
@@ -111,13 +115,13 @@ function handleClick(item: MenuItemType): void {
       >
         <MenuItems
           class="ep-menu rounded-xl border shadow-lg p-1 no-scrollbar"
-          :class="width"
+          :class="[width, `ep-control--${size}`]"
           :style="maxHeightStyle"
         >
           <template v-for="(item, i) in items" :key="i">
             <!-- group -->
             <div v-if="item.type === 'group'" class="py-1">
-              <div v-if="item.label" class="px-3 py-1 text-xs text-text-l">
+              <div v-if="item.label" class="py-1 text-text-l" :class="sizeClass">
                 {{ item.label }}
               </div>
 
@@ -129,7 +133,8 @@ function handleClick(item: MenuItemType): void {
                     type="button"
                     :disabled="child.disabled"
                     :class="[
-                      'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition',
+                      'ep-menu-item w-full flex min-w-0 items-center gap-2 rounded-lg transition',
+                      sizeClass,
                       child.disabled && 'opacity-50 cursor-not-allowed',
                       isSelected(child)
                         ? 'bg-primary/30 font-medium text-primary'
@@ -139,9 +144,8 @@ function handleClick(item: MenuItemType): void {
                     ]"
                     @click="handleClick(child)"
                   >
-                    <!--<component :is="child.icon" v-if="child.icon" class="w-4 h-4" />-->
-                    <svgIcon v-if="child.icon" :name="child.icon" :class="iconClass(child)" />
-                    {{ child.label }}
+                    <SvgIcon v-if="child.icon" :name="child.icon" :class="iconClass(child)" />
+                    <span class="min-w-0 flex-1 text-left">{{ child.label }}</span>
                   </button>
                 </MenuItem>
               </template>
@@ -156,7 +160,8 @@ function handleClick(item: MenuItemType): void {
                 type="button"
                 :disabled="item.disabled"
                 :class="[
-                  'w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition',
+                  'ep-menu-item w-full flex min-w-0 items-center gap-2 rounded-lg transition',
+                  sizeClass,
                   item.disabled && 'opacity-50 cursor-not-allowed',
                   isSelected(item)
                     ? 'bg-primary/30 font-medium text-primary'
@@ -166,9 +171,8 @@ function handleClick(item: MenuItemType): void {
                 ]"
                 @click="handleClick(item)"
               >
-                <!--<component :is="item.icon" v-if="item.icon" class="w-4 h-4" />-->
-                <svgIcon v-if="item.icon" :name="item.icon" :class="iconClass(item)" />
-                {{ item.label }}
+                <SvgIcon v-if="item.icon" :name="item.icon" :class="iconClass(item)" />
+                <span class="min-w-0 flex-1 text-left">{{ item.label }}</span>
               </button>
             </MenuItem>
           </template>

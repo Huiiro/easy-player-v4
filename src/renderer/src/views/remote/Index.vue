@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useMessage } from '@/components/ui/useMessage'
 
@@ -202,30 +203,37 @@ onMounted(() => void load())
 
 <template>
   <section class="custom-scrollbar h-full overflow-y-auto p-7 text-text">
-    <header class="mb-6 flex items-center justify-between">
+    <header class="mb-6 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl font-bold">{{ t('remote.title') }}</h1>
         <p class="mt-1 text-sm text-text-l">{{ t('remote.supported') }}</p>
       </div>
-      <div class="flex items-center gap-4">
-        <label class="text-sm text-text-l">{{ t('remote.provider') }}</label>
-        <BaseSelect v-model="providerFilter" :options="providerOptions" class="w-36" />
-        <button
-          class="btn-hover grid size-8 place-items-center"
+      <div class="flex flex-wrap items-center gap-2">
+        <label class="text-xs text-text-l">{{ t('remote.provider') }}</label>
+        <BaseSelect
+          v-model="providerFilter"
+          :options="providerOptions"
+          :aria-label="t('remote.provider')"
+          size="sm"
+          class="w-36"
+        />
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          icon-only
           :aria-label="t('remote.refresh')"
           :title="t('remote.refresh')"
           @click="refreshSources"
         >
           <SvgIcon name="common-refresh" class-name="size-4" />
           <span class="sr-only">{{ t('remote.refresh') }}</span>
-        </button>
-        <button
-          class="btn-hover-base flex items-center rounded-lg bg-primary px-3 py-2 text-sm text-white"
-          @click="openCreate"
-        >
-          <SvgIcon name="common-plus" class-name="mr-1 size-4" />
+        </BaseButton>
+        <BaseButton size="sm" @click="openCreate">
+          <template #left>
+            <SvgIcon name="common-plus" class-name="size-4" />
+          </template>
           {{ t('remote.add') }}
-        </button>
+        </BaseButton>
       </div>
     </header>
 

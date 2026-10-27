@@ -106,12 +106,12 @@ const moreMenuItems = computed(() => [
       <div class="flex items-center gap-1">
         <!-- multi select -->
         <button
-          class="btn-hover grid size-8 place-items-center"
+          class="btn-hover header-control header-icon-control"
           :aria-label="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
           :title="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
           @click="emit('toggleSelection')"
         >
-          <SvgIcon :name="selectionMode ? 'common-back-left' : 'common-task'" class-name="size-5" />
+          <SvgIcon :name="selectionMode ? 'common-back-left' : 'common-task'" class-name="size-4" />
           <span class="sr-only"
             >{{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
           </span>
@@ -125,7 +125,7 @@ const moreMenuItems = computed(() => [
           />
           <input
             :value="keyword"
-            class="input-base h-8 w-52 search-input"
+            class="ep-input ep-control--sm w-52 border text-xs outline-none search-input"
             :placeholder="t('songList.search')"
             :aria-label="t('songList.search')"
             @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
@@ -143,17 +143,20 @@ const moreMenuItems = computed(() => [
           </button>
         </div>
         <!-- count text -->
-        <p class="text-sm text-text-l text-nowrap ml-2 cursor-default btn-hover">
+        <p class="header-control text-text-l ml-2 cursor-default">
           {{ t('songList.total', { count: total }) }}
         </p>
       </div>
-      <div class="flex flex-wrap items-center justify-end gap-4">
-        <BaseMenu :model-value="sortBy" :items="sortMenuItems" width="w-40" :max-height="360">
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <BaseMenu
+          :model-value="sortBy"
+          :items="sortMenuItems"
+          size="sm"
+          width="w-40"
+          :max-height="360"
+        >
           <template #trigger>
-            <button
-              class="btn-hover flex items-center gap-1 px-2 text-xs"
-              :aria-label="t('songList.sort')"
-            >
+            <button class="btn-hover header-control px-2" :aria-label="t('songList.sort')">
               <SvgIcon name="common-sort" class-name="size-4" />
               {{ activeSortLabel }} {{ direction }}
             </button>
@@ -172,12 +175,12 @@ const moreMenuItems = computed(() => [
         <!-- tag -->
         <button
           v-if="showTagManager"
-          class="btn-hover grid size-4 place-items-center"
+          class="btn-hover header-control header-icon-control"
           :aria-label="t('tags.manageAndFilter')"
           :title="t('tags.manageAndFilter')"
           @click="emit('openTagManager')"
         >
-          <SvgIcon name="common-tag" class-name="size-4.5" />
+          <SvgIcon name="common-tag" class-name="size-4" />
           <span class="sr-only">{{ t('tags.manageAndFilter') }}</span>
         </button>
         <span
@@ -188,14 +191,14 @@ const moreMenuItems = computed(() => [
         </span>
         <button
           v-if="activeTagFilterCount"
-          class="btn-hover text-xs text-text-l"
+          class="btn-hover header-control px-2 text-text-l"
           @click="emit('clearTagFilters')"
         >
           {{ t('tags.clearFilter') }}
         </button>
         <!-- refresh -->
         <button
-          class="btn-hover grid size-4 place-items-center"
+          class="btn-hover header-control header-icon-control"
           :aria-label="t('songList.refresh')"
           :title="t('songList.refresh')"
           @click="emit('refresh')"
@@ -203,10 +206,10 @@ const moreMenuItems = computed(() => [
           <SvgIcon name="common-refresh" class-name="size-4" />
           <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
-        <BaseMenu :items="moreMenuItems" width="w-44">
+        <BaseMenu :items="moreMenuItems" size="sm" width="w-44">
           <template #trigger>
             <button
-              class="btn-hover grid size-6 place-items-center"
+              class="btn-hover header-control header-icon-control"
               :aria-label="t('songList.more')"
               :title="t('songList.more')"
             >
@@ -217,16 +220,16 @@ const moreMenuItems = computed(() => [
       </div>
     </div>
 
-    <div v-if="selectionMode" class="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 pb-3 text-sm">
-      <button class="btn-hover" @click="emit('toggleAll')">
+    <div v-if="selectionMode" class="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 pb-3 text-xs">
+      <button class="btn-hover header-control px-2" @click="emit('toggleAll')">
         {{ allSelected ? t('songList.clearSelection') : t('songList.selectAll') }}
       </button>
-      <button class="btn-hover" @click="emit('selectNewest')">
+      <button class="btn-hover header-control px-2" @click="emit('selectNewest')">
         {{ t('songList.selectNewest') }}
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchPlay')"
       >
         <SvgIcon name="play-play" class-name="size-4" />
@@ -234,7 +237,7 @@ const moreMenuItems = computed(() => [
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchAddToPlaylist')"
       >
         <SvgIcon name="common-plus" class-name="size-4" />
@@ -242,7 +245,7 @@ const moreMenuItems = computed(() => [
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchEditTags')"
       >
         <SvgIcon name="common-edit" class-name="size-4" />
@@ -250,7 +253,7 @@ const moreMenuItems = computed(() => [
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchReloadFromDisk')"
       >
         <SvgIcon name="common-refresh" class-name="size-4" />
@@ -258,7 +261,7 @@ const moreMenuItems = computed(() => [
       </button>
       <button
         :disabled="selectedCount === 0"
-        class="flex gap-1 items-center btn-hover disabled:opacity-40"
+        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchDelete')"
       >
         <SvgIcon name="common-delete" class-name="size-4" />
@@ -282,6 +285,22 @@ const moreMenuItems = computed(() => [
 </template>
 
 <style scoped>
+.header-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  height: var(--ep-control-height-sm);
+  min-height: var(--ep-control-height-sm);
+  font-size: var(--text-xs);
+  line-height: var(--text-xs--line-height);
+  white-space: nowrap;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
+}
+.header-icon-control {
+  width: var(--ep-control-height-sm);
+  flex-shrink: 0;
+}
 .search-input {
   padding-left: 2rem !important;
   padding-right: 2rem !important;

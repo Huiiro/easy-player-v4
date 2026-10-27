@@ -313,7 +313,8 @@ html.mica-enabled:has(.ep-dialog .ep-overlay--blur) #app {
   box-shadow: none;
 }
 .ep-menu,
-.ep-popover {
+.ep-popover,
+.ep-select-options {
   background: var(--color-bg-l);
   border-color: var(--color-border);
   color: var(--color-text);

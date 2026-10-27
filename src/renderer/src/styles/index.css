@@ -257,7 +257,7 @@ textarea,
 }
 
 .btn-hover {
-  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] not-disabled:hover:text-primary;
 }
 
 .btn-hover-base {
