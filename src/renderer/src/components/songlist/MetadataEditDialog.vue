@@ -11,7 +11,6 @@ import CropperDialog from '@/components/cropper/CropperDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import eventBus from '@/utils/eventBus'
 import { createSourceRequestScope } from '@/services/sourceRequests'
-import { useUIStore } from '@/stores/ui/uiStore'
 
 export interface SongMetadata {
   title?: string
@@ -48,7 +47,6 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>()
 const { t } = useI18n()
-const ui = useUIStore()
 const { success: showSuccess, error: showError } = useMessage()
 
 const coverRequests = createSourceRequestScope()
@@ -323,19 +321,28 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
                 ✕
               </button>
             </div>
-            <div class="mt-2 flex gap-1">
-              <BaseButton class="min-w-0 flex-1" @click="chooseCover">{{
+            <div class="mt-3 flex flex-col gap-2">
+              <BaseButton class="w-full" @click="chooseCover">{{
                 t('metadataEdit.chooseCover')
               }}</BaseButton>
-              <button
-                class="grid h-9 px-1 shrink-0 place-items-center rounded text-white hover:opacity-85 disabled:opacity-50"
+              <BaseButton
+                variant="secondary"
+                class="w-full"
                 :aria-label="t('metadataEdit.searchCover')"
-                :title="t('metadataEdit.searchCover')"
                 :disabled="searchingCovers"
                 @click="openCoverSearch"
               >
-                <svg-icon name="common-search" class-name="size-4" />
-              </button>
+                <SvgIcon name="common-search" class-name="mr-1.5 size-3.5" />
+                {{ t('metadataEdit.searchCover') }}
+              </BaseButton>
+              <BaseButton
+                variant="secondary"
+                class="w-full"
+                :disabled="saving || loading"
+                @click="sourceDialogVisible = true"
+              >
+                {{ t('metadataEdit.networkMatch') }}
+              </BaseButton>
             </div>
           </div>
 
@@ -390,13 +397,6 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
             <div>
               <div :class="inputLabelClass">{{ t('metadataEdit.genre') }}</div>
               <BaseInput v-model="metadata.genre" :clearable="false" />
-              <p class="mt-1 text-xs text-text-l">
-                {{
-                  t('settings.genreEditHint', {
-                    separators: ui.genreSeparator || t('settings.genreSeparatorDisabled')
-                  })
-                }}
-              </p>
             </div>
             <div>
               <div :class="inputLabelClass">{{ t('metadataEdit.discNumber') }}</div>
@@ -437,16 +437,24 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
         <div class="flex gap-2">
           <BaseInput
             v-model="coverSearch"
+            class="min-w-0 flex-1"
             :placeholder="t('metadataEdit.searchCoverPlaceholder')"
             :clearable="false"
             @keyup.enter="searchCovers"
           />
-          <BaseButton :disabled="searchingCovers" class="text-nowrap" @click="searchCovers">
+          <BaseButton
+            :disabled="searchingCovers"
+            class="shrink-0 text-nowrap"
+            @click="searchCovers"
+          >
             <svg-icon name="common-search" class-name="size-[14px] mr-1" />
             {{ t('metadataEdit.searchCover') }}
           </BaseButton>
         </div>
-        <div v-if="coverResults.length" class="mt-4 grid grid-cols-4 gap-3">
+        <div
+          v-if="coverResults.length"
+          class="custom-scrollbar mt-4 grid max-h-[min(24rem,50dvh)] grid-cols-2 gap-3 overflow-y-auto overscroll-contain pb-1 pr-1 sm:grid-cols-4"
+        >
           <button
             v-for="result in coverResults"
             :key="result.id"
@@ -471,12 +479,6 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
       </div>
     </BaseDialog>
     <template #footer>
-      <BaseButton
-        variant="secondary"
-        :disabled="saving || loading"
-        @click="sourceDialogVisible = true"
-        >{{ t('metadataEdit.networkMatch') }}</BaseButton
-      >
       <BaseButton variant="secondary" @click="emit('update:modelValue', false)">
         {{ t('metadataEdit.cancel') }}
       </BaseButton>

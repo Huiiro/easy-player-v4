@@ -48,6 +48,7 @@
     "test:network-sources": "node scripts/test-network-sources.mjs && node scripts/test-lyric-providers.mjs",
     "test:source-metadata": "node scripts/test-source-metadata.mjs",
     "test:source-metadata:ui": "electron scripts/check-source-metadata.cjs",
+    "test:lyrics-manager": "electron scripts/check-lyrics-manager.cjs",
     "test:builtin-plugins": "node scripts/test-builtin-plugins.mjs",
     "test:qqmusic-source": "node scripts/test-qqmusic-source.mjs",
     "test:kugou-source": "node scripts/test-kugou-source.mjs",

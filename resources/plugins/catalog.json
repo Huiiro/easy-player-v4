@@ -8,7 +8,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.1",
+      "version": "1.1.2",
       "apiVersion": 2,
       "sources": [
         {
@@ -21,9 +21,9 @@
           ]
         }
       ],
-      "size": 759405,
-      "sha256": "7ccf20bb870882b4e0e831b82003d075c75311ce544b3d028d4bf1b35585e0da",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.1-7ccf20bb8708.epp"
+      "size": 761388,
+      "sha256": "b35abeb9e81203aa58365a78ea0f978126ceb55e0de68c5c237bf8077f0174e7",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.2-b35abeb9e812.epp"
     },
     {
       "id": "builtin.kugou",
@@ -32,7 +32,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.1",
+      "version": "1.1.2",
       "apiVersion": 2,
       "sources": [
         {
@@ -45,9 +45,9 @@
           ]
         }
       ],
-      "size": 320494,
-      "sha256": "1aa735bd879a18e68744d0b54539ed54a8ab4578cb09a198e70235a6a298bc9e",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.1-1aa735bd879a.epp"
+      "size": 321230,
+      "sha256": "bca1a23fd0f1d5009361999b0a8a54d16b6ef3389f5a94850ab7657f6dc99fec",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.2-bca1a23fd0f1.epp"
     },
     {
       "id": "builtin.qqmusic",
@@ -56,7 +56,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.1",
+      "version": "1.1.2",
       "apiVersion": 2,
       "sources": [
         {
@@ -69,9 +69,9 @@
           ]
         }
       ],
-      "size": 46383,
-      "sha256": "2e748b7df534181c8c6cab9a0b36c00158a1f11fdb34ac37e2e492334cab5460",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.1-2e748b7df534.epp"
+      "size": 47394,
+      "sha256": "8df725cf3023194e58aaf2de2211e2cb1a15931622de93a8d4996b08d6c56ed5",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.2-8df725cf3023.epp"
     },
     {
       "id": "builtin.bili",

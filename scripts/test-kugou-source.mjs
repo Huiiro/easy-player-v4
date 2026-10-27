@@ -330,6 +330,48 @@ missingLyrics = true
 assert.equal(await metadata.getSourceTrackLyrics(results[0].resource), null)
 missingLyrics = false
 
+// The catalog's separate suffix is a translated display name, not the lyric identity.
+const savedSearchRows = clone(searchRows)
+searchRows.splice(
+  0,
+  searchRows.length,
+  {
+    MixSongID: '423788044',
+    FileHash: hash1,
+    OriSongName: '花の塔',
+    Suffix: '(花之塔)',
+    SingerName: '酸欠少女さユり'
+  },
+  {
+    MixSongID: '432780292',
+    FileHash: hash2,
+    OriSongName: '花の塔',
+    Suffix: '(Tower of Flower)',
+    SingerName: '酸欠少女さユり'
+  },
+  {
+    MixSongID: '28056043',
+    FileHash: hash1,
+    OriSongName: 'ミカヅキ',
+    Suffix: '(新月)',
+    SingerName: '酸欠少女さユり'
+  }
+)
+const search = load('src/main/service/lyrics/network.ts')
+const japanese = await search.searchNetworkLyrics({ title: '花の塔', artist: '酸欠少女さユり' })
+assert.equal(
+  japanese.length,
+  2,
+  'host matching keeps the two original-title KRCs and rejects the other song'
+)
+assert(japanese.every((candidate) => candidate.title === '花の塔' && candidate.format === 'krc'))
+assert.deepEqual(
+  plain(japanese).map((candidate) => candidate.resource.resourceId),
+  ['423788044', '432780292']
+)
+assert.equal((await metadata.searchSourceTracks('kugou', '花の塔'))[0].title, '花の塔 (花之塔)')
+searchRows.splice(0, searchRows.length, ...savedSearchRows)
+
 searchFailure = { status: 0, error_code: 403 }
 await assert.rejects(
   metadata.searchSourceTracks('kugou', 'Song'),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createSourceRequestScope } from '@/services/sourceRequests'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -7,6 +7,7 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
+import type { LibrarySong } from '@/types/library'
 import {
   resolveLyrics,
   type LyricFormat,
@@ -18,6 +19,10 @@ const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
 const ui = useUIStore()
 const player = usePlayerStore()
+type EditingSong = Pick<LibrarySong, 'id' | 'audio' | 'title' | 'artist' | 'album'>
+const editingSong = shallowRef<EditingSong | null>(null)
+const saving = ref(false)
+let editSession = 0
 const { t } = useI18n()
 const providerLabelKeys: Record<string, string> = {
   netease: 'playerPanel.lyricProviderNetease',
@@ -30,7 +35,10 @@ function cancelRequest(): void {
   requests.cancelAll()
   loading.value = false
 }
-onBeforeUnmount(cancelRequest)
+onBeforeUnmount(() => {
+  editSession++
+  cancelRequest()
+})
 const error = ref('')
 const candidates = ref<NetworkLyricCandidate[]>([])
 const selected = ref(0)
@@ -47,7 +55,9 @@ const sourceLabel = computed(() => {
   if (!resolvedSource.value) return t('playerPanel.lyricSourceNone')
   return t(`lyrics.source.${resolvedSource.value}`)
 })
-const isAutoPreview = computed(() => previewSource.value === 'auto')
+const isReadOnlyPreview = computed(
+  () => previewSource.value === 'auto' || previewSource.value === 'embedded'
+)
 const sources = computed(() => [
   { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
   { value: 'embedded', label: t('lyrics.source.embedded') },
@@ -57,7 +67,7 @@ const sources = computed(() => [
 ])
 async function loadDraft(source = previewSource.value): Promise<void> {
   requests.cancel('draft')
-  const song = player.currentQueueSong
+  const song = editingSong.value
   lyric.value = ''
   translation.value = ''
   romanization.value = ''
@@ -117,8 +127,8 @@ async function loadDraft(source = previewSource.value): Promise<void> {
   call.finish()
 }
 async function initializeDraft(): Promise<void> {
-  const metadata = player.trackInfo?.metadata
-  const song = player.currentQueueSong
+  const song = editingSong.value
+  const metadata = player.trackInfo?.filePath === song?.audio ? player.trackInfo?.metadata : null
   query.value = {
     title: metadata?.title?.trim() || song?.title || '',
     artist: metadata?.artist?.trim() || song?.artist || '',
@@ -134,13 +144,28 @@ function updateVisible(value: boolean): void {
   emit('update:modelValue', value)
 }
 watch(
-  () => [props.modelValue, player.currentQueueSong?.id] as const,
-  ([visible]) => {
+  // Playback can advance independently; each open dialog owns one editing target.
+  () => props.modelValue,
+  (visible) => {
+    editSession++
     cancelRequest()
+    saving.value = false
+    const song = visible ? player.currentQueueSong : null
+    editingSong.value = song
+      ? {
+          id: song.id,
+          audio: song.audio,
+          title: song.title,
+          artist: song.artist,
+          album: song.album
+        }
+      : null
     if (visible) void initializeDraft()
-  }
+  },
+  { immediate: true, flush: 'sync' }
 )
 async function selectSource(source: 'auto' | LyricSource): Promise<void> {
+  if (!props.modelValue || !editingSong.value || saving.value) return
   cancelRequest()
   previewSource.value = source
   await loadDraft(source)
@@ -164,7 +189,7 @@ function selectCandidate(index: number): void {
   }
 }
 async function search(): Promise<void> {
-  if (!query.value.title.trim()) return
+  if (!props.modelValue || !editingSong.value || saving.value || !query.value.title.trim()) return
   requests.cancel('draft')
   const call = requests.start('search')
   loading.value = true
@@ -192,22 +217,29 @@ async function search(): Promise<void> {
   }
 }
 async function save(): Promise<void> {
-  if (isAutoPreview.value) return
-  const song = player.currentQueueSong
+  if (!props.modelValue || isReadOnlyPreview.value || saving.value) return
+  const song = editingSong.value
   if (!song) return
-  const response = await window.api.database.command('updateSongLyrics', {
-    id: song.id,
-    lrc: lyric.value,
-    lyricFormat: lyricFormat.value,
-    translation: translation.value || undefined,
-    translationFormat: translation.value ? translationFormat.value : undefined,
-    romanization: romanization.value || undefined,
-    romanizationFormat: romanization.value ? romanizationFormat.value : undefined
-  })
-  if (!response.success) return
-  eventBus.emit('lyricsUpdated', song.id)
-  emit('saved')
-  emit('update:modelValue', false)
+  const session = editSession
+  saving.value = true
+  try {
+    const response = await window.api.database.command('updateSongLyrics', {
+      id: song.id,
+      lrc: lyric.value,
+      lyricFormat: lyricFormat.value,
+      translation: translation.value || undefined,
+      translationFormat: translation.value ? translationFormat.value : undefined,
+      romanization: romanization.value || undefined,
+      romanizationFormat: romanization.value ? romanizationFormat.value : undefined
+    })
+    if (!response.success) return
+    eventBus.emit('lyricsUpdated', song.id)
+    if (session !== editSession || !props.modelValue) return
+    emit('saved')
+    emit('update:modelValue', false)
+  } finally {
+    if (session === editSession) saving.value = false
+  }
 }
 </script>
 
@@ -219,6 +251,16 @@ async function save(): Promise<void> {
     width="max-w-5xl"
     @update:model-value="updateVisible"
   >
+    <p
+      v-if="editingSong"
+      class="mb-3 truncate text-sm font-medium text-text"
+      :title="editingSong.title"
+    >
+      {{ editingSong.title
+      }}<span v-if="editingSong.artist" class="font-normal text-text-l">
+        — {{ editingSong.artist }}</span
+      >
+    </p>
     <div class="grid h-[min(68vh,45rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
       <div class="custom-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
         <div>
@@ -230,6 +272,7 @@ async function save(): Promise<void> {
             <button
               v-for="source in sources"
               :key="source.value"
+              :disabled="saving || !editingSong"
               class="manager-button rounded-lg px-3 py-2 text-left text-sm"
               :class="
                 previewSource === source.value
@@ -278,7 +321,7 @@ async function save(): Promise<void> {
           />
           <button
             class="manager-button w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
-            :disabled="loading || !query.title.trim()"
+            :disabled="loading || saving || !editingSong || !query.title.trim()"
             @click="search"
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}
@@ -329,19 +372,19 @@ async function save(): Promise<void> {
         <textarea
           v-model="lyric"
           class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1"
-          :readonly="isAutoPreview"
+          :readonly="isReadOnlyPreview || saving || !editingSong"
           :placeholder="t('playerPanel.lyricEditorPlaceholder')"
         />
         <textarea
           v-model="translation"
           class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
-          :readonly="isAutoPreview"
+          :readonly="isReadOnlyPreview || saving || !editingSong"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
         />
         <textarea
           v-model="romanization"
           class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
-          :readonly="isAutoPreview"
+          :readonly="isReadOnlyPreview || saving || !editingSong"
           :placeholder="t('playerPanel.lyricRomanizationPlaceholder')"
         />
       </div>
@@ -357,10 +400,10 @@ async function save(): Promise<void> {
       <button
         class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
         type="button"
-        :disabled="isAutoPreview"
+        :disabled="isReadOnlyPreview || saving || !editingSong"
         @click="save"
       >
-        {{ t('common.save') }}
+        {{ t('playerPanel.lyricSaveDatabase') }}
       </button>
     </template>
   </BaseDialog>

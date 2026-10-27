@@ -52,6 +52,8 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
       structuredClone,
       URLSearchParams,
       AbortSignal,
+      setTimeout,
+      clearTimeout,
       AbortController,
       Error,
       Date,
@@ -252,7 +254,14 @@ const qrcQQ = load(
                   data: {
                     body: {
                       song: {
-                        list: [{ id: 123, mid: 'word', name: query.title }]
+                        list: [
+                          {
+                            id: 123,
+                            mid: 'word',
+                            name: query.title,
+                            singer: [{ name: query.artist }]
+                          }
+                        ]
                       }
                     }
                   }
@@ -564,3 +573,111 @@ const embedded = load('src/main/service/lyrics/embedded.ts', {
 })
 assert.equal((await embedded.readEmbeddedLyrics('/music/track.flac')).content, '[0:01.25]Embedded')
 console.log('Lyric provider, fallback, ranking and source separation fixtures passed')
+
+// Real adapters must emit alias-aware names that still pass the unchanged host checks.
+let identityVersion = ''
+const identityQuery = { title: 'Translated song', artist: 'Translated singer' }
+const identityNetease = load(pluginPath('official/netease/lyrics.ts'), {
+  '@neteasecloudmusicapienhanced/api': {
+    default: {
+      search: async () => ({
+        status: 200,
+        body: {
+          code: 200,
+          result: {
+            songs: [
+              {
+                id: 711,
+                name: 'Original song' + identityVersion,
+                transNames: ['Translated song'],
+                artists: [{ id: 773, name: 'Original singer' }]
+              }
+            ]
+          }
+        }
+      }),
+      artist_detail: async ({ id }) => ({
+        status: 200,
+        body: {
+          code: 200,
+          data: {
+            artist: { id: Number(id), name: 'Original singer', alias: ['Translated singer'] }
+          }
+        }
+      }),
+      lyric_new: async () => ({ status: 200, body: { lrc: { lyric: '[00:01.00]Fixture' } } }),
+      lyric: async () => ({ status: 200, body: { lrc: { lyric: '[00:01.00]Fixture' } } })
+    }
+  }
+})
+const identityQQ = load(
+  pluginPath('official/qqmusic/lyrics.ts'),
+  {},
+  {
+    fetch: async (_url, init) => ({
+      ok: true,
+      text: async () =>
+        JSON.stringify(
+          init.body
+            ? {
+                code: 0,
+                req_1: {
+                  code: 0,
+                  data: {
+                    body: {
+                      song: {
+                        list: [
+                          {
+                            mid: '000StudioSong1',
+                            title: 'Original song (Display translation)',
+                            name: 'Original song',
+                            alias: ['Translated song'],
+                            subtitle: identityVersion ? 'Live' : '',
+                            singer: [{ name: 'Original singer', alias: ['Translated singer'] }]
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            : { code: 0, lyric: '[00:01.00]Fixture' }
+        )
+    })
+  }
+)
+async function identityResults(request) {
+  return [
+    ...(await identityNetease.searchNeteaseLyrics(request, false)),
+    ...(await identityQQ.searchQQMusicLyrics(request, false))
+  ].filter((candidate) => isRelevantCandidate(candidate, request))
+}
+assert.equal(
+  (await identityResults(identityQuery)).length,
+  2,
+  'declared song and artist aliases survive host filtering'
+)
+assert.equal(
+  (await identityResults({ ...identityQuery, artist: 'Unrelated singer' })).length,
+  0,
+  'aliases must not permit another singer'
+)
+assert.equal(
+  (await identityResults({ ...identityQuery, title: 'Unrelated song' })).length,
+  0,
+  'do not use the query as a fallback title'
+)
+identityVersion = ' (Live)'
+assert.equal(
+  (await identityResults(identityQuery)).length,
+  0,
+  'a declared translated name cannot disguise a Live recording'
+)
+assert.equal(
+  (await identityResults({ ...identityQuery, title: 'Translated song (Live)' })).length,
+  2,
+  'the requested Live recording remains searchable'
+)
+console.log(
+  'NetEase/QQ title aliases, verified artist aliases and recording versions pass real host relevance checks'
+)
