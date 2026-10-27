@@ -28,7 +28,9 @@ watch(
   <BaseDrawer
     :model-value="modelValue"
     :direction="ui.playQueuePosition"
-    width="28rem"
+    width="26rem"
+    header-class="px-1 py-1"
+    body-class="px-1 py-1"
     @update:model-value="(val) => $emit('update:modelValue', val)"
   >
     <template #header>

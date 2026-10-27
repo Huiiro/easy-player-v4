@@ -56,7 +56,7 @@ defineExpose({ scrollToCurrent })
       @click="activateSong($event, () => playAt(item.index))"
       @dblclick="activateSong($event, () => playAt(item.index))"
     >
-      <span class="w-5 shrink-0 text-right text-xs text-text-l2 tabular-nums">
+      <span class="mr-1 w-5 shrink-0 text-right text-xs text-text-l2 tabular-nums">
         {{ item.index + 1 }}
       </span>
       <img
@@ -75,7 +75,7 @@ defineExpose({ scrollToCurrent })
         @click="player.moveQueueItem(item.index, item.index - 1)"
         @dblclick.stop
       >
-        ↑
+        <SvgIcon name="arrow-arrow-up" class-name="size-4" />
       </button>
       <button
         class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none"
@@ -83,14 +83,14 @@ defineExpose({ scrollToCurrent })
         @click="player.moveQueueItem(item.index, item.index + 1)"
         @dblclick.stop
       >
-        ↓
+        <SvgIcon name="arrow-arrow-down" class-name="size-4" />
       </button>
       <button
         class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none text-red-400"
         @click="removeAt(item.index)"
         @dblclick.stop
       >
-        ×
+        <SvgIcon name="common-close" class-name="size-2.5" />
       </button>
     </div>
   </RecycleScroller>
