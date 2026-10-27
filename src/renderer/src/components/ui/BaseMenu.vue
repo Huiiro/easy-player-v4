@@ -120,13 +120,13 @@ function handleClick(item: MenuItemType): void {
         >
           <template v-for="(item, i) in items" :key="i">
             <!-- group -->
-            <div v-if="item.type === 'group'" class="py-1">
+            <div v-if="item.type === 'group'" class="flow-root">
               <div v-if="item.label" class="py-1 text-text-l" :class="sizeClass">
                 {{ item.label }}
               </div>
 
               <template v-for="(child, j) in item.children" :key="j">
-                <div v-if="child.type === 'divider'" class="my-1 h-px bg-border" />
+                <div v-if="child.type === 'divider'" class="mx-2 my-1.5 h-px bg-border" />
 
                 <MenuItem v-else v-slot="{ active }" :disabled="child.disabled">
                   <button
@@ -152,7 +152,7 @@ function handleClick(item: MenuItemType): void {
             </div>
 
             <!-- divider -->
-            <div v-else-if="item.type === 'divider'" class="my-1 h-px bg-border" />
+            <div v-else-if="item.type === 'divider'" class="mx-2 my-1.5 h-px bg-border" />
 
             <!-- item -->
             <MenuItem v-else v-slot="{ active }" :disabled="item.disabled">

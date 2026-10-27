@@ -8,6 +8,14 @@ import { querySongList, type SongListSource } from '@/services/songListQuery'
 import { playSearchResult } from '@/services/searchPlayback'
 import eventBus from '@/utils/eventBus'
 import { createSongTextComparator, songSortText } from '@/utils/songTextSort'
+import {
+  normalizeSongListColumns,
+  songListLayout,
+  songPlayCount,
+  songYear,
+  type OptionalSongColumn,
+  type SongSortField as SortField
+} from '@/utils/songListLayout'
 import SongListHeader from './SongListHeader.vue'
 import { useSongSelection } from './useSongSelection'
 import SongListItem from './SongListItem.vue'
@@ -17,8 +25,6 @@ import type { LibrarySong } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
-type SortField =
-  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface MusicSourceOption {
   id: number
   name: string
@@ -44,7 +50,21 @@ const statistics = useStatisticsStore()
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
-const scroller = ref<{ scrollToItem?: (index: number) => void } | null>(null)
+const scroller = ref<{ el?: HTMLElement; scrollToItem?: (index: number) => void } | null>(null)
+const columns = computed(() => normalizeSongListColumns(uiStore.songListColumns))
+const layoutStyle = computed(() => songListLayout(columns.value))
+const scrollLeft = ref(0)
+const contentWidth = ref(0)
+function syncScrollLayout(): void {
+  const element = scroller.value?.el
+  if (!element) return
+  scrollLeft.value = element.scrollLeft
+  contentWidth.value = element.clientWidth
+}
+function toggleColumn(column: OptionalSongColumn): void {
+  uiStore.songListColumns = { ...columns.value, [column]: !columns.value[column] }
+}
+watch(columns, () => void nextTick(syncScrollLayout))
 const showBackTop = ref(false)
 const loading = ref(true)
 const keyword = ref('')
@@ -146,6 +166,14 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
       if (result !== 0) return result * (sortOrder.value === 'asc' ? 1 : -1)
     }
     return right.id - left.id
+  } else if (field === 'year') {
+    const leftYear = songYear(left)
+    const rightYear = songYear(right)
+    if (leftYear === null || rightYear === null) {
+      if (leftYear !== rightYear) return leftYear === null ? 1 : -1
+    } else result = leftYear - rightYear
+  } else if (field === 'playTimes') {
+    result = (songPlayCount(left) ?? 0) - (songPlayCount(right) ?? 0)
   } else if (field === 'id' || field === 'duration') {
     result = Number(left[field] ?? 0) - Number(right[field] ?? 0)
   } else {
@@ -188,8 +216,9 @@ const load = async (resetScroll = false): Promise<void> => {
     const result = await getSongs()
     if (!disposed && revision === loadRevision) {
       songs.value = result
+      await nextTick()
+      if (!disposed && revision === loadRevision) syncScrollLayout()
       if (resetScroll) {
-        await nextTick()
         if (!disposed && revision === loadRevision) {
           scroller.value?.scrollToItem?.(0)
           showBackTop.value = false
@@ -216,12 +245,13 @@ const toggleSort = (field: SortField): void => {
   if (sortBy.value === field) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   else {
     sortBy.value = field
-    sortOrder.value = field === 'relevance' ? 'desc' : 'asc'
+    sortOrder.value = field === 'relevance' || field === 'playTimes' ? 'desc' : 'asc'
   }
   if (field !== 'relevance') browsingSort = { field, order: sortOrder.value }
 }
 const onListScroll = (event: Event): void => {
   actions.value?.closeMenu()
+  scrollLeft.value = (event.target as HTMLElement).scrollLeft
   showBackTop.value = (event.target as HTMLElement).scrollTop > 320
 }
 const backToTop = (): void => {
@@ -361,7 +391,11 @@ watch([keyword, composing], () => {
 </script>
 
 <template>
-  <section class="relative flex h-full min-h-0 flex-col text-text" :aria-busy="loading">
+  <section
+    class="relative flex h-full min-h-0 flex-col text-text"
+    :aria-busy="loading"
+    :style="layoutStyle"
+  >
     <SongListHeader
       v-model:keyword="keyword"
       :total="songs.length"
@@ -375,6 +409,9 @@ watch([keyword, composing], () => {
       :all-selected="allSelected"
       :show-file-name="showFileName"
       :compact="uiStore.compactSongList"
+      :columns="columns"
+      :scroll-left="scrollLeft"
+      :content-width="contentWidth"
       :show-tag-manager="canFilterByTags"
       :active-tag-filter-count="canFilterByTags ? selectedTagIds.length : 0"
       :source-filter="canFilterBySource ? sourceFilter : undefined"
@@ -387,6 +424,7 @@ watch([keyword, composing], () => {
       @select-newest="selectNewest"
       @toggle-file-name="showFileName = !showFileName"
       @toggle-compact="uiStore.compactSongList = !uiStore.compactSongList"
+      @toggle-column="toggleColumn"
       @batch-play="playSelected"
       @batch-add-to-playlist="actions?.addSelectedToPlaylist()"
       @batch-edit-tags="actions?.openBatchTags()"
@@ -413,6 +451,7 @@ watch([keyword, composing], () => {
         :item-size="uiStore.compactSongList ? 56 : 64"
         key-field="id"
         @scroll.passive="onListScroll"
+        @resize="syncScrollLayout"
       >
         <template #default="{ item, index }">
           <SongListItem
@@ -424,6 +463,7 @@ watch([keyword, composing], () => {
             :keyword="keyword"
             :show-file-name="showFileName"
             :compact="uiStore.compactSongList"
+            :columns="columns"
             @play="playSong"
             @toggle-select="toggleSelect"
             @request-menu="(song, x, y) => actions?.openMenu(song, x, y)"
@@ -461,6 +501,9 @@ watch([keyword, composing], () => {
 .song-list-scroller {
   position: absolute;
   inset: 0;
+}
+.song-list-scroller :deep(.vue-recycle-scroller__item-wrapper) {
+  min-width: var(--song-list-min-width);
 }
 .song-list-backtop {
   bottom: var(--song-list-backtop-bottom, 7rem);

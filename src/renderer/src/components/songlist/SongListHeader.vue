@@ -4,9 +4,12 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
+import type {
+  OptionalSongColumn,
+  SongListColumns,
+  SongSortField as SortField
+} from '@/utils/songListLayout'
 
-type SortField =
-  'id' | 'title' | 'artist' | 'album' | 'duration' | 'playTime' | 'diskNo' | 'trackNo' | 'relevance'
 interface SourceOption {
   label: string
   value: string
@@ -25,6 +28,9 @@ const props = defineProps<{
   allSelected: boolean
   showFileName: boolean
   compact: boolean
+  columns?: SongListColumns
+  scrollLeft?: number
+  contentWidth?: number
   showTagManager?: boolean
   activeTagFilterCount?: number
   sourceFilter?: string
@@ -41,6 +47,7 @@ const emit = defineEmits<{
   selectNewest: []
   toggleFileName: []
   toggleCompact: []
+  toggleColumn: [column: OptionalSongColumn]
   batchPlay: []
   batchAddToPlaylist: []
   batchEditTags: []
@@ -61,7 +68,7 @@ const sortFields = computed(() => [
   ...(props.showRelevanceSort
     ? [{ field: 'relevance' as const, label: t('songList.relevance') }]
     : []),
-  { field: 'id' as const, label: t('songList.number') },
+  { field: 'id' as const, label: t('songList.defaultSort') },
   {
     field: 'title' as const,
     label: props.showFileName ? t('songList.fileName') : t('songList.title')
@@ -69,6 +76,8 @@ const sortFields = computed(() => [
   { field: 'artist' as const, label: t('songList.artist') },
   { field: 'album' as const, label: t('songList.album') },
   { field: 'duration' as const, label: t('songList.duration') },
+  { field: 'year' as const, label: t('songList.year') },
+  { field: 'playTimes' as const, label: t('songList.playTimes') },
   ...(props.showAlbumSorts
     ? [
         { field: 'diskNo' as const, label: t('songList.discNumber') },
@@ -81,13 +90,23 @@ const activeSortLabel = computed(
   () =>
     sortFields.value.find((option) => option.field === props.sortBy)?.label ?? t('songList.sort')
 )
-const sortMenuItems = computed(() =>
-  sortFields.value.map(({ field, label }) => ({
+const sortMenuItems = computed(() => {
+  const items = sortFields.value.map(({ field, label }) => ({
     value: field,
     label: field === props.sortBy ? `${label} ${direction.value}` : label,
     onClick: () => emit('sort', field)
   }))
-)
+  return [
+    ...items.filter((item) => item.value !== 'playTimes'),
+    { type: 'divider' as const },
+    { type: 'group' as const, children: items.filter((item) => item.value === 'playTimes') }
+  ]
+})
+const columnMenuLabels = {
+  genre: { show: 'songList.showGenreColumn', hide: 'songList.hideGenreColumn' },
+  year: { show: 'songList.showYearColumn', hide: 'songList.hideYearColumn' },
+  playTimes: { show: 'songList.showPlayTimesColumn', hide: 'songList.hidePlayTimesColumn' }
+}
 const moreMenuItems = computed(() => [
   {
     label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
@@ -96,6 +115,14 @@ const moreMenuItems = computed(() => [
   {
     label: props.showFileName ? t('songList.showTitle') : t('songList.showFileName'),
     onClick: () => emit('toggleFileName')
+  },
+  { type: 'divider' as const },
+  {
+    type: 'group' as const,
+    children: (['genre', 'year', 'playTimes'] as const).map((column) => ({
+      label: t(columnMenuLabels[column][props.columns?.[column] ? 'hide' : 'show']),
+      onClick: () => emit('toggleColumn', column)
+    }))
   }
 ])
 </script>
@@ -272,19 +299,35 @@ const moreMenuItems = computed(() => [
       }}</span>
     </div>
 
-    <div
-      class="grid grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem] items-center gap-3 px-5 py-2 text-xs text-text-l"
-    >
-      <span>#</span>
-      <span>{{ showFileName ? t('songList.fileName') : t('songList.title') }}</span>
-      <span>{{ t('songList.artist') }}</span>
-      <span>{{ t('songList.album') }}</span>
-      <span class="text-right">{{ t('songList.duration') }}</span>
+    <div class="overflow-hidden">
+      <div
+        class="song-list-columns grid items-center gap-3 px-5 py-2 text-xs text-text-l"
+        :style="{
+          width: contentWidth ? `${contentWidth}px` : undefined,
+          transform: `translateX(-${scrollLeft || 0}px)`
+        }"
+      >
+        <span>#</span>
+        <span>{{ showFileName ? t('songList.fileName') : t('songList.title') }}</span>
+        <span>{{ t('songList.artist') }}</span>
+        <span>{{ t('songList.album') }}</span>
+        <span v-if="columns?.genre">{{ t('songList.genre') }}</span>
+        <span v-if="columns?.year" class="text-right">{{ t('songList.year') }}</span>
+        <span v-if="columns?.playTimes" class="text-right">{{ t('songList.playTimes') }}</span>
+        <span class="text-right">{{ t('songList.duration') }}</span>
+      </div>
     </div>
   </header>
 </template>
 
 <style scoped>
+.song-list-columns {
+  min-width: var(--song-list-min-width, 40.5rem);
+  grid-template-columns: var(
+    --song-list-grid-columns,
+    3rem minmax(12rem, 1.8fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 4rem
+  );
+}
 .header-control {
   display: inline-flex;
   align-items: center;

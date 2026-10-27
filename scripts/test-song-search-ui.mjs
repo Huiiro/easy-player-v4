@@ -96,6 +96,16 @@ vm.runInNewContext(
       }
       if (name.endsWith('useSongSelection')) return selectionModule.exports
       if (name.endsWith('songTextSort')) return sortModule.exports
+      if (name.endsWith('songListLayout')) {
+        const layout = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync('src/renderer/src/utils/songListLayout.ts', 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          { exports: layout.exports, module: layout }
+        )
+        return layout.exports
+      }
       if (name === 'vue')
         return {
           ...Vue,
@@ -200,6 +210,26 @@ try {
     'kimi',
     'halfwidth kana supplies Japanese context'
   )
+  state.songs.value = [
+    { id: 1, year: 2020, playTimes: 2 },
+    { id: 2, year: 1999, playTimes: 12 },
+    { id: 3, year: null, playTimes: 0 },
+    { id: 4, year: 2020 },
+    { id: 5, year: 0, playTimes: 3 }
+  ]
+  state.toggleSort('year')
+  assert.deepEqual(ids(), [2, 4, 1, 5, 3], 'year sorts numerically with missing years last')
+  state.toggleSort('year')
+  assert.deepEqual(ids(), [4, 1, 2, 5, 3], 'missing years remain last in descending order')
+  state.toggleSort('playTimes')
+  assert.deepEqual(ids(), [2, 5, 1, 4, 3], 'play count defaults to descending numeric order')
+  state.toggleSort('playTimes')
+  assert.deepEqual(
+    ids(),
+    [4, 3, 1, 5, 2],
+    'play count can reverse with missing counts treated as zero'
+  )
+  state.toggleSort('title')
   state.songs.value = []
   state.keyword.value = 'qlx'
   await flushSearch()

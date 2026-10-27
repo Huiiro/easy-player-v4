@@ -11,6 +11,9 @@ export interface LibrarySong {
   artist: string | null
   album: string | null
   duration: number | null
+  year?: number | null
+  genre?: string | null
+  playTimes?: number
   cover: string | null
   coverAnalysisPath?: string | null
   coverPrimary?: string | null

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
+import type { SongListColumns } from '@/utils/songListLayout'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
@@ -69,6 +70,7 @@ export const UI_PREFERENCE_KEYS = [
   'themeBackgroundEnabled',
   'useCardView',
   'compactSongList',
+  'songListColumns',
   'useCustomBg',
   'reduceMotion',
   'useLocalFileName',
@@ -293,6 +295,7 @@ export const useUIStore = defineStore(
     } | null>(null)
     const useCardView = ref(false)
     const compactSongList = ref(false)
+    const songListColumns = ref<SongListColumns>({ genre: false, year: false, playTimes: false })
     const useCustomBg = ref(false)
     const reduceMotion = ref(false)
     const useLocalFileName = ref(false)
@@ -956,6 +959,7 @@ export const useUIStore = defineStore(
       themeBeforeFollowingSystem,
       useCardView,
       compactSongList,
+      songListColumns,
       useCustomBg,
       reduceMotion,
       extremePlayback,

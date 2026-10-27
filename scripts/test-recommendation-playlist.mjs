@@ -87,6 +87,16 @@ vm.runInNewContext(
         return helper.exports
       }
       if (name.endsWith('songTextSort')) return sortModule.exports
+      if (name.endsWith('songListLayout')) {
+        const layout = { exports: {} }
+        vm.runInNewContext(
+          ts.transpileModule(readFileSync('src/renderer/src/utils/songListLayout.ts', 'utf8'), {
+            compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+          }).outputText,
+          { exports: layout.exports, module: layout }
+        )
+        return layout.exports
+      }
       if (name === 'vue')
         return {
           ...Vue,

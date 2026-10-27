@@ -29,6 +29,7 @@
     "build:linux": "npm run build:nocheck && electron-builder --linux",
     "test:ui": "electron scripts/check-ui-components.cjs",
     "test:list-loading": "electron scripts/check-list-loading.cjs",
+    "test:song-columns": "electron scripts/check-song-columns.cjs",
     "test:home": "electron scripts/check-home-layout.cjs",
     "test:global-search": "electron scripts/check-global-search.cjs",
     "test:appearance": "node scripts/test-appearance.mjs && electron scripts/check-appearance.cjs",

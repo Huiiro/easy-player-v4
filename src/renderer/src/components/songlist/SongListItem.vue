@@ -9,6 +9,8 @@ import { getHighlightParts } from '@/utils/highlight'
 import { artistDisplayTokens } from '@/utils/artists'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useSongActivation } from '@/hooks/useSongActivation'
+import { formatGenres } from '@/utils/genres'
+import { songPlayCount, songYear, type SongListColumns } from '@/utils/songListLayout'
 
 const props = defineProps<{
   song: LibrarySong
@@ -19,6 +21,7 @@ const props = defineProps<{
   keyword: string
   showFileName: boolean
   compact: boolean
+  columns?: SongListColumns
 }>()
 
 const emit = defineEmits<{
@@ -37,18 +40,25 @@ const coverUrl = computed(() =>
   props.song.cover ? `easy-player-media://cover?path=${encodeURIComponent(props.song.cover)}` : null
 )
 const formatDuration = computed(() => {
-  const seconds = Math.max(0, Math.floor(props.song.duration ?? 0))
+  const duration = props.song.duration
+  if (typeof duration !== 'number' || !Number.isFinite(duration) || duration < 0) return '-'
+  const seconds = Math.floor(duration)
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 })
-const displayedTitle = computed(() =>
-  props.showFileName ? props.song.fileName || props.song.title : props.song.title
-)
+const displayedTitle = computed(() => {
+  const value =
+    props.showFileName && props.song.fileName?.trim() ? props.song.fileName : props.song.title
+  return value?.trim() || '-'
+})
 const highlightedTitle = computed(() => getHighlightParts(displayedTitle.value, props.keyword))
 const artistTokens = computed(() =>
   artistDisplayTokens(props.song.artist, ui.artistSeparator, ui.normalizeMetadataSeparator)
 )
 const highlightedAlbum = computed(() =>
-  getHighlightParts(props.song.album || t('songList.unknownAlbum'), props.keyword)
+  getHighlightParts(props.song.album?.trim() || '-', props.keyword)
+)
+const displayedGenre = computed(() =>
+  formatGenres(props.song.genre, ui.genreSeparator, ui.normalizeMetadataSeparator)
 )
 
 watch(
@@ -88,7 +98,7 @@ function openAlbum(): void {
     :class="compact ? 'h-14' : 'h-16'"
   >
     <div
-      class="grid h-full grid-cols-[3rem_minmax(12rem,1.8fr)_minmax(8rem,1fr)_minmax(8rem,1fr)_4rem] items-center gap-3 px-5 transition-colors hover:bg-hover"
+      class="song-list-row grid h-full items-center gap-3 px-5 transition-colors hover:bg-hover"
       :class="
         current
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
@@ -186,7 +196,7 @@ function openAlbum(): void {
             </button>
           </template>
         </span>
-        <template v-else>{{ t('songList.unknownArtist') }}</template>
+        <template v-else>-</template>
       </span>
       <span class="min-w-0 truncate text-sm text-text-l">
         <button
@@ -199,9 +209,31 @@ function openAlbum(): void {
             <template v-else>{{ part.text }}</template>
           </template>
         </button>
-        <template v-else>{{ t('songList.unknownAlbum') }}</template>
+        <template v-else>-</template>
+      </span>
+      <span
+        v-if="columns?.genre"
+        class="min-w-0 truncate text-sm text-text-l"
+        :title="displayedGenre"
+      >
+        {{ displayedGenre || '-' }}
+      </span>
+      <span v-if="columns?.year" class="text-right text-sm tabular-nums text-text-l">
+        {{ songYear(song) ?? '-' }}
+      </span>
+      <span v-if="columns?.playTimes" class="text-right text-sm tabular-nums text-text-l">
+        {{ songPlayCount(song) ?? '-' }}
       </span>
       <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
     </div>
   </div>
 </template>
+
+<style scoped>
+.song-list-row {
+  grid-template-columns: var(
+    --song-list-grid-columns,
+    3rem minmax(12rem, 1.8fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 4rem
+  );
+}
+</style>

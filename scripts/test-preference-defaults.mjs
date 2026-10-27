@@ -94,6 +94,12 @@ assert.ok(!uiModule.UI_PREFERENCE_KEYS.includes('normalizeGenreSeparator'))
 assert.ok(!uiModule.UI_PREFERENCE_KEYS.includes('normalizeArtistSeparator'))
 assert.equal(ui.genreSeparator, '/；;、,，')
 assert.equal(ui.normalizeMetadataSeparator, false)
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songListColumns'))
+assert.deepEqual(JSON.parse(JSON.stringify(ui.songListColumns)), {
+  genre: false,
+  year: false,
+  playTimes: false
+})
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
@@ -290,6 +296,30 @@ for (const background of [
 console.log(
   'Removed scene names hydrate and persist as the default; current background IDs are retained'
 )
+savedUiPreferences = JSON.stringify({
+  songListColumns: { genre: true, year: true, playTimes: true }
+})
+const columnsPinia = Pinia.createPinia().use(persisted)
+Vue.createSSRApp({ render: () => null }).use(columnsPinia)
+const columnsUi = uiModule.useUIStore(columnsPinia)
+assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
+  genre: true,
+  year: true,
+  playTimes: true
+})
+columnsUi.$persist()
+assert.deepEqual(JSON.parse(savedUiPreferences).songListColumns, {
+  genre: true,
+  year: true,
+  playTimes: true
+})
+columnsUi.resetPreferences()
+assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
+  genre: false,
+  year: false,
+  playTimes: false
+})
+Pinia.disposePinia(columnsPinia)
 console.log(
-  'Initial preference defaults, repeat resets, resource preservation and configuration-only persistence passed'
+  'Initial preference defaults, repeat resets, resource preservation, song columns and configuration-only persistence passed'
 )
