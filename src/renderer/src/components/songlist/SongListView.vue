@@ -423,7 +423,7 @@ watch([keyword, composing], () => {
     <button
       v-if="showBackTop && !loading && filteredSongs.length"
       type="button"
-      class="absolute right-5 bottom-28 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg transition-colors hover:bg-hover-bg"
+      class="song-list-backtop absolute right-5 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg"
       :aria-label="t('songList.backToTop')"
       :title="t('songList.backToTop')"
       @click="backToTop"
@@ -442,3 +442,24 @@ watch([keyword, composing], () => {
     />
   </section>
 </template>
+
+<style scoped>
+.song-list-backtop {
+  bottom: var(--song-list-backtop-bottom, 7rem);
+  isolation: isolate;
+  transition: bottom var(--motion-duration-slow) var(--motion-ease-spring);
+}
+.song-list-backtop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--color-hover-bg);
+  opacity: 0;
+  transition: opacity var(--motion-duration-fast) var(--motion-ease-enter);
+}
+.song-list-backtop:hover::before {
+  opacity: 1;
+}
+</style>

@@ -23,6 +23,9 @@ import type { LibrarySong } from '@/types/library'
 import { formatArtists, splitArtists } from '@/utils/artists'
 import type { LyricFormat, LyricSource } from '@/services/lyrics'
 
+const emit = defineEmits<{
+  'layout-change': [state: { collapsed: boolean; hidden: boolean }]
+}>()
 const ui = useUIStore()
 const layoutStyle = computed(() => footerLayoutStyle(ui.footerLayout))
 const player = usePlayerStore()
@@ -98,6 +101,11 @@ const { footerHidden, footerPeekVisible, autoHideActive } = useFooterAutoHide(
   computed(() => ui.autoHideFooter && !ui.showPlayer),
   footerBusy,
   computed(() => ui.reduceMotion)
+)
+watch(
+  [collapsed, () => autoHideActive.value && footerHidden.value],
+  ([collapsed, hidden]) => emit('layout-change', { collapsed, hidden }),
+  { immediate: true }
 )
 const lyricSourcesLoading = ref(false)
 const lyricSourceOptions = ref<

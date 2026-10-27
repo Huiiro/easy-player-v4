@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineAsyncComponent } from 'vue'
+import { defineAsyncComponent, ref } from 'vue'
 import { usePlaybackLifecycle } from '@/hooks/usePlaybackLifecycle'
 import Header from '@/views/layout/header/Index.vue'
 import Sidebar from '@/views/layout/sidebar/Index.vue'
@@ -22,6 +22,7 @@ const AppBackground = defineAsyncComponent(
 )
 
 const { ui } = usePlaybackLifecycle()
+const footerState = ref({ collapsed: false, hidden: false })
 </script>
 
 <template>
@@ -34,7 +35,13 @@ const { ui } = usePlaybackLifecycle()
     <!-- Keep the outgoing page intact; extreme.html owns the replacement UI. -->
     <AppBackground />
     <!-- 主容器 -->
-    <div class="relative z-[2] flex flex-col w-full h-full">
+    <div
+      class="relative z-[2] flex flex-col w-full h-full"
+      :style="{
+        '--song-list-backtop-bottom':
+          footerState.collapsed || footerState.hidden ? '1.25rem' : '7rem'
+      }"
+    >
       <!-- 顶栏 -->
       <header class="shrink-0 z-20">
         <Header />
@@ -62,7 +69,7 @@ const { ui } = usePlaybackLifecycle()
         class="footer-motion pointer-events-none absolute inset-x-0 bottom-0 z-20"
         :class="ui.showPlayer ? 'translate-y-[calc(100%+1rem)] opacity-0 pointer-events-none' : ''"
       >
-        <FootBar />
+        <FootBar @layout-change="footerState = $event" />
       </footer>
 
       <PlayerPanelTransition :open="ui.showPlayer">
