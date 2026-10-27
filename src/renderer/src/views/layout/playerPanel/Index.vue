@@ -474,7 +474,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                       ? 'play-dislike'
                       : 'play-like'
                 "
-                :class-name="currentPreference === -1 ? 'size-4 scale-125 text-red-400' : 'size-4'"
+                :class-name="currentPreference === -1 ? 'size-4 scale-125 text-danger' : 'size-4'"
               />
             </button>
             <!-- speed -->
@@ -730,7 +730,7 @@ function changeLyricsOffset(event: WheelEvent): void {
               <SvgIcon name="play-prev" class-name="size-6" />
             </button>
             <button
-              class="grid size-[3.2rem] place-items-center rounded-full bg-primary text-white shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+              class="grid size-[3.2rem] place-items-center rounded-full ep-button--primary shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
               :disabled="!player.currentFile"
               :title="player.isPlaying ? t('playerPanel.pause') : t('playerPanel.play')"
               @click="togglePlayback"

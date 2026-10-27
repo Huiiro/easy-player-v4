@@ -517,7 +517,7 @@ onBeforeUnmount(() => {
           {{ t('home.layout.reset') }}
         </button>
         <button
-          class="rounded-lg bg-primary px-4 py-2 text-sm text-white"
+          class="rounded-lg ep-button--primary px-4 py-2 text-sm"
           @click="uiStore.homeLayoutOpen = false"
         >
           {{ t('home.layout.done') }}

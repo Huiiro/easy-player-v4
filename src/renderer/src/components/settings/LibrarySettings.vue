@@ -223,10 +223,7 @@ onBeforeUnmount(() => offProgress?.())
       <button class="btn-hover px-3 py-1.5 text-sm" @click="removeMissingDialogOpen = false">
         {{ t('common.cancel') }}
       </button>
-      <button
-        class="rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
-        @click="removeMissingSongs"
-      >
+      <button class="rounded-lg ep-button--danger px-3 py-1.5 text-sm" @click="removeMissingSongs">
         {{ t('settings.remove') }}
       </button>
     </template>

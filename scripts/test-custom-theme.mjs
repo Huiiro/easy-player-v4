@@ -52,7 +52,7 @@ vm.runInNewContext(
     }
   }
 )
-const { parseCustomTheme, applyCustomTheme, customThemeCSS } = exports
+const { parseCustomTheme, applyCustomTheme, customThemeCSS, customThemeBackgroundCSS } = exports
 const valid = {
   version: 1,
   name: ' Test ',
@@ -146,6 +146,23 @@ const mixed = {
   }
 }
 const mixedCSS = customThemeCSS(mixed)
+const stagedCSS = customThemeBackgroundCSS(
+  {
+    ...mixed,
+    rules: {
+      '.ep-app-background': { filter: 'blur(2px)' },
+      '.ep-header': { color: 'red' }
+    }
+  },
+  '[data-background-style="candidate"]'
+)
+assert.match(stagedCSS, /\[data-background-style="candidate"\] \.ep-app-background\{/)
+assert.match(stagedCSS, /plugin-theme\/example.nyan-cat\/revision\/images\/sky.png/)
+assert.doesNotMatch(
+  stagedCSS,
+  /:root|\.ep-header|body,button/,
+  'staging background resources must not change the visible page or chrome'
+)
 assert.match(mixedCSS, /plugin-theme\/example.nyan-cat\/revision\/images\/sky.png/)
 assert.doesNotMatch(mixedCSS, /\.ep-app-background\{[^}]*images\/wall.png/)
 assert(

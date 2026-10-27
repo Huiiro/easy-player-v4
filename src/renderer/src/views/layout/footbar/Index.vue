@@ -322,7 +322,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     ref="footerRoot"
-    class="pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 transition-transform duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:pb-3 select-none"
+    class="app-footer-shell pointer-events-none bg-gradient-to-t from-bg/30 px-4 pb-4 pt-2 transition-transform duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:pb-3 select-none"
     :style="{ transform: autoHideActive && footerHidden ? 'translateY(100%)' : '' }"
   >
     <section
@@ -430,7 +430,7 @@ onBeforeUnmount(() => {
               <SvgIcon name="play-prev" class-name="size-4" />
             </button>
             <button
-              class="grid size-10 place-items-center rounded-full bg-primary text-white shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+              class="ep-button--primary grid size-10 place-items-center rounded-full shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
               :disabled="!player.currentFile"
               :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
               @click.stop="togglePlayback"
@@ -529,7 +529,7 @@ onBeforeUnmount(() => {
         </button>
         <button
           class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
-          :class="currentPreference === -1 ? 'text-red-400' : 'text-text'"
+          :class="currentPreference === -1 ? 'text-danger' : 'text-text'"
           :disabled="!player.currentQueueSong"
           :title="t('recommendation.dislike')"
           @click.stop="markCurrent(-1)"
@@ -664,7 +664,7 @@ onBeforeUnmount(() => {
       >
         <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
         <button
-          class="grid size-7 place-items-center rounded-full bg-primary text-white"
+          class="ep-button--primary grid size-7 place-items-center rounded-full"
           :disabled="!player.currentFile"
           :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
           @click.stop="togglePlayback"

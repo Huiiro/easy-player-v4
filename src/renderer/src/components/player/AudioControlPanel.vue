@@ -723,9 +723,9 @@ function refreshOutputDevices(): void {
             class="rounded-full border px-2 py-0.5 text-[11px] font-normal"
             :class="
               player.audioChain.isBitPerfect
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-500'
+                ? 'border-success/40 bg-success/10 text-success'
                 : player.audioChain.isBitPerfectEligible
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-500'
+                  ? 'border-warning/40 bg-warning/10 text-warning'
                   : 'border-border bg-bg text-text-l'
             "
             :title="player.audioChain.bitPerfectBlockers.join('\n')"
@@ -798,7 +798,7 @@ function refreshOutputDevices(): void {
               : player.trackInfo.dsdTransport
           }}
         </p>
-        <p v-if="player.glitchCount > 0" class="text-[11px] text-amber-500">
+        <p v-if="player.glitchCount > 0" class="text-[11px] text-warning">
           {{ t('ap.playEx') }} {{ player.glitchCount }}
         </p>
       </div>
@@ -1279,7 +1279,7 @@ function refreshOutputDevices(): void {
               >{{ t('ap.irTotalGain') }} {{ irAppliedGainDb.toFixed(1) }} dB</span
             >
           </div>
-          <p v-if="irError" class="mt-1 text-xs text-red-500">{{ irError }}</p>
+          <p v-if="irError" class="mt-1 text-xs text-danger">{{ irError }}</p>
         </div>
         <!-- Gapless -->
         <div class="flex items-center gap-3 mt-3">
@@ -1796,7 +1796,7 @@ function refreshOutputDevices(): void {
                   clipGuardRecentlyActive &&
                   player.state === 'playing' &&
                   player.audioChain?.activeNodes.includes('Output clip guard')
-                    ? 'text-amber-500'
+                    ? 'text-warning'
                     : 'text-text-l'
                 "
                 >{{ clipGuardStatus }}</span
@@ -1829,7 +1829,7 @@ function refreshOutputDevices(): void {
           {{ t('common.cancel') }}
         </button>
         <button
-          class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-50"
           :disabled="resettingSettings"
           @click="resetAudioProcessingSettings"
         >
@@ -1858,7 +1858,7 @@ function refreshOutputDevices(): void {
           {{ t('common.cancel') }}
         </button>
         <button
-          class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white"
+          class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm"
           @click="saveCustomPreset"
         >
           {{ editingPresetId ? t('ap.updateEqPreset') : t('ap.saveEqPreset') }}

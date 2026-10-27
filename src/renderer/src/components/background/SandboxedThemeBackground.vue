@@ -6,11 +6,12 @@ import type { InstalledPluginTheme } from '../../../../shared/themePlugins'
 const props = withDefaults(defineProps<{ theme: InstalledPluginTheme; paused?: boolean }>(), {
   paused: false
 })
-const emit = defineEmits<{ failure: [] }>()
+const emit = defineEmits<{ failure: []; ready: [] }>()
 const frame = ref<HTMLIFrameElement | null>(null)
 const ready = ref(false)
 const failed = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
+let readyFrame = 0
 const source = computed(() => {
   const expected = `easy-player-media://plugin-theme/${props.theme.pluginId}/${props.theme.revision}/__frame.html`
   return props.theme.rendererUrl === expected ? expected : undefined
@@ -24,6 +25,8 @@ function sendState(): void {
 function fail(reason = 'FRAME_FAILED'): void {
   if (failed.value) return
   clearTimeout(timer)
+  cancelAnimationFrame(readyFrame)
+  readyFrame = 0
   failed.value = true
   ready.value = false
   reportThemeFailure(props.theme, reason)
@@ -34,8 +37,18 @@ function message(event: MessageEvent): void {
   if (!event.data || event.data.channel !== 'easy-player-theme') return
   if (event.data.type === 'ready') {
     clearTimeout(timer)
-    ready.value = true
     sendState()
+    if (!ready.value && !readyFrame && !failed.value) {
+      // The handshake can precede the child frame's first composited paint.
+      // Keep the themed fallback visible through that paint opportunity.
+      readyFrame = requestAnimationFrame(() => {
+        readyFrame = requestAnimationFrame(() => {
+          readyFrame = 0
+          ready.value = true
+          emit('ready')
+        })
+      })
+    }
   } else if (event.data.type === 'failed') fail()
 }
 watch(() => props.paused, sendState)
@@ -46,6 +59,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   clearTimeout(timer)
+  cancelAnimationFrame(readyFrame)
   window.removeEventListener('message', message)
   if (frame.value) {
     frame.value.style.visibility = 'hidden'

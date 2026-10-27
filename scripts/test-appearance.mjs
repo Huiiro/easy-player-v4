@@ -24,7 +24,7 @@ function load(file, dependencies = {}) {
 const colors = load('src/renderer/src/components/background/songThemeColors.ts')
 const dependencies = { '@/components/background/songThemeColors': colors }
 const { resolveAppearance } = load('src/renderer/src/services/appearance.ts', dependencies)
-const { createAppearanceScheduler } = load(
+const { createAppearanceScheduler, createAppearanceHandoff } = load(
   'src/renderer/src/services/appearanceController.ts',
   dependencies
 )
@@ -82,6 +82,14 @@ for (const colorMode of ['light', 'dark', 'system']) {
                 : background.type
           )
           assert.equal(JSON.stringify(preferences), before, 'resolution cannot rewrite preferences')
+          if (material !== 'none')
+            assert.equal(
+              result.contentDark,
+              result.dark || systemDark,
+              'native content contrast follows its actual system backdrop'
+            )
+          if (!result.dark)
+            assert.equal(result.backgroundScrim, null, 'light mode preserves original backgrounds')
           combinations++
         }
       }
@@ -89,6 +97,65 @@ for (const colorMode of ['light', 'dark', 'system']) {
   }
 }
 const runtime = { systemDark: false, material: 'none', scene, songColor: null }
+assert.equal(
+  resolveAppearance({ ...base, background: { type: 'preset', id: 'solid' } }, runtime)
+    .backgroundScrim,
+  null
+)
+assert.equal(
+  resolveAppearance(
+    { ...base, colorMode: 'light', background: { type: 'preset', id: 'solid' } },
+    runtime
+  ).backgroundScrim,
+  null
+)
+assert.equal(resolveAppearance({ ...base, colorMode: 'light' }, runtime).backgroundScrim, null)
+assert.equal(
+  resolveAppearance(
+    { ...base, colorMode: 'light' },
+    { ...runtime, scene: { ...scene, colorMode: 'light' } }
+  ).backgroundScrim,
+  null
+)
+assert.equal(resolveAppearance(base, { ...runtime, material: 'mica' }).backgroundScrim, null)
+for (const type of ['image', 'video']) {
+  const chrome = resolveAppearance(
+    { ...base, colorMode: 'light', background: { type } },
+    runtime
+  ).chrome
+  assert.equal(chrome.header, base.customChrome.header)
+  assert.equal(chrome.footer, base.customChrome.footer)
+  assert.equal(chrome.border, base.customChrome.border)
+  assert.equal(chrome.dark, true)
+  assert.equal(chrome.accentColor, base.accentColor)
+}
+const lightSceneChrome = resolveAppearance({ ...base, colorMode: 'light' }, runtime).chrome
+assert.equal(lightSceneChrome.header, scene.headerBackground)
+assert.equal(lightSceneChrome.footer, scene.footerBackground)
+assert.equal(lightSceneChrome.border, scene.chromeBorder)
+assert.equal(lightSceneChrome.dark, true)
+assert.equal(resolveAppearance({ ...base, colorMode: 'light' }, runtime).contentDark, true)
+assert.equal(
+  resolveAppearance(
+    { ...base, colorMode: 'light', background: { type: 'preset', id: 'solid' } },
+    runtime
+  ).contentDark,
+  false
+)
+assert.equal(
+  resolveAppearance(
+    { ...base, colorMode: 'light' },
+    { ...runtime, scene: { ...scene, colorMode: 'light' } }
+  ).chrome.dark,
+  false
+)
+assert.equal(
+  resolveAppearance(
+    { ...base, colorMode: 'light', background: { type: 'preset', id: 'solid' } },
+    runtime
+  ).chrome.dark,
+  false
+)
 const theme = { name: 'Palette', background: 'replace', tokens: { '--color-primary': '#ab1234' } }
 let result = resolveAppearance({ ...base, themeBackgroundEnabled: false }, { ...runtime, theme })
 assert.equal(
@@ -161,6 +228,33 @@ reentrant()
 jobs.shift()()
 jobs.shift()()
 assert.equal(passes, 2, 'changes caused during application receive a subsequent pass')
+const handoff = createAppearanceHandoff()
+const presented = []
+const stage = (key) => handoff.stage(key, (animated) => presented.push([key, animated]))
+stage('a')
+handoff.hold('a')
+stage('b')
+assert.deepEqual(presented, [['a', false]], 'loading retains the visible palette')
+handoff.start('b', true)
+assert.deepEqual(presented.at(-1), ['b', true], 'palette starts with the ready background')
+stage('c')
+stage('d')
+assert.equal(presented.length, 2, 'queued selections do not repaint the current fade')
+handoff.settle(true)
+handoff.start('d', true)
+assert.deepEqual(presented.at(-1), ['d', true])
+handoff.settle(false)
+stage('e')
+assert.deepEqual(presented.at(-1), ['e', false], 'normal updates resume after handoff')
+handoff.hold('e')
+stage('f')
+handoff.release('e')
+handoff.hold('e')
+handoff.start('f', true)
+assert.equal(presented.length, 4, 'cancelled candidates cannot apply a stale palette')
+handoff.release('native')
+stage('native')
+assert.deepEqual(presented.at(-1), ['native', false], 'native material bypasses the handoff')
 console.log(
   `Appearance policy: ${combinations} combinations, source fallback, material restoration and scheduler ordering passed`
 )

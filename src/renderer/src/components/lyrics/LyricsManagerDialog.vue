@@ -289,7 +289,7 @@ async function save(): Promise<void> {
               </span>
             </button>
             <button
-              class="manager-button w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
+              class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
               type="button"
               :disabled="previewSource === ui.lyricSourceMode"
               @click="applyPlaybackSource"
@@ -320,7 +320,7 @@ async function save(): Promise<void> {
             :placeholder="t('playerPanel.lyricAlbum')"
           />
           <button
-            class="manager-button w-full rounded-lg bg-primary px-3 py-2 text-sm text-white disabled:opacity-50"
+            class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
             :disabled="loading || saving || !editingSong || !query.title.trim()"
             @click="search"
           >
@@ -368,7 +368,7 @@ async function save(): Promise<void> {
             </button>
           </div>
         </div>
-        <p v-if="error" class="text-sm text-red-400">{{ error }}</p>
+        <p v-if="error" class="text-sm text-danger">{{ error }}</p>
         <textarea
           v-model="lyric"
           class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1"
@@ -398,7 +398,7 @@ async function save(): Promise<void> {
         {{ t('common.cancel') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-primary px-4 py-2 text-sm text-white disabled:opacity-50"
+        class="btn-hover-base rounded-lg ep-button--primary px-4 py-2 text-sm disabled:opacity-50"
         type="button"
         :disabled="isReadOnlyPreview || saving || !editingSong"
         @click="save"

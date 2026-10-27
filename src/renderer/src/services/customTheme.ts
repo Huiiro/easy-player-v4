@@ -89,11 +89,38 @@ export function customThemeCSS(theme: CustomTheme): string {
     .join(';')
   return (
     `:root{${tokens}}\n` +
-    runtimePackages(theme).map(packageCSS).join('\n') +
+    runtimePackages(theme)
+      .map((installed) => packageCSS(installed))
+      .join('\n') +
     Object.entries(theme.rules)
       .map(
         ([selector, declarations]) =>
           `${selector}{${Object.entries(declarations)
+            .map(([key, value]) => `${key}:${value}`)
+            .join(';')}}`
+      )
+      .join('\n')
+  )
+}
+
+/** Stage only the candidate background; page/chrome styles wait for its handoff. */
+export function customThemeBackgroundCSS(theme: CustomTheme, scope: string): string {
+  const tokens = Object.entries(theme.tokens)
+    .map(([key, value]) => `${key}:${value} !important`)
+    .join(';')
+  return (
+    `${scope}{${tokens}}\n` +
+    runtimePackages(theme)
+      .map((installed) => packageCSS(installed, scope))
+      .join('\n') +
+    Object.entries(theme.rules)
+      .filter(([selector]) => selector.includes('.ep-app-background'))
+      .map(
+        ([selector, declarations]) =>
+          `${selector
+            .split(',')
+            .map((part) => `${scope} ${part}`)
+            .join(',')}{${Object.entries(declarations)
             .map(([key, value]) => `${key}:${value}`)
             .join(';')}}`
       )
@@ -134,15 +161,17 @@ function runtimePackages(theme: CustomTheme): RuntimePackage[] {
     })
   return packages
 }
-function packageCSS(installed?: RuntimePackage): string {
+function packageCSS(installed?: RuntimePackage, backgroundScope?: string): string {
   if (!installed) return ''
   return Object.entries(installed.manifest.slots)
     .map(([slot, assignment]) => {
+      if (backgroundScope && slot !== 'appBackground') return ''
       const target = THEME_SLOTS[slot as ThemeSlot]
+      const selector = backgroundScope ? `${backgroundScope} ${target.selector}` : target.selector
       const fontSelector =
         slot === 'global'
           ? 'body,button,input,select,textarea'
-          : `${target.selector},${target.selector} :where(button,input,select,textarea)`
+          : `${selector},${selector} :where(button,input,select,textarea)`
       const fontRule = assignment.font
         ? `${fontSelector}{font-family:"EPTheme-${installed.id}-${assignment.font}",sans-serif}`
         : ''
@@ -161,7 +190,7 @@ function packageCSS(installed?: RuntimePackage): string {
           'background-repeat:no-repeat'
         )
       }
-      return fontRule + `${target.selector}{${declarations.join(';')}}`
+      return fontRule + `${selector}{${declarations.join(';')}}`
     })
     .join('\n')
 }

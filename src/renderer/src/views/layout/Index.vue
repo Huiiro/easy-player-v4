@@ -6,6 +6,7 @@ import Sidebar from '@/views/layout/sidebar/Index.vue'
 import AppPageOutlet from '@/components/layout/AppPageOutlet.vue'
 import PlayerPanelTransition from '@/components/layout/PlayerPanelTransition.vue'
 import LayoutModeTransition from '@/components/layout/LayoutModeTransition.vue'
+import AppBackground from '@/components/background/AppBackground.vue'
 
 const FootBar = defineAsyncComponent(() => import('@/views/layout/footbar/Index.vue'))
 
@@ -17,23 +18,23 @@ const DesktopLyricsSync = defineAsyncComponent(
 
 const CardView = defineAsyncComponent(() => import('@/views/layout/card/Index.vue'))
 
-const AppBackground = defineAsyncComponent(
-  () => import('@/components/background/AppBackground.vue')
-)
-
 const { ui } = usePlaybackLifecycle()
 const footerState = ref({ collapsed: false, hidden: false })
+const backgroundContentDark = ref(ui.resolvedAppearance.contentDark)
 </script>
 
 <template>
   <DesktopLyricsSync v-if="!ui.extremePlayback && ui.useDesktopLyrics" />
   <div
-    class="relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
+    class="app-layout relative flex flex-col w-full h-full overflow-hidden text-base text-[var(--color-text)]"
+    :data-background-contrast="
+      !ui.resolvedAppearance.dark && backgroundContentDark ? 'dark' : undefined
+    "
     :class="ui.nativeMaterialEnabled ? 'bg-transparent' : 'bg-[var(--color-bg)]'"
     :style="ui.getCustomFontStyle"
   >
     <!-- Keep the outgoing page intact; extreme.html owns the replacement UI. -->
-    <AppBackground />
+    <AppBackground @contrast="backgroundContentDark = $event" />
     <!-- 主容器 -->
     <div
       class="relative z-[2] flex flex-col w-full h-full"

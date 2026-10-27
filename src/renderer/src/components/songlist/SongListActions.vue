@@ -110,7 +110,7 @@ defineExpose({
       </button>
       <button
         class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        :class="activeMenuSong.preference === -1 ? 'text-red-400' : ''"
+        :class="activeMenuSong.preference === -1 ? 'text-danger' : ''"
         :aria-pressed="activeMenuSong.preference === -1"
         @click="setActiveMenuSongPreference(-1)"
       >
@@ -162,14 +162,14 @@ defineExpose({
       </button>
       <button
         v-if="source.type === 'playlist'"
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
+        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-danger hover:bg-hover"
         @click="removeActiveMenuSong"
       >
         <SvgIcon name="common-delete" class-name="size-4" />
         {{ t('songList.removeFromPlaylist') }}
       </button>
       <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-red-400 hover:bg-hover"
+        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-danger hover:bg-hover"
         @click="requestDeleteActiveMenuSong"
       >
         <SvgIcon name="common-delete" class-name="size-4" />

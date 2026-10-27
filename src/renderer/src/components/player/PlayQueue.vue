@@ -86,7 +86,7 @@ defineExpose({ scrollToCurrent })
         <SvgIcon name="arrow-arrow-down" class-name="size-4" />
       </button>
       <button
-        class="invisible group-hover/queue-row:visible transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:text-primary inline-flex size-4 shrink-0 items-center justify-center text-base leading-none text-red-400"
+        class="invisible group-hover/queue-row:visible rounded transition-colors duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] hover:bg-hover-danger inline-flex size-4 shrink-0 items-center justify-center text-base leading-none text-danger"
         @click="removeAt(item.index)"
         @dblclick.stop
       >

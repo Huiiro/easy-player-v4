@@ -13,7 +13,7 @@ interface GpuTimer {
 const props = withDefaults(defineProps<{ theme: InstalledPluginTheme; paused?: boolean }>(), {
   paused: false
 })
-const emit = defineEmits<{ failure: [] }>()
+const emit = defineEmits<{ failure: []; ready: [] }>()
 const loading = new AbortController()
 const textureData = new Map<string, Float32Array | ImageBitmap>()
 let failed = false
@@ -307,6 +307,7 @@ function initialize(): void {
   ready.value = true
   resize()
   syncAnimation()
+  emit('ready')
 }
 
 function contextLost(event: Event): void {
@@ -329,7 +330,10 @@ onMounted(() => {
   canvas.value?.addEventListener('webglcontextrestored', initialize)
   observer = new ResizeObserver(resize)
   if (canvas.value) observer.observe(canvas.value)
-  if (!props.theme.fragmentShader) return
+  if (!props.theme.fragmentShader) {
+    emit('ready')
+    return
+  }
   void Promise.all(
     props.theme.textures.map(async (texture) => {
       const response = await fetch(texture.url, { signal: loading.signal })
@@ -364,8 +368,8 @@ onMounted(() => {
     })
 })
 onBeforeUnmount(() => {
-  // The parent transition keeps this DOM visible after unmount. Hide the
-  // canvas before losing its context so the static fallback covers the exit.
+  // A replacement covers this layer before disposal. Hide the canvas before
+  // context loss for callers that also retain a surrounding view during exit.
   if (canvas.value) canvas.value.style.display = 'none'
   disposed = true
   loading.abort()

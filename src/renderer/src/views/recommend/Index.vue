@@ -313,7 +313,7 @@ useVisibleInterval(() => {
                 {{ t(`recommendation.reasons.${song.reason}`) }}
                 <span
                   v-if="song.discoveryKind === 'cold'"
-                  class="ml-2 text-amber-400"
+                  class="ml-2 text-warning"
                   :title="t('recommendation.coldHelp')"
                 >
                   {{ t('recommendation.coldPick') }}
@@ -368,7 +368,7 @@ useVisibleInterval(() => {
               </button>
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
-                :class="song.preference === -1 ? 'text-red-400' : ''"
+                :class="song.preference === -1 ? 'text-danger' : ''"
                 :disabled="clearingLessRecommended || resettingSongIds.has(song.id)"
                 :title="
                   song.preference === -1 ? t('recommendation.reset') : t('recommendation.dislike')

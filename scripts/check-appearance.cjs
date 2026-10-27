@@ -88,6 +88,8 @@ app.whenReady().then(async () => {
       if (url.hostname !== 'plugin-theme') return new Response('Not Found', { status: 404 })
       if (/\/paths.bin$|\/ends.bin$/.test(url.pathname))
         await new Promise((resolve) => setTimeout(resolve, 250))
+      if (url.pathname.endsWith('/__frame.html'))
+        await new Promise((resolve) => setTimeout(resolve, 160))
       const response = themeResourceResponse(url, (id, hash, file) =>
         packages.themeResource(id, hash, file)
       )
@@ -137,9 +139,14 @@ app.whenReady().then(async () => {
               contents: 'export const usePlayerStore=()=>({currentQueueSong:null})',
               loader: 'js'
             }))
-            build.onLoad({ filter: /components[\\/]background[\\/]SolidBackground\.vue$/ }, () => ({
-              contents:
-                "export const __esModule=true;import {h} from 'vue';export default {render(){return h('div',{style:'position:absolute;inset:0;background:#000'},'Scene background')}}",
+            build.onResolve({ filter: /\.glsl\?raw$/ }, ({ path: filename, resolveDir }) => ({
+              path: filename.startsWith('@/')
+                ? path.resolve('src/renderer/src', filename.slice(2).replace('?raw', ''))
+                : path.resolve(resolveDir, filename.replace('?raw', '')),
+              namespace: 'shader'
+            }))
+            build.onLoad({ filter: /.*/, namespace: 'shader' }, ({ path: filename }) => ({
+              contents: 'export default ' + JSON.stringify(fs.readFileSync(filename, 'utf8')),
               loader: 'js'
             }))
             build.onLoad({ filter: /\.vue$/ }, ({ path: filename }) => {
@@ -237,7 +244,7 @@ app.whenReady().then(async () => {
       const themeListeners=new Set();const themeListener=()=>{for(const callback of themeListeners)callback()};
       window.api.plugins={themes:async()=>({success:true,data:activeThemes}),onChanged:callback=>{themeListeners.add(callback);return()=>themeListeners.delete(callback)}};
       let ui;
-      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();return()=>h('main',{class:'settings-page',style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)])])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
+      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();const contentDark=Vue.ref(ui.resolvedAppearance.contentDark);return()=>h('main',{class:'app-layout settings-page','data-background-contrast':!ui.resolvedAppearance.dark&&contentDark.value?'dark':undefined,style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground,{onContrast:value=>{contentDark.value=value}}),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)])])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
       let mounted=mount();await ui.initializeTheme();await wait();
       check(ui.colorMode==='light'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Legacy native-material snapshots migrate back to the saved user preferences');
       check(ui.nativeMaterialEnabled&&ui.resolvedAppearance.background.type==='none'&&!document.querySelector('.app-background-layer,.ep-app-background'),'Native material suppresses all renderer backgrounds');
@@ -283,25 +290,120 @@ app.whenReady().then(async () => {
       selectors[0].click();await wait();const light=[...document.querySelectorAll('[role=option]')].find(option=>option.textContent.includes('浅色'));light.click();await wait();
       check(ui.colorMode==='light'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.aurora','The real settings control changes color mode without clearing the scene');
       const rgb=value=>{const canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,1,1);ctx.fillStyle=value;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data]};
-      const lum=channels=>channels.slice(0,3).map(v=>v/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
+      const lum=channels=>Array.from(channels).slice(0,3).map(v=>v/255).map(v=>v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
       const contrast=(a,b)=>(Math.max(lum(a),lum(b))+0.05)/(Math.min(lum(a),lum(b))+0.05);
-      ui.setColorMode('light');ui.accentSource='auto';ui.reduceMotion=false;
-      for(const scene of systemBackgroundThemes.filter(scene=>scene.id!=='none')) {
+      ui.setColorMode('light');ui.selectCustomTheme('');
+      const delayedScene=systemBackgroundThemes.find(scene=>scene.id==='solid');const originalScene={...delayedScene};
+      let resolveDelayedScene;const delayedSceneModule=new Promise(resolve=>{resolveDelayedScene=resolve});
+      Object.assign(delayedScene,{pluginTheme:{pluginId:'fixture.pending',revision:'pending',data:{background:'#152535'}},component:Vue.defineAsyncComponent(()=>delayedSceneModule)});
+      ui.selectThemeBackground(delayedScene.id);await nextTick();
+      const pendingFrames=[];
+      for(let frame=0;frame<3;frame++) {const layer=document.querySelector('.app-background-layer');pendingFrames.push(layer&&rgb(getComputedStyle(layer).backgroundColor));await new Promise(resolve=>requestAnimationFrame(resolve))}
+      check(pendingFrames.every(color=>color&&color[0]===21&&color[1]===37&&color[2]===53)&&!document.querySelector('.async-scene-ready'),'Light theme switching paints its authored fallback on every frame while an async component loads: '+JSON.stringify(pendingFrames));
+      resolveDelayedScene({emits:['ready'],mounted(){this.$emit('ready')},render:()=>h('div',{class:'async-scene-ready',style:'position:absolute;inset:0;background:#152535'})});await wait();
+      check(!!document.querySelector('.async-scene-ready'),'Ready async scenes replace the loading fallback');
+      const rendererFallback=window.__rendererFixtures.at(-1);
+      ui.selectThemeBackground('plugin:'+rendererFallback.pluginId);await wait();
+      const frameHost=document.querySelector('.sandboxed-theme-background');
+      check(!!frameHost&&!frameHost.querySelector('iframe').classList.contains('ready')&&rgb(getComputedStyle(frameHost).backgroundColor).slice(0,3).join(',')===rgb(rendererFallback.data.background).slice(0,3).join(','),'Pending sandbox frames keep their theme color instead of the global light background');
+      for(let retry=0;retry<80&&!frameHost.querySelector('iframe.ready');retry++)await new Promise(resolve=>setTimeout(resolve,30));
+      check(!!frameHost.querySelector('iframe.ready'),'Sandbox frames become visible after their ready handshake and initial paint opportunity');
+      ui.selectThemeBackground('plugin:builtin.theme.rainy');await wait();
+      const pendingShader=document.querySelector('.declarative-theme-background');
+      check(!!pendingShader&&rgb(getComputedStyle(pendingShader).backgroundColor).slice(0,3).join(',')===rgb(window.__rainyFixture.data.background).slice(0,3).join(','),'Shader loading fallback is not overwritten by the global background default');
+      Object.assign(delayedScene,originalScene);delete delayedScene.pluginTheme;
+      ui.setColorMode('light');ui.accentSource='auto';ui.reduceMotion=true;
+      for(const scene of [...systemBackgroundThemes.filter(scene=>scene.id!=='none'),{id:'plugin:builtin.theme.rainy'}]) {
         ui.selectThemeBackground(scene.id);await wait();
         const scrim=document.querySelector('.app-background-scrim');
-        check(!!scrim,'Light '+scene.id+' has a readability layer including the song background');
-        const overlay=rgb(getComputedStyle(scrim).backgroundColor);const surface=overlay.map((value,i)=>i<3?value*overlay[3]/255:value);
-        const primary=rgb(getComputedStyle(document.documentElement).getPropertyValue('--color-primary'));
+        check(!scrim,'Light '+scene.id+' preserves the background without a global veil');
+        const pageStyle=getComputedStyle(document.querySelector('.app-layout'));
+        const surface=rgb(scene.id==='solid'?getComputedStyle(document.querySelector('.solid-background')).backgroundColor:pageStyle.getPropertyValue('--color-bg'));
+        const primary=rgb(pageStyle.getPropertyValue('--color-primary'));
         const text=rgb(getComputedStyle(document.querySelector('.setting-row h3')).color);
         const secondary=rgb(getComputedStyle(document.querySelector('.setting-row p')).color);
-        check(contrast(text,surface)>=7&&contrast(secondary,surface)>=4.5&&contrast(primary,surface)>=4.5,'Light '+scene.id+' keeps readable text and accent against its darkest backdrop');
+        const auxiliary=rgb(pageStyle.getPropertyValue('--color-text-l2'));
+        check(contrast(text,surface)>=7&&contrast(secondary,surface)>=4.5&&contrast(auxiliary,surface)>=4.5&&contrast(primary,surface)>=4.5,'Light '+scene.id+' keeps readable foregrounds on component surfaces: '+JSON.stringify({text:contrast(text,surface),secondary:contrast(secondary,surface),auxiliary:contrast(auxiliary,surface),accent:contrast(primary,surface)}));
+        if(scene.id==='solid') {
+          const canvas=document.querySelector('.solid-background canvas');const gl=canvas.getContext('webgl');
+          check(!!gl&&gl.getUniform(gl.getParameter(gl.CURRENT_PROGRAM),gl.getUniformLocation(gl.getParameter(gl.CURRENT_PROGRAM),'u_light'))===1,'Real song-background shader renders its light palette without a white overlay');
+          ui.reduceMotion=true;ui.accentSource='user';
+          for(const color of ['rgb(0 0 0)','rgb(255 255 255)','rgb(255 0 0)','rgb(0 255 0)','rgb(0 0 255)']) {
+            ui.songThemeColor=color;await wait();
+            gl.drawArrays(gl.TRIANGLES,0,3);const pixel=new Uint8Array(4);gl.readPixels(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1,gl.RGBA,gl.UNSIGNED_BYTE,pixel);
+            check(lum(pixel)>0.35&&lum(pixel)<0.56&&contrast(auxiliary,pixel)>=4.5&&contrast(text,pixel)>=7,'Light artwork material stays muted and readable for '+color+': '+JSON.stringify([...pixel]));
+            const material=rgb(getComputedStyle(document.documentElement).getPropertyValue('--color-bg'));
+            check(material.slice(0,3).every((channel,i)=>Math.abs(channel-pixel[i])<=1),'Song material, root palette and async fallback stay aligned when only artwork changes: '+color);
+            for(const token of ['--app-header-bg','--app-footer-bg']) {
+              const chrome=rgb(getComputedStyle(document.documentElement).getPropertyValue(token));const composite=chrome.map((v,i)=>i<3?v*chrome[3]/255+pixel[i]*(1-chrome[3]/255):v);
+              check(lum(composite)<0.62&&Math.abs(lum(composite)-lum(pixel))<0.08&&contrast(auxiliary,composite)>=4.5,'Song '+token+' shares the muted artwork palette without a bright white surface: '+color);
+            }
+            if(!['rgb(0 0 0)','rgb(255 255 255)'].includes(color)) check(Math.max(...pixel.slice(0,3))-Math.min(...pixel.slice(0,3))>=18,'Light artwork preserves a visible color tint for '+color);
+          }
+          ui.songThemeColor=null;ui.accentSource='auto';await wait();
+        }
         const layer=document.querySelector('.app-background-layer');ui.setColorMode('dark');await wait();ui.setColorMode('light');await wait();
         const rootStyle=getComputedStyle(document.documentElement);
         check(document.querySelector('.app-background-layer')===layer&&!document.querySelector('[class*=app-theme-background-leave]')&&contrast(rgb(rootStyle.getPropertyValue('--color-text')),rgb(rootStyle.getPropertyValue('--color-bg')))>=7,'Switching '+scene.id+' light/dark preserves its canvas host and avoids a fading cleared layer');
       }
       ui.setCustomBackground({kind:'image',url:'',path:'contrast.png'});await wait();
       const rootStyle=getComputedStyle(document.documentElement);
-      for(const token of ['--app-header-bg','--app-footer-bg']) {const chrome=rgb(rootStyle.getPropertyValue(token));const composite=chrome.map((v,i)=>i<3?v*chrome[3]/255:v);check(contrast(rgb(rootStyle.getPropertyValue('--color-text')),composite)>=7,'Light custom media uses readable '+token);}
+      const baseSurface=rgb(rootStyle.getPropertyValue('--color-bg'));const cardSurface=rgb(rootStyle.getPropertyValue('--color-bg-l'));const insetSurface=rgb(rootStyle.getPropertyValue('--color-bg-l2'));
+      check(lum(baseSurface)<0.85&&lum(baseSurface)>0.65&&lum(cardSurface)>lum(baseSurface)&&lum(insetSurface)<lum(baseSurface),'Light surfaces have a soft base, raised cards and recessed controls without a near-white page');
+      check(!document.querySelector('.app-background-scrim'),'Light custom images retain their original colors without a global veil');
+      const savedFilter=ui.getBackgroundFilter;
+      ui.setCustomBackground({kind:'video',url:'',path:'contrast.mp4'});await wait();
+      check(!document.querySelector('.app-background-scrim')&&ui.getBackgroundFilter===savedFilter,'Light custom videos retain their original colors and user filters');
+      for(const surface of [baseSurface,cardSurface,insetSurface]) for(const token of ['--color-text','--color-text-l','--color-text-l2','--color-primary']) check(contrast(rgb(rootStyle.getPropertyValue(token)),surface)>=4.5,'Light component '+token+' remains readable on '+JSON.stringify(surface));
+      const label=rgb(rootStyle.getPropertyValue('--btn-primary-text'));
+      for(const token of ['--btn-primary-bg','--btn-primary-bg-hover']) check(contrast(label,rgb(rootStyle.getPropertyValue(token)))>=4.5,'Light primary button retains label contrast for '+token);
+      check(ui.resolvedAppearance.chrome.header===ui.customBg.headerBackground&&ui.resolvedAppearance.chrome.footer===ui.customBg.footerBackground,'Light custom chrome preserves the authored header and footer colors without white mixing');
+      const chromeHost=document.createElement('div');chromeHost.style.cssText='position:fixed;left:-10000px;top:0';
+      chromeHost.innerHTML='<header class="ep-header"><span class="text-text">Header</span><span class="text-primary">Accent</span></header><footer class="ep-footer"><span class="text-text">Song</span><span class="text-text-l">Artist</span><span class="ep-progress-fill">Progress</span></footer>';
+      document.body.append(chromeHost);
+      const footerFade=document.createElement('div');footerFade.className='app-footer-shell bg-gradient-to-t from-bg/30';chromeHost.append(footerFade);
+      const chromeSnapshot=()=>[...chromeHost.querySelectorAll('.ep-header,.ep-footer')].map(bar=>({background:getComputedStyle(bar).backgroundColor,text:getComputedStyle(bar.querySelector('.text-text')).color,accent:getComputedStyle(bar).getPropertyValue('--color-primary'),hover:getComputedStyle(bar).getPropertyValue('--color-hover-bg'),progress:getComputedStyle(bar).getPropertyValue('--ep-progress-fill'),fade:getComputedStyle(footerFade).backgroundImage}));
+      const lightChrome=chromeSnapshot();
+      check(!document.documentElement.classList.contains('dark')&&document.documentElement.dataset.chromeDark==='true'&&contrast(rgb(getComputedStyle(chromeHost.querySelector('.text-text')).color),baseSurface)<2,'Dark chrome foregrounds are scoped to the bars while the page remains light');
+      for(const bar of chromeHost.querySelectorAll('.ep-header,.ep-footer')) {
+        const background=rgb(getComputedStyle(bar).backgroundColor);const composite=background.map((v,i)=>i<3?v*background[3]/255+255*(1-background[3]/255):v);
+        check(contrast(rgb(getComputedStyle(bar.querySelector('.text-text')).color),composite)>=4.5,'Authored '+bar.tagName+' keeps readable foregrounds over a bright backdrop');
+      }
+      ui.setColorMode('dark');await wait();
+      check(JSON.stringify(chromeSnapshot())===JSON.stringify(lightChrome),'Custom chrome backgrounds, labels, accents, hover and progress colors match dark-mode styling');
+      ui.setColorMode('light');ui.selectThemeBackground('plugin:builtin.theme.rainy');await wait();
+      check(ui.resolvedAppearance.chrome.header===window.__rainyFixture.data.headerBackground&&ui.resolvedAppearance.chrome.footer===window.__rainyFixture.data.footerBackground&&ui.resolvedAppearance.chrome.dark,'Light plugin chrome retains its scene palette and dark foreground treatment');
+      for(const [selector,color] of [['.ep-header',window.__rainyFixture.data.headerBackground],['.ep-footer',window.__rainyFixture.data.footerBackground]]) {
+        const source=rgb(color);const bar=chromeHost.querySelector(selector);const lifted=rgb(getComputedStyle(bar).backgroundColor);
+        check(lum(lifted)>lum(source)&&lum(lifted)-lum(source)<0.03&&Math.abs(lifted[3]-source[3])<=1,'Theme '+selector+' gets a restrained brightness lift while preserving opacity');
+        const composite=lifted.map((v,i)=>i<3?v*lifted[3]/255+255*(1-lifted[3]/255):v);
+        check(contrast(rgb(getComputedStyle(bar.querySelector('.text-text')).color),composite)>=4.5,'Raised theme '+selector+' keeps readable labels');
+      }
+      ui.setColorMode('dark');await wait();
+      check(document.documentElement.dataset.chromeRaised==='false','Dark theme chrome keeps its original brightness');
+      ui.setColorMode('light');await wait();
+      ui.selectThemeBackground('none');await wait();
+      check(document.documentElement.dataset.chromeDark==='false'&&document.documentElement.dataset.chromeRaised==='false'&&contrast(rgb(getComputedStyle(chromeHost.querySelector('.text-text')).color),baseSurface)>=7,'Leaving authored backgrounds restores ordinary light chrome without stale colors');
+      await ui.setNativeWindowMaterial('mica');await wait();
+      const micaFooter=chromeHost.querySelector('.ep-footer');const page=document.querySelector('.app-layout');
+      const contrastProbe=document.createElement('div');contrastProbe.style.cssText='position:fixed;left:-10000px';contrastProbe.innerHTML='<span class="text-text">Page</span><span class="text-text-l">Secondary</span><label class="plain-label">Caption</label><aside class="ep-sidebar-item">Sidebar</aside><button class="ep-button ep-button--primary">Play</button>';page.append(contrastProbe);
+      const dialogProbe=document.createElement('div');dialogProbe.className='ep-dialog-panel';dialogProbe.style.cssText='position:fixed;left:-10000px';dialogProbe.innerHTML='<span class="text-text">Dialog</span>';document.body.append(dialogProbe);
+      for(const nativeDark of [false,true]) {
+        systemDark=nativeDark;for(const listener of mediaListeners)listener();await wait();
+        const micaStyle=getComputedStyle(micaFooter);const micaSurface=rgb(micaStyle.backgroundColor);const backdrop=nativeDark?[24,28,26]:[225,229,224];
+        const composite=micaSurface.map((v,i)=>i<3?v*micaSurface[3]/255+backdrop[i]*(1-micaSurface[3]/255):v);
+        check(micaSurface[3]/255<=0.18&&lum(micaSurface)<0.05,'Light Mica footer uses only a subtle dark tint instead of covering the native material');
+        for(const token of ['--color-text','--color-text-l','--color-text-l2','--color-primary']) check(contrast(rgb(micaStyle.getPropertyValue(token)),composite)>=4.5,'Light Mica footer keeps '+token+' readable on its '+(nativeDark?'dark':'light')+' native backdrop');
+        check(ui.colorMode==='light'&&!document.documentElement.classList.contains('dark')&&ui.resolvedAppearance.contentDark===nativeDark&&(page.dataset.backgroundContrast==='dark')===nativeDark,'Native backdrop contrast changes the page foreground without rewriting the selected light mode');
+        for(const selector of ['.text-text','.text-text-l','.plain-label','.ep-sidebar-item']) check(contrast(rgb(getComputedStyle(contrastProbe.querySelector(selector)).color),backdrop)>=4.5,'Page '+selector+' stays readable on a '+(nativeDark?'dark':'light')+' Mica backdrop');
+        const buttonStyle=getComputedStyle(contrastProbe.querySelector('button'));check(contrast(rgb(buttonStyle.color),rgb(buttonStyle.backgroundColor))>=4.5,'Primary labels retain contrast in the adaptive content palette');
+        check(contrast(rgb(getComputedStyle(dialogProbe.querySelector('span')).color),rgb(getComputedStyle(dialogProbe).backgroundColor))>=7&&lum(rgb(getComputedStyle(dialogProbe).backgroundColor))>0.85,'Body-teleported dialogs keep their independent light surface and dark labels');
+      }
+      contrastProbe.remove();dialogProbe.remove();
+      check(getComputedStyle(footerFade).backgroundImage==='none'&&getComputedStyle(micaFooter).boxShadow!=='none'&&rgb(getComputedStyle(document.body).backgroundColor)[3]===0,'Light Mica removes the outer white gradient, softens its shadow and preserves native transparency');
+      await ui.setNativeWindowMaterial('none');await wait();
+      check(getComputedStyle(footerFade).backgroundImage!=='none','Leaving Mica restores the ordinary footer gradient');
+      chromeHost.remove();
       ui.selectThemeBackground('none');ui.reduceMotion=false;await wait();
       ui.setColorMode('dark');await wait();await new Promise(resolve=>setTimeout(resolve,350));
       const modeSamples=[];ui.setColorMode('light');
@@ -425,6 +527,7 @@ app.whenReady().then(async () => {
       };
       window.pauseOfficialScene=async(paused)=>{ui.reduceMotion=paused;await wait()};
       window.showOfficialSceneLight=async()=>{ui.setColorMode('light');await wait();for(let retry=0;retry<40&&document.documentElement.classList.contains('dark');retry++)await new Promise(resolve=>setTimeout(resolve,30));return !document.documentElement.classList.contains('dark')};
+      window.previewLightAppearance=async(id)=>{ui.selectCustomTheme('');ui.setColorMode('light');ui.reduceMotion=true;ui.selectThemeBackground(id);document.querySelector('#app main section').scrollIntoView({block:'start'});await wait();return {dark:ui.resolvedAppearance.dark,background:ui.resolvedAppearance.background,scrim:ui.resolvedAppearance.backgroundScrim}};
       window.toggleOfficialScene=async(id,available)=>{activeThemes=available?[blackhole,midnight,nyan,rainy,...window.__rendererFixtures]:activeThemes.filter(theme=>theme.pluginId!=='builtin.theme.'+id);themeListener();await wait();return {selected:ui.systemBackground,type:ui.resolvedAppearance.background.type,resolved:ui.resolvedAppearance.background.id}};
       const pluginHost=document.createElement('div');document.body.append(pluginHost);
       window.api.plugins.list=async()=>({success:true,data:[
@@ -596,6 +699,19 @@ app.whenReady().then(async () => {
       'build/appearance-settings.png',
       (await window.webContents.capturePage()).toPNG()
     )
+    for (const [name, background] of [
+      ['plain', 'none'],
+      ['song', 'solid'],
+      ['scene', 'plugin:builtin.theme.rainy']
+    ]) {
+      await window.webContents.executeJavaScript(
+        'window.previewLightAppearance(' + JSON.stringify(background) + ')'
+      )
+      fs.writeFileSync(
+        'build/light-appearance-' + name + '.png',
+        (await window.webContents.capturePage()).toPNG()
+      )
+    }
     window.setContentSize(620, 900)
     await new Promise((resolve) => setTimeout(resolve, 200))
     result.compact = await window.webContents.executeJavaScript(

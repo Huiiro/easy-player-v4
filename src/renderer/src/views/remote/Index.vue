@@ -262,7 +262,7 @@ onMounted(() => void load())
               </span>
             </div>
             <p class="mt-1 truncate text-sm text-text-l">{{ source.baseUrl }}</p>
-            <p v-if="source.credentialError" class="mt-2 text-sm text-amber-500" role="status">
+            <p v-if="source.credentialError" class="mt-2 text-sm text-warning" role="status">
               {{
                 t(
                   source.credentialError === 'unavailable'
@@ -306,7 +306,7 @@ onMounted(() => void load())
               {{ syncingSourceId === source.id ? t('remote.syncing') : t('remote.sync') }}
             </button>
             <button
-              class="btn-hover flex items-center gap-1 px-2 py-1 text-sm text-red-400"
+              class="btn-hover flex items-center gap-1 px-2 py-1 text-sm text-danger"
               @click="deleteTarget = source"
             >
               <svg-icon name="common-delete" class-name="w-[12px] h-[12px]" />
@@ -350,7 +350,7 @@ onMounted(() => void load())
       <label class="block text-sm">
         {{ t('remote.password') }}
         <input v-model="form.secret" class="input-base mt-1 h-9 w-full" type="password" />
-        <p v-if="editing?.credentialError" class="mt-2 text-sm text-amber-500" role="status">
+        <p v-if="editing?.credentialError" class="mt-2 text-sm text-warning" role="status">
           {{
             t(
               editing.credentialError === 'unavailable'
@@ -369,7 +369,7 @@ onMounted(() => void load())
         {{ t('remote.testConnection') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm"
         @click="saveSource"
       >
         {{ t('common.save') }}
@@ -390,7 +390,7 @@ onMounted(() => void load())
         {{ t('common.cancel') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
         @click="remove"
       >
         {{ t('remote.delete') }}

@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     const styles = []
     const bundle = await esbuild.build({
       stdin: {
-        contents: `import * as Vue from 'vue'; import { createI18n } from 'vue-i18n'; import { createRouter, createMemoryHistory } from 'vue-router'; import Home from './src/renderer/src/views/home/Index.vue'; import zh from './src/renderer/src/i18n/locales/zh'; export { Vue, createI18n, createRouter, createMemoryHistory, Home, zh };`,
+        contents: `import * as Vue from 'vue'; import { createI18n } from 'vue-i18n'; import { createRouter, createMemoryHistory } from 'vue-router'; import Home from './src/renderer/src/views/home/Index.vue'; import zh from './src/renderer/src/i18n/locales/zh'; import {resolveAppearance, DEFAULT_ACCENT_COLOR} from './src/renderer/src/services/appearance'; import {applyAppearance} from './src/renderer/src/services/appearanceController'; export { Vue, createI18n, createRouter, createMemoryHistory, Home, zh, resolveAppearance, DEFAULT_ACCENT_COLOR, applyAppearance };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -121,7 +121,7 @@ app.whenReady().then(async () => {
       .find((file) => /^main-.*\.css$/.test(file))
     const css =
       fs.readFileSync(path.join('out/renderer/assets', cssFile), 'utf8') +
-      fs.readFileSync('src/renderer/src/views/home/home.css', 'utf8') +
+      fs.readFileSync('src/renderer/src/styles/home.css', 'utf8') +
       styles.join('\n')
     await window.webContents.executeJavaScript(
       `document.head.insertAdjacentHTML('beforeend','<style></style>');document.head.lastElementChild.textContent=${JSON.stringify(css)};document.body.insertAdjacentHTML('beforeend',${JSON.stringify('<svg style="display:none">' + sprite + '</svg>')});void 0;`
@@ -147,7 +147,11 @@ app.whenReady().then(async () => {
     })()`)
     const theme = async (dark) =>
       window.webContents.executeJavaScript(
-        `document.documentElement.classList.toggle('dark',${dark});document.documentElement.style.cssText=${JSON.stringify(dark ? '--color-bg:#15181c;--color-bg-l:#282e35;--color-bg-l2:#242a31;--color-text:#e5e9ee;--color-text-l:#929da9;--color-border:#59616c;--color-hover:rgb(255 255 255 / 5%);--color-hover-bg:#2d343c;--color-primary:#72c9a3;' : '--color-bg:#fafbf9;--color-bg-l:#edf0eb;--color-bg-l2:#f0f3ef;--color-text:#24352f;--color-text-l:#7b867f;--color-border:#9ba69d;--color-hover:rgb(0 0 0 / 4%);--color-hover-bg:#e8ede7;--color-primary:#3e8267;')};void 0;`
+        `(() => {
+          const {resolveAppearance, DEFAULT_ACCENT_COLOR, applyAppearance}=HomePreview;
+          const appearance=resolveAppearance({colorMode:${JSON.stringify(dark ? 'dark' : 'light')},background:{type:'none'},accentSource:'user',accentColor:DEFAULT_ACCENT_COLOR,themeBackgroundEnabled:false,customChrome:{header:'',footer:'',border:''}},{systemDark:false,material:'none',scene:{id:'none',colorMode:'light'},songColor:null});
+          applyAppearance(appearance,document.documentElement);
+        })()`
       )
     const save = async (name) => {
       await new Promise((resolve) => setTimeout(resolve, 250))

@@ -229,6 +229,32 @@
   transition: none !important;
 }
 
+/* One snapshot handoff keeps authored rules, local contrast palettes, chrome
+ * and canvases on the same clock without interpolating text through gray. */
+::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: appearance-reveal var(--motion-duration-theme) var(--motion-ease-standard) both;
+  mix-blend-mode: normal;
+}
+::view-transition-group(root) {
+  animation-duration: var(--motion-duration-theme);
+}
+@keyframes appearance-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+:root.appearance-snapshot,
+:root.appearance-snapshot * {
+  transition: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root.theme-transitioning {
     transition: none !important;

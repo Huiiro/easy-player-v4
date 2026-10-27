@@ -3,23 +3,14 @@ import { notifyWindowReady } from '@/services/windowReady'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import type { SystemBackground } from '@/stores/ui/uiStore'
-import { primarySurfaceColors } from '@/components/background/songThemeColors'
-
-interface MiniPlayerTheme {
-  dark: boolean
-  background: SystemBackground | 'custom'
-  accent: string
-  fill?: string
-  border: string | null
-}
+import { applyCompactAppearance, type CompactAppearance } from '@/services/appearanceController'
 
 interface MiniPlayerState {
   cover: string | null
   title: string
   artist: string
   isPlaying: boolean
-  theme?: MiniPlayerTheme
+  theme?: CompactAppearance
 }
 
 const { t } = useI18n()
@@ -41,24 +32,7 @@ const removeUpdateListener = window.api.miniPlayer.onUpdate((data) => {
   }
   if (next.theme) {
     const root = document.documentElement
-    root.classList.toggle('dark', next.theme.dark)
-    root.dataset.systemTheme = next.theme.background
-    root.style.colorScheme = next.theme.dark ? 'dark' : 'light'
-    if (next.theme.accent) root.style.setProperty('--color-primary', next.theme.accent)
-    else root.style.removeProperty('--color-primary')
-    if (next.theme.background === 'solid') {
-      const fill = next.theme.fill ?? next.theme.accent
-      const surface = primarySurfaceColors(fill)
-      root.style.setProperty('--color-primary-fill', fill)
-      root.style.setProperty('--color-on-primary', surface.text)
-      root.style.setProperty('--btn-primary-bg-hover', surface.hover)
-    } else {
-      root.style.removeProperty('--color-primary-fill')
-      root.style.removeProperty('--color-on-primary')
-      root.style.removeProperty('--btn-primary-bg-hover')
-    }
-    if (next.theme.border) root.style.setProperty('--color-border', next.theme.border)
-    else root.style.removeProperty('--color-border')
+    applyCompactAppearance(next.theme, root)
   }
   void notifyWindowReady()
 })

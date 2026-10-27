@@ -808,7 +808,7 @@ onBeforeUnmount(() => {
           {{ t('common.cancel') }}
         </button>
         <button
-          class="rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-50"
+          class="rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-50"
           :disabled="resetting"
           @click="restoreDefaults"
         >
@@ -835,7 +835,7 @@ onBeforeUnmount(() => {
         <button class="btn-hover px-3 py-1.5 text-sm" @click="savePresetDialogOpen = false">
           {{ t('common.cancel') }}
         </button>
-        <button class="rounded-lg bg-primary px-3 py-1.5 text-sm text-white" @click="savePreset">
+        <button class="rounded-lg ep-button--primary px-3 py-1.5 text-sm" @click="savePreset">
           {{ t(editingPresetId ? 'ap.updateEqPreset' : 'ap.saveEqPreset') }}
         </button>
       </template>

@@ -35,7 +35,7 @@ async function clearHistory(): Promise<void> {
         </p>
       </div>
       <button
-        class="btn-hover flex items-center gap-1.5 px-2 py-1.5 text-sm text-red-400"
+        class="btn-hover flex items-center gap-1.5 px-2 py-1.5 text-sm text-danger"
         :title="t('history.clear')"
         @click="clearDialogOpen = true"
       >
@@ -51,7 +51,7 @@ async function clearHistory(): Promise<void> {
       <button class="btn-hover px-3 py-1.5 text-sm" @click="clearDialogOpen = false">
         {{ t('common.cancel') }}
       </button>
-      <button class="rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white" @click="clearHistory">
+      <button class="rounded-lg ep-button--danger px-3 py-1.5 text-sm" @click="clearHistory">
         {{ t('history.clear') }}
       </button>
     </template>

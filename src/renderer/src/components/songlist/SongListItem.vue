@@ -155,7 +155,7 @@ function openAlbum(): void {
             <SvgIcon
               v-else-if="song.preference === -1"
               name="play-dislike"
-              class-name="size-4 shrink-0 text-red-400"
+              class-name="size-4 shrink-0 text-danger"
               :title="t('songList.dislike')"
             />
             <SvgIcon

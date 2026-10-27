@@ -137,7 +137,7 @@ watch(
         :presets="presetColors"
         class="shrink-0"
       />
-      <button class="btn-hover-base rounded-lg bg-primary px-3 text-sm text-white" @click="create">
+      <button class="btn-hover-base rounded-lg ep-button--primary px-3 text-sm" @click="create">
         {{ t('tags.create') }}
       </button>
     </div>
@@ -193,7 +193,7 @@ watch(
               @change="update(tag)"
             />
             <button
-              class="btn-hover px-1 text-sm text-red-400"
+              class="btn-hover px-1 text-sm text-danger"
               :aria-label="t('tags.delete')"
               @click="tagPendingDelete = tag"
             >
@@ -232,7 +232,7 @@ watch(
         {{ t('tags.cancel') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
         @click="confirmRemove"
       >
         {{ t('tags.delete') }}

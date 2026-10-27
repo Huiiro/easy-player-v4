@@ -17,7 +17,12 @@ import {
   type AppearancePreferences,
   type ColorMode
 } from '@/services/appearance'
-import { applyAppearance, createAppearanceScheduler } from '@/services/appearanceController'
+import {
+  applyAppearance,
+  backgroundAppearanceHandoff,
+  createAppearanceScheduler
+} from '@/services/appearanceController'
+import { backgroundSceneKey } from '@/components/background/backgroundScene'
 import { computed, nextTick, onScopeDispose, reactive, ref, shallowRef, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
@@ -222,8 +227,7 @@ export const useUIStore = defineStore(
     const customThemeOverridesBackground = computed(() => {
       return resolvedAppearance.value.background.type === 'theme'
     })
-    function refreshCustomTheme(): void {
-      const theme = appliedCustomTheme.value
+    function refreshCustomTheme(theme = appliedCustomTheme.value): void {
       try {
         applyCustomTheme(
           theme
@@ -574,57 +578,72 @@ export const useUIStore = defineStore(
     function applyTheme(): void {
       const root = document.documentElement
       const appearance = resolvedAppearance.value
-      const themeTokens = appliedCustomTheme.value?.tokens
-      const themePaletteKey = JSON.stringify([
-        themeTokens?.['--color-bg'],
-        themeTokens?.['--color-bg-l'],
-        themeTokens?.['--color-bg-l2'],
-        themeTokens?.['--color-text']
-      ])
-      const key = JSON.stringify([
-        appearance.dark,
-        appearance.material,
-        appearance.systemTheme,
-        appearance.accentColor,
-        appearance.primaryFill,
-        appearance.chrome
-      ])
-      if (key !== appliedAppearanceKey || themePaletteKey !== appliedThemePaletteKey) {
-        if (
-          (appliedDark !== undefined && appliedDark !== appearance.dark) ||
-          (appliedThemePaletteKey !== undefined && appliedThemePaletteKey !== themePaletteKey)
-        ) {
-          // Cross-fading light text and dark surfaces together passes through a
-          // gray-on-gray frame. Switch mode or authored surface palettes atomically;
-          // accent changes within one palette retain their normal color transition.
-          if (themeTransitionTimer) clearTimeout(themeTransitionTimer)
-          themeTransitionTimer = undefined
-          root.classList.remove('theme-transitioning')
-          void getComputedStyle(root).transitionProperty
-        } else if (
-          themeInitialized &&
-          !reduceMotion.value &&
-          !window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        ) {
-          beginThemeTransition()
+      const theme = appliedCustomTheme.value
+      const sceneKey = backgroundSceneKey(
+        appearance,
+        effectiveCustomThemeName.value,
+        customBg.url,
+        getSystemBackgroundTheme(systemBackground.value).pluginTheme?.revision
+      )
+      backgroundAppearanceHandoff.stage(sceneKey, () => {
+        const themeTokens = theme?.tokens
+        const themePaletteKey = JSON.stringify([
+          themeTokens?.['--color-bg'],
+          themeTokens?.['--color-bg-l'],
+          themeTokens?.['--color-bg-l2'],
+          themeTokens?.['--color-text'],
+          appearance.systemTheme === 'solid',
+          appearance.contentDark
+        ])
+        const key = JSON.stringify([
+          appearance.dark,
+          appearance.contentDark,
+          appearance.material,
+          appearance.systemTheme,
+          appearance.accentColor,
+          appearance.primaryFill,
+          appearance.backgroundSurface,
+          appearance.chrome
+        ])
+        if (key !== appliedAppearanceKey || themePaletteKey !== appliedThemePaletteKey) {
+          if (
+            (appliedDark !== undefined && appliedDark !== appearance.dark) ||
+            (appliedThemePaletteKey !== undefined && appliedThemePaletteKey !== themePaletteKey)
+          ) {
+            // Cross-fading light text and dark surfaces together passes through a
+            // gray-on-gray frame. Switch mode or authored surface palettes atomically;
+            // accent changes within one palette retain their normal color transition.
+            if (themeTransitionTimer) clearTimeout(themeTransitionTimer)
+            themeTransitionTimer = undefined
+            root.classList.remove('theme-transitioning')
+            void getComputedStyle(root).transitionProperty
+          } else if (
+            themeInitialized &&
+            !reduceMotion.value &&
+            !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ) {
+            beginThemeTransition()
+          }
+          applyAppearance(appearance, root)
+          appliedAppearanceKey = key
+          appliedDark = appearance.dark
+          appliedThemePaletteKey = themePaletteKey
         }
-        applyAppearance(appearance, root)
-        appliedAppearanceKey = key
-        appliedDark = appearance.dark
-        appliedThemePaletteKey = themePaletteKey
-      }
+        refreshCustomTheme(theme)
+      })
       root.classList.toggle('reduce-motion', reduceMotion.value)
       root.style.setProperty('--lrc-size', `${lyricsFontSize.value}rem`)
       const normalizedPadding = normalizeLyricsFontPadding(lyricsFontPadding.value)
       if (normalizedPadding !== lyricsFontPadding.value) lyricsFontPadding.value = normalizedPadding
       root.style.setProperty('--lrc-padding', `${normalizedPadding}px`)
       root.style.fontFamily = customFontFamily.value ? fontStack.value : ''
-      refreshCustomTheme()
     }
     function beginThemeTransition(): void {
       if (!themeInitialized || reduceMotion.value || typeof document === 'undefined') return
       const root = document.documentElement
       root.classList.add('theme-transitioning')
+      // Establish transition rules before changing inherited palette values.
+      void getComputedStyle(root).transitionProperty
       if (themeTransitionTimer) clearTimeout(themeTransitionTimer)
       const configuredDuration = getComputedStyle(root)
         .getPropertyValue('--motion-duration-theme')
@@ -919,6 +938,7 @@ export const useUIStore = defineStore(
       customThemes,
       appearancePreferences,
       resolvedAppearance,
+      backgroundTheme: appliedCustomTheme,
       colorMode,
       setColorMode,
       nativeMaterialEnabled,

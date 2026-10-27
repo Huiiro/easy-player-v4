@@ -71,7 +71,7 @@ function playlistCoverUrl(playlist: Playlist): string | null {
             {{ t('home.playlistSongCount', { count: playlist.songCount }) }}
           </span>
           <span
-            class="playlist-cover-action pointer-events-none absolute bottom-3 right-3 grid size-11 translate-y-1 place-items-center rounded-full bg-primary text-white opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+            class="playlist-cover-action pointer-events-none absolute bottom-3 right-3 grid size-11 translate-y-1 place-items-center rounded-full ep-button--primary opacity-0 shadow-lg transition-all duration-[var(--motion-duration-standard)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
           >
             <SvgIcon
               :name="

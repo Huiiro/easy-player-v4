@@ -62,24 +62,6 @@ textarea,
   height: 100%;
 }
 
-/* 自定义背景 hover 样式 */
-.hover-overlay {
-  @apply hover:bg-white/10;
-}
-
-.hover-overlay-light {
-  @apply hover:bg-black/10;
-}
-
-.hover-overlay-combine {
-  @apply hover:bg-[var(--color-hover)] transition-colors;
-}
-
-/* 禁止所有颜色过渡 */
-.no-bg-transition {
-  transition-property: transform, box-shadow, opacity !important;
-}
-
 /*electron drag webkit*/
 .header-drag {
   -webkit-app-region: drag;
@@ -122,21 +104,6 @@ textarea,
   width: 4px;
 }
 
-.custom-dialog-footer-close-btn {
-  padding: 0.25rem 1rem;
-  border-radius: 0.25rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
-  background-color: var(--color-bg);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  transition: all var(--motion-duration-standard) var(--motion-ease-standard);
-}
-
-.custom-dialog-footer-close-btn:hover {
-  background-color: var(--color-primary);
-}
-
 .lrc {
   color: var(--lrc-default);
 }
@@ -157,73 +124,6 @@ textarea,
   w-full
   outline-none
   transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)];
-}
-
-.input-label {
-  @apply my-0.5;
-}
-
-.btn-gray {
-  @apply px-4 py-1
-  rounded
-  border border-border
-  text-sm text-text
-  hover:bg-hover-bg;
-}
-
-.btn-small {
-  @apply px-2 py-1
-  rounded
-  border border-border
-  text-sm text-text
-  hover:bg-hover-bg;
-}
-
-.btn-base {
-  @apply mt-1
-  border-border border-dashed
-  bg-hover-bg
-  transition-all
-  duration-[var(--motion-duration-standard)]
-  ease-[var(--motion-ease-standard)]
-  hover:bg-primary
-  text-text text-sm
-  rounded
-  flex
-  items-center
-  justify-center
-  gap-1;
-}
-
-.btn-hl-base {
-  @apply mt-1
-  border-border border-dashed
-  bg-hover-bg
-  hover:bg-primary/20
-  text-sm text-primary
-  rounded
-  flex
-  items-center
-  justify-center
-  gap-1;
-}
-
-.more-item {
-  @apply px-3 py-2
-  rounded-lg
-  hover:bg-hover-bg
-  cursor-pointer
-  text-sm
-  flex
-  items-center
-  transition
-  gap-2;
-}
-
-.shortcut-input {
-  @apply w-120 flex
-  items-center justify-center gap-12
-  text-text text-nowrap text-sm;
 }
 
 @keyframes ripple-wave {
@@ -257,7 +157,10 @@ textarea,
 }
 
 .btn-hover {
-  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)] not-disabled:hover:text-primary;
+  @apply transition-all duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)];
+}
+.btn-hover:not(.text-danger) {
+  @apply not-disabled:hover:text-primary;
 }
 
 .btn-hover-base {

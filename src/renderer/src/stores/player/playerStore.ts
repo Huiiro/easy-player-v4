@@ -2138,11 +2138,13 @@ export const usePlayerStore = defineStore('player', () => {
       artist: metadata?.artist || song?.artist || '',
       isPlaying: isPlaying.value,
       theme: {
-        dark: ui.resolvedAppearance.dark,
+        dark: ui.resolvedAppearance.contentDark,
         background: ui.resolvedAppearance.systemTheme,
-        accent: ui.resolvedAppearance.accentColor,
+        accent: ui.resolvedAppearance.contentDark
+          ? ui.resolvedAppearance.chrome.accentColor
+          : ui.resolvedAppearance.accentColor,
         fill: ui.resolvedAppearance.primaryFill ?? ui.resolvedAppearance.accentColor,
-        border: ui.resolvedAppearance.chrome.border
+        backgroundSurface: ui.resolvedAppearance.backgroundSurface
       }
     })
     window.api.system.updateTray({

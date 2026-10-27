@@ -5,6 +5,8 @@ precision mediump float;
 #endif
 uniform vec2 u_resolution;
 uniform vec3 u_color;
+uniform float u_light;
+uniform vec3 u_light_surface;
 
 void main() {
     vec2 uv = gl_FragCoord.xy / u_resolution;
@@ -20,9 +22,10 @@ void main() {
     pigment *= 0.72 / max(0.72, max(pigment.r, max(pigment.g, pigment.b)));
     // An opaque, softly tinted material. Only a nearly imperceptible surface
     // falloff and static grain remain: no light bands, moving shapes or hotspots.
-    vec3 color = vec3(0.055, 0.062, 0.064) + pigment * 0.16;
+    vec3 darkColor = vec3(0.055, 0.062, 0.064) + pigment * 0.16;
+    vec3 color = mix(darkColor, u_light_surface, u_light);
     float edge = smoothstep(0.25, 0.75, length(uv - 0.5));
-    color *= (0.98 + uv.y * 0.02) * (1.0 - edge * 0.025);
+    color *= mix((0.98 + uv.y * 0.02) * (1.0 - edge * 0.025), 1.0 - edge * 0.012, u_light);
     float grain = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     gl_FragColor = vec4(clamp(color + (grain - 0.5) * 1.2 / 255.0, 0.0, 1.0), 1.0);
 }

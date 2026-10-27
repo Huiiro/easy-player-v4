@@ -167,11 +167,7 @@ function onClear(): void {
                 sizeClass,
                 `ep-control--${size}`,
                 opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
-                isSelected
-                  ? 'bg-primary/30 font-medium text-primary'
-                  : active
-                    ? 'bg-primary/20'
-                    : ''
+                isSelected ? 'bg-primary/8 font-medium text-primary' : active ? 'bg-primary/4' : ''
               ]"
             >
               <!-- checkmark -->

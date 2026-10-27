@@ -20,7 +20,7 @@
 | ------------------------------------------------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------ |
 | `--color-primary`                                                              | `oklch(0.691 0.198 148.262)`                                | 全局强调色；未覆写时可由用户色彩设置或歌曲主题色更新         |
 | `--color-primary-l-10`                                                         | `color-mix(in srgb, var(--color-primary), #fff 10%)`        | 强调色混白 10%                                               |
-| `--color-primary-l-20`                                                         | `color-mix(in srgb, var(--color-primary), #fff 20%)`        | 混白 20%，主按钮悬停默认引用                                 |
+| `--color-primary-l-20`                                                         | `color-mix(in srgb, var(--color-primary), #fff 20%)`        | 混白 20%，可供主题规则使用                                   |
 | `--color-primary-l-50`                                                         | `color-mix(in srgb, var(--color-primary), #fff 50%)`        | 混白 50%                                                     |
 | `--color-primary-l-75`                                                         | `color-mix(in srgb, var(--color-primary), #fff 75%)`        | 混白 75%                                                     |
 | `--color-primary-d-10`                                                         | `color-mix(in srgb, var(--color-primary), transparent 10%)` | 强调色混透明 10%                                             |
@@ -28,7 +28,7 @@
 | `--color-primary-d-50`                                                         | `color-mix(in srgb, var(--color-primary), transparent 50%)` | 混透明 50%                                                   |
 | `--color-primary-d-75`                                                         | `color-mix(in srgb, var(--color-primary), transparent 75%)` | 混透明 75%                                                   |
 | `--color-primary-fill`                                                         | `var(--color-primary)`                                      | 强调填充；底层歌曲主题可能提供独立填充色，消费位置按背景使用 |
-| `--color-on-primary`                                                           | `var(--color-white)`                                        | 强调背景上的前景色，部分内置背景/按钮使用                    |
+| `--color-on-primary`                                                           | 启动时为白色，运行时按有效填充计算黑/白前景                 | 主按钮与强调填充的统一前景色                                 |
 | `--color-black-10`、`--color-black-20`、`--color-black-40`、`--color-black-50` | 黑色，分别 10% / 20% / 40% / 50% 不透明度                   | 固定黑色透明层                                               |
 | `--color-white`                                                                | `rgb(255 255 255)`                                          | 固定白色                                                     |
 | `--color-white-90`                                                             | `color-mix(in srgb, #fff, transparent 10%)`                 | 白色 90% 不透明度                                            |
@@ -37,80 +37,84 @@
 
 ### 文字、表面、边框与图标
 
-| 变量               | 浅色默认                     | 深色默认                     | 用途                             |
-| ------------------ | ---------------------------- | ---------------------------- | -------------------------------- |
-| `--color-text`     | `oklch(21% 0.034 264.665)`   | `oklch(92% 0.01 260)`        | 主文字                           |
-| `--color-text-l`   | `oklch(45% 0.02 260)`        | `oklch(70% 0.02 260)`        | 次级文字                         |
-| `--color-text-l2`  | `oklch(36% 0.01 260)`        | `oklch(55% 0.015 260)`       | 辅助文字；后缀不表示严格亮度顺序 |
-| `--color-text-l3`  | `oklch(87.2% 0.01 258.338)`  | `oklch(35% 0.01 260)`        | 对比或弱化文字，需按实际组件检查 |
-| `--color-bg`       | `oklch(98.5% 0.001 106.423)` | `oklch(14% 0.01 260)`        | 主表面及组件背景回退             |
-| `--color-bg-l`     | `oklch(95% 0.01 110)`        | `oklch(18% 0.015 260)`       | 卡片、菜单等表面                 |
-| `--color-bg-l2`    | `oklch(96% 0.005 110)`       | `oklch(22% 0.02 260)`        | 次层表面、次按钮                 |
-| `--color-bg-d`     | `oklch(55.1% 0.027 264.364)` | `oklch(10% 0.01 260)`        | 特殊深表面                       |
-| `--color-border`   | `oklch(0.678 0.009 253.88)`  | `oklch(0.306 0.005 286.081)` | 常规边框、滑块轨道回退           |
-| `--color-border-l` | `oklch(0.778 0.011 196.927)` | `oklch(0.532 0.002 286.347)` | 辅助边框                         |
-| `--color-icon`     | `oklch(30% 0.03 260)`        | `oklch(80% 0.01 260)`        | 图标                             |
-| `--color-icon-l`   | `oklch(70% 0.01 260)`        | `oklch(55% 0.01 260)`        | 辅助图标                         |
+| 变量               | 浅色默认                    | 深色默认                     | 用途                             |
+| ------------------ | --------------------------- | ---------------------------- | -------------------------------- |
+| `--color-text`     | `oklch(25% 0.017 260)`      | `oklch(92% 0.01 260)`        | 主文字                           |
+| `--color-text-l`   | `oklch(39% 0.015 260)`      | `oklch(70% 0.02 260)`        | 次级文字                         |
+| `--color-text-l2`  | `oklch(43% 0.013 260)`      | `oklch(66% 0.015 260)`       | 辅助文字；后缀不表示严格亮度顺序 |
+| `--color-text-l3`  | `oklch(87.2% 0.01 258.338)` | `oklch(35% 0.01 260)`        | 对比或弱化文字，需按实际组件检查 |
+| `--color-bg`       | `oklch(93.5% 0.006 95)`     | `oklch(14% 0.01 260)`        | 主表面及组件背景回退             |
+| `--color-bg-l`     | `oklch(96.3% 0.004 95)`     | `oklch(18% 0.015 260)`       | 卡片、菜单等表面                 |
+| `--color-bg-l2`    | `oklch(90.5% 0.007 95)`     | `oklch(22% 0.02 260)`        | 次层表面、次按钮                 |
+| `--color-bg-d`     | `oklch(87.5% 0.008 95)`     | `oklch(10% 0.01 260)`        | 特殊深表面                       |
+| `--color-border`   | `oklch(72% 0.008 95)`       | `oklch(0.306 0.005 286.081)` | 常规边框、滑块轨道回退           |
+| `--color-border-l` | `oklch(82% 0.006 95)`       | `oklch(0.532 0.002 286.347)` | 辅助边框                         |
+| `--color-icon`     | `oklch(30% 0.017 260)`      | `oklch(80% 0.01 260)`        | 图标                             |
+| `--color-icon-l`   | `oklch(47% 0.013 260)`      | `oklch(55% 0.01 260)`        | 辅助图标                         |
 
 ### 状态与交互
 
-| 变量                     | 浅色默认              | 深色默认                    | 用途                       |
-| ------------------------ | --------------------- | --------------------------- | -------------------------- |
-| `--color-danger`         | `oklch(55% 0.22 25)`  | `oklch(65% 0.2 25)`         | 危险状态                   |
-| `--color-success`        | `oklch(65% 0.18 145)` | `oklch(70% 0.18 145)`       | 成功状态                   |
-| `--color-warning`        | `oklch(75% 0.16 80)`  | `oklch(80% 0.16 80)`        | 警告状态                   |
-| `--color-border-danger`  | `oklch(60% 0.22 25)`  | `oklch(60% 0.2 25)`         | 危险边框                   |
-| `--color-border-success` | `oklch(65% 0.18 145)` | 同浅色                      | 成功边框                   |
-| `--color-border-warning` | `oklch(75% 0.16 80)`  | 同浅色                      | 警告边框                   |
-| `--color-hover`          | `rgba(0, 0, 0, 0.05)` | `rgba(255, 255, 255, 0.06)` | 侧栏等悬停叠加层           |
-| `--color-hover-bg`       | `oklch(92% 0.01 110)` | `oklch(25% 0.02 260)`       | 次按钮、幽灵按钮等悬停背景 |
-| `--color-hover-danger`   | `oklch(92% 0.03 25)`  | `oklch(30% 0.05 25)`        | 危险项悬停背景             |
-| `--color-hover-t-10`     | 黑色 3%               | 白色 4%                     | 透明交互层                 |
-| `--color-hover-t-20`     | 黑色 6%               | 白色 8%                     | 透明交互层                 |
-| `--color-hover-t-30`     | 黑色 10%              | 白色 12%                    | 透明交互层                 |
-| `--color-hover-t-40`     | 黑色 15%              | 白色 16%                    | 透明交互层                 |
-| `--color-hover-t-50`     | 黑色 20%              | 白色 22%                    | 透明交互层                 |
+| 变量                     | 浅色默认                | 深色默认                    | 用途                       |
+| ------------------------ | ----------------------- | --------------------------- | -------------------------- |
+| `--color-danger`         | `oklch(48% 0.18 25)`    | `oklch(72% 0.16 25)`        | 危险状态                   |
+| `--color-success`        | `oklch(43% 0.12 145)`   | `oklch(70% 0.18 145)`       | 成功状态                   |
+| `--color-warning`        | `oklch(46% 0.1 80)`     | `oklch(80% 0.16 80)`        | 警告状态                   |
+| `--color-border-danger`  | `oklch(60% 0.22 25)`    | `oklch(60% 0.2 25)`         | 危险边框                   |
+| `--color-border-success` | `oklch(65% 0.18 145)`   | 同浅色                      | 成功边框                   |
+| `--color-border-warning` | `oklch(75% 0.16 80)`    | 同浅色                      | 警告边框                   |
+| `--color-hover`          | `rgba(0, 0, 0, 0.05)`   | `rgba(255, 255, 255, 0.06)` | 侧栏等悬停叠加层           |
+| `--color-hover-bg`       | `oklch(87.5% 0.008 95)` | `oklch(25% 0.02 260)`       | 次按钮、幽灵按钮等悬停背景 |
+| `--color-hover-danger`   | `oklch(92% 0.03 25)`    | `oklch(30% 0.05 25)`        | 危险项悬停背景             |
+| `--color-hover-t-10`     | 黑色 3%                 | 白色 4%                     | 透明交互层                 |
+| `--color-hover-t-20`     | 黑色 6%                 | 白色 8%                     | 透明交互层                 |
+| `--color-hover-t-30`     | 黑色 10%                | 白色 12%                    | 透明交互层                 |
+| `--color-hover-t-40`     | 黑色 15%                | 白色 16%                    | 透明交互层                 |
+| `--color-hover-t-50`     | 黑色 20%                | 白色 22%                    | 透明交互层                 |
 
-状态边框和危险按钮有独立变量，不会因为只修改 `--color-danger` 就全部同步。
+危险按钮的默认表面、前景与焦点环从 `--color-danger` 衍生，跟随当前材质；状态边框仍有独立变量。主题可显式覆盖任一公开变量。
 
 ## 按钮、滚动条与组件材料
 
 ### 按钮与滚动条
 
-| 变量                      | 默认值                                                              | 作用范围 / 类型                            |
-| ------------------------- | ------------------------------------------------------------------- | ------------------------------------------ |
-| `--btn-primary-bg`        | `var(--color-primary-fill)`                                         | 主按钮背景，CSS background                 |
-| `--btn-primary-text`      | `var(--color-white)`                                                | 主按钮文字，颜色；部分内置背景另有默认引用 |
-| `--btn-primary-bg-hover`  | `var(--color-primary-l-20)`                                         | 主按钮悬停背景                             |
-| `--btn-primary-ring`      | `var(--color-primary)`                                              | 主按钮焦点环，颜色                         |
-| `--btn-danger-bg`         | `#fee2e2`                                                           | 危险按钮背景                               |
-| `--btn-danger-bg-hover`   | `#fecaca`                                                           | 危险按钮悬停背景                           |
-| `--btn-danger-text`       | `#7f1d1d`                                                           | 危险按钮文字，颜色                         |
-| `--btn-danger-ring`       | `#7f1d1d`                                                           | 危险按钮焦点环，颜色                       |
-| `--scrollbar-track`       | `transparent`                                                       | 主文档使用公共样式的滚动轨道，颜色         |
-| `--scrollbar-thumb`       | 浅色 `oklch(92.3% 0.003 48.717)`；深色 `oklch(0.228 0.031 256.878)` | 滚动滑块                                   |
-| `--scrollbar-thumb-hover` | 浅色 `oklch(86.9% 0.005 56.366)`；深色 `oklch(0.402 0.025 257.521)` | 滚动滑块悬停                               |
+| 变量                      | 默认值                                                        | 作用范围 / 类型                        |
+| ------------------------- | ------------------------------------------------------------- | -------------------------------------- |
+| `--btn-primary-bg`        | `var(--color-primary-fill)`                                   | 主按钮背景，CSS background             |
+| `--btn-primary-text`      | `var(--color-on-primary)`                                     | 主按钮文字，与实际填充的对比度同步计算 |
+| `--btn-primary-bg-hover`  | 按填充色计算；朝提高前景对比度的方向混黑/白 12%               | 主按钮悬停背景                         |
+| `--btn-primary-ring`      | `var(--color-primary)`                                        | 主按钮焦点环，颜色                     |
+| `--btn-danger-bg`         | 浅色：危险色 10% 与 `--color-bg-l` 混合；深色 12%             | 危险按钮背景                           |
+| `--btn-danger-bg-hover`   | 浅色：危险色 14% 与 `--color-bg-l` 混合；深色 18%             | 危险按钮悬停背景                       |
+| `--btn-danger-text`       | 浅色：`var(--color-danger)`；深色：危险色 55% 与主文字混合    | 危险按钮文字，颜色                     |
+| `--btn-danger-ring`       | `var(--color-danger)`                                         | 危险按钮焦点环，颜色                   |
+| `--scrollbar-track`       | `transparent`                                                 | 主文档使用公共样式的滚动轨道，颜色     |
+| `--scrollbar-thumb`       | 浅色 `oklch(70% 0.008 95)`；深色 `oklch(0.228 0.031 256.878)` | 滚动滑块                               |
+| `--scrollbar-thumb-hover` | 浅色 `oklch(58% 0.01 95)`；深色 `oklch(0.402 0.025 257.521)`  | 滚动滑块悬停                           |
 
 ### 框架、侧栏、弹层与开关
 
-| 变量                       | 默认值 / 回退                                                          | 作用范围 / 类型                                   |
-| -------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
-| `--ep-app-bg`              | `var(--color-bg)`                                                      | 接管主界面背景时的 background；支持渐变           |
-| `--app-header-bg`          | `color-mix(in srgb, var(--color-bg) 82%, transparent)`                 | 顶栏背景；已注册 `<color>`，使用颜色，不填渐变    |
-| `--app-footer-bg`          | `color-mix(in srgb, var(--color-bg) 78%, transparent)`                 | 底栏背景；已注册 `<color>`，使用颜色，不填渐变    |
-| `--app-chrome-border`      | 顶栏混入 `--color-border` 82%；底栏混入 `--color-text` 10%，余下为透明 | 顶/底栏边框，颜色；设置一个值会同时影响两处       |
-| `--ep-button-radius`       | `0.375rem`                                                             | BaseButton 圆角，CSS border-radius                |
-| `--ep-sidebar-bg`          | `transparent`                                                          | 侧栏 background；支持渐变                         |
-| `--ep-sidebar-text`        | `var(--color-text-l)`                                                  | 导航项文字颜色                                    |
-| `--ep-sidebar-active-bg`   | `color-mix(in srgb, var(--color-primary) 15%, transparent)`            | 活动导航项背景                                    |
-| `--ep-sidebar-active-text` | `var(--color-primary)`                                                 | 活动导航项文字颜色                                |
-| `--ep-sidebar-item-radius` | `0.5rem`                                                               | 导航项圆角                                        |
-| `--ep-dialog-bg`           | `var(--color-bg)`                                                      | BaseDialog 与 BaseDrawer 面板背景                 |
-| `--ep-dialog-radius`       | `1rem`                                                                 | BaseDialog 圆角；不自动控制抽屉圆角               |
-| `--ep-overlay-bg`          | `rgb(0 0 0 / 50%)`                                                     | 对话框/抽屉遮罩 background                        |
-| `--ep-surface-shadow`      | `0 20px 25px -5px rgb(0 0 0 / 10%), 0 8px 10px -6px rgb(0 0 0 / 10%)`  | 对话框/抽屉阴影，CSS box-shadow                   |
-| `--ep-switch-active`       | `var(--color-primary)`                                                 | 开启时背景颜色；显式 `activeColor` 组件属性优先   |
-| `--ep-switch-inactive`     | `var(--color-border)`                                                  | 关闭时背景颜色；显式 `inactiveColor` 组件属性优先 |
+| 变量                        | 默认值 / 回退                                                          | 作用范围 / 类型                                   |
+| --------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------- |
+| `--ep-app-bg`               | `var(--color-bg)`                                                      | 接管主界面背景时的 background；支持渐变           |
+| `--app-header-bg`           | `color-mix(in srgb, var(--color-bg) 82%, transparent)`                 | 顶栏背景；已注册 `<color>`，使用颜色，不填渐变    |
+| `--app-footer-bg`           | `color-mix(in srgb, var(--color-bg) 78%, transparent)`                 | 底栏背景；已注册 `<color>`，使用颜色，不填渐变    |
+| `--app-chrome-border`       | 顶栏混入 `--color-border` 82%；底栏混入 `--color-text` 10%，余下为透明 | 顶/底栏边框，颜色；设置一个值会同时影响两处       |
+| `--app-chrome-accent`       | 当前背景的原始强调色                                                   | 深色顶栏/底栏强调色，不随浅色页面压暗             |
+| `--app-chrome-on-accent`    | 强调色对应的黑或白前景                                                 | 深色背景内强调色按钮的文字和图标                  |
+| `--app-chrome-accent-hover` | 强调色对应的悬停填充色                                                 | 保持强调色按钮悬停时的前景对比度                  |
+| `--app-song-surface`        | 当前歌曲的材质色                                                       | 跟随歌曲的背景与顶/底栏共用底色                   |
+| `--ep-button-radius`        | `0.375rem`                                                             | BaseButton 圆角，CSS border-radius                |
+| `--ep-sidebar-bg`           | `transparent`                                                          | 侧栏 background；支持渐变                         |
+| `--ep-sidebar-text`         | `var(--color-text-l)`                                                  | 导航项文字颜色                                    |
+| `--ep-sidebar-active-bg`    | `color-mix(in srgb, var(--color-primary) 15%, transparent)`            | 活动导航项背景                                    |
+| `--ep-sidebar-active-text`  | `var(--color-primary)`                                                 | 活动导航项文字颜色                                |
+| `--ep-sidebar-item-radius`  | `0.5rem`                                                               | 导航项圆角                                        |
+| `--ep-dialog-bg`            | `var(--color-bg)`                                                      | BaseDialog 与 BaseDrawer 面板背景                 |
+| `--ep-dialog-radius`        | `1rem`                                                                 | BaseDialog 圆角；不自动控制抽屉圆角               |
+| `--ep-overlay-bg`           | `rgb(0 0 0 / 50%)`                                                     | 对话框/抽屉遮罩 background                        |
+| `--ep-surface-shadow`       | `0 20px 25px -5px rgb(0 0 0 / 10%), 0 8px 10px -6px rgb(0 0 0 / 10%)`  | 对话框/抽屉阴影，CSS box-shadow                   |
+| `--ep-switch-active`        | `var(--color-primary)`                                                 | 开启时背景颜色；显式 `activeColor` 组件属性优先   |
+| `--ep-switch-inactive`      | `var(--color-border)`                                                  | 关闭时背景颜色；显式 `inactiveColor` 组件属性优先 |
 
 顶/底栏的背景回退还可能由运行时外观逻辑写入。要给已注册为 `<color>` 的区域添加渐变，使用 `.ep-header` / `.ep-footer` 的普通背景规则；添加图片使用清单。不要用颜色变量塞入 `url()`。
 
@@ -214,18 +218,18 @@ JSON 的双引号转义发生在解析阶段，下面 `areas` 的实际 CSS 值�
 
 作用于引用它们的主题过渡、公共控件与 Vue 过渡。不覆盖所有独立背景动画、视频或着色器时间线。
 
-| 变量                           | 默认值                              | 类型 / 用途            |
-| ------------------------------ | ----------------------------------- | ---------------------- |
-| `--motion-duration-fast`       | `150ms`                             | 时间，快速反馈         |
-| `--motion-duration-standard`   | `200ms`                             | 时间，普通交互         |
-| `--motion-duration-slow`       | `300ms`                             | 时间，较慢过渡         |
-| `--motion-duration-emphasized` | `400ms`                             | 时间，强调过渡         |
-| `--motion-duration-theme`      | `220ms`                             | 时间，主题色与材料过渡 |
-| `--motion-ease-standard`       | `cubic-bezier(0.2, 0, 0, 1)`        | CSS easing             |
-| `--motion-ease-enter`          | `cubic-bezier(0, 0, 0.2, 1)`        | 进入 easing            |
-| `--motion-ease-exit`           | `cubic-bezier(0.4, 0, 1, 1)`        | 离开 easing            |
-| `--motion-ease-emphasized`     | `cubic-bezier(0.22, 1, 0.36, 1)`    | 强调 easing            |
-| `--motion-ease-spring`         | `cubic-bezier(0.34, 1.56, 0.64, 1)` | 弹性 easing            |
+| 变量                           | 默认值                              | 类型 / 用途                        |
+| ------------------------------ | ----------------------------------- | ---------------------------------- |
+| `--motion-duration-fast`       | `150ms`                             | 时间，快速反馈                     |
+| `--motion-duration-standard`   | `200ms`                             | 时间，普通交互                     |
+| `--motion-duration-slow`       | `300ms`                             | 时间，较慢过渡                     |
+| `--motion-duration-emphasized` | `400ms`                             | 时间，强调过渡                     |
+| `--motion-duration-theme`      | `220ms`                             | 时间，背景、主题配色与材料统一过渡 |
+| `--motion-ease-standard`       | `cubic-bezier(0.2, 0, 0, 1)`        | CSS easing                         |
+| `--motion-ease-enter`          | `cubic-bezier(0, 0, 0.2, 1)`        | 进入 easing                        |
+| `--motion-ease-exit`           | `cubic-bezier(0.4, 0, 1, 1)`        | 离开 easing                        |
+| `--motion-ease-emphasized`     | `cubic-bezier(0.22, 1, 0.36, 1)`    | 强调 easing                        |
+| `--motion-ease-spring`         | `cubic-bezier(0.34, 1.56, 0.64, 1)` | 弹性 easing                        |
 
 系统 `prefers-reduced-motion` 和应用减少动态效果设置会通过专门规则关闭过渡/动画，不应依赖主题时长绕过这些规则。
 

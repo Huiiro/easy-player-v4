@@ -134,7 +134,7 @@ eventBus.on('openAudioControls', openAudioControls)
       @click="go('/home')"
     >
       <span
-        class="grid size-[21px] place-items-center rounded-md bg-primary text-[0.7rem] font-bold text-white"
+        class="grid size-[21px] place-items-center rounded-md bg-[var(--color-primary-fill)] text-[0.7rem] font-bold text-[var(--color-on-primary)]"
         >EY
       </span>
       <span class="text-[16px] font-semibold tracking-tight">

@@ -137,9 +137,9 @@ function handleClick(item: MenuItemType): void {
                       sizeClass,
                       child.disabled && 'opacity-50 cursor-not-allowed',
                       isSelected(child)
-                        ? 'bg-primary/30 font-medium text-primary'
+                        ? 'bg-primary/8 font-medium text-primary'
                         : active
-                          ? 'bg-primary/20'
+                          ? 'bg-primary/4'
                           : ''
                     ]"
                     @click="handleClick(child)"
@@ -164,9 +164,9 @@ function handleClick(item: MenuItemType): void {
                   sizeClass,
                   item.disabled && 'opacity-50 cursor-not-allowed',
                   isSelected(item)
-                    ? 'bg-primary/30 font-medium text-primary'
+                    ? 'bg-primary/8 font-medium text-primary'
                     : active
-                      ? 'bg-primary/20'
+                      ? 'bg-primary/4'
                       : ''
                 ]"
                 @click="handleClick(item)"

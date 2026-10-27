@@ -103,7 +103,7 @@ async function submit(): Promise<void> {
       </button>
       <button
         type="button"
-        class="btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-50"
         :disabled="submitting"
         @click="submit"
       >

@@ -63,6 +63,14 @@ function luminance(rgb: Rgb): number {
   return linear[0] * 0.2126 + linear[1] * 0.7152 + linear[2] * 0.0722
 }
 
+/** Match the material before its async component or GPU frame is available. */
+export function solidBackgroundColor(primary: string, dark = true): string {
+  const color = /^\d+\s+\d+\s+\d+$/.test(primary.trim()) ? `rgb(${primary})` : primary
+  if (dark) return `color-mix(in srgb, ${color} 16%, #181e20)`
+  const tint = `oklch(from ${color} clamp(0.6, l, 0.75) min(c, 0.1) h)`
+  return `color-mix(in oklab, ${tint} 35%, oklch(0.82 0.007 95))`
+}
+
 export function primarySurfaceColors(color: string): { text: string; hover: string } {
   let channels = color
     .replace(/^rgb\(|\)$/g, '')

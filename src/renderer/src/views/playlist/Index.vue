@@ -303,7 +303,7 @@ watch(playlistId, () => {
         {{ t('common.cancel') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white"
+        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
         @click="deletePlaylist"
       >
         {{ t('playlist.delete') }}

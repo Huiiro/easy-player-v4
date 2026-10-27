@@ -331,7 +331,7 @@ onBeforeUnmount(() => {
       <button
         type="button"
         role="menuitem"
-        class="flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm text-red-400 hover:bg-hover"
+        class="flex w-full items-center gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-left text-sm text-danger hover:bg-hover"
         @click="confirmDeleteFolderSongs(menuFolder)"
       >
         <SvgIcon name="common-delete" class-name="size-4" />
@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
         {{ t('common.cancel') }}
       </button>
       <button
-        class="btn-hover-base rounded-lg bg-red-500 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm disabled:opacity-50"
         :disabled="deleting"
         @click="deleteFolderSongs"
       >

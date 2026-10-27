@@ -2,14 +2,19 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import vertexSource from '@/shaders/vertexSource.glsl?raw'
 import fragmentSource from '@/shaders/solidSource.glsl?raw'
+import { solidBackgroundColor } from './songThemeColors'
 
-const props = defineProps<{ primary: string; active: boolean; reducedMotion: boolean }>()
+const props = defineProps<{
+  primary: string
+  active: boolean
+  reducedMotion: boolean
+  dark?: boolean
+}>()
+const emit = defineEmits<{ ready: [] }>()
 const canvas = ref<HTMLCanvasElement>()
 const available = ref(false)
 const fallbackStyle = computed(() => ({
-  '--solid-color': /^\d+\s+\d+\s+\d+$/.test(props.primary.trim())
-    ? `rgb(${props.primary})`
-    : props.primary
+  backgroundColor: solidBackgroundColor(props.primary, props.dark !== false)
 }))
 let gl: WebGLRenderingContext | null = null
 let program: WebGLProgram | null = null
@@ -20,6 +25,8 @@ let frame = 0
 let lastFrame = 0
 let colorUniform: WebGLUniformLocation | null = null
 let resolutionUniform: WebGLUniformLocation | null = null
+let lightUniform: WebGLUniformLocation | null = null
+let lightSurfaceUniform: WebGLUniformLocation | null = null
 
 function parseColor(value: string): number[] {
   const channels = value.trim().split(/\s+/).map(Number)
@@ -37,6 +44,8 @@ function parseColor(value: string): number[] {
 }
 let targetColor = parseColor(props.primary)
 let currentColor = [...targetColor]
+let targetLightSurface = [...targetColor]
+let currentLightSurface = [...targetLightSurface]
 
 function stop(): void {
   if (frame) cancelAnimationFrame(frame)
@@ -60,9 +69,14 @@ function draw(now: number): void {
   lastFrame = now
   const blend = animate ? 1 - Math.exp(-elapsed * 2.4) : 1
   currentColor = currentColor.map((channel, i) => channel + (targetColor[i] - channel) * blend)
+  currentLightSurface = currentLightSurface.map(
+    (channel, i) => channel + (targetLightSurface[i] - channel) * blend
+  )
   gl.useProgram(program)
   gl.uniform3fv(colorUniform, currentColor)
   gl.uniform2f(resolutionUniform, gl.drawingBufferWidth, gl.drawingBufferHeight)
+  gl.uniform1f(lightUniform, props.dark === false ? 1 : 0)
+  gl.uniform3fv(lightSurfaceUniform, currentLightSurface)
   gl.drawArrays(gl.TRIANGLES, 0, 3)
   if (animate) frame = requestAnimationFrame(draw)
   else lastFrame = 0
@@ -99,6 +113,8 @@ function release(): void {
 
 function init(): void {
   release()
+  targetLightSurface = parseColor(solidBackgroundColor(props.primary, false))
+  currentLightSurface = [...targetLightSurface]
   const target = canvas.value
   if (!target) return
   gl = target.getContext('webgl', {
@@ -149,6 +165,8 @@ function init(): void {
   gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 0, 0)
   colorUniform = gl.getUniformLocation(program, 'u_color')
   resolutionUniform = gl.getUniformLocation(program, 'u_resolution')
+  lightUniform = gl.getUniformLocation(program, 'u_light')
+  lightSurfaceUniform = gl.getUniformLocation(program, 'u_light_surface')
   available.value = true
   resize()
 }
@@ -167,8 +185,17 @@ watch(
   () => props.primary,
   (value) => {
     targetColor = parseColor(value)
+    targetLightSurface = parseColor(solidBackgroundColor(value, false))
     start()
   }
+)
+watch(
+  () => props.dark,
+  () => {
+    stop()
+    draw(performance.now())
+  },
+  { flush: 'post' }
 )
 watch(
   () => [props.active, props.reducedMotion],
@@ -182,6 +209,7 @@ onMounted(() => {
   canvas.value?.addEventListener('webglcontextrestored', init)
   document.addEventListener('visibilitychange', visibilityChanged)
   init()
+  emit('ready')
   observer = new ResizeObserver(() => {
     clearTimeout(resizeTimer)
     resizeTimer = setTimeout(resize, 100)
@@ -189,9 +217,8 @@ onMounted(() => {
   if (canvas.value) observer.observe(canvas.value)
 })
 onBeforeUnmount(() => {
-  // Vue keeps the leaving DOM until its parent transition finishes. Hide the
-  // canvas synchronously before clearing it; reactive styles no longer update
-  // once this component is unmounted, so the material fallback must take over.
+  // The controller waits for an opaque replacement before disposal. Also hide
+  // the canvas before clearing it when a surrounding view is being removed.
   if (canvas.value) canvas.value.style.display = 'none'
   observer?.disconnect()
   clearTimeout(resizeTimer)
@@ -208,6 +235,7 @@ onBeforeUnmount(() => {
 <template>
   <div
     class="solid-background absolute inset-0 pointer-events-none"
+    :class="{ 'solid-background--light': dark === false }"
     :style="fallbackStyle"
     aria-hidden="true"
   >
@@ -218,9 +246,3 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
-
-<style scoped>
-.solid-background {
-  background: color-mix(in srgb, var(--solid-color) 16%, #181e20);
-}
-</style>

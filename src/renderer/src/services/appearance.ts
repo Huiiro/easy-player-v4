@@ -3,7 +3,7 @@ import type {
   SystemBackground,
   SystemBackgroundTheme
 } from '@/components/background/systemBackgroundRegistry'
-import { accessibleSongAccent } from '@/components/background/songThemeColors'
+import { accessibleSongAccent, solidBackgroundColor } from '@/components/background/songThemeColors'
 
 export type ColorMode = 'light' | 'dark' | 'system'
 export type AccentSource = 'auto' | 'user' | 'scene' | 'song'
@@ -41,6 +41,11 @@ export function resolveAppearance(preferences: AppearancePreferences, runtime: A
       : preferences.background
   const sceneActive = background.type === 'preset'
   const customActive = background.type === 'image' || background.type === 'video'
+  const lightSongMaterial = sceneActive && background.id === 'solid' && !dark
+  const contentDark =
+    dark ||
+    (nativeMaterialEnabled && runtime.systemDark) ||
+    (sceneActive && background.id !== 'solid' && runtime.scene.colorMode === 'dark')
   const reasons: (
     'material' | 'themeBackground' | 'themeAccent' | 'songUnavailable' | 'sceneUnavailable'
   )[] = []
@@ -62,44 +67,86 @@ export function resolveAppearance(preferences: AppearancePreferences, runtime: A
     accentSource = 'scene'
   } else if (source === 'song') reasons.push('songUnavailable')
   else if (source === 'scene') reasons.push('sceneUnavailable')
-  // Preserve hue while limiting accent lightness on pale surfaces. The saved
+  let chromeAccentColor = accentColor
+  // Preserve hue while limiting accent lightness and chroma on pale surfaces. The saved
   // color stays intact; explicit theme tokens retain their author-defined value.
-  if (!dark) accentColor = `oklch(from ${accentColor} min(l, 0.45) c h)`
+  if (!dark)
+    accentColor = lightSongMaterial
+      ? `oklch(from ${accentColor} min(l, 0.32) min(c, 0.07) h)`
+      : `oklch(from ${accentColor} min(l, 0.42) min(c, 0.12) h)`
   if (runtime.theme?.tokens?.['--color-primary']) {
     accentColor = runtime.theme.tokens['--color-primary']
+    chromeAccentColor = accentColor
     accentSource = 'theme'
     reasons.push('themeAccent')
   }
   const translucent = runtime.material === 'acrylic' || runtime.material === 'vibrancy'
-  const sceneChrome = sceneActive && dark
+  const lightMica = runtime.material === 'mica' && !dark
+  const sceneChrome = sceneActive && (dark || background.id !== 'solid')
+  const importedChrome = background.type === 'theme'
+  const chromeDark = contentDark || customActive || importedChrome
+  const raisedChrome = !dark && chromeDark && (sceneChrome || importedChrome)
+  // Light mode changes foregrounds and component surfaces, leaving authored
+  // backgrounds intact. Keep the existing dark-mode readability treatment.
+  const backgroundScrim = !dark
+    ? null
+    : customActive
+      ? 'color-mix(in srgb, var(--color-bg) 42%, transparent)'
+      : sceneActive && background.id !== 'solid'
+        ? 'var(--ep-background-scrim, color-mix(in srgb, var(--color-bg) 62%, transparent))'
+        : null
   const header = nativeMaterialEnabled
     ? 'transparent'
     : customActive
-      ? dark
-        ? preferences.customChrome.header
-        : `color-mix(in srgb, var(--color-bg) 92%, ${preferences.customChrome.header})`
+      ? preferences.customChrome.header
       : sceneChrome
         ? runtime.scene.headerBackground
-        : 'color-mix(in srgb, var(--color-bg) 82%, transparent)'
-  const footer = translucent
-    ? 'color-mix(in srgb, var(--color-primary) 8%, color-mix(in srgb, var(--color-bg) 24%, transparent))'
-    : customActive
-      ? dark
+        : importedChrome
+          ? (runtime.theme?.tokens['--app-header-bg'] ?? 'oklch(14% 0.01 260 / 82%)')
+          : lightSongMaterial
+            ? 'color-mix(in srgb, var(--color-bg-l) 78%, transparent)'
+            : dark
+              ? 'color-mix(in srgb, var(--color-bg) 82%, transparent)'
+              : 'color-mix(in srgb, var(--color-bg-l) 94%, transparent)'
+  const footer = lightMica
+    ? runtime.systemDark
+      ? 'rgb(10 16 13 / 16%)'
+      : 'rgb(24 34 28 / 6%)'
+    : translucent
+      ? 'color-mix(in srgb, var(--color-primary) 8%, color-mix(in srgb, var(--color-bg) 24%, transparent))'
+      : customActive
         ? preferences.customChrome.footer
-        : `color-mix(in srgb, var(--color-bg) 92%, ${preferences.customChrome.footer})`
-      : sceneChrome
-        ? runtime.scene.footerBackground
-        : 'color-mix(in srgb, var(--color-bg) 78%, transparent)'
-  const border = translucent
-    ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)'
-    : customActive
-      ? preferences.customChrome.border
-      : sceneChrome
-        ? runtime.scene.chromeBorder
-        : 'color-mix(in srgb, var(--color-border) 82%, transparent)'
+        : sceneChrome
+          ? runtime.scene.footerBackground
+          : importedChrome
+            ? (runtime.theme?.tokens['--app-footer-bg'] ?? 'oklch(14% 0.01 260 / 78%)')
+            : lightSongMaterial
+              ? 'color-mix(in srgb, var(--color-bg-l2) 88%, transparent)'
+              : dark
+                ? 'color-mix(in srgb, var(--color-bg) 78%, transparent)'
+                : 'color-mix(in srgb, var(--color-bg-l) 96%, transparent)'
+  const border = lightMica
+    ? runtime.systemDark
+      ? 'rgb(255 255 255 / 10%)'
+      : 'rgb(24 34 28 / 12%)'
+    : translucent
+      ? 'color-mix(in srgb, var(--color-primary) 18%, transparent)'
+      : customActive
+        ? preferences.customChrome.border
+        : sceneChrome
+          ? runtime.scene.chromeBorder
+          : importedChrome
+            ? (runtime.theme?.tokens['--app-chrome-border'] ?? 'rgb(210 220 216 / 15%)')
+            : 'color-mix(in srgb, var(--color-border) 82%, transparent)'
   return {
     dark,
+    contentDark,
     background,
+    backgroundSurface:
+      sceneActive && background.id === 'solid'
+        ? solidBackgroundColor(runtime.songColor ?? accentColor, dark)
+        : null,
+    backgroundScrim,
     nativeMaterialEnabled,
     material: runtime.material,
     accentColor,
@@ -111,7 +158,14 @@ export function resolveAppearance(preferences: AppearancePreferences, runtime: A
           ? runtime.songColor
           : accentColor
         : null,
-    chrome: { header, footer, border },
+    chrome: {
+      header,
+      footer,
+      border,
+      dark: chromeDark,
+      raised: raisedChrome,
+      accentColor: chromeAccentColor
+    },
     reasons
   }
 }

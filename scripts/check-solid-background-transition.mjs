@@ -31,6 +31,7 @@ for (const reducedMotion of [false, true]) {
   canvas.removeEventListener = () => {}
   const context = vm.createContext({
     defineProps: () => ({ primary: '24 30 32', active: true, reducedMotion }),
+    defineEmits: () => () => {},
     ref: (value) => ({ value }),
     computed: (getter) => ({
       get value() {

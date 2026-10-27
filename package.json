@@ -33,6 +33,8 @@
     "test:home": "electron scripts/check-home-layout.cjs",
     "test:global-search": "electron scripts/check-global-search.cjs",
     "test:appearance": "node scripts/test-appearance.mjs && electron scripts/check-appearance.cjs",
+    "test:background-transition": "electron scripts/check-background-transition.cjs",
+    "test:theme-system": "electron scripts/check-theme-system.cjs",
     "test:card-motion": "electron scripts/check-card-motion.cjs",
     "test:genres": "node scripts/test-genres.mjs",
     "test:native-metadata": "node scripts/test-native-metadata.mjs",
