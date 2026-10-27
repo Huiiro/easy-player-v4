@@ -4,13 +4,15 @@ import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import BaseButton from '@/components/ui/BaseButton.vue'
+import CollectionHeaderActions from '@/components/collection/CollectionHeaderActions.vue'
 
 type LibraryKind = 'album' | 'artist' | 'genre'
 const props = defineProps<{ kind: LibraryKind }>()
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const songList = ref<InstanceType<typeof SongListView> | null>(null)
+const playing = ref(false)
 const rawName = computed(() => String(route.query.name || ''))
 const rawArtist = computed(() => String(route.query.artist || ''))
 const rawCover = computed(() => String(route.query.cover || ''))
@@ -39,6 +41,17 @@ const source = computed(() =>
       : { type: 'genre' as const, genre: rawName.value }
 )
 
+async function playAll(): Promise<void> {
+  const list = songList.value
+  if (!list || list.loading || playing.value) return
+  playing.value = true
+  try {
+    await list.playAll()
+  } finally {
+    playing.value = false
+  }
+}
+
 watch(coverUrl, () => {
   coverFailed.value = false
 })
@@ -46,7 +59,7 @@ watch(coverUrl, () => {
 
 <template>
   <section class="flex h-full min-h-0 flex-col text-text">
-    <header class="flex shrink-0 items-center gap-4 px-7 py-5">
+    <header class="flex shrink-0 flex-wrap items-center gap-4 px-6 py-5">
       <div
         class="grid size-16 shrink-0 place-items-center overflow-hidden bg-bg-l text-text-l"
         :class="kind === 'artist' ? 'rounded-full' : 'rounded-xl'"
@@ -60,7 +73,7 @@ watch(coverUrl, () => {
         />
         <SvgIcon v-else :name="icon" class-name="size-8" />
       </div>
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 flex-1 basis-48">
         <p class="text-xs font-semibold tracking-[.12em] text-text-l">
           {{ t(`library.${kind}`) }}
         </p>
@@ -69,10 +82,13 @@ watch(coverUrl, () => {
           {{ subtitle }}
         </p>
       </div>
-      <BaseButton variant="ghost" size="sm" @click="router.back()">
-        {{ t('library.back') }}
-      </BaseButton>
+      <CollectionHeaderActions
+        :disabled="!songList || songList.loading"
+        :playing="playing"
+        @play="playAll"
+        @back="router.back()"
+      />
     </header>
-    <SongListView class="min-h-0 flex-1" :source="source" />
+    <SongListView ref="songList" class="min-h-0 flex-1" :source="source" />
   </section>
 </template>

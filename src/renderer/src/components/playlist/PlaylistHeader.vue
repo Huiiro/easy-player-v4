@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
+import CollectionHeaderActions from '@/components/collection/CollectionHeaderActions.vue'
 
 withDefaults(
   defineProps<{
@@ -19,14 +21,12 @@ const emit = defineEmits<{
   back: []
 }>()
 const { t } = useI18n()
-const playButtonClass =
-  'btn-hover-base rounded-lg bg-primary px-3 py-1.5 text-sm text-white hover:text-white disabled:opacity-50'
 </script>
 
 <template>
   <header
-    class="flex shrink-0 gap-6 px-6 transition-all duration-[var(--motion-duration-standard)]"
-    :class="collapsed ? 'items-center py-3' : 'items-end py-6'"
+    class="flex shrink-0 flex-wrap items-center gap-4 px-6 transition-all duration-[var(--motion-duration-standard)]"
+    :class="collapsed ? 'py-3' : 'py-6'"
   >
     <button
       type="button"
@@ -48,7 +48,7 @@ const playButtonClass =
       </span>
     </button>
     <slot name="cover-input" />
-    <div class="min-w-0 flex-1">
+    <div class="min-w-0 flex-1" :class="collapsed ? 'basis-32' : 'basis-48'">
       <p v-if="!collapsed" class="ml-1 text-xs font-semibold tracking-[.12em] text-text-l">
         {{ t('playlist.label') }}
       </p>
@@ -59,20 +59,19 @@ const playButtonClass =
           </h1>
         </slot>
       </div>
-      <template v-if="!collapsed">
-        <slot name="details" />
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          <button type="button" :class="playButtonClass" :disabled="playing" @click="emit('play')">
-            {{ t('playlist.play') }}
-          </button>
-          <slot name="actions" />
-        </div>
-      </template>
+      <slot v-if="!collapsed" name="details" />
     </div>
-    <div class="flex shrink-0 items-center gap-1">
-      <button
-        type="button"
-        class="btn-hover grid size-8 place-items-center"
+    <CollectionHeaderActions
+      :playing="playing"
+      :play-label="t('playlist.play')"
+      :back-label="t('playlist.back')"
+      @play="emit('play')"
+      @back="emit('back')"
+    >
+      <BaseButton
+        variant="ghost"
+        size="sm"
+        icon-only
         :title="t(collapsed ? 'playlist.expandHeader' : 'playlist.collapseHeader')"
         :aria-label="t(collapsed ? 'playlist.expandHeader' : 'playlist.collapseHeader')"
         :aria-expanded="!collapsed"
@@ -82,25 +81,8 @@ const playButtonClass =
           :name="collapsed ? 'common-expand-down' : 'common-expand-up'"
           class-name="size-4"
         />
-      </button>
-      <button
-        v-if="collapsed"
-        type="button"
-        :class="playButtonClass"
-        :disabled="playing"
-        @click="emit('play')"
-      >
-        {{ t('playlist.play') }}
-      </button>
-    </div>
-    <button
-      v-if="!collapsed"
-      type="button"
-      class="btn-hover mb-1 flex shrink-0 items-center gap-1 text-sm"
-      @click="emit('back')"
-    >
-      <SvgIcon name="common-back" class-name="size-3.5" />
-      {{ t('playlist.back') }}
-    </button>
+      </BaseButton>
+      <slot v-if="!collapsed" name="actions" />
+    </CollectionHeaderActions>
   </header>
 </template>

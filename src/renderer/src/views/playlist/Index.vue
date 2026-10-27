@@ -12,6 +12,7 @@ import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { useMessage } from '@/components/ui/useMessage'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import CropperDialog from '@/components/cropper/CropperDialog.vue'
 
 interface Playlist {
@@ -237,15 +238,20 @@ watch(playlistId, () => {
         </h1>
         <button
           v-if="!headerCollapsed"
-          class="btn-hover grid size-4 shrink-0 place-items-center"
+          type="button"
+          class="ep-focusable group grid size-6 shrink-0 cursor-pointer place-items-center"
           :title="t('playlist.editName')"
+          :aria-label="t('playlist.editName')"
           @click="startEditing('name')"
         >
-          <SvgIcon name="common-edit" class-name="size-3.5" />
+          <SvgIcon
+            name="common-edit"
+            class-name="size-3 transition-colors group-hover:text-primary group-focus-visible:text-primary"
+          />
         </button>
       </template>
       <template #details>
-        <div class="mt-2 flex min-w-0 items-start gap-2 text-sm text-text-l">
+        <div class="mt-2 flex min-w-0 items-center gap-2 text-sm text-text-l">
           <textarea
             v-if="editingField === 'description'"
             v-model="editDescription"
@@ -260,11 +266,16 @@ watch(playlistId, () => {
             {{ playlist.description || t('playlist.descriptionPlaceholder') }}
           </p>
           <button
-            class="btn-hover grid size-5 shrink-0 place-items-center"
+            type="button"
+            class="ep-focusable group grid size-6 shrink-0 cursor-pointer place-items-center"
             :title="t('playlist.editDescription')"
+            :aria-label="t('playlist.editDescription')"
             @click="startEditing('description')"
           >
-            <SvgIcon name="common-edit" class-name="size-3.5" />
+            <SvgIcon
+              name="common-edit"
+              class-name="size-3 transition-colors group-hover:text-primary group-focus-visible:text-primary"
+            />
           </button>
         </div>
         <p class="mt-2 text-xs text-text-l">
@@ -272,19 +283,12 @@ watch(playlistId, () => {
         </p>
       </template>
       <template #actions>
-        <button
-          class="btn-hover-base rounded-lg px-3 py-1.5 text-sm text-red-400"
-          @click="deleteDialogOpen = true"
-        >
-          {{ t('playlist.delete') }}
-        </button>
-        <button
-          v-if="playlist.customCover"
-          class="btn-hover px-2 py-1.5 text-xs"
-          @click="resetCover"
-        >
+        <BaseButton v-if="playlist.customCover" variant="ghost" size="sm" @click="resetCover">
           {{ t('playlist.resetCover') }}
-        </button>
+        </BaseButton>
+        <BaseButton variant="ghost" size="sm" @click="deleteDialogOpen = true">
+          {{ t('playlist.delete') }}
+        </BaseButton>
       </template>
     </PlaylistHeader>
     <SongListView class="min-h-0 flex-1" :source="songListSource" />

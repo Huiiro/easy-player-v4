@@ -26,6 +26,7 @@ math.random = () => {
 }
 const smart = load('src/renderer/src/stores/player/smartShuffle.ts', {}, { Math: math })
 let saved
+let sessionSyncWrites = 0
 let prepared = ''
 let ended
 let stateChanged
@@ -113,6 +114,7 @@ const api = {
       data: key === 'player.playback-session' ? restoreSession : restoreCheckpoint
     }),
     saveSync: (_key, data) => {
+      if (_key === 'player.playback-session') sessionSyncWrites++
       saved = JSON.parse(JSON.stringify(data))
       return { success: true }
     },
@@ -168,6 +170,81 @@ const settle = async () => {
 function player() {
   Pinia.setActivePinia(Pinia.createPinia())
   return module.usePlayerStore()
+}
+
+const reused = player()
+reused.setPlayMode(1)
+reused.smartShuffleEnabled = false
+const reuseSongs = songs.map((song) => ({
+  ...song,
+  tags: [{ id: 1, name: 'Tag', color: '#123456' }],
+  sortReadings: { title: 'song', artist: null, album: null, fileName: null }
+}))
+assert.equal(await reused.playCollection(reuseSongs, reuseSongs[0].id, 42), true)
+await settle()
+const queueReference = reused.queue
+const firstSongReference = reused.queue[0]
+const tagReference = reused.queue[1].tags
+const beforeManualWrites = sessionSyncWrites
+assert.equal(
+  await reused.playCollection(JSON.parse(JSON.stringify(reuseSongs)), reuseSongs[2].id, 42),
+  true
+)
+assert.equal(reused.queue, queueReference, 'same collection reuses the queue array')
+assert.equal(reused.queue[0], firstSongReference, 'same collection retains song objects')
+assert.equal(
+  reused.queue[1].tags,
+  tagReference,
+  'equal nested metadata does not cause reactive churn'
+)
+assert.equal(
+  sessionSyncWrites,
+  beforeManualWrites,
+  'same-queue manual selection skips synchronous queue rewrite'
+)
+assert.equal(reused.getPreviousQueueIndex(), 0, 'manual selection preserves shuffle history')
+reused.savePlaybackSessionSync()
+assert.deepEqual(saved.shuffleHistory, [reuseSongs[0].id, reuseSongs[2].id])
+assert.ok(
+  saved.shufflePlayedSongIds.includes(reuseSongs[0].id),
+  'manual selection retains played round'
+)
+const beforeMetadataWrites = sessionSyncWrites
+const updated = JSON.parse(JSON.stringify(reuseSongs))
+updated[0].title = 'Updated title'
+updated[0].cover = '/updated-cover.jpg'
+updated[0].tags[0].name = 'Updated tag'
+reused.setQueue([...updated, updated[0]], 42)
+assert.equal(reused.queue, queueReference, 'deduplicated matching collection still reuses queue')
+assert.equal(reused.queue[0], firstSongReference, 'metadata updates retain the existing queue item')
+assert.equal(reused.queue[0].title, 'Updated title')
+assert.equal(reused.queue[0].cover, '/updated-cover.jpg')
+assert.equal(reused.queue[0].tags[0].name, 'Updated tag')
+assert.equal(reused.currentQueueIndex, 2, 'metadata refresh retains queue cursor')
+assert.equal(reused.getPreviousQueueIndex(), 0, 'metadata refresh retains shuffle history')
+assert.equal(sessionSyncWrites, beforeMetadataWrites, 'metadata refresh uses scheduled persistence')
+
+function expectQueueReplacement(nextSongs, playlistId, label) {
+  const previousQueue = reused.queue
+  const previousWrites = sessionSyncWrites
+  reused.setQueue(nextSongs, playlistId)
+  assert.notEqual(reused.queue, previousQueue, label + ' replaces queue')
+  assert.equal(reused.currentQueueIndex, -1, label + ' resets cursor')
+  assert.equal(sessionSyncWrites, previousWrites + 1, label + ' persists changed queue')
+}
+expectQueueReplacement(updated, 43, 'different playlist identity')
+expectQueueReplacement([...reused.queue].reverse(), 43, 'different order')
+expectQueueReplacement([...reused.queue, { ...songs[0], id: 9001 }], 43, 'added song')
+expectQueueReplacement(reused.queue.slice(1), 43, 'removed song')
+for (const [field, value] of [
+  ['audio', '/new-path'],
+  ['sourceId', 9],
+  ['songStatus', 0]
+]) {
+  const changed = reused.queue.map((song, index) =>
+    index === 0 ? { ...song, [field]: value } : song
+  )
+  expectQueueReplacement(changed, 43, 'changed ' + field)
 }
 
 for (const weighted of [false, true]) {

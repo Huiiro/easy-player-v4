@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import PlaylistHeader from '@/components/playlist/PlaylistHeader.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SongListView from '@/components/songlist/SongListView.vue'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -144,9 +145,9 @@ async function playLikedSongs(): Promise<void> {
         <p class="mt-2 text-sm text-text-l">{{ t('playlist.likedDescription') }}</p>
       </template>
       <template #actions>
-        <button v-if="customCover" class="btn-hover px-2 py-1.5 text-xs" @click="resetCover">
+        <BaseButton v-if="customCover" variant="ghost" size="sm" @click="resetCover">
           {{ t('playlist.resetCover') }}
-        </button>
+        </BaseButton>
       </template>
     </PlaylistHeader>
     <SongListView class="min-h-0 flex-1" :source="songListSource" />

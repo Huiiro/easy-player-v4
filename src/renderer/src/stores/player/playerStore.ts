@@ -516,13 +516,48 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function setQueue(songs: LibrarySong[], playlistId: number | null = null): void {
-    queueRevision++
     const ids = new Set<number>()
-    queue.value = songs.filter((song) => {
+    const nextQueue = songs.filter((song) => {
       if (ids.has(song.id)) return false
       ids.add(song.id)
       return true
     })
+    const sameQueue =
+      queuePlaylistId.value === playlistId &&
+      queue.value.length === nextQueue.length &&
+      nextQueue.every((song, index) => {
+        const current = queue.value[index]
+        return (
+          current.id === song.id &&
+          current.audio === song.audio &&
+          current.sourceId === song.sourceId &&
+          current.songStatus === song.songStatus
+        )
+      })
+    if (sameQueue) {
+      // Queries return fresh objects. Keep the active queue and navigation state,
+      // but still pick up edited titles, artwork, tags and other metadata.
+      let changed = false
+      nextQueue.forEach((song, index) => {
+        const current = queue.value[index]
+        if (current === song) return
+        const metadataChanged = (Object.keys(song) as (keyof LibrarySong)[]).some((key) => {
+          const value = song[key]
+          return (
+            current[key] !== value &&
+            (typeof value !== 'object' || JSON.stringify(current[key]) !== JSON.stringify(value))
+          )
+        })
+        if (metadataChanged) {
+          Object.assign(current, song)
+          changed = true
+        }
+      })
+      if (changed) schedulePlaybackSessionSave()
+      return
+    }
+    queueRevision++
+    queue.value = nextQueue
     queuePlaylistId.value = playlistId
     currentQueueIndex.value = -1
     unavailableSongIds.clear()

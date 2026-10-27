@@ -170,12 +170,49 @@ app.whenReady().then(async () => {
       'Edited queue title',
       'queue snapshot cache invalidates when persisted metadata changes'
     )
+    writes.length = 0
+    const manualCollectionMetrics = await window.webContents.executeJavaScript(`(async()=>{
+      const queue=window.switchPlayer.queue,first=queue[0],durations=[];
+      for(const index of [5,6,7]){
+        const incoming=window.switchSongs.map(song=>({...song}));
+        const start=performance.now();
+        if(!(await window.switchPlayer.playCollection(incoming,incoming[index].id)))throw Error('manual collection playback failed');
+        durations.push(performance.now()-start);
+      }
+      await window.switchWait(1100);
+      return {switchMs:durations,sameQueue:queue===window.switchPlayer.queue,sameFirstSong:first===window.switchPlayer.queue[0],currentIndex:window.switchPlayer.currentQueueIndex};
+    })()`)
+    if (!baseline) {
+      assert.equal(
+        manualCollectionMetrics.sameQueue,
+        true,
+        'manual collection selection keeps queue identity'
+      )
+      assert.equal(
+        manualCollectionMetrics.sameFirstSong,
+        true,
+        'fresh query objects preserve unchanged queue items'
+      )
+      assert.equal(manualCollectionMetrics.currentIndex, 7)
+      assert.equal(
+        writes.filter((item) => item.kind === 'sync').length,
+        0,
+        'manual same-queue playback avoids synchronous full-queue persistence'
+      )
+      assert.equal(
+        writes.filter((item) => item.kind === 'async').length,
+        1,
+        'manual playback burst coalesces session persistence'
+      )
+    }
     const report = {
       scope:
         'Real Vue player store and SQLite IPC with a 2419-song fixture; excludes decoder, artwork and lyrics rendering',
       baseline,
       ...metrics,
-      writes: switchWrites
+      writes: switchWrites,
+      manualCollectionMetrics,
+      manualCollectionWrites: [...writes]
     }
     const output = path.resolve(
       'build',

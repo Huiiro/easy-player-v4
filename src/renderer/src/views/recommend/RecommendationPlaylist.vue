@@ -6,6 +6,7 @@ import { useRoute, useRouter } from 'vue-router'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
+import CollectionHeaderActions from '@/components/collection/CollectionHeaderActions.vue'
 import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { RecommendationGroup } from '@/views/home/types'
@@ -50,7 +51,7 @@ async function playAll(): Promise<void> {
   </section>
   <section v-else class="flex h-full min-h-0 flex-col text-text">
     <header
-      class="flex shrink-0 items-center gap-6 px-6 transition-all duration-[var(--motion-duration-standard)]"
+      class="flex shrink-0 flex-wrap items-center gap-4 px-6 transition-all duration-[var(--motion-duration-standard)]"
       :class="headerCollapsed ? 'py-3' : 'py-6'"
     >
       <div
@@ -64,7 +65,7 @@ async function playAll(): Promise<void> {
           :class-name="headerCollapsed ? 'size-5 text-primary' : 'size-12 text-primary'"
         />
       </div>
-      <div class="min-w-0 flex-1">
+      <div class="min-w-0 flex-1" :class="headerCollapsed ? 'basis-32' : 'basis-48'">
         <p v-if="!headerCollapsed" class="text-xs font-semibold text-text-l">
           {{ t('playlist.label') }}
         </p>
@@ -75,37 +76,30 @@ async function playAll(): Promise<void> {
         <p v-if="!statistics.enabled" class="mt-2 text-sm text-text-l">
           {{ t('settings.statisticsDisabled') }}
         </p>
-        <BaseButton
-          v-if="!headerCollapsed"
-          class="mt-4"
-          :disabled="playing || songList?.loading || !statistics.enabled"
-          @click="playAll"
-        >
-          {{ t('playlist.play') }}
-        </BaseButton>
       </div>
-      <div class="flex shrink-0 items-center gap-2">
+      <CollectionHeaderActions
+        :playing="playing"
+        :disabled="!songList || songList.loading || !statistics.enabled"
+        :play-label="t('playlist.play')"
+        :back-label="t('playlist.back')"
+        @play="playAll"
+        @back="router.back()"
+      >
         <BaseButton
-          v-if="headerCollapsed"
-          :disabled="playing || songList?.loading || !statistics.enabled"
-          @click="playAll"
-        >
-          {{ t('playlist.play') }}
-        </BaseButton>
-        <button
-          class="btn-hover grid size-8 place-items-center"
+          variant="ghost"
+          size="sm"
+          icon-only
           :title="t(headerCollapsed ? 'playlist.expandHeader' : 'playlist.collapseHeader')"
+          :aria-label="t(headerCollapsed ? 'playlist.expandHeader' : 'playlist.collapseHeader')"
+          :aria-expanded="!headerCollapsed"
           @click="headerCollapsed = !headerCollapsed"
         >
           <SvgIcon
             :name="headerCollapsed ? 'common-expand-down' : 'common-expand-up'"
             class-name="size-4"
           />
-        </button>
-        <button class="btn-hover px-3 py-2 text-sm" @click="router.back()">
-          {{ t('playlist.back') }}
-        </button>
-      </div>
+        </BaseButton>
+      </CollectionHeaderActions>
     </header>
     <SongListView
       :key="`${source.group}:${source.generatedFor}`"
