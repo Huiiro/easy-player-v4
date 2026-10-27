@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
               v-for="playlist in playlists"
               :key="playlist.id"
               draggable="true"
-              class="ep-sidebar-item relative grid h-9 w-full place-items-center transition-colors"
+              class="ep-sidebar-item relative flex h-9 w-full items-center pl-1 transition-colors"
               :class="
                 isActive(`/playlist/${playlist.id}`) ? 'ep-sidebar-item--active' : 'text-text-l'
               "
@@ -307,11 +307,11 @@ onBeforeUnmount(() => {
               <img
                 v-if="playlistCover(playlist.cover)"
                 :src="playlistCover(playlist.cover)!"
-                class="size-5 rounded object-cover"
+                class="size-7 shrink-0 rounded object-cover"
                 :alt="playlist.name"
               />
-              <span v-else class="grid size-5 place-items-center rounded bg-bg-l"
-                ><SvgIcon name="common-music" class-name="size-3"
+              <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l"
+                ><SvgIcon name="common-music" class-name="size-4"
               /></span>
               <span
                 v-if="isPlayingPlaylist(playlist.id)"
@@ -330,7 +330,7 @@ onBeforeUnmount(() => {
             v-for="playlist in playlists"
             :key="playlist.id"
             draggable="true"
-            class="ep-sidebar-item flex h-9 w-full items-center gap-2 px-2 text-left text-sm transition-colors"
+            class="ep-sidebar-item flex h-9 w-full items-center gap-2 pl-1 pr-2 text-left text-sm transition-colors"
             :class="
               isActive(`/playlist/${playlist.id}`) ? 'ep-sidebar-item--active font-semibold' : ''
             "
@@ -343,11 +343,11 @@ onBeforeUnmount(() => {
             <img
               v-if="playlistCover(playlist.cover)"
               :src="playlistCover(playlist.cover)!"
-              class="size-5 rounded object-cover"
+              class="size-7 shrink-0 rounded object-cover"
               :alt="playlist.name"
             />
-            <span v-else class="grid size-5 place-items-center rounded bg-bg-l"
-              ><SvgIcon name="common-music" class-name="size-3"
+            <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l"
+              ><SvgIcon name="common-music" class-name="size-4"
             /></span>
             <span class="min-w-0 flex-1 truncate">{{ playlist.name }}</span>
             <span
