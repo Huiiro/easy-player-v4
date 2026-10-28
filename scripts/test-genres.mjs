@@ -233,6 +233,162 @@ try {
   )
   db.exec('ROLLBACK TO genre_case_matching; RELEASE genre_case_matching')
 
+  db.exec('SAVEPOINT album_grouping')
+  const insertAlbum = db.prepare(
+    'INSERT INTO song(id,title,audio,album,artist,cover,folder_id) VALUES(?,?,?,?,?,?,1)'
+  )
+  insertAlbum.run(1001, 'Solo', 'album-1001.mp3', 'Shared', 'Singer A', 'a.jpg')
+  insertAlbum.run(1002, 'Guest', 'album-1002.mp3', 'Shared', 'Singer B', 'b.jpg')
+  insertAlbum.run(1003, 'Duet', 'album-1003.mp3', 'Shared', 'Singer A / Singer B', null)
+  insertAlbum.run(1004, 'Other', 'album-1004.mp3', 'Other', 'Singer A', null)
+  insertAlbum.run(1005, 'Unknown album', 'album-1005.mp3', '', 'Singer B', null)
+  const splitAlbums = catalog.queryAlbums('asc', 'Shared')
+  assert.equal(splitAlbums.length, 3, 'default grouping keeps existing artist-specific albums')
+  assert.deepEqual(catalog.queryAlbums('asc', 'Shared', false), splitAlbums)
+  const merged = catalog.queryAlbums('asc', 'Shared', true)
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].songCount, 3)
+  assert.equal(merged[0].artistCount, 3)
+  assert.equal(merged[0].albumCover, 'b.jpg')
+  const artistAlbums = catalog.queryAlbums('asc', '  singer b  ', false)
+  assert.equal(
+    artistAlbums.filter((album) => album.albumName === 'Shared').length,
+    2,
+    'artist search matches solo and participating artists'
+  )
+  assert.equal(
+    artistAlbums.find((album) => album.albumName === '').songCount,
+    1,
+    'artist search also finds unnamed albums'
+  )
+  const artistMerged = catalog
+    .queryAlbums('asc', 'Singer B', true)
+    .find((album) => album.albumName === 'Shared')
+  assert.deepEqual(
+    artistMerged,
+    merged[0],
+    'matching an artist retains every track, artist count and cover in the merged album'
+  )
+  assert.equal(catalog.queryAlbums('asc', 'nonexistent artist', true).length, 0)
+  assert.deepEqual(
+    catalog.getSongsByAlbum('Shared', 'Singer A').map((song) => song.id),
+    [1001]
+  )
+  assert.deepEqual(
+    catalog.getSongsByAlbum('Shared', 'Singer A', '', true).map((song) => song.id),
+    [1003, 1002, 1001],
+    'grouping ignores an artist filter from a previously saved detail route'
+  )
+  assert.deepEqual(
+    catalog.getSongsByAlbum('Shared', 'Singer A', 'Guest', true).map((song) => song.id),
+    [1002]
+  )
+  const unknownAlbum = catalog
+    .queryAlbums('asc', '', true)
+    .find((album) => album.albumName === null)
+  assert.equal(
+    catalog.getSongsByAlbum('__easy_player_unknown_album__', undefined, '', true).length,
+    unknownAlbum.songCount
+  )
+  assert.deepEqual(
+    catalog
+      .queryAlbums('asc', '', true)
+      .map((album) => album.albumName)
+      .reverse(),
+    catalog.queryAlbums('desc', '', true).map((album) => album.albumName)
+  )
+  assert.deepEqual(
+    catalog.queryAlbums('asc', 'Shared', false),
+    splitAlbums,
+    'turning off grouping restores the original albums'
+  )
+  assert.equal(
+    db.prepare('SELECT artist FROM song WHERE id=1003').get().artist,
+    'Singer A / Singer B',
+    'classification never rewrites artist tags'
+  )
+  const albumCalls = []
+  const albumApi = {
+    database: {
+      command: async (name, params) => {
+        albumCalls.push([name, params])
+        return {
+          success: true,
+          data:
+            name === 'queryAlbums'
+              ? catalog.queryAlbums(params.sort, params.search, params.groupByName)
+              : catalog.getSongsByAlbum(
+                  params.album,
+                  params.artist,
+                  params.search,
+                  params.groupByName
+                )
+        }
+      }
+    }
+  }
+  const albumBrowser = load(
+    'src/renderer/src/services/libraryBrowser.ts',
+    {},
+    { window: { api: albumApi } }
+  )
+  const mergedCards = await albumBrowser.queryLibraryItems(
+    'album',
+    'asc',
+    'Shared',
+    '',
+    'Unknown',
+    true,
+    'Various artists'
+  )
+  assert.equal(mergedCards.length, 1)
+  assert.equal(mergedCards[0].subtitle, 'Various artists')
+  const artistCards = await albumBrowser.queryLibraryItems(
+    'album',
+    'asc',
+    'Singer B',
+    '',
+    'Unknown',
+    true,
+    'Various artists'
+  )
+  assert.equal(
+    artistCards.find((item) => item.value === 'Shared').count,
+    3,
+    'renderer artist search receives the complete grouped album'
+  )
+  assert.equal(
+    mergedCards[0].subtitleValue,
+    undefined,
+    'merged cards never navigate with a single artist filter'
+  )
+  assert.equal(
+    (await albumBrowser.queryLibraryItems('album', 'asc', 'Shared', '', 'Unknown'))[0]
+      .subtitleValue !== undefined,
+    true
+  )
+  const albumQuery = load(
+    'src/renderer/src/services/songListQuery.ts',
+    {},
+    { window: { api: albumApi } }
+  )
+  const albumOptions = {
+    source: { type: 'album', album: 'Shared', artist: 'Singer A' },
+    search: '',
+    tags: [],
+    sourceFilter: 'all',
+    artistSeparator: '/',
+    genreSeparator: ';',
+    statistics: { enabled: false, generation: '1' }
+  }
+  assert.equal(
+    (await albumQuery.querySongList({ ...albumOptions, albumGroupByName: true })).length,
+    3
+  )
+  assert.equal(albumCalls.at(-1)[1].groupByName, true)
+  assert.equal((await albumQuery.querySongList(albumOptions)).length, 1)
+  db.exec('ROLLBACK TO album_grouping; RELEASE album_grouping')
+
   const calls = []
   const api = {
     database: {

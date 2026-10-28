@@ -205,6 +205,7 @@ const getSongs = (): Promise<LibrarySong[]> =>
     sourceFilter: sourceFilter.value,
     artistSeparator: uiStore.artistSeparator,
     genreSeparator: uiStore.genreSeparator,
+    albumGroupByName: uiStore.albumGroupByName,
     statistics
   })
 
@@ -317,6 +318,48 @@ const onSongPreferencesCleared = ({ songIds }: { songIds: number[] }): void => {
   const cleared = new Set(songIds)
   for (const song of songs.value) if (cleared.has(song.id)) song.preference = 0
 }
+const onSongsPreferenceChanged = ({
+  songIds,
+  preference
+}: {
+  songIds: number[]
+  preference: -1 | 0 | 1
+}): void => {
+  if (props.source.type === 'liked') {
+    void load()
+    return
+  }
+  const ids = new Set(songIds)
+  for (const song of songs.value) if (ids.has(song.id)) song.preference = preference
+}
+const onSongsLyricFlagsChanged = ({
+  songIds,
+  disableNetwork,
+  instrumental
+}: {
+  songIds: number[]
+  disableNetwork?: boolean
+  instrumental?: boolean
+}): void => {
+  const ids = new Set(songIds)
+  for (const song of songs.value)
+    if (ids.has(song.id)) {
+      if (disableNetwork !== undefined) song.disableNetworkLyrics = disableNetwork
+      if (instrumental !== undefined) song.instrumental = instrumental
+    }
+}
+const onSongLyricSettingsChanged = async (songId: number): Promise<void> => {
+  if (!songs.value.some((song) => song.id === songId)) return
+  const response = await window.api.database.command('getSongLyricSettings', { songId })
+  if (response.success) {
+    const settings = response.data as import('../../../../shared/songLyrics').SongLyricSettings
+    onSongsLyricFlagsChanged({
+      songIds: [songId],
+      disableNetwork: settings.disableNetwork,
+      instrumental: settings.instrumental
+    })
+  }
+}
 const locateCurrentSong = (): void => {
   const id = player.currentQueueSong?.id
   if (!id) return
@@ -337,6 +380,9 @@ onMounted(() => {
   eventBus.on('tagsChanged', onTagsChanged)
   eventBus.on('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.on('songPreferencesCleared', onSongPreferencesCleared)
+  eventBus.on('songsPreferenceChanged', onSongsPreferenceChanged)
+  eventBus.on('songsLyricFlagsChanged', onSongsLyricFlagsChanged)
+  eventBus.on('songLyricSettingsChanged', onSongLyricSettingsChanged)
   eventBus.on('locateCurrentSong', locateCurrentSong)
 })
 onBeforeUnmount(() => {
@@ -348,6 +394,9 @@ onBeforeUnmount(() => {
   eventBus.off('tagsChanged', onTagsChanged)
   eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.off('songPreferencesCleared', onSongPreferencesCleared)
+  eventBus.off('songsPreferenceChanged', onSongsPreferenceChanged)
+  eventBus.off('songsLyricFlagsChanged', onSongsLyricFlagsChanged)
+  eventBus.off('songLyricSettingsChanged', onSongLyricSettingsChanged)
   eventBus.off('locateCurrentSong', locateCurrentSong)
 })
 watch(
@@ -363,7 +412,9 @@ watch(
       ? uiStore.genreSeparator
       : props.source.type === 'artist'
         ? uiStore.artistSeparator
-        : undefined,
+        : props.source.type === 'album'
+          ? uiStore.albumGroupByName
+          : undefined,
   () => void load(true)
 )
 watch([keyword, composing], () => {
@@ -408,6 +459,7 @@ watch([keyword, composing], () => {
       :all-selected="allSelected"
       :show-file-name="showFileName"
       :compact="uiStore.compactSongList"
+      :hide-dividers="uiStore.hideSongListDividers"
       :columns="columns"
       :scroll-left="scrollLeft"
       :content-width="contentWidth"
@@ -423,10 +475,13 @@ watch([keyword, composing], () => {
       @select-newest="selectNewest"
       @toggle-file-name="showFileName = !showFileName"
       @toggle-compact="uiStore.compactSongList = !uiStore.compactSongList"
+      @toggle-dividers="uiStore.hideSongListDividers = !uiStore.hideSongListDividers"
       @toggle-column="toggleColumn"
       @batch-play="playSelected"
       @batch-add-to-playlist="actions?.addSelectedToPlaylist()"
       @batch-edit-tags="actions?.openBatchTags()"
+      @batch-preference="actions?.setSelectedPreference($event)"
+      @batch-lyric-flag="(flag, enabled) => actions?.setLyricFlag(flag, enabled)"
       @batch-reload-from-disk="actions?.reloadSelectedSongsFromDisk()"
       @batch-delete="actions?.requestDeleteSelectedSongs()"
       @open-tag-manager="tagManagerOpen = true"
@@ -462,6 +517,7 @@ watch([keyword, composing], () => {
             :keyword="keyword"
             :show-file-name="showFileName"
             :compact="uiStore.compactSongList"
+            :hide-dividers="uiStore.hideSongListDividers"
             :columns="columns"
             @play="playSong"
             @toggle-select="toggleSelect"

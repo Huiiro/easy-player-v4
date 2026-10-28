@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useUIStore } from '@/stores/ui/uiStore'
 import SongListView from '@/components/songlist/SongListView.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import CollectionHeaderActions from '@/components/collection/CollectionHeaderActions.vue'
@@ -10,6 +11,7 @@ type LibraryKind = 'album' | 'artist' | 'genre'
 const props = defineProps<{ kind: LibraryKind }>()
 const { t } = useI18n()
 const route = useRoute()
+const ui = useUIStore()
 const router = useRouter()
 const songList = ref<InstanceType<typeof SongListView> | null>(null)
 const playing = ref(false)
@@ -24,7 +26,7 @@ const title = computed(() =>
   rawName.value.startsWith('__easy_player_unknown_') ? t('library.unknown') : rawName.value
 )
 const subtitle = computed(() =>
-  props.kind === 'album' && rawArtist.value
+  props.kind === 'album' && !ui.albumGroupByName && rawArtist.value
     ? rawArtist.value.startsWith('__easy_player_unknown_')
       ? t('library.unknown')
       : rawArtist.value
@@ -35,7 +37,11 @@ const icon = computed(() =>
 )
 const source = computed(() =>
   props.kind === 'album'
-    ? { type: 'album' as const, album: rawName.value, artist: rawArtist.value || undefined }
+    ? {
+        type: 'album' as const,
+        album: rawName.value,
+        artist: ui.albumGroupByName ? undefined : rawArtist.value || undefined
+      }
     : props.kind === 'artist'
       ? { type: 'artist' as const, artist: rawName.value }
       : { type: 'genre' as const, genre: rawName.value }

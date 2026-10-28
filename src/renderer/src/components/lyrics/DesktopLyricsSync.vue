@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { type LyricLine, resolveLyrics } from '@/services/lyrics'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -6,7 +7,10 @@ import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
 
+const { t } = useI18n()
 const player = usePlayerStore()
+const instrumental = ref(false)
+const lyricPositionMs = computed(() => player.positionMs + player.lyricsOffsetMs)
 const ui = useUIStore()
 const sourceRequests = createSourceRequestScope()
 const lyrics = ref<LyricLine[]>([])
@@ -23,6 +27,7 @@ async function loadLyrics(): Promise<void> {
   const song = player.currentQueueSong
   if (!song) {
     lyrics.value = []
+    instrumental.value = false
     return
   }
   const call = sourceRequests.start('lyrics')
@@ -33,9 +38,12 @@ async function loadLyrics(): Promise<void> {
     ui.autoSearchNetworkLyrics,
     ui.preferWordTimedNetworkLyrics,
     { ...call.options, isCurrent: call.isCurrent }
-  ).finally(call.finish)
+  )
+    .catch((): Awaited<ReturnType<typeof resolveLyrics>> => ({ lines: [], source: null }))
+    .finally(call.finish)
   if (id === requestId) {
     lyrics.value = result.lines
+    instrumental.value = result.instrumental === true
     lyricRevision += 1
     publish()
   }
@@ -43,15 +51,15 @@ async function loadLyrics(): Promise<void> {
 
 function currentIndex(): number {
   for (let index = displayLyrics.value.length - 1; index >= 0; index -= 1)
-    if (player.positionMs >= displayLyrics.value[index].timeMs) return index
+    if (lyricPositionMs.value >= displayLyrics.value[index].timeMs) return index
   return 0
 }
 
 function activeLines(): LyricLine[] {
   return displayLyrics.value.filter((line, index) => {
-    if (line.untimed || player.positionMs < line.timeMs) return false
+    if (line.untimed || lyricPositionMs.value < line.timeMs) return false
     const endMs = line.endMs ?? displayLyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
-    return player.positionMs < endMs
+    return lyricPositionMs.value < endMs
   })
 }
 
@@ -93,13 +101,15 @@ function publish(): void {
   window.api.desktopLyrics.update({
     songId: player.currentQueueSong?.id,
     revision: lyricRevision,
-    current: current?.text || player.currentQueueSong?.title || '',
+    current: instrumental.value
+      ? t('lyrics.instrumental')
+      : current?.text || player.currentQueueSong?.title || '',
     currentStartMs: current?.untimed ? undefined : current?.timeMs,
     currentEndMs: current?.untimed ? undefined : currentEndMs,
     next: next?.text || '',
     translation:
       !overlapping && ui.desktopLyricsStyles.showTranslation ? current?.translation || '' : '',
-    positionMs: player.positionMs,
+    positionMs: lyricPositionMs.value,
     sweepStartMs: sweepRange?.startMs,
     sweepEndMs: sweepRange?.endMs,
     isPlaying: player.isPlaying,
@@ -133,6 +143,8 @@ function handleLyricsUpdated(songId: number): void {
 
 onMounted(() => {
   eventBus.on('lyricsUpdated', handleLyricsUpdated)
+  eventBus.on('songLyricSettingsChanged', handleLyricsUpdated)
+  cleanups.push(() => eventBus.off('songLyricSettingsChanged', handleLyricsUpdated))
   cleanups.push(() => eventBus.off('lyricsUpdated', handleLyricsUpdated))
   cleanups.push(window.api.desktopLyrics.onAction(handleAction))
   cleanups.push(window.api.desktopLyrics.onRequestState(publish))
@@ -172,6 +184,7 @@ watch(
   [
     () => ui.useDesktopLyrics,
     () => player.positionMs,
+    () => player.lyricsOffsetMs,
     () => player.isPlaying,
     () => player.currentQueueSong?.id,
     () => ui.desktopLyricsStyles

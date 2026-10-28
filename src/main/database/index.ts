@@ -27,22 +27,13 @@ function migrate(db: Database.Database): void {
       .prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migration')
       .get() as { version: number }
     if (version >= DATABASE_SCHEMA_VERSION) return
-
-    // V1 is the complete baseline, including the search schema.
-    // Add future version migrations after this block.
-    if (version < 1) {
-      db.exec(schemaV1)
-      db.exec(searchSchema)
-      db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(1)
-    }
-    if (version < 2) {
-      // V2 is retained as a compatibility marker; metadata is stored in audio files.
-      db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(2)
-    }
+    db.exec(schemaV1)
+    db.exec(searchSchema)
+    db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(DATABASE_SCHEMA_VERSION)
   })()
 }
 
-/** Opens the local library database and applies pending schema versions. */
+/** Opens the local library database and ensures the consolidated V1 schema. */
 export function initDatabase(overridePath?: string): Database.Database {
   return logOperation(
     '[Database] initialize',

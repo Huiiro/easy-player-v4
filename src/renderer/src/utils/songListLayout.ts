@@ -12,7 +12,14 @@ export type SongSortField =
   | 'diskNo'
   | 'trackNo'
   | 'relevance'
-export type OptionalSongColumn = 'genre' | 'year' | 'playTimes'
+export type OptionalSongColumn =
+  | 'genre'
+  | 'year'
+  | 'playTimes'
+  | 'disableNetworkLyrics'
+  | 'instrumental'
+  | 'preference'
+  | 'remoteSource'
 export type SongListColumns = Record<OptionalSongColumn, boolean>
 
 export function normalizeSongListColumns(value: unknown): SongListColumns {
@@ -20,23 +27,31 @@ export function normalizeSongListColumns(value: unknown): SongListColumns {
   return {
     genre: columns.genre === true,
     year: columns.year === true,
-    playTimes: columns.playTimes === true
+    playTimes: columns.playTimes === true,
+    disableNetworkLyrics: columns.disableNetworkLyrics === true,
+    instrumental: columns.instrumental === true,
+    preference: columns.preference === true,
+    remoteSource: columns.remoteSource === true
   }
 }
 
 export function songListLayout(columns: SongListColumns): Record<string, string> {
-  const tracks = ['3rem', 'minmax(12rem,1.8fr)', 'minmax(8rem,1fr)', 'minmax(8rem,1fr)']
-  let minimum = 35
+  const tracks = ['2.5rem', 'minmax(12rem,2fr)', 'minmax(7rem,1fr)', 'minmax(8rem,1.2fr)']
+  let minimum = 33
   for (const [column, width] of [
-    ['genre', 8],
-    ['year', 4.5],
-    ['playTimes', 5]
+    ['genre', 6],
+    ['year', 3.5],
+    ['playTimes', 4.5],
+    ['disableNetworkLyrics', 2.25],
+    ['instrumental', 2.25],
+    ['preference', 2.25],
+    ['remoteSource', 2.25]
   ] as const) {
     if (!columns[column]) continue
     tracks.push(`${width}rem`)
     minimum += width
   }
-  tracks.push('4rem')
+  tracks.push('3.5rem')
   // Include the row's horizontal padding and inter-column gaps.
   return {
     '--song-list-grid-columns': tracks.join(' '),

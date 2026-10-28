@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InstrumentalNotice from './InstrumentalNotice.vue'
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricChar, LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
 import { createSourceRequestScope } from '@/services/sourceRequests'
@@ -40,6 +41,7 @@ const ui = useUIStore()
 const sourceRequests = createSourceRequestScope()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
+const instrumental = ref(false)
 const viewportRef = ref<HTMLElement>()
 const lineRefs = ref<HTMLElement[]>([])
 const isUserScrolling = ref(false)
@@ -127,6 +129,7 @@ async function load(): Promise<void> {
   const loadId = ++lyricLoadId
   lyrics.value = []
   source.value = null
+  instrumental.value = false
   lineRefs.value = []
   const song = props.song
   if (!song) return
@@ -138,10 +141,13 @@ async function load(): Promise<void> {
     props.autoSearchNetwork,
     ui.preferWordTimedNetworkLyrics,
     { ...call.options, isCurrent: call.isCurrent }
-  ).finally(call.finish)
+  )
+    .catch((): Awaited<ReturnType<typeof resolveLyrics>> => ({ lines: [], source: null }))
+    .finally(call.finish)
   if (isUnmounted || loadId !== lyricLoadId) return
   lyrics.value = result.lines
   source.value = result.source
+  instrumental.value = result.instrumental === true
 }
 
 const scheduleSnapToCurrent = (): void => {
@@ -403,7 +409,8 @@ onUnmounted(() => {
     :class="props.darkText && 'player-lyrics--dark-text'"
     @scroll="handleScrollVelocity"
   >
-    <div class="lyric-track">
+    <InstrumentalNotice v-if="instrumental" />
+    <div v-else class="lyric-track">
       <div
         v-for="(line, idx) in lyrics"
         :key="idx"

@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type */
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type, vue/one-component-per-file */
 const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
@@ -9,7 +9,7 @@ app.setPath('userData', fs.mkdtempSync(path.resolve('build/lyrics-manager-ui-'))
 app.disableHardwareAcceleration()
 
 async function runFixture() {
-  const { Vue, createI18n, Manager, zh, eventBus } = window.Fixture
+  const { Vue, createI18n, Manager, PlayerLyrics, PlayerLyricsV2, zh, eventBus } = window.Fixture
   const { h, createApp, reactive, nextTick } = Vue
   window.requestAnimationFrame = (callback) => setTimeout(() => callback(performance.now()), 16)
   window.cancelAnimationFrame = clearTimeout
@@ -28,6 +28,13 @@ async function runFixture() {
     artist: 'Artist ' + id,
     album: 'Album ' + id,
     audio: 'song-' + id + '.flac'
+  })
+  const policies = new Map()
+  const defaultPolicy = (songId) => ({
+    songId,
+    offsetMs: null,
+    disableNetwork: false,
+    instrumental: false
   })
   const databaseLyrics = (id) => ({ lrc: '[00:01.00]Database ' + id, lyricFormat: 'lrc' })
   const writes = [],
@@ -88,6 +95,19 @@ async function runFixture() {
     },
     database: {
       command: async (action, params) => {
+        if (action === 'getSongLyricSettings')
+          return {
+            success: true,
+            data: policies.get(params.songId) || defaultPolicy(params.songId)
+          }
+        if (action === 'setSongLyricSettings') {
+          const data = {
+            ...(policies.get(params.songId) || defaultPolicy(params.songId)),
+            ...params.patch
+          }
+          policies.set(params.songId, data)
+          return { success: true, data }
+        }
         if (action === 'getSong') {
           reads.push(params.id)
           if (holdRead) {
@@ -164,10 +184,10 @@ async function runFixture() {
   )
   check(
     [...document.querySelectorAll('textarea')].every((el) => el.readOnly) &&
-      button('保存到数据库').disabled,
+      button(zh.playerPanel.lyricSaveDatabase).disabled,
     'embedded lyrics remain read-only'
   )
-  button('保存到数据库').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  button(zh.playerPanel.lyricSaveDatabase).dispatchEvent(new MouseEvent('click', { bubbles: true }))
   await wait()
   check(writes.length === 0, 'read-only previews cannot overwrite database lyrics')
   button('数据库歌词').click()
@@ -180,7 +200,7 @@ async function runFixture() {
     'network searches keep the original song metadata'
   )
   await edit('[00:01.00]Saved for song 1')
-  button('保存到数据库').click()
+  button(zh.playerPanel.lyricSaveDatabase).click()
   await wait(250)
   check(
     writes[0].id === 1 &&
@@ -194,7 +214,7 @@ async function runFixture() {
   check(editor().value.includes('Database 2'), 'reopening captures the newly playing song')
   holdSave = true
   await edit('[00:01.00]Pending song 2')
-  button('保存到数据库').click()
+  button(zh.playerPanel.lyricSaveDatabase).click()
   await wait()
   await close()
   window.managerPlayer.currentQueueSong = song(3)
@@ -207,16 +227,43 @@ async function runFixture() {
     'an earlier save completion cannot close or alter a reopened dialog'
   )
   check(
-    updates.at(-1) === 2 && !button('保存到数据库').disabled,
+    updates.at(-1) === 2 && !button(zh.playerPanel.lyricSaveDatabase).disabled,
     'late saves notify their own target without changing the new session'
   )
   await edit('[00:01.00]Saved song 3')
-  button('保存到数据库').click()
+  button(zh.playerPanel.lyricSaveDatabase).click()
   await wait(250)
   check(
     writes.at(-1).id === 3 && !state.open,
     'a reopened dialog saves to its own snapshotted target'
   )
+  state.open = true
+  await wait()
+  const queryCount = queries.length
+  document.querySelector('[role=switch][aria-label="不搜索网络歌词"]').click()
+  await wait()
+  check(
+    policies.get(3).disableNetwork && button('搜索网络歌词').disabled,
+    'song network flag is persisted and blocks manual searches'
+  )
+  button('搜索网络歌词').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await wait()
+  check(queries.length === queryCount, 'blocked songs never issue a network query')
+  document.querySelector('[role=switch][aria-label="纯音乐"]').click()
+  await wait()
+  check(
+    policies.get(3).instrumental && !editor().value,
+    'instrumental marker clears the lyric preview without changing stored lyrics'
+  )
+  await close()
+  state.open = true
+  await wait()
+  check(
+    document.querySelector('[role=switch][aria-label="纯音乐"]').getAttribute('aria-checked') ===
+      'true',
+    'instrumental marker survives reopening the dialog'
+  )
+  await close()
   window.managerPlayer.currentQueueSong = song(1)
   holdRead = true
   state.open = true
@@ -238,9 +285,33 @@ async function runFixture() {
   window.managerPlayer.currentQueueSong = song(3)
   await wait()
   check(
-    button('保存到数据库').disabled,
+    button(zh.playerPanel.lyricSaveDatabase).disabled,
     'opening without a song never adopts a later playback target'
   )
+  await close()
+  Object.assign(window.managerUi, {
+    reduceMotion: true,
+    autoAdjustLyricsDisplay: false,
+    lyricsStyle: 'word',
+    getPlayerLyricsFontStyle: {}
+  })
+  for (const component of [PlayerLyrics, PlayerLyricsV2]) {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const pureApp = createApp(component, {
+      song: song(3),
+      sourceOrder: ['database', 'network'],
+      currentTime: 0
+    }).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+    pureApp.mount(host)
+    await wait()
+    check(
+      !!host.querySelector('[data-instrumental]') && host.textContent.includes('纯音乐'),
+      'lyric renderer displays the dedicated instrumental state'
+    )
+    pureApp.unmount()
+    host.remove()
+  }
   check(fileWrites === 0, 'lyric management never writes embedded audio metadata')
   return checks
 }
@@ -251,7 +322,7 @@ app.whenReady().then(async () => {
       stdin: {
         resolveDir: process.cwd(),
         contents:
-          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsManagerDialog.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
+          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsManagerDialog.vue';export {default as PlayerLyrics} from './src/renderer/src/components/lyrics/PlayerLyrics.vue';export {default as PlayerLyricsV2} from './src/renderer/src/components/lyrics/PlayerLyricsV2.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
       },
       bundle: true,
       platform: 'browser',

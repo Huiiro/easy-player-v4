@@ -19,7 +19,12 @@ function queryScopedSongs(
   return attachTags(rows.map((row) => mapSong(row as SongRow)).filter(predicate))
 }
 
-export function getSongsByAlbum(album: string, artist?: string, search = ''): Song[] {
+export function getSongsByAlbum(
+  album: string,
+  artist?: string,
+  search = '',
+  groupByName = false
+): Song[] {
   const where = [
     album === '__easy_player_unknown_album__'
       ? "(album IS NULL OR TRIM(album) = '')"
@@ -27,9 +32,9 @@ export function getSongsByAlbum(album: string, artist?: string, search = ''): So
   ]
   const params: Record<string, string> = {}
   if (album !== '__easy_player_unknown_album__') params.album = album
-  if (artist === '__easy_player_unknown_artist__')
+  if (!groupByName && artist === '__easy_player_unknown_artist__')
     where.push("(artist IS NULL OR TRIM(artist) = '')")
-  else if (artist) {
+  else if (!groupByName && artist) {
     where.push('artist = @artist')
     params.artist = artist
   }
@@ -59,12 +64,29 @@ export function getSongsByArtist(artist: string, separator = '', search = ''): S
   return queryScopedSongs('artist = @artist', { artist }, search)
 }
 
-export function queryAlbums(sort: 'asc' | 'desc' = 'asc', search = ''): Album[] {
+export function queryAlbums(
+  sort: 'asc' | 'desc' = 'asc',
+  search = '',
+  groupByName = false
+): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
   const keyword = search.trim()
+  if (groupByName) {
+    return getDatabase()
+      .prepare(
+        `SELECT CASE WHEN album IS NULL OR TRIM(album) = '' THEN NULL ELSE album END AS albumName,
+        MAX(artist) AS artistName, COUNT(DISTINCT COALESCE(NULLIF(TRIM(artist), ''), '')) AS artistCount,
+        COUNT(*) AS songCount, MAX(cover) AS albumCover
+       FROM song
+       GROUP BY CASE WHEN album IS NULL OR TRIM(album) = '' THEN NULL ELSE album END
+       ${keyword ? 'HAVING MAX(CASE WHEN album LIKE @search OR artist LIKE @search THEN 1 ELSE 0 END) = 1' : ''}
+       ORDER BY albumName COLLATE NOCASE ${direction}`
+      )
+      .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
+  }
   return getDatabase()
     .prepare(
-      `SELECT album AS albumName, artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS albumCover FROM song ${keyword ? 'WHERE album LIKE @search' : ''} GROUP BY album, artist ORDER BY album COLLATE NOCASE ${direction}`
+      `SELECT album AS albumName, artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS albumCover FROM song ${keyword ? 'WHERE album LIKE @search OR artist LIKE @search' : ''} GROUP BY album, artist ORDER BY album COLLATE NOCASE ${direction}`
     )
     .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
 }

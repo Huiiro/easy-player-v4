@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import type {
   OptionalSongColumn,
   SongListColumns,
@@ -28,6 +29,7 @@ const props = defineProps<{
   allSelected: boolean
   showFileName: boolean
   compact: boolean
+  hideDividers?: boolean
   columns?: SongListColumns
   scrollLeft?: number
   contentWidth?: number
@@ -47,10 +49,13 @@ const emit = defineEmits<{
   selectNewest: []
   toggleFileName: []
   toggleCompact: []
+  toggleDividers: []
   toggleColumn: [column: OptionalSongColumn]
   batchPlay: []
   batchAddToPlaylist: []
   batchEditTags: []
+  batchPreference: [preference: -1 | 0 | 1]
+  batchLyricFlag: [flag: 'disableNetwork' | 'instrumental', enabled: boolean]
   batchReloadFromDisk: []
   batchDelete: []
   openTagManager: []
@@ -105,25 +110,114 @@ const sortMenuItems = computed(() => {
 const columnMenuLabels = {
   genre: { show: 'songList.showGenreColumn', hide: 'songList.hideGenreColumn' },
   year: { show: 'songList.showYearColumn', hide: 'songList.hideYearColumn' },
-  playTimes: { show: 'songList.showPlayTimesColumn', hide: 'songList.hidePlayTimesColumn' }
+  playTimes: { show: 'songList.showPlayTimesColumn', hide: 'songList.hidePlayTimesColumn' },
+  disableNetworkLyrics: {
+    show: 'songList.showDisableNetworkLyrics',
+    hide: 'songList.hideDisableNetworkLyrics'
+  },
+  instrumental: { show: 'songList.showInstrumental', hide: 'songList.hideInstrumental' },
+  preference: { show: 'songList.showPreferenceColumn', hide: 'songList.hidePreferenceColumn' },
+  remoteSource: { show: 'songList.showRemoteSourceColumn', hide: 'songList.hideRemoteSourceColumn' }
+}
+function columnMenuItems(columns: OptionalSongColumn[]): {
+  label: string
+  onClick: () => void
+}[] {
+  return columns.map((column) => ({
+    label: t(columnMenuLabels[column][props.columns?.[column] ? 'hide' : 'show']),
+    onClick: () => emit('toggleColumn', column)
+  }))
 }
 const moreMenuItems = computed(() => [
   {
-    label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
-    onClick: () => emit('toggleCompact')
-  },
-  {
-    label: props.showFileName ? t('songList.showTitle') : t('songList.showFileName'),
-    onClick: () => emit('toggleFileName')
+    type: 'group' as const,
+    label: t('songList.displayOptions'),
+    children: [
+      {
+        label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
+        onClick: () => emit('toggleCompact')
+      },
+      {
+        label: props.showFileName ? t('songList.showTitle') : t('songList.showFileName'),
+        onClick: () => emit('toggleFileName')
+      },
+      {
+        label: t(props.hideDividers ? 'songList.showDividers' : 'songList.hideDividers'),
+        onClick: () => emit('toggleDividers')
+      }
+    ]
   },
   { type: 'divider' as const },
   {
     type: 'group' as const,
-    children: (['genre', 'year', 'playTimes'] as const).map((column) => ({
-      label: t(columnMenuLabels[column][props.columns?.[column] ? 'hide' : 'show']),
-      onClick: () => emit('toggleColumn', column)
-    }))
+    label: t('songList.informationColumns'),
+    children: columnMenuItems(['genre', 'year', 'playTimes'])
+  },
+  { type: 'divider' as const },
+  {
+    type: 'group' as const,
+    label: t('songList.flagColumns'),
+    children: columnMenuItems([
+      'disableNetworkLyrics',
+      'instrumental',
+      'preference',
+      'remoteSource'
+    ])
   }
+])
+const batchMenuItems = computed(() => [
+  {
+    type: 'group' as const,
+    label: t('songList.preferenceColumn'),
+    children: [
+      {
+        label: t('songList.like'),
+        icon: 'play-like',
+        disabled: props.selectedCount === 0,
+        onClick: () => emit('batchPreference', 1)
+      },
+      {
+        label: t('songList.dislike'),
+        icon: 'play-dislike',
+        disabled: props.selectedCount === 0,
+        onClick: () => emit('batchPreference', -1)
+      },
+      {
+        label: t('songList.clearFeedback'),
+        icon: 'common-close',
+        disabled: props.selectedCount === 0,
+        onClick: () => emit('batchPreference', 0)
+      }
+    ]
+  },
+  ...(['disableNetwork', 'instrumental'] as const).flatMap((flag) => [
+    { type: 'divider' as const },
+    {
+      type: 'group' as const,
+      label: t(flag === 'disableNetwork' ? 'lyrics.source.network' : 'lyrics.instrumental'),
+      children: [
+        {
+          label: t(
+            flag === 'disableNetwork' ? 'songList.addDisableNetwork' : 'songList.addInstrumental'
+          ),
+          icon: flag === 'disableNetwork' ? 'common-no-internet-add' : 'common-music-notes-add',
+          disabled: props.selectedCount === 0,
+          onClick: () => emit('batchLyricFlag', flag, true)
+        },
+        {
+          label: t(
+            flag === 'disableNetwork'
+              ? 'songList.removeDisableNetwork'
+              : 'songList.removeInstrumental'
+          ),
+          icon:
+            flag === 'disableNetwork' ? 'common-no-internet-remove' : 'common-music-notes-remove',
+          disabled: props.selectedCount === 0,
+          onClick: () => emit('batchLyricFlag', flag, false)
+        }
+      ]
+    }
+  ])
 ])
 </script>
 
@@ -233,7 +327,7 @@ const moreMenuItems = computed(() => [
           <SvgIcon name="common-refresh" class-name="size-4" />
           <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
-        <BaseMenu :items="moreMenuItems" size="sm" width="w-44">
+        <BaseMenu :items="moreMenuItems" size="sm" width="w-56" :max-height="440">
           <template #trigger>
             <button
               class="btn-hover header-control header-icon-control"
@@ -247,54 +341,73 @@ const moreMenuItems = computed(() => [
       </div>
     </div>
 
-    <div v-if="selectionMode" class="flex flex-wrap items-center gap-x-2 gap-y-2 px-5 pb-3 text-xs">
-      <button class="btn-hover header-control px-2" @click="emit('toggleAll')">
+    <div v-if="selectionMode" class="flex flex-wrap items-center gap-1 px-5 pb-3 text-xs">
+      <BaseButton size="sm" variant="ghost" @click="emit('toggleAll')">
+        <template #left>
+          <SvgIcon :name="allSelected ? 'common-close' : 'common-check'" class-name="size-4" />
+        </template>
         {{ allSelected ? t('songList.clearSelection') : t('songList.selectAll') }}
-      </button>
-      <button class="btn-hover header-control px-2" @click="emit('selectNewest')">
+      </BaseButton>
+      <BaseButton size="sm" variant="ghost" @click="emit('selectNewest')">
+        <template #left><SvgIcon name="common-select" class-name="size-4" /></template>
         {{ t('songList.selectNewest') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        size="sm"
+        variant="ghost"
         :disabled="selectedCount === 0"
-        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchPlay')"
       >
-        <SvgIcon name="play-play" class-name="size-4" />
+        <template #left><SvgIcon name="play-play" class-name="size-4" /></template>
         {{ t('songList.play') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        size="sm"
+        variant="ghost"
         :disabled="selectedCount === 0"
-        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchAddToPlaylist')"
       >
-        <SvgIcon name="common-plus" class-name="size-4" />
+        <template #left><SvgIcon name="common-plus" class-name="size-4" /></template>
         {{ t('songList.addToPlaylist') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        size="sm"
+        variant="ghost"
         :disabled="selectedCount === 0"
-        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchEditTags')"
       >
-        <SvgIcon name="common-edit" class-name="size-4" />
+        <template #left><SvgIcon name="common-edit" class-name="size-4" /></template>
         {{ t('songList.editTags') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseMenu :items="batchMenuItems" size="sm" width="w-60" :max-height="400">
+        <template #trigger>
+          <BaseButton size="sm" variant="ghost" :disabled="selectedCount === 0">
+            <template #left><SvgIcon name="common-preference" class-name="size-4" /></template>
+            {{ t('songList.batchFeedback') }}
+            <template #right><SvgIcon name="arrow-arrow-down" class-name="size-3" /></template>
+          </BaseButton>
+        </template>
+      </BaseMenu>
+      <BaseButton
+        size="sm"
+        variant="ghost"
         :disabled="selectedCount === 0"
-        class="btn-hover header-control px-2 disabled:opacity-40"
         @click="emit('batchReloadFromDisk')"
       >
-        <SvgIcon name="common-refresh" class-name="size-4" />
+        <template #left><SvgIcon name="common-refresh" class-name="size-4" /></template>
         {{ t('songList.reloadFromDisk') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        size="sm"
+        variant="ghost"
         :disabled="selectedCount === 0"
-        class="btn-hover header-control px-2 disabled:opacity-40"
+        class="text-danger!"
         @click="emit('batchDelete')"
       >
-        <SvgIcon name="common-delete" class-name="size-4" />
+        <template #left><SvgIcon name="common-delete" class-name="size-4" /></template>
         {{ t('songList.delete') }}
-      </button>
-      <span class="text-text-l cursor-default">{{
+      </BaseButton>
+      <span class="header-control px-2 text-text-l cursor-default">{{
         t('songList.selected', { count: selectedCount })
       }}</span>
     </div>
@@ -312,8 +425,44 @@ const moreMenuItems = computed(() => [
         <span>{{ t('songList.artist') }}</span>
         <span>{{ t('songList.album') }}</span>
         <span v-if="columns?.genre">{{ t('songList.genre') }}</span>
-        <span v-if="columns?.year" class="text-right">{{ t('songList.year') }}</span>
-        <span v-if="columns?.playTimes" class="text-right">{{ t('songList.playTimes') }}</span>
+        <span v-if="columns?.year" class="text-center">{{ t('songList.year') }}</span>
+        <span v-if="columns?.playTimes" class="text-center">{{ t('songList.playTimes') }}</span>
+        <span
+          v-if="columns?.disableNetworkLyrics"
+          class="flex items-center justify-center"
+          :title="t('lyrics.disableNetwork')"
+          :aria-label="t('lyrics.disableNetwork')"
+          role="img"
+        >
+          <SvgIcon name="common-no-internet" class-name="size-3.5" />
+        </span>
+        <span
+          v-if="columns?.instrumental"
+          class="flex items-center justify-center"
+          :title="t('lyrics.instrumental')"
+          :aria-label="t('lyrics.instrumental')"
+          role="img"
+        >
+          <SvgIcon name="common-music-notes" class-name="size-3.5" />
+        </span>
+        <span
+          v-if="columns?.preference"
+          class="flex items-center justify-center"
+          :title="t('songList.preferenceColumn')"
+          :aria-label="t('songList.preferenceColumn')"
+          role="img"
+        >
+          <SvgIcon name="play-like" class-name="size-3.5" />
+        </span>
+        <span
+          v-if="columns?.remoteSource"
+          class="flex items-center justify-center"
+          :title="t('songList.remoteSourceColumn')"
+          :aria-label="t('songList.remoteSourceColumn')"
+          role="img"
+        >
+          <SvgIcon name="menu-remote" class-name="size-3.5" />
+        </span>
         <span class="text-right">{{ t('songList.duration') }}</span>
       </div>
     </div>
@@ -322,10 +471,10 @@ const moreMenuItems = computed(() => [
 
 <style scoped>
 .song-list-columns {
-  min-width: var(--song-list-min-width, 40.5rem);
+  min-width: var(--song-list-min-width, 38.5rem);
   grid-template-columns: var(
     --song-list-grid-columns,
-    3rem minmax(12rem, 1.8fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 4rem
+    2.5rem minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(8rem, 1.2fr) 3.5rem
   );
 }
 .header-control {

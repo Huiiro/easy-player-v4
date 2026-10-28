@@ -458,7 +458,7 @@ try {
   await service.reloadSongMetadata(1)
   assert.equal(getSong().album, 'External file edit')
   const schema = load('src/main/database/schema.ts')
-  for (const version of [1, 2]) {
+  for (const version of [1]) {
     const legacyFile = path.join(root, 'v' + version + '.db')
     const old = new Database(legacyFile)
     old.exec(schema.schemaV1)
@@ -478,7 +478,7 @@ try {
     const upgraded = migrated.initDatabase(legacyFile)
     assert.equal(
       upgraded.prepare('SELECT MAX(version) AS version FROM schema_migration').get().version,
-      2
+      schema.DATABASE_SCHEMA_VERSION
     )
     assert.equal(
       upgraded.prepare("SELECT 1 FROM sqlite_master WHERE name='song_metadata_override'").get(),

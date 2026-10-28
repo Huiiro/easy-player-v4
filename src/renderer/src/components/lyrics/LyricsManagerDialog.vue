@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { defaultSongLyricSettings } from '../../../../shared/songLyrics'
+import type { SongLyricSettingsPatch } from '../../../../shared/songLyrics'
+import { readSongLyricSettings, writeSongLyricSettings } from '@/services/songLyricSettings'
+import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createSourceRequestScope } from '@/services/sourceRequests'
@@ -22,6 +26,31 @@ const player = usePlayerStore()
 type EditingSong = Pick<LibrarySong, 'id' | 'audio' | 'title' | 'artist' | 'album'>
 const editingSong = shallowRef<EditingSong | null>(null)
 const saving = ref(false)
+const songSettings = ref(defaultSongLyricSettings(0))
+const settingsReady = ref(false)
+const networkBlocked = computed(
+  () => songSettings.value.disableNetwork || songSettings.value.instrumental
+)
+async function savePolicy(patch: SongLyricSettingsPatch): Promise<void> {
+  const song = editingSong.value
+  if (!song || saving.value || !settingsReady.value) return
+  const session = editSession
+  saving.value = true
+  cancelRequest()
+  try {
+    const updated = await writeSongLyricSettings(song.id, patch)
+    if (session !== editSession) return
+    songSettings.value = updated
+    candidates.value = []
+    await loadDraft()
+  } catch (cause) {
+    if (session === editSession)
+      error.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    if (session === editSession) saving.value = false
+  }
+}
+
 let editSession = 0
 const { t } = useI18n()
 const providerLabelKeys: Record<string, string> = {
@@ -75,7 +104,7 @@ async function loadDraft(source = previewSource.value): Promise<void> {
   translationFormat.value = undefined
   romanizationFormat.value = undefined
   resolvedSource.value = null
-  if (!song || source === 'network') return
+  if (!song || source === 'network' || songSettings.value.instrumental) return
   const call = requests.start('draft')
   if (source === 'auto') {
     const result = await resolveLyrics(
@@ -128,6 +157,18 @@ async function loadDraft(source = previewSource.value): Promise<void> {
 }
 async function initializeDraft(): Promise<void> {
   const song = editingSong.value
+  const session = editSession
+  if (!song) return
+  try {
+    const policy = await readSongLyricSettings(song.id)
+    if (session !== editSession) return
+    songSettings.value = policy
+  } catch (cause) {
+    if (session === editSession) error.value = String(cause)
+    return
+  }
+  if (session !== editSession) return
+  settingsReady.value = true
   const metadata = player.trackInfo?.filePath === song?.audio ? player.trackInfo?.metadata : null
   query.value = {
     title: metadata?.title?.trim() || song?.title || '',
@@ -148,6 +189,8 @@ watch(
   () => props.modelValue,
   (visible) => {
     editSession++
+    songSettings.value = defaultSongLyricSettings(0)
+    settingsReady.value = false
     cancelRequest()
     saving.value = false
     const song = visible ? player.currentQueueSong : null
@@ -189,7 +232,15 @@ function selectCandidate(index: number): void {
   }
 }
 async function search(): Promise<void> {
-  if (!props.modelValue || !editingSong.value || saving.value || !query.value.title.trim()) return
+  if (
+    !props.modelValue ||
+    !editingSong.value ||
+    saving.value ||
+    !settingsReady.value ||
+    networkBlocked.value ||
+    !query.value.title.trim()
+  )
+    return
   requests.cancel('draft')
   const call = requests.start('search')
   loading.value = true
@@ -199,6 +250,7 @@ async function search(): Promise<void> {
     const response = await window.api.lyrics.searchNetwork(
       {
         ...query.value,
+        songId: editingSong.value.id,
         preferWordTimed: ui.preferWordTimedNetworkLyrics
       },
       call.options
@@ -272,7 +324,7 @@ async function save(): Promise<void> {
             <button
               v-for="source in sources"
               :key="source.value"
-              :disabled="saving || !editingSong"
+              :disabled="saving || !editingSong || !settingsReady"
               class="manager-button rounded-lg px-3 py-2 text-left text-sm"
               :class="
                 previewSource === source.value
@@ -302,6 +354,30 @@ async function save(): Promise<void> {
             </button>
           </div>
         </div>
+        <div class="space-y-3 border-t border-border pt-4">
+          <p class="text-xs text-text-l">{{ t('lyrics.songSettings') }}</p>
+          <label class="flex items-center justify-between gap-2 text-sm">
+            {{ t('lyrics.disableNetwork') }}
+            <BaseSwitch
+              :model-value="songSettings.disableNetwork"
+              :disabled="saving || !editingSong || !settingsReady"
+              :aria-label="t('lyrics.disableNetwork')"
+              @update:model-value="savePolicy({ disableNetwork: $event === true })"
+            />
+          </label>
+          <label class="flex items-center justify-between gap-2 text-sm">
+            {{ t('lyrics.instrumental') }}
+            <BaseSwitch
+              :model-value="songSettings.instrumental"
+              :disabled="saving || !editingSong || !settingsReady"
+              :aria-label="t('lyrics.instrumental')"
+              @update:model-value="savePolicy({ instrumental: $event === true })"
+            />
+          </label>
+          <p v-if="networkBlocked" class="text-xs text-text-l">
+            {{ t('lyrics.networkDisabledHint') }}
+          </p>
+        </div>
         <div class="space-y-2 border-t border-border pt-4">
           <p class="text-xs text-text-l">{{ t('playerPanel.lyricSearch') }}</p>
           <input
@@ -321,7 +397,14 @@ async function save(): Promise<void> {
           />
           <button
             class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
-            :disabled="loading || saving || !editingSong || !query.title.trim()"
+            :disabled="
+              loading ||
+              saving ||
+              !editingSong ||
+              !settingsReady ||
+              networkBlocked ||
+              !query.title.trim()
+            "
             @click="search"
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}

@@ -75,6 +75,7 @@ interface EventRow {
   durationMs: number
   endReason: string
   startOrigin: string
+  skipFeedback: number
 }
 
 const normalize = (value: string | null): string => value?.trim().toLocaleLowerCase() ?? ''
@@ -120,17 +121,6 @@ export function getRecommendationScores(
 ): RecommendationScore[] {
   const db = getDatabase()
   const now = asOf
-  const resetRows = db
-    .prepare(
-      "SELECT key, value_json AS value FROM app_setting WHERE key LIKE 'recommendation.reset.%'"
-    )
-    .all() as Array<{ key: string; value: string }>
-  const resets = new Map(
-    resetRows.map((row) => [
-      Number(row.key.slice('recommendation.reset.'.length)),
-      Number(row.value)
-    ])
-  )
   const allSongs = db
     .prepare(
       'SELECT id, preference, artist, album, genre, year, play_times AS playTimes, duration, song_status AS songStatus, is_newest AS isNewest, created_at AS createdAt FROM song WHERE song_status != 0'
@@ -149,7 +139,7 @@ export function getRecommendationScores(
   const cutoff = dailySnapshot ? cutoffDate.getTime() : now - 90 * 86400_000
   const events = db
     .prepare(
-      "SELECT song_id AS songId, started_at AS startedAt, COALESCE(ended_at, started_at + played_ms) AS endedAt, played_ms AS playedMs, COALESCE(duration_ms, 0) AS durationMs, COALESCE(end_reason, 'legacy') AS endReason, start_origin AS startOrigin FROM play_history WHERE started_at >= ? AND started_at < ? AND COALESCE(ended_at, started_at + played_ms) < ?"
+      "SELECT song_id AS songId, started_at AS startedAt, COALESCE(ended_at, started_at + played_ms) AS endedAt, played_ms AS playedMs, COALESCE(duration_ms, 0) AS durationMs, COALESCE(end_reason, 'legacy') AS endReason, start_origin AS startOrigin, skip_feedback AS skipFeedback FROM play_history WHERE started_at >= ? AND started_at < ? AND COALESCE(ended_at, started_at + played_ms) < ?"
     )
     .all(cutoff, now, now) as EventRow[]
   const todayStarts = new Map<number, number>(
@@ -213,8 +203,7 @@ export function getRecommendationScores(
     for (const tagId of tagsBySong.get(song.id) ?? []) add(tagCatalogue, tagId, 1)
   }
   const base = songs.map((song) => {
-    const resetAt = resets.get(song.id) ?? 0
-    const recent = (eventsBySong.get(song.id) ?? []).filter((event) => event.startedAt > resetAt)
+    const recent = eventsBySong.get(song.id) ?? []
     let completions = 0
     let skips = 0
     let listened = 0
@@ -230,6 +219,7 @@ export function getRecommendationScores(
       if (duration > 0 ? ratio >= 0.8 : event.endReason === 'ended' && event.playedMs >= 60_000)
         completions += decay
       if (
+        event.skipFeedback !== 0 &&
         ['next', 'previous', 'selected'].includes(event.endReason) &&
         ratio < 0.25 &&
         event.playedMs < 30_000
@@ -253,7 +243,7 @@ export function getRecommendationScores(
     const preference = song.preference
     const playTimes = Math.max(0, song.playTimes - (todayStarts.get(song.id) ?? 0))
     // play_times counts starts. Remove sessions already represented by detailed events.
-    const legacyPlays = resetAt ? 0 : Math.max(0, playTimes - recent.length)
+    const legacyPlays = Math.max(0, playTimes - recent.length)
     const engagedPlays = legacyPlays + engagedRecent
     // An early skip of a familiar song is weak evidence: it may mean the listener wants variety.
     const skipReliability = Math.max(0.25, 1 / (1 + engagedPlays / 3))
@@ -382,9 +372,7 @@ export function getRecommendationScores(
         plays,
         engagedPlays,
         recentEngagedPlays,
-        recentPlays: (eventsBySong.get(song.id) ?? []).filter(
-          (event) => event.startedAt > (resets.get(song.id) ?? 0)
-        ).length,
+        recentPlays: (eventsBySong.get(song.id) ?? []).length,
         completions,
         skips,
         factors: {
@@ -671,19 +659,44 @@ export function setSongPreference(songId: number, preference: -1 | 0 | 1): void 
   getDatabase().prepare('UPDATE song SET preference = ? WHERE id = ?').run(preference, songId)
 }
 
-/** Reset personal recommendation evidence without deleting listening statistics. */
+export function setSongsPreference(songIds: number[], preference: -1 | 0 | 1): number[] {
+  if (
+    !Array.isArray(songIds) ||
+    songIds.length > 10000 ||
+    songIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+    ![-1, 0, 1].includes(preference)
+  )
+    throw new Error('Invalid song preference')
+  const ids = [...new Set(songIds)]
+  const db = getDatabase()
+  return db.transaction(() => {
+    const exists = db.prepare('SELECT id FROM song WHERE id = ?')
+    const update = db.prepare('UPDATE song SET preference = ? WHERE id = ?')
+    for (const id of ids) {
+      if (!exists.get(id)) throw new Error('Song not found')
+      update.run(preference, id)
+    }
+    return ids
+  })()
+}
+
+/** Clear negative feedback only; keep likes, listening history and positive evidence. */
 function resetSongRecommendations(songIds: number[]): void {
   const db = getDatabase()
   db.transaction(() => {
-    const update = db.prepare('UPDATE song SET preference = 0 WHERE id = ?')
-    const reset = db.prepare(
-      `INSERT INTO app_setting (key, value_json) VALUES (?, ?)
-      ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json`
-    )
-    const resetAt = JSON.stringify(Date.now())
+    const exists = db.prepare('SELECT id FROM song WHERE id = ?')
+    const update = db.prepare('UPDATE song SET preference = 0 WHERE id = ? AND preference = -1')
+    const clearSkips = db.prepare(`UPDATE play_history SET skip_feedback = 0
+      WHERE song_id = ? AND started_at <= ?
+        AND COALESCE(ended_at, started_at + played_ms) <= ?
+        AND end_reason IN ('next', 'previous', 'selected') AND played_ms < 30000
+        AND (COALESCE(NULLIF(duration_ms, 0), (SELECT duration * 1000 FROM song WHERE id = song_id), 0) <= 0
+          OR played_ms < COALESCE(NULLIF(duration_ms, 0), (SELECT duration * 1000 FROM song WHERE id = song_id), 0) * 0.25)`)
+    const at = Date.now()
     for (const songId of songIds) {
-      if (!update.run(songId).changes) throw new Error('Song not found')
-      reset.run(`recommendation.reset.${songId}`, resetAt)
+      if (!exists.get(songId)) throw new Error('Song not found')
+      update.run(songId)
+      clearSkips.run(songId, at, at)
     }
   })()
 }

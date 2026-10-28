@@ -62,15 +62,29 @@ try {
     initialized.prepare("SELECT 1 FROM sqlite_master WHERE name = 'song_sort_reading'").get()
   )
   initialized.prepare("INSERT INTO app_setting (key, value_json) VALUES ('test', 'true')").run()
+  initialized.exec(`
+    INSERT INTO folder (id,name,full_path,is_root_path,import_time) VALUES (1,'Test','/test',1,'2020-01-01');
+    INSERT INTO song (id,title,audio,folder_id,duration,play_times,preference,offset_ms,disable_network_lyrics,instrumental)
+      VALUES (1,'Keep settings','/test/1',1,180,8,1,1200,1,1);
+  `)
+  assert.equal(
+    initialized.prepare("SELECT 1 FROM sqlite_master WHERE name='song_lyric_setting'").get(),
+    undefined
+  )
   databaseApi.closeDatabase()
   const reopened = databaseApi.initDatabase(databasePath)
-  assert.deepEqual(
-    reopened.prepare('SELECT version FROM schema_migration ORDER BY version').all(),
-    Array.from({ length: DATABASE_SCHEMA_VERSION }, (_, index) => ({ version: index + 1 }))
-  )
+  assert.deepEqual(reopened.prepare('SELECT version FROM schema_migration').all(), [{ version: 1 }])
   assert.equal(
-    reopened.prepare("SELECT value_json FROM app_setting WHERE key = 'test'").get().value_json,
+    reopened.prepare("SELECT value_json FROM app_setting WHERE key='test'").get().value_json,
     'true'
+  )
+  assert.deepEqual(
+    reopened
+      .prepare(
+        'SELECT offset_ms,disable_network_lyrics,instrumental,preference,play_times FROM song WHERE id=1'
+      )
+      .get(),
+    { offset_ms: 1200, disable_network_lyrics: 1, instrumental: 1, preference: 1, play_times: 8 }
   )
 } finally {
   databaseApi.closeDatabase()
@@ -197,6 +211,7 @@ const {
   getRecentDiscoveryGroups,
   recordPlayEvent,
   setSongPreference,
+  setSongsPreference,
   resetSongRecommendation,
   clearLessRecommended,
   diversifyByArtist,
@@ -560,31 +575,60 @@ for (let i = 0; i < 1000; i++) {
 }
 assert.ok(likedPicks > reducedPicks * 10, 'reduced preference should lower exposure')
 
+setSongsPreference([8, 9], 1)
+assert.equal(db.prepare('SELECT preference FROM song WHERE id=8').get().preference, 1)
+assert.throws(() => setSongsPreference([8, 999999], -1))
+assert.equal(
+  db.prepare('SELECT preference FROM song WHERE id=8').get().preference,
+  1,
+  'batch preference failure is atomic'
+)
+setSongsPreference([8, 9], 0)
 const historyCount = db
   .prepare('SELECT COUNT(*) AS count FROM play_history WHERE song_id = 2')
   .get().count
 const startsCount = db.prepare('SELECT play_times FROM song WHERE id = 2').get().play_times
+const resetAsOf = Date.now()
+const beforeReset = getRecommendationScores(resetAsOf).find((score) => score.songId === 2)
 setSongPreference(2, -1)
 resetSongRecommendation(2)
-const resetScore = getRecommendationScores().find((score) => score.songId === 2)
+const resetScore = getRecommendationScores(resetAsOf).find((score) => score.songId === 2)
 assert.equal(resetScore.preference, 0)
-assert.equal(resetScore.recentPlays, 0)
-assert.equal(resetScore.engagedPlays, 0, 'legacy starts do not undo a reset')
-assert.equal(resetScore.factors.behavior, 0)
+assert.equal(resetScore.recentPlays, beforeReset.recentPlays)
+assert.equal(resetScore.engagedPlays, beforeReset.engagedPlays)
+assert.equal(resetScore.skips, 0)
+assert.equal(resetScore.behaviorParts.listened, beforeReset.behaviorParts.listened)
+assert.equal(resetScore.behaviorParts.history, beforeReset.behaviorParts.history)
 assert.notEqual(resetScore.reason, 'skipped')
-assert.ok(resetScore.weight > 0.06)
+assert.ok(resetScore.weight > beforeReset.weight)
 assert.equal(
   db.prepare('SELECT COUNT(*) AS count FROM play_history WHERE song_id = 2').get().count,
   historyCount
 )
 assert.equal(db.prepare('SELECT play_times FROM song WHERE id = 2').get().play_times, startsCount)
+setSongPreference(1, 1)
+insertHistory.run(1, now - 86400_000, 3000, 180000, 'next')
+const positive = getRecommendationScores(resetAsOf).find((score) => score.songId === 1)
+resetSongRecommendation(1)
+const retained = getRecommendationScores(resetAsOf).find((score) => score.songId === 1)
+assert.equal(retained.preference, 1, 'clearing negative feedback never clears likes')
+assert.equal(retained.skips, 0)
+for (const part of ['completion', 'listened', 'repeat', 'intent', 'history'])
+  assert.equal(
+    retained.behaviorParts[part],
+    positive.behaviorParts[part],
+    `${part} survives clearing negative feedback`
+  )
+assert.equal(retained.completions, positive.completions)
+assert.equal(retained.engagedPlays, positive.engagedPlays)
 assert.throws(() => resetSongRecommendation(-1))
 assert.throws(() => resetSongRecommendation(999999))
 assert.equal(
   db
-    .prepare("SELECT COUNT(*) AS count FROM app_setting WHERE key = 'recommendation.reset.999999'")
+    .prepare("SELECT COUNT(*) AS count FROM app_setting WHERE key GLOB 'recommendation.reset.*'")
     .get().count,
-  0
+  0,
+  'clears never create song-wide reset settings'
 )
 const recommendationRepository = loadTypeScript(
   path.join(__dirname, '../src/main/database/repository/recommendations.ts'),
@@ -612,16 +656,14 @@ assert.ok(
     .items.some((song) => song.songId === 2),
   'reset songs stay removed after reload and pagination'
 )
-// New listening after the reset becomes evidence again.
-const resetAt = Number(
-  db.prepare("SELECT value_json FROM app_setting WHERE key = 'recommendation.reset.2'").get()
-    .value_json
-)
-insertHistory.run(2, resetAt + 1, 170000, 180000, 'ended')
-const relearned = getRecommendationScores(resetAt + 200000).find((score) => score.songId === 2)
+// New skips count again, while positive listening continues to accumulate.
+const afterReset = Date.now() + 1
+insertHistory.run(2, afterReset, 3000, 180000, 'next')
+insertHistory.run(2, afterReset + 1, 170000, 180000, 'ended')
+const relearned = getRecommendationScores(afterReset + 200000).find((score) => score.songId === 2)
 assert.equal(relearned.recentEngagedPlays, 1)
-assert.ok(relearned.factors.behavior > 0)
-
+assert.ok(relearned.skips > 0)
+assert.equal(relearned.recentPlays, beforeReset.recentPlays + 2)
 // Bulk clearing includes songs beyond both the page size and the 100-song cap.
 for (let id = 1000; id < 1105; id++) {
   songs.run(id, `Reduced ${id}`, `/test/${id}`, null, null, null, null, 0, 180)
@@ -637,7 +679,17 @@ assert.ok(
   beforeBulk.some((score) => score.preference === 0 && score.reason === 'skipped'),
   'bulk fixture includes automatically reduced songs'
 )
-const historyBeforeBulk = db.prepare('SELECT * FROM play_history ORDER BY id').all()
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+const listeningHistory = () =>
+  db
+    .prepare(
+      'SELECT id, song_id, started_at, ended_at, played_ms, duration_ms, end_reason, start_origin FROM play_history ORDER BY id'
+    )
+    .all()
+const historyBeforeBulk = listeningHistory()
+const feedbackBeforeBulk = db
+  .prepare('SELECT id, skip_feedback FROM play_history ORDER BY id')
+  .all()
 const startsBeforeBulk = db.prepare('SELECT id, play_times FROM song ORDER BY id').all()
 db.exec(`CREATE TRIGGER reject_bulk_reset BEFORE UPDATE OF preference ON song
   WHEN OLD.id = 1104 AND NEW.preference = 0
@@ -655,6 +707,11 @@ assert.equal(
   0,
   'bulk failure rolls back reset markers'
 )
+assert.deepEqual(
+  db.prepare('SELECT id, skip_feedback FROM play_history ORDER BY id').all(),
+  feedbackBeforeBulk,
+  'failed batch rolls back feedback flags'
+)
 db.exec('DROP TRIGGER reject_bulk_reset')
 const cleared = clearLessRecommended()
 assert.deepEqual(
@@ -671,11 +728,7 @@ assert.equal(
     .length,
   0
 )
-assert.deepEqual(
-  db.prepare('SELECT * FROM play_history ORDER BY id').all(),
-  historyBeforeBulk,
-  'bulk reset preserves listening history'
-)
+assert.deepEqual(listeningHistory(), historyBeforeBulk, 'bulk reset preserves listening history')
 assert.deepEqual(
   db.prepare('SELECT id, play_times FROM song ORDER BY id').all(),
   startsBeforeBulk,

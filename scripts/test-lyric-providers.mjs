@@ -15,6 +15,9 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
     ]
     mocks = {
       ...mocks,
+      [resolve('src/main/database/repository/songLyrics.ts')]: {
+        songAllowsNetworkLyrics: () => true
+      },
       [resolve('src/main/i18n/index.ts')]: { t: (key) => key },
       [resolve('src/main/sources/index.ts')]: {
         getNetworkSources: () => ({
@@ -58,6 +61,7 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
       Error,
       Date,
       require: (name) => {
+        if (name === '@/utils/eventBus') return { default: { emit: () => undefined } }
         if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
         if (name in mocks) return mocks[name]
         if (name === '../service/playbackMode') return policy

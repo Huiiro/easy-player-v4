@@ -41,6 +41,9 @@ let coverObserver: IntersectionObserver | null = null
 let activated = false
 
 const title = computed(() => t(`library.${props.kind}s`))
+const searchPlaceholder = computed(() =>
+  props.kind === 'album' ? t('library.searchAlbums') : t('library.search', { type: title.value })
+)
 const icon = computed(() =>
   props.kind === 'album' ? 'common-album' : props.kind === 'artist' ? 'common-user' : 'common-genre'
 )
@@ -88,7 +91,9 @@ async function load(restoreScroll = false, resetScroll = false): Promise<void> {
       order.value,
       keyword.value,
       separator.value,
-      t('library.unknown')
+      t('library.unknown'),
+      ui.albumGroupByName,
+      t('library.variousArtists')
     )
     if (revision === loadRevision) {
       const keys = new Set(result.map(itemKey))
@@ -113,7 +118,7 @@ function open(item: GridItem): void {
     props.kind === 'album'
       ? {
           name: item.value,
-          artist: item.subtitleValue || '',
+          artist: ui.albumGroupByName ? '' : item.subtitleValue || '',
           cover: item.cover || ''
         }
       : { name: item.value, cover: item.cover || '' }
@@ -124,10 +129,13 @@ function refresh(): void {
   void load(true)
 }
 
-watch([keyword, order, separator], () => {
-  clearSavedScrollPosition()
-  void load(false, true)
-})
+watch(
+  [keyword, order, separator, () => (props.kind === 'album' ? ui.albumGroupByName : false)],
+  () => {
+    clearSavedScrollPosition()
+    void load(false, true)
+  }
+)
 watch(cardSize, () => {
   clearSavedScrollPosition()
   scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
@@ -177,8 +185,8 @@ onActivated(() => {
                 ? 'opacity-100'
                 : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
             "
-            :placeholder="t('library.search', { type: title })"
-            :aria-label="t('library.search', { type: title })"
+            :placeholder="searchPlaceholder"
+            :aria-label="searchPlaceholder"
           />
           <button
             v-if="keyword"

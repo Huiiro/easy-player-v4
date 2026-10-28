@@ -264,6 +264,29 @@ export default {
     duplicates: 'Duplicates {count}'
   },
   songList: {
+    showDividers: 'Show row dividers',
+    hideDividers: 'Hide row dividers',
+    displayOptions: 'Display',
+    informationColumns: 'Information columns',
+    flagColumns: 'Flag columns',
+    preferenceColumn: 'Preference',
+    remoteSourceColumn: 'Remote source',
+    showPreferenceColumn: 'Show preference column',
+    hidePreferenceColumn: 'Hide preference column',
+    showRemoteSourceColumn: 'Show remote source column',
+    hideRemoteSourceColumn: 'Hide remote source column',
+    marksAndPreference: 'Flags and preference',
+    addDisableNetwork: 'Disable network lyrics',
+    removeDisableNetwork: 'Allow network lyrics',
+    addInstrumental: 'Mark as instrumental',
+    removeInstrumental: 'Remove instrumental mark',
+    showDisableNetworkLyrics: 'Show network lyrics flag',
+    hideDisableNetworkLyrics: 'Hide network lyrics flag',
+    showInstrumental: 'Show instrumental flag',
+    hideInstrumental: 'Hide instrumental flag',
+    batchFeedback: 'Batch flags and preference',
+    batchUpdated: 'Updated {count} songs',
+    clearFeedback: 'Clear like/dislike',
     total: '{count} songs',
     search: 'Search songs, artists, or albums',
     clearSearch: 'Clear search',
@@ -470,7 +493,9 @@ export default {
     genre: 'Genre',
     genres: 'Genres',
     unknown: 'Unknown',
+    variousArtists: 'Various artists',
     search: 'Search {type}',
+    searchAlbums: 'Search albums or artists',
     clearSearch: 'Clear search',
     refresh: 'Refresh',
     sort: 'Sort alphabetically',
@@ -641,7 +666,7 @@ export default {
     lessRecommendedCleared: 'All Show less entries cleared',
     removeAndReset: 'Remove and reset score',
     resetScoreHelp: 'Remove from Show less',
-    scoreReset: 'Recommendation score reset for this song',
+    scoreReset: 'Negative recommendation feedback cleared for this song',
     failed: 'Could not save preference',
     showMore: 'Show more',
     reasons: {
@@ -1051,6 +1076,9 @@ export default {
     lyricsDrag: 'Drag to change priority',
     lyricsFirst: 'Preferred source',
     lyricsFallback: 'Used when earlier sources are unavailable',
+    lyricsOffsetPerSong: 'Apply lyric offset per song',
+    lyricsOffsetPerSongDescription:
+      'Reset temporary offsets when switching songs and load saved song offsets. When off, songs without a saved offset use the global offset.',
     autoSearchNetworkLyrics: 'Automatically search network lyrics',
     autoSearchNetworkLyricsDescription:
       'When enabled, automatically searches online for lyrics when local lyrics are missing.',
@@ -1078,6 +1106,9 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    albumGroupByName: 'Group albums by name',
+    albumGroupByNameDescription:
+      'Combine tracks from different artists under the same album name. When off, group by album and artist. Song tags remain unchanged.',
     ignoreShortSongs: 'Ignore songs shorter than 5 seconds',
     ignoreShortSongsDescription:
       'Skip audio shorter than 5 seconds when importing folders or songs.',
@@ -1186,6 +1217,10 @@ export default {
     showRomanization: 'Show Romanization',
     lyricFontSize: 'Lyric font size',
     lyricSpacing: 'Lyric spacing',
+    lyricOffsetSave: 'Save lyric offset for this song',
+    lyricOffsetRemove: 'Remove saved lyric offset',
+    lyricOffsetSaved: 'Song lyric offset saved',
+    lyricOffsetRemoved: 'Saved song lyric offset removed',
     lyricTiming: 'Lyric timing offset (±5 seconds)',
     lyricTimingReset: 'Reset lyric timing offset',
     progressStyle: 'Toggle progress style',
@@ -1235,6 +1270,13 @@ export default {
     lyricSourceNone: 'No lyrics found'
   },
   lyrics: {
+    songSettings: 'Song lyric settings',
+    disableNetwork: 'Disable network lyric search',
+    instrumental: 'Instrumental',
+    instrumentalHint: 'This song is marked as instrumental',
+    networkDisabledHint:
+      'Network lyrics will not be searched or matched for this song. Instrumental songs display a dedicated lyric state.',
+
     source: {
       embedded: 'Embedded lyrics',
       database: 'Database lyrics',

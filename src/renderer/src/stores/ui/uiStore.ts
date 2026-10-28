@@ -75,6 +75,7 @@ export const UI_PREFERENCE_KEYS = [
   'themeBackgroundEnabled',
   'useCardView',
   'compactSongList',
+  'hideSongListDividers',
   'songListColumns',
   'useCustomBg',
   'reduceMotion',
@@ -106,6 +107,7 @@ export const UI_PREFERENCE_KEYS = [
   'lyricsFontSize',
   'lyricsFontPadding',
   'lyricsOffsetMs',
+  'lyricsOffsetPerSong',
   'lyricsStyle',
   'karaokeAnimation',
   'lyricsColors',
@@ -130,6 +132,7 @@ export const UI_PREFERENCE_KEYS = [
   'musicSourceId',
   'normalizeMetadataSeparator',
   'ignoreShortSongs',
+  'albumGroupByName',
   'artistSeparator',
   'genreSeparator',
   'librarySortOrder',
@@ -299,7 +302,16 @@ export const useUIStore = defineStore(
     } | null>(null)
     const useCardView = ref(false)
     const compactSongList = ref(false)
-    const songListColumns = ref<SongListColumns>({ genre: false, year: false, playTimes: false })
+    const hideSongListDividers = ref(false)
+    const songListColumns = ref<SongListColumns>({
+      genre: false,
+      year: false,
+      playTimes: false,
+      disableNetworkLyrics: false,
+      instrumental: false,
+      preference: false,
+      remoteSource: false
+    })
     const useCustomBg = ref(false)
     const reduceMotion = ref(false)
     const useLocalFileName = ref(false)
@@ -451,6 +463,7 @@ export const useUIStore = defineStore(
     const lyricsFontSize = ref(2.4)
     const lyricsFontPadding = ref(30)
     const lyricsOffsetMs = ref(0)
+    const lyricsOffsetPerSong = ref(true)
     const lyricsStyle = ref<'none' | 'glow' | 'follow'>('none')
     const karaokeAnimation = ref<'wave' | 'float'>('wave')
     const lyricsColors = reactive({
@@ -491,6 +504,7 @@ export const useUIStore = defineStore(
     const musicSourceId = ref(0)
     const normalizeMetadataSeparator = ref(false)
     const ignoreShortSongs = ref(true)
+    const albumGroupByName = ref(false)
     const artistSeparator = ref('/；;、')
     const genreSeparator = ref(DEFAULT_GENRE_SEPARATOR)
     const librarySortOrder = reactive<Record<'album' | 'artist' | 'genre', 'asc' | 'desc'>>({
@@ -979,6 +993,7 @@ export const useUIStore = defineStore(
       themeBeforeFollowingSystem,
       useCardView,
       compactSongList,
+      hideSongListDividers,
       songListColumns,
       useCustomBg,
       reduceMotion,
@@ -1016,6 +1031,7 @@ export const useUIStore = defineStore(
       lyricsFontSize,
       lyricsFontPadding,
       lyricsOffsetMs,
+      lyricsOffsetPerSong,
       lyricsStyle,
       karaokeAnimation,
       lyricsColors,
@@ -1049,6 +1065,7 @@ export const useUIStore = defineStore(
       musicSourceId,
       normalizeMetadataSeparator,
       ignoreShortSongs,
+      albumGroupByName,
       artistSeparator,
       genreSeparator,
       librarySortOrder,

@@ -15,6 +15,12 @@ const lyricSourceKey = (source: string): string => source
 <template>
   <SettingCard>
     <SettingRow
+      :label="t('settings.lyricsOffsetPerSong')"
+      :description="t('settings.lyricsOffsetPerSongDescription')"
+    >
+      <BaseSwitch v-model="ui.lyricsOffsetPerSong" size="md" />
+    </SettingRow>
+    <SettingRow
       :label="t('settings.autoSearchNetworkLyrics')"
       :description="t('settings.autoSearchNetworkLyricsDescription')"
     >

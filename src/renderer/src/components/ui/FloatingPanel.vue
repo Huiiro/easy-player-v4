@@ -11,6 +11,8 @@ import {
 import { floatingPosition } from './floatingPosition'
 import type { FloatingAlign, FloatingSide } from './types'
 
+defineOptions({ inheritAttrs: false })
+
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -25,7 +27,14 @@ const props = withDefaults(
 )
 const panel = ref<HTMLElement | null>(null)
 const active = ref(true)
-const style = ref<CSSProperties>({ visibility: 'hidden' })
+// Measure with the final positioning and content width before revealing the panel.
+// A static block would measure as viewport-wide and briefly clamp side menus to the left edge.
+const style = ref<CSSProperties>({
+  position: props.teleport ? 'fixed' : 'absolute',
+  width: 'max-content',
+  maxWidth: 'calc(100vw - 16px)',
+  visibility: 'hidden'
+})
 const actualSide = ref<FloatingSide>(props.side)
 let observer: ResizeObserver | undefined
 let frame = 0
@@ -101,7 +110,12 @@ watch(
     })
     stop()
     if (cancelled || !props.open || !active.value) return
-    style.value = { ...style.value, visibility: 'hidden' }
+    style.value = {
+      ...style.value,
+      position: props.teleport ? 'fixed' : 'absolute',
+      width: 'max-content',
+      visibility: 'hidden'
+    }
     await nextTick()
     if (cancelled || !props.open || !active.value) return
     update()
@@ -125,7 +139,14 @@ onActivated(() => {
 
 <template>
   <Teleport to="body" :disabled="!teleport">
-    <div v-show="active" ref="panel" class="ep-floating" :style="style" :data-side="actualSide">
+    <div
+      v-show="active"
+      ref="panel"
+      v-bind="$attrs"
+      class="ep-floating"
+      :style="style"
+      :data-side="actualSide"
+    >
       <slot :side="actualSide" />
     </div>
   </Teleport>

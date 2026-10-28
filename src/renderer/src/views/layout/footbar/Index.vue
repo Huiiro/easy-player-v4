@@ -534,7 +534,7 @@ onBeforeUnmount(() => {
           :title="t('recommendation.dislike')"
           @click.stop="markCurrent(-1)"
         >
-          <SvgIcon name="play-dislike" class-name="size-6" />
+          <SvgIcon name="play-dislike" class-name="size-5" />
         </button>
         <button
           class="ep-footer-action-queue grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"

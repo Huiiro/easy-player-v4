@@ -84,3 +84,9 @@ export {
   getRecommendationPage
 } from './repository/recommendations'
 export { getOverviewStats } from './repository/statistics'
+
+export {
+  getSongLyricSettings,
+  setSongLyricSettings,
+  setSongsLyricFlags
+} from './repository/songLyrics'

@@ -27,6 +27,81 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   const playlistSongIds = ref<number[]>([])
   const songTagDialogOpen = ref(false)
   const batchTagDialogOpen = ref(false)
+  const batchTagSongIds = ref<number[]>([])
+  const pending = ref(false)
+  const menuSongs = computed(() =>
+    activeMenuSong.value &&
+    props.selectedIds.has(activeMenuSong.value.id) &&
+    props.selectedIds.size > 1
+      ? props.songs.filter((song) => props.selectedIds.has(song.id))
+      : activeMenuSong.value
+        ? [activeMenuSong.value]
+        : []
+  )
+  const menuAllLiked = computed(
+    () => menuSongs.value.length > 0 && menuSongs.value.every((song) => song.preference === 1)
+  )
+  const menuAllDisliked = computed(
+    () => menuSongs.value.length > 0 && menuSongs.value.every((song) => song.preference === -1)
+  )
+  const menuAllDisableNetwork = computed(
+    () => menuSongs.value.length > 0 && menuSongs.value.every((song) => song.disableNetworkLyrics)
+  )
+  const menuAllInstrumental = computed(
+    () => menuSongs.value.length > 0 && menuSongs.value.every((song) => song.instrumental)
+  )
+  async function setSelectedPreference(
+    preference: -1 | 0 | 1,
+    ids = [...props.selectedIds]
+  ): Promise<void> {
+    if (pending.value || !ids.length) return
+    pending.value = true
+    try {
+      if (!(await player.setPreferences(ids, preference)))
+        throw new Error(t('recommendation.failed'))
+      await props.refresh()
+      success(t('songList.batchUpdated', { count: ids.length }))
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t('recommendation.failed'))
+    } finally {
+      pending.value = false
+    }
+  }
+  async function setLyricFlag(
+    flag: 'disableNetwork' | 'instrumental',
+    enabled: boolean,
+    ids = [...props.selectedIds]
+  ): Promise<void> {
+    if (pending.value || !ids.length) return
+    pending.value = true
+    try {
+      const response = await window.api.database.command('setSongsLyricFlags', {
+        songIds: [...ids],
+        patch: { [flag]: enabled }
+      })
+      if (!response.success) throw new Error(response.error || t('recommendation.failed'))
+      const selected = new Set(ids)
+      for (const song of player.queue)
+        if (selected.has(song.id)) {
+          if (flag === 'disableNetwork') song.disableNetworkLyrics = enabled
+          else song.instrumental = enabled
+        }
+      eventBus.emit('songsLyricFlagsChanged', { songIds: ids, [flag]: enabled })
+      if (player.currentQueueSong && selected.has(player.currentQueueSong.id))
+        eventBus.emit('songLyricSettingsChanged', player.currentQueueSong.id)
+      await props.refresh()
+      success(t('songList.batchUpdated', { count: ids.length }))
+    } catch (error) {
+      showError(error instanceof Error ? error.message : t('recommendation.failed'))
+    } finally {
+      pending.value = false
+    }
+  }
+  function setMenuLyricFlag(flag: 'disableNetwork' | 'instrumental', enabled: boolean): void {
+    const ids = menuSongs.value.map((song) => song.id)
+    closeMenu()
+    void setLyricFlag(flag, enabled, ids)
+  }
   const tagSongId = ref<number | null>(null)
   const songsPendingDelete = ref<LibrarySong[]>([])
   const songDetailsOpen = ref(false)
@@ -77,11 +152,18 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     }
   }
   async function setActiveMenuSongPreference(preference: -1 | 1): Promise<void> {
-    const song = activeMenuSong.value
+    const targets = [...menuSongs.value]
+    const next =
+      targets.length && targets.every((song) => song.preference === preference) ? 0 : preference
     closeMenu()
-    if (!song) return
-    const next = song.preference === preference ? 0 : preference
-    if (!(await player.setPreference(song.id, next))) showError(t('recommendation.failed'))
+    if (!targets.length) return
+    if (targets.length > 1)
+      await setSelectedPreference(
+        next,
+        targets.map((song) => song.id)
+      )
+    else if (!(await player.setPreference(targets[0].id, next)))
+      showError(t('recommendation.failed'))
   }
   async function copyActiveMenuSongName(): Promise<void> {
     const song = activeMenuSong.value
@@ -171,9 +253,15 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     eventBus.emit('tagsChanged')
   }
   function openSongTags(): void {
-    if (!activeMenuSong.value) return
-    tagSongId.value = activeMenuSong.value.id
-    songTagDialogOpen.value = true
+    const targets = menuSongs.value.map((song) => song.id)
+    if (!targets.length) return
+    if (targets.length > 1) {
+      batchTagSongIds.value = targets
+      batchTagDialogOpen.value = true
+    } else {
+      tagSongId.value = targets[0]
+      songTagDialogOpen.value = true
+    }
     closeMenu()
   }
   async function openSongDetails(): Promise<void> {
@@ -202,6 +290,7 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   }
   function openBatchTags(): void {
     if (!props.selectedIds.size) return
+    batchTagSongIds.value = [...props.selectedIds]
     batchTagDialogOpen.value = true
   }
   async function reloadSongsFromDisk(songIds: number[]): Promise<void> {
@@ -250,6 +339,15 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     menuElement.value = element instanceof HTMLElement ? element : null
   }
   return {
+    batchTagSongIds,
+    menuSongs,
+    menuAllLiked,
+    menuAllDisliked,
+    menuAllDisableNetwork,
+    menuAllInstrumental,
+    setSelectedPreference,
+    setLyricFlag,
+    setMenuLyricFlag,
     activeMenuSong,
     activeMenuQueueIndex,
     menuPosition,

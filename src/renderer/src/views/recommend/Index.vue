@@ -140,7 +140,8 @@ async function resetRecommendation(song: RecommendedSong): Promise<void> {
       return
     }
     for (const group of groupOrder) {
-      for (const item of groups.value[group]) if (item.id === song.id) item.preference = 0
+      for (const item of groups.value[group])
+        if (item.id === song.id && item.preference === -1) item.preference = 0
     }
     groups.value.lessRecommended = groups.value.lessRecommended.filter(
       (item) => item.id !== song.id
@@ -375,7 +376,7 @@ useVisibleInterval(() => {
                 "
                 @click="setPreference(song, song.preference === -1 ? 0 : -1)"
               >
-                <SvgIcon name="play-dislike" class-name="size-6" />
+                <SvgIcon name="play-dislike" class-name="size-5" />
               </button>
             </div>
           </article>

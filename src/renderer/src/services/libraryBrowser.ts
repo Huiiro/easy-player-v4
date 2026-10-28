@@ -2,6 +2,7 @@ export type LibraryKind = 'album' | 'artist' | 'genre'
 type SortOrder = 'asc' | 'desc'
 
 interface AlbumRow {
+  artistCount?: number
   albumName: string | null
   artistName: string | null
   songCount: number
@@ -37,14 +38,17 @@ export async function queryLibraryItems(
   order: SortOrder,
   search: string,
   separator: string,
-  unknownLabel: string
+  unknownLabel: string,
+  albumGroupByName = false,
+  variousArtistsLabel = ''
 ): Promise<GridItem[]> {
   const action =
     kind === 'album' ? 'queryAlbums' : kind === 'artist' ? 'queryArtists' : 'queryGenres'
   const response = await window.api.database.command(action, {
     sort: order,
     search: search,
-    separator: kind === 'album' ? undefined : separator
+    separator: kind === 'album' ? undefined : separator,
+    ...(kind === 'album' ? { groupByName: albumGroupByName } : {})
   })
   if (!response.success) {
     return []
@@ -53,8 +57,11 @@ export async function queryLibraryItems(
     return (response.data as AlbumRow[]).map((item) => ({
       name: displayName(item.albumName, unknownLabel),
       value: valueOrUnknown(item.albumName, 'album'),
-      subtitle: displayName(item.artistName, unknownLabel),
-      subtitleValue: valueOrUnknown(item.artistName, 'artist'),
+      subtitle:
+        albumGroupByName && (item.artistCount ?? 0) > 1
+          ? variousArtistsLabel
+          : displayName(item.artistName, unknownLabel),
+      subtitleValue: albumGroupByName ? undefined : valueOrUnknown(item.artistName, 'artist'),
       count: item.songCount,
       cover: item.albumCover
     }))

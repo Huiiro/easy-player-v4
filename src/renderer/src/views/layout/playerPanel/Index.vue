@@ -28,7 +28,20 @@ const player = usePlayerStore()
 const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
   useSeekProgress(player)
 const { t } = useI18n()
-const { error: showError } = useMessage()
+const { error: showError, success } = useMessage()
+const savingOffset = ref(false)
+async function saveOffset(clear = false): Promise<void> {
+  if (!player.currentQueueSong || savingOffset.value) return
+  savingOffset.value = true
+  try {
+    await player.saveLyricsOffset(clear ? null : player.lyricsOffsetMs)
+    success(t(clear ? 'playerPanel.lyricOffsetRemoved' : 'playerPanel.lyricOffsetSaved'))
+  } catch (error) {
+    showError(error instanceof Error ? error.message : t('settings.fileOperationFailed'))
+  } finally {
+    savingOffset.value = false
+  }
+}
 const preferencePending = ref(false)
 const currentPreference = computed(() =>
   player.currentQueueSong ? player.getSongPreference(player.currentQueueSong.id) : 0
@@ -113,7 +126,7 @@ const lyricsStyleLabel = computed(() =>
 const lyricsFontScale = computed(() => ui.lyricsFontSize / 2.4)
 const lyricsFontSpacingScale = computed(() => ui.lyricsFontPadding / 30)
 const lyricsOffsetLabel = computed(() => {
-  const seconds = ui.lyricsOffsetMs / 1000
+  const seconds = player.lyricsOffsetMs / 1000
   return `${seconds > 0 ? '+' : ''}${seconds.toFixed(1)}s`
 })
 
@@ -126,10 +139,12 @@ function handleLyricsUpdated(songId: number): void {
 }
 onMounted(() => {
   eventBus.on('lyricsUpdated', handleLyricsUpdated)
+  eventBus.on('songLyricSettingsChanged', handleLyricsUpdated)
   window.addEventListener('keydown', handleKeyDown)
 })
 onUnmounted(() => {
   eventBus.off('lyricsUpdated', handleLyricsUpdated)
+  eventBus.off('songLyricSettingsChanged', handleLyricsUpdated)
   window.removeEventListener('keydown', handleKeyDown)
 })
 
@@ -263,7 +278,7 @@ function playNext(): void {
   void player.playNext()
 }
 function seekTo(positionMs: number): void {
-  void player.seek(positionMs)
+  void player.seek(Math.max(0, positionMs - player.lyricsOffsetMs))
 }
 function cyclePlayMode(): void {
   player.setPlayMode(((player.playMode + 1) % 4) as PlayMode)
@@ -298,7 +313,7 @@ function changeLyricPadding(event: WheelEvent): void {
 }
 function changeLyricsOffset(event: WheelEvent): void {
   event.preventDefault()
-  ui.setLyricsOffset(ui.lyricsOffsetMs + (event.deltaY < 0 ? 100 : -100))
+  player.setLyricsOffset(player.lyricsOffsetMs + (event.deltaY < 0 ? 100 : -100))
 }
 </script>
 
@@ -474,7 +489,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                       ? 'play-dislike'
                       : 'play-like'
                 "
-                :class-name="currentPreference === -1 ? 'size-4 scale-125 text-danger' : 'size-4'"
+                :class-name="currentPreference === -1 ? 'size-4 text-danger' : 'size-4'"
               />
             </button>
             <!-- speed -->
@@ -543,7 +558,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             <!-- lyrics timing -->
             <label
               class="panel-tool vertical-tool"
-              :class="ui.lyricsOffsetMs !== 0 && 'active'"
+              :class="player.lyricsOffsetMs !== 0 && 'active'"
               :title="t('playerPanel.lyricTiming')"
               @wheel="changeLyricsOffset"
             >
@@ -556,17 +571,39 @@ function changeLyricsOffset(event: WheelEvent): void {
                   min="-5000"
                   max="5000"
                   step="100"
-                  :value="ui.lyricsOffsetMs"
-                  @input="ui.setLyricsOffset(Number(($event.target as HTMLInputElement).value))"
+                  :value="player.lyricsOffsetMs"
+                  @input="player.setLyricsOffset(Number(($event.target as HTMLInputElement).value))"
                 />
-                <button
-                  type="button"
-                  class="lyric-timing-reset"
-                  :title="t('playerPanel.lyricTimingReset')"
-                  @click.prevent="ui.resetLyricsOffset()"
-                >
-                  <SvgIcon name="common-refresh" class-name="size-3" />
-                </button>
+                <span class="lyric-timing-actions">
+                  <button
+                    type="button"
+                    class="lyric-timing-reset"
+                    :disabled="savingOffset || !player.lyricsSettingsReady"
+                    :title="t('playerPanel.lyricOffsetSave')"
+                    :aria-label="t('playerPanel.lyricOffsetSave')"
+                    @click.prevent="saveOffset()"
+                  >
+                    <SvgIcon name="common-check" class-name="size-3" />
+                  </button>
+                  <button
+                    v-if="player.songLyricSettings.offsetMs !== null"
+                    type="button"
+                    class="lyric-timing-reset"
+                    :disabled="savingOffset"
+                    :title="t('playerPanel.lyricOffsetRemove')"
+                    @click.prevent="saveOffset(true)"
+                  >
+                    ×
+                  </button>
+                  <button
+                    type="button"
+                    class="lyric-timing-reset"
+                    :title="t('playerPanel.lyricTimingReset')"
+                    @click.prevent="player.setLyricsOffset(0)"
+                  >
+                    <SvgIcon name="common-refresh" class-name="size-3" />
+                  </button>
+                </span>
               </span>
             </label>
             <!-- font padding -->
@@ -779,7 +816,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             class="size-full flex-1"
             :style="lyricColorStyle"
             :song="player.currentQueueSong"
-            :current-time="player.positionMs + ui.lyricsOffsetMs"
+            :current-time="player.positionMs + player.lyricsOffsetMs"
             :is-playing="player.isPlaying"
             :source-order="ui.lyricSourceOrder"
             :align-mode="collapsed ? 'center' : ui.lyricsAlignment"
@@ -921,7 +958,17 @@ function changeLyricsOffset(event: WheelEvent): void {
   pointer-events: auto;
 }
 .lyric-timing-popup {
+  width: 6rem;
   height: 12rem;
+}
+.lyric-timing-actions {
+  position: absolute;
+  bottom: 0.5rem;
+  display: flex;
+  gap: 0.3rem;
+}
+.lyric-timing-actions .lyric-timing-reset {
+  position: static;
 }
 .lyric-timing-reset {
   position: absolute;

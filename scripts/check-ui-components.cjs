@@ -16,6 +16,7 @@ app.whenReady().then(async () => {
       stdin: {
         contents: `import * as Vue from 'vue'; import { createI18n } from 'vue-i18n';
           import * as UI from './src/renderer/src/components/ui';
+          import FloatingPanel from './src/renderer/src/components/ui/FloatingPanel.vue';
           import { floatingPosition } from './src/renderer/src/components/ui/floatingPosition';
           import { fromHex, rgbaToHex, hsvaToRgba } from './src/renderer/src/components/ui/color';
           import AppPageOutlet from './src/renderer/src/components/layout/AppPageOutlet.vue';
@@ -33,7 +34,7 @@ app.whenReady().then(async () => {
           import ImpulseResponseEditor from './src/renderer/src/components/player/ImpulseResponseEditor.vue';
           import LibrarySettings from './src/renderer/src/components/settings/LibrarySettings.vue';
           import SongDetailsDialog from './src/renderer/src/components/songlist/SongDetailsDialog.vue';
-          export { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog };`,
+          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -108,7 +109,7 @@ app.whenReady().then(async () => {
       `const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)}; document.head.append(style);`
     )
     const results = await window.webContents.executeJavaScript(`(async () => {
-      const { Vue, UI, createI18n, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog } = Checks;
+      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog } = Checks;
       const { createApp, h, reactive, nextTick, onMounted, onActivated } = Vue;
       const results = [];
       function check(value, message) { if (!value) throw new Error(message); results.push(message); }
@@ -209,6 +210,27 @@ app.whenReady().then(async () => {
       check(pos.side === 'top' && pos.left === 692 && pos.top === 492, 'floating panel flips and stays inside viewport');
       check(rgbaToHex(hsvaToRgba(fromHex('#ff000080')),true) === '#ff000080', 'color conversion retains alpha');
       let invalid = false; try { fromHex('zzzzzz'); } catch { invalid = true; } check(invalid, 'invalid color is rejected');
+      let submenuOpen, submenuAnchorLeft;
+      const visibleSubmenuPositions=[];
+      await mount({setup(){
+        const anchor=Vue.ref(null);submenuOpen=Vue.ref(false);submenuAnchorLeft=Vue.ref(320);
+        return()=>h('div',[
+          h('button',{ref:anchor,style:{position:'fixed',left:submenuAnchorLeft.value+'px',top:'180px',width:'140px',height:'32px'}},'Flags'),
+          submenuOpen.value?h(FloatingPanel,{open:true,anchor:anchor.value,side:'right',align:'start',offset:12,teleport:true},()=>h('div',{style:{width:'200px',height:'100px'}},'Actions')):null
+        ]);
+      }});
+      const submenuObserver=new MutationObserver(()=>{
+        const panel=document.querySelector('.ep-floating');
+        if(panel && getComputedStyle(panel).visibility==='visible')visibleSubmenuPositions.push(panel.getBoundingClientRect().left);
+      });
+      submenuObserver.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['style']});
+      try{
+        submenuOpen.value=true;await wait();
+        check(visibleSubmenuPositions.length>0 && visibleSubmenuPositions.every(left=>Math.abs(left-472)<1),'submenu is beside its trigger from its first visible position');
+        submenuOpen.value=false;await wait();visibleSubmenuPositions.length=0;
+        submenuAnchorLeft.value=700;submenuOpen.value=true;await wait();
+        check(visibleSubmenuPositions.length>0 && visibleSubmenuPositions.every(left=>Math.abs(left-488)<1),'reopened submenu flips left without flashing at the viewport edge');
+      }finally{submenuObserver.disconnect();}
       let shown = 0, hidden = 0;
       state = await mount(UI.BasePopover, {trigger:'hover', teleport:true, offset:20, content:'Panel',onShow:()=>shown++,onHide:()=>hidden++}, {trigger:()=>h('span','Trigger')});
       document.querySelector('.ep-popover-trigger').dispatchEvent(new Event('pointerenter')); await wait();
@@ -266,6 +288,23 @@ app.whenReady().then(async () => {
       songActions.requestDeleteSelectedSongs();check(songActions.songsPendingDelete.value.length===2 && window.__uiPlayer.queue.length===3,'delete action waits for dialog confirmation');
       await songActions.onSongsDeleted([1,3]);check(window.__uiPlayer.queue.length===1 && window.__uiPlayer.queue[0].id===2 && actionProps.selectedIds.size===0 && refreshes===1,'confirmed deletion updates queue, selection and collection');
       await songActions.removeSongsFromCurrentPlaylist([2]);check(mutations[0].action==='removeSongsFromPlaylist' && mutations[0].params.playlistId===12,'playlist action retains source collection identity');
+      const preferences=[];
+      actionProps.songs=[{id:1,sourceId:null,title:'One',preference:0},{id:3,sourceId:null,title:'Three',preference:1},{id:4,sourceId:null,title:'Four',preference:0}];
+      actionProps.selectedIds=new Set([1,3]);
+      window.__uiPlayer.setPreferences=async(ids,preference)=>{preferences.push({ids:[...ids],preference});return true};
+      window.__uiPlayer.setPreference=async(id,preference)=>{preferences.push({ids:[id],preference});return true};
+      await songActions.openMenu(actionProps.songs[0],10,10);songActions.openSongTags();
+      actionProps.selectedIds=new Set([4]);
+      check(songActions.batchTagDialogOpen.value && songActions.batchTagSongIds.value.join(',')==='1,3','right-click batch tag editor snapshots selected song IDs');
+      actionProps.selectedIds=new Set([1,3]);
+      await songActions.openMenu(actionProps.songs[0],10,10);await songActions.setActiveMenuSongPreference(1);
+      check(preferences.at(-1).ids.join(',')==='1,3' && preferences.at(-1).preference===1,'right-click liking a selected row updates the selected songs');
+      await songActions.openMenu(actionProps.songs[2],10,10);await songActions.setActiveMenuSongPreference(-1);
+      check(preferences.at(-1).ids.join(',')==='4','right-clicking outside the selection keeps preference edits on that song');
+      await songActions.setLyricFlag('instrumental',true);
+      check(mutations.at(-1).action==='setSongsLyricFlags' && mutations.at(-1).params.songIds.join(',')==='1,3' && mutations.at(-1).params.patch.instrumental===true,'multi-select adds lyric markers in a single batch');
+      await songActions.setLyricFlag('disableNetwork',false);
+      check(mutations.at(-1).params.patch.disableNetwork===false,'multi-select can remove network lyric markers');
       let swipe;const navigations=[];const collapsed=Vue.ref(true),reduced=Vue.ref(true);
       const swipePlayer=reactive({queue:[{id:1},{id:2},{id:3}],currentQueueSong:{id:2},currentQueueIndex:1,playMode:0,shuffleNavigationRevision:0,getPreviousQueueIndex:()=>0,getNextQueueIndex:()=>2,playPrevious:async()=>navigations.push('previous'),playNext:async index=>navigations.push(index)});
       await mount({setup(){swipe=useFooterSwipe(swipePlayer,collapsed,reduced);return()=>h('p','Swipe');}});
@@ -335,11 +374,17 @@ app.whenReady().then(async () => {
       check(panelDisposals===3 && !document.querySelector('[data-player-canvas]') && hiddenAtDisposal.every(Boolean),'reduced motion closes immediately without clearing a visible canvas');
       document.documentElement.classList.remove('reduce-motion');
       const metadataFixture={id:1,title:'Metadata fixture',artist:'Singer A;Singer B',album:'Album',genre:'POP,rock',duration:10,fileSize:100,year:null,trackNo:null,diskNo:null};
-      window.__activationUi=reactive({normalizeMetadataSeparator:false,artistSeparator:';',genreSeparator:',',ignoreShortSongs:true});
+      window.__activationUi=reactive({albumGroupByName:false,normalizeMetadataSeparator:false,artistSeparator:';',genreSeparator:',',ignoreShortSongs:true});
       window.api.files={onImportProgress:()=>()=>{}};
       window.api.database={command:async()=>({success:true,data:metadataFixture})};
       const detailsState=reactive({open:false});
       await mount({render:()=>[h(LibrarySettings),h(SongDetailsDialog,{modelValue:detailsState.open,songId:1,'onUpdate:modelValue':value=>detailsState.open=value})]});
+      const albumGroupingRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent==='settings.albumGroupByName');
+      check(!!albumGroupingRow && albumGroupingRow.querySelector('[role=switch]').getAttribute('aria-checked')==='false','album grouping setting starts disabled');
+      albumGroupingRow.querySelector('[role=switch]').click();await wait();
+      check(window.__activationUi.albumGroupByName===true,'album grouping switch updates the shared library preference');
+      albumGroupingRow.querySelector('[role=switch]').click();await wait();
+      check(window.__activationUi.albumGroupByName===false,'album grouping switch restores artist-based grouping when disabled');
       const normalizationRows=[...document.querySelectorAll('.setting-row')].filter(row=>row.querySelector('h3')?.textContent==='settings.normalizeMetadataSeparator');
       check(normalizationRows.length===1,'library settings expose one shared separator normalization switch');
       normalizationRows[0].querySelector('[role=switch]').click();await wait();

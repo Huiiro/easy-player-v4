@@ -6,7 +6,8 @@ import {
   getRecommendationScores,
   recordPlayEvent,
   resetSongRecommendation,
-  setSongPreference
+  setSongPreference,
+  setSongsPreference
 } from '../database/recommendations'
 import { Logger } from '../service/loggerService'
 import { logOperation, logParams } from '../service/operationLogger'
@@ -30,6 +31,26 @@ const handlers = {
   querySongs: (params: Parameters<typeof library.querySongs>[0]) => library.querySongs(params),
   queryAllSongs: () => library.queryAllSongs(),
   getSong: ({ id }: { id: number }) => library.getSong(id),
+  setSongsLyricFlags: ({
+    songIds,
+    patch
+  }: {
+    songIds: number[]
+    patch: Pick<
+      import('../../shared/songLyrics').SongLyricSettingsPatch,
+      'disableNetwork' | 'instrumental'
+    >
+  }) => library.setSongsLyricFlags(songIds, patch),
+  setSongsPreference: ({ songIds, preference }: { songIds: number[]; preference: -1 | 0 | 1 }) =>
+    setSongsPreference(songIds, preference),
+  getSongLyricSettings: ({ songId }: { songId: number }) => library.getSongLyricSettings(songId),
+  setSongLyricSettings: ({
+    songId,
+    patch
+  }: {
+    songId: number
+    patch: import('../../shared/songLyrics').SongLyricSettingsPatch
+  }) => library.setSongLyricSettings(songId, patch),
   updateSongCoverAnalysis: ({
     id,
     analysis
@@ -40,12 +61,14 @@ const handlers = {
   getSongsByAlbum: ({
     album,
     artist,
-    search
+    search,
+    groupByName
   }: {
     album: string
     artist?: string
     search?: string
-  }) => library.getSongsByAlbum(album, artist, search),
+    groupByName?: boolean
+  }) => library.getSongsByAlbum(album, artist, search, groupByName === true),
   getSongsByGenre: ({
     genre,
     search,
@@ -64,8 +87,12 @@ const handlers = {
     separator?: string
     search?: string
   }) => library.getSongsByArtist(artist, separator, search),
-  queryAlbums: ({ sort, search }: { sort?: 'asc' | 'desc'; search?: string } = {}) =>
-    library.queryAlbums(sort, search),
+  queryAlbums: ({
+    sort,
+    search,
+    groupByName
+  }: { sort?: 'asc' | 'desc'; search?: string; groupByName?: boolean } = {}) =>
+    library.queryAlbums(sort, search, groupByName === true),
   queryArtists: ({
     sort,
     search,

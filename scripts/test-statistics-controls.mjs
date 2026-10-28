@@ -227,12 +227,17 @@ assert.equal(
   false,
   'a fresh renderer reads the persisted disabled setting before playback'
 )
-const ui = Vue.reactive({ extremePlayback: false, customBg: {} })
+const ui = Vue.reactive({
+  extremePlayback: false,
+  customBg: {},
+  resolvedAppearance: { contentDark: false }
+})
 const playerModule = load(
   'src/renderer/src/stores/player/playerStore.ts',
   {
     vue: Vue,
     pinia: Pinia,
+    '@/services/songLyricController': { createSongLyricController: () => ({}) },
     '@/stores/persistence': { flushPlayerDataStorage() {} },
     '@/stores/statistics/statisticsStore': { useStatisticsStore: () => statistics },
     '@/stores/ui/uiStore': { useUIStore: () => ui },
@@ -249,6 +254,7 @@ const playerModule = load(
 const player = playerModule.usePlayerStore()
 player.queue = [{ id: 1, title: 'Song', audio: '/music/1.flac', songStatus: 1, preference: 1 }]
 player.currentQueueIndex = 0
+player.currentFile = '/music/1.flac'
 player.durationMs = 100_000
 await player.play()
 player.finishHistoryOnUnload()
@@ -257,6 +263,13 @@ assert.equal(calls.length, 0, 'disabled playback must not send recording or scor
 await statistics.setEnabled(true)
 await player.play()
 assert.equal(count('play_history'), 1)
+assert.equal(await player.resetSongRecommendation(1), true)
+assert.equal(
+  player.getSongPreference(1),
+  1,
+  'clearing negative feedback preserves liked state in the player cache'
+)
+assert.equal(db.prepare('SELECT preference FROM song WHERE id = 1').get().preference, 1)
 const oldGeneration = statistics.generation
 player.state = 'playing'
 await statistics.setEnabled(false)
@@ -324,8 +337,10 @@ const viewMocks = {
   '@/components/ui/useMessage': { useMessage: () => ({ success() {}, warning() {}, error() {} }) },
   '@/utils/eventBus': { default: { on() {}, off() {}, emit() {} } },
   '@/constants/playlists': { LIKED_PLAYLIST_ID: -1 },
+  '@/services/searchPlayback': { playSearchResult() {} },
+  '@/utils/songListLayout': load('src/renderer/src/utils/songListLayout.ts'),
   '@/utils/songTextSort': { createSongTextComparator: () => () => 0, songSortText: () => '' },
-  './home.css': {}
+  '../../styles/home.css': {}
 }
 const viewApi = {
   database: {

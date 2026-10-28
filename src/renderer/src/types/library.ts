@@ -28,6 +28,9 @@ export interface LibrarySong {
   createdAt: string
   songStatus: number
   sourceId: number | null
+  offsetMs?: number | null
+  disableNetworkLyrics?: boolean
+  instrumental?: boolean
   preference?: -1 | 0 | 1
   playTime?: string
   tags?: Array<{ id: number; name: string; color: string | null }>

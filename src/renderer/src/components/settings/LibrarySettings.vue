@@ -130,6 +130,12 @@ onBeforeUnmount(() => offProgress?.())
   </SettingRow>
   <hr class="mx-5 my-4 border-0 border-t border-border" />
   <SettingRow
+    :label="t('settings.albumGroupByName')"
+    :description="t('settings.albumGroupByNameDescription')"
+  >
+    <BaseSwitch v-model="ui.albumGroupByName" size="md" />
+  </SettingRow>
+  <SettingRow
     :label="t('settings.genreSeparator')"
     :description="t('settings.genreSeparatorDescription')"
   >

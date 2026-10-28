@@ -20,6 +20,7 @@ const ui = Vue.reactive({
 const player = Vue.reactive({
   currentQueueSong: { id: 1, title: 'Test song' },
   positionMs: 0,
+  lyricsOffsetMs: 0,
   durationMs: 10000,
   isPlaying: true
 })
@@ -61,6 +62,13 @@ const script = compileScript(descriptor, { id: 'desktop-lyrics-window-test' })
 const exports = {}
 const mocks = {
   vue: Vue,
+  'vue-i18n': { useI18n: () => ({ t: (key) => key }) },
+  '@/services/sourceRequests': {
+    createSourceRequestScope: () => ({
+      cancelAll() {},
+      start: () => ({ options: {}, isCurrent: () => true, finish() {} })
+    })
+  },
   '@/services/lyrics': { resolveLyrics: async () => ({ lines: [] }) },
   '@/stores/player/playerStore': { usePlayerStore: () => player },
   '@/stores/ui/uiStore': { useUIStore: () => ui },

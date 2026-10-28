@@ -1,7 +1,7 @@
 import { getDatabase } from '../index'
 import type { Song, SongQuery, Tag } from '../types'
 
-export const songColumns = `id, title, artist, album, duration, cover, cover_analysis_path AS coverAnalysisPath, cover_primary AS coverPrimary, cover_secondary AS coverSecondary, cover_lyrics_dark AS coverLyricsDark, cover_analysis_version AS coverAnalysisVersion, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, preference, created_at AS createdAt`
+export const songColumns = `id, title, artist, album, duration, cover, cover_analysis_path AS coverAnalysisPath, cover_primary AS coverPrimary, cover_secondary AS coverSecondary, cover_lyrics_dark AS coverLyricsDark, cover_analysis_version AS coverAnalysisVersion, audio, folder_id AS folderId, is_newest AS isNewest, lrc, translation, lyric_format AS lyricFormat, translation_format AS translationFormat, romanization, romanization_format AS romanizationFormat, year, genre, bitrate, sample_rate AS sampleRate, bit_depth AS bitDepth, channels, format, file_name AS fileName, file_size AS fileSize, play_times AS playTimes, track_no AS trackNo, disk_no AS diskNo, song_status AS songStatus, source_id AS sourceId, remote_id AS remoteId, offset_ms AS offsetMs, disable_network_lyrics AS disableNetworkLyrics, instrumental, preference, created_at AS createdAt`
 
 export const songColumnsFor = (alias: string): string =>
   songColumns
@@ -9,11 +9,17 @@ export const songColumnsFor = (alias: string): string =>
     .map((column) => `${alias}${column}`)
     .join(', ')
 
-export type SongRow = Omit<Song, 'isNewest'> & { isNewest: number }
+export type SongRow = Omit<Song, 'isNewest' | 'disableNetworkLyrics' | 'instrumental'> & {
+  isNewest: number
+  disableNetworkLyrics: number
+  instrumental: number
+}
 
 export const mapSong = (row: SongRow): Song => ({
   ...row,
-  isNewest: row.isNewest === 1
+  isNewest: row.isNewest === 1,
+  disableNetworkLyrics: row.disableNetworkLyrics === 1,
+  instrumental: row.instrumental === 1
 })
 
 export function attachTags(songs: Song[]): Song[] {

@@ -1,3 +1,4 @@
+import { createSongLyricController } from '@/services/songLyricController'
 import { computed, nextTick, ref, watch } from 'vue'
 import { flushPlayerDataStorage } from '@/stores/persistence'
 import { defineStore } from 'pinia'
@@ -323,6 +324,22 @@ export const usePlayerStore = defineStore('player', () => {
     return result.success
   }
 
+  async function setPreferences(songIds: number[], preference: -1 | 0 | 1): Promise<boolean> {
+    const ids = [...new Set(songIds)]
+    if (!ids.length) return false
+    const result = await window.api.database.command('setSongsPreference', {
+      songIds: ids,
+      preference
+    })
+    if (!result.success) return false
+    const selected = new Set(ids)
+    for (const song of queue.value) if (selected.has(song.id)) song.preference = preference
+    shuffleNavigationRevision.value++
+    eventBus.emit('songsPreferenceChanged', { songIds: ids, preference })
+    await loadRecommendationScores()
+    return true
+  }
+
   function getSongPreference(songId: number): number {
     // The revision also refreshes the current-song feedback controls.
     void shuffleNavigationRevision.value
@@ -336,10 +353,12 @@ export const usePlayerStore = defineStore('player', () => {
   async function resetSongRecommendation(songId: number): Promise<boolean> {
     const result = await window.api.database.command('resetSongRecommendation', { songId })
     if (!result.success) return false
-    for (const song of queue.value) if (song.id === songId) song.preference = 0
+    const preference = getSongPreference(songId) === 1 ? 1 : 0
+    for (const song of queue.value)
+      if (song.id === songId && song.preference === -1) song.preference = 0
     recommendationScores.delete(songId)
     shuffleNavigationRevision.value++
-    eventBus.emit('songPreferenceChanged', { songId, preference: 0 })
+    eventBus.emit('songPreferenceChanged', { songId, preference })
     success(t('recommendation.scoreReset'))
     await loadRecommendationScores()
     return true
@@ -350,7 +369,8 @@ export const usePlayerStore = defineStore('player', () => {
     if (!result.success) return false
     const songIds = result.data as number[]
     const cleared = new Set(songIds)
-    for (const song of queue.value) if (cleared.has(song.id)) song.preference = 0
+    for (const song of queue.value)
+      if (cleared.has(song.id) && song.preference === -1) song.preference = 0
     for (const songId of songIds) recommendationScores.delete(songId)
     shuffleNavigationRevision.value++
     eventBus.emit('songPreferencesCleared', { songIds })
@@ -411,6 +431,7 @@ export const usePlayerStore = defineStore('player', () => {
   const positionFormatted = computed(() => formatTime(positionMs.value))
   const durationFormatted = computed(() => formatTime(durationMs.value))
   const currentQueueSong = computed(() => queue.value[currentQueueIndex.value] ?? null)
+  const songLyrics = createSongLyricController(currentQueueSong, ui)
   watch(
     () => statistics.generation,
     () => {
@@ -2174,6 +2195,7 @@ export const usePlayerStore = defineStore('player', () => {
   watch(() => ui.resolvedAppearance, publishMiniPlayerState)
 
   return {
+    ...songLyrics,
     // State
     playbackModeChanging,
     setExtremePlayback,
@@ -2230,6 +2252,7 @@ export const usePlayerStore = defineStore('player', () => {
     loadSmartShuffleConfig,
     setSmartShuffleEnabled,
     setPreference,
+    setPreferences,
     resetSongRecommendation,
     clearLessRecommended,
     getSongPreference,

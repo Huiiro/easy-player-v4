@@ -1,4 +1,4 @@
-export const DATABASE_SCHEMA_VERSION = 2
+export const DATABASE_SCHEMA_VERSION = 1
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (
@@ -64,6 +64,9 @@ export const schemaV1 = `
     song_status INTEGER DEFAULT 1,
     source_id INTEGER,
     remote_id TEXT,
+    offset_ms INTEGER CHECK(offset_ms BETWEEN -5000 AND 5000),
+    disable_network_lyrics INTEGER NOT NULL DEFAULT 0 CHECK(disable_network_lyrics IN (0, 1)),
+    instrumental INTEGER NOT NULL DEFAULT 0 CHECK(instrumental IN (0, 1)),
     preference INTEGER NOT NULL DEFAULT 0 CHECK(preference IN (-1, 0, 1)),
     created_at DATETIME DEFAULT (datetime('now', 'localtime')),
     FOREIGN KEY(folder_id) REFERENCES folder(id) ON DELETE RESTRICT,
@@ -127,6 +130,7 @@ export const schemaV1 = `
     end_reason TEXT,
     start_origin TEXT NOT NULL DEFAULT 'automatic',
     ended_at INTEGER,
+    skip_feedback INTEGER NOT NULL DEFAULT 1 CHECK(skip_feedback IN (0, 1)),
     FOREIGN KEY(song_id) REFERENCES song(id) ON DELETE CASCADE,
     FOREIGN KEY(playlist_id) REFERENCES song_list(id) ON DELETE SET NULL
   );

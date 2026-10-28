@@ -7,8 +7,11 @@ type Events = {
   playlistsChanged: void
   playlistRenamed: number
   tagsChanged: void
+  songLyricSettingsChanged: number
   lyricsUpdated: number
   songActionsMenuOpened: 'footer' | 'songlist'
+  songsPreferenceChanged: { songIds: number[]; preference: -1 | 0 | 1 }
+  songsLyricFlagsChanged: { songIds: number[]; disableNetwork?: boolean; instrumental?: boolean }
   songPreferenceChanged: { songId: number; preference: -1 | 0 | 1 }
   songPreferencesCleared: { songIds: number[] }
   locateCurrentSong: void

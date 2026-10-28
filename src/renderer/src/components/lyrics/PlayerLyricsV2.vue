@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InstrumentalNotice from './InstrumentalNotice.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
 import { createSourceRequestScope } from '@/services/sourceRequests'
@@ -64,6 +65,7 @@ const ui = useUIStore()
 const sourceRequests = createSourceRequestScope()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
+const instrumental = ref(false)
 const viewportRef = ref<HTMLElement>()
 const lineRefs = ref<HTMLElement[]>([])
 const isUserScrolling = ref(false)
@@ -237,6 +239,7 @@ async function load(): Promise<void> {
   rowTarget = Number.NaN
   lyrics.value = []
   source.value = null
+  instrumental.value = false
   lineRefs.value = []
   const song = props.song
   if (!song) return
@@ -258,6 +261,7 @@ async function load(): Promise<void> {
   if (isUnmounted || loadId !== lyricLoadId) return
   lyrics.value = withLyricInterludes(result.lines)
   source.value = result.source
+  instrumental.value = result.instrumental === true
 }
 
 const scheduleSnapToCurrent = (): void => {
@@ -826,7 +830,8 @@ onUnmounted(() => {
     @touchmove.passive="handleInteraction"
     @keydown="handleKeydown"
   >
-    <div ref="trackRef" class="lyric-track">
+    <InstrumentalNotice v-if="instrumental" />
+    <div v-else ref="trackRef" class="lyric-track">
       <div
         v-for="(line, idx) in lyrics"
         :key="idx"

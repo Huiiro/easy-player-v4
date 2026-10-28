@@ -9,6 +9,7 @@ import { parseAudioFile } from './audioMetadataService'
 import { getDataPath } from '../utils/pathUtils'
 import { getDatabase } from '../database'
 import { refreshNewestSongs } from '../database/newestSongs'
+import { normalizeLyricOffset } from '../../shared/songLyrics'
 
 type BackupPart = 'songs' | 'playlists' | 'tags' | 'settings'
 type BackupManifest = {
@@ -152,7 +153,7 @@ export async function importLibrary(
         )
       )
       const insert = db.prepare(
-        'INSERT INTO song (title,artist,album,duration,cover,audio,folder_id,is_newest,lrc,translation,year,genre,bitrate,sample_rate,bit_depth,channels,format,file_name,file_size,play_times,track_no,disk_no,song_status,source_id,remote_id) VALUES (@title,@artist,@album,@duration,@cover,@audio,@folder_id,@is_newest,@lrc,@translation,@year,@genre,@bitrate,@sample_rate,@bit_depth,@channels,@format,@file_name,@file_size,@play_times,@track_no,@disk_no,@song_status,@source_id,@remote_id)'
+        'INSERT INTO song (title,artist,album,duration,cover,audio,folder_id,is_newest,lrc,translation,year,genre,bitrate,sample_rate,bit_depth,channels,format,file_name,file_size,play_times,track_no,disk_no,song_status,source_id,remote_id,disable_network_lyrics,instrumental,offset_ms) VALUES (@title,@artist,@album,@duration,@cover,@audio,@folder_id,@is_newest,@lrc,@translation,@year,@genre,@bitrate,@sample_rate,@bit_depth,@channels,@format,@file_name,@file_size,@play_times,@track_no,@disk_no,@song_status,@source_id,@remote_id,@disable_network_lyrics,@instrumental,@offset_ms)'
       )
       db.transaction(() => {
         const getFolderId = (fullPath: string): number => {
@@ -187,7 +188,13 @@ export async function importLibrary(
             is_newest: song.is_newest ?? 0,
             song_status: existsSync(audio) ? 1 : 0,
             source_id: null,
-            remote_id: null
+            remote_id: null,
+            disable_network_lyrics: song.disable_network_lyrics === 1 ? 1 : 0,
+            instrumental: song.instrumental === 1 ? 1 : 0,
+            offset_ms:
+              typeof song.offset_ms === 'number' && Number.isFinite(song.offset_ms)
+                ? normalizeLyricOffset(song.offset_ms)
+                : null
           })
           imported.push({ id: Number(result.lastInsertRowid), audio })
           if (Number.isInteger(sourceId)) songIdMap.set(sourceId, Number(result.lastInsertRowid))

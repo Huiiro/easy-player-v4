@@ -53,6 +53,8 @@ async function runChecks() {
   ].map((song) => ({
     ...song,
     title: 'Track ' + song.id,
+    disableNetworkLyrics: true,
+    instrumental: true,
     artist: 'Artist',
     album: 'Album',
     duration: 180,
@@ -147,9 +149,9 @@ async function runChecks() {
     if (label.includes('列')) {
       const group = option.parentElement
       check(
-        group.querySelectorAll('.ep-menu-item').length === 3 &&
+        group.querySelectorAll('.ep-menu-item').length === (label.includes('标记') ? 4 : 3) &&
           group.previousElementSibling?.classList.contains('h-px'),
-        'optional column toggles share a separate group after a divider'
+        'column toggles are grouped by information or flags after a divider'
       )
     }
     if (label === '默认') {
@@ -171,7 +173,7 @@ async function runChecks() {
   for (const label of ['显示流派列', '显示年份列', '显示播放次数列'])
     await menuAction('更多', label)
   check(
-    Object.values(window.ui.songListColumns).every(Boolean),
+    ['genre', 'year', 'playTimes'].every((column) => window.ui.songListColumns[column]),
     'more menu toggles all three persisted preference fields'
   )
   aligned('all optional columns')
@@ -254,6 +256,29 @@ async function runChecks() {
     'compact mode retains optional columns with 56px rows'
   )
   aligned('compact mode')
+  await menuAction('更多', '显示禁用网络歌词标记')
+  await menuAction('更多', '显示纯音乐标记')
+  aligned('lyric flag columns')
+  const headers = [...document.querySelector('.song-list-columns').children].map(
+    (cell) => cell.getAttribute('aria-label') || cell.textContent.trim()
+  )
+  check(
+    headers.includes('不搜索网络歌词') && headers.includes('纯音乐'),
+    'more menu exposes both lyric flag columns'
+  )
+  check(
+    cells(rows()[0]).at(-2).querySelector('use')?.getAttribute('xlink:href') ===
+      '#icon-common-music-notes' &&
+      cells(rows()[0]).at(-3).querySelector('use')?.getAttribute('xlink:href') ===
+        '#icon-common-no-internet',
+    'song rows render persisted lyric flags'
+  )
+  await menuAction('更多', '隐藏纯音乐标记')
+  check(
+    !window.ui.songListColumns.instrumental && window.ui.songListColumns.disableNetworkLyrics,
+    'flag visibility switches are independent'
+  )
+  aligned('one lyric flag column')
   check(queries === 1, 'column toggles and local sorting never requery the database')
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   return checks
@@ -350,7 +375,7 @@ app.whenReady().then(async () => {
     })
     const win = new BrowserWindow({
       show: false,
-      width: 900,
+      width: 780,
       height: 780,
       webPreferences: { sandbox: true, offscreen: true, backgroundThrottling: false }
     })

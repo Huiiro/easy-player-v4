@@ -47,6 +47,9 @@ export interface Song {
   songStatus: number
   sourceId: number | null
   remoteId: string | null
+  offsetMs: number | null
+  disableNetworkLyrics: boolean
+  instrumental: boolean
   preference: -1 | 0 | 1
   createdAt: string
   tags?: Tag[]
@@ -149,6 +152,7 @@ export interface OverviewStats {
   }>
 }
 export interface Album {
+  artistCount?: number
   albumName: string | null
   artistName: string | null
   songCount: number

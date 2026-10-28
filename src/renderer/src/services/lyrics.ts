@@ -1,3 +1,4 @@
+import { readSongLyricSettings } from './songLyricSettings'
 export type LyricSource = 'embedded' | 'database' | 'local' | 'network'
 import type { LyricFormat } from '../../../shared/networkSources'
 export type { LyricFormat, NetworkLyricCandidate } from '../../../shared/networkSources'
@@ -949,6 +950,7 @@ export async function resolveLyrics(
     isCurrent?: () => boolean
   }
 ): Promise<{
+  instrumental?: boolean
   lines: LyricLine[]
   source: LyricSource | null
   content?: string
@@ -958,6 +960,9 @@ export async function resolveLyrics(
   romanization?: string
   romanizationFormat?: LyricFormat
 }> {
+  const policy = await readSongLyricSettings(song.id)
+  if (request?.isCurrent && !request.isCurrent()) return { lines: [], source: null }
+  if (policy.instrumental) return { lines: [], source: null, instrumental: true }
   const sourceOrder =
     forcedSource === 'auto'
       ? [
@@ -998,9 +1003,10 @@ export async function resolveLyrics(
     } else if (source === 'network') {
       // Network lookup is intentionally only an automatic fallback. Manual
       // searches are handled by the lyrics manager and require saving first.
-      if (forcedSource !== 'auto' || !allowAutoNetworkSearch) continue
+      if (forcedSource !== 'auto' || !allowAutoNetworkSearch || policy.disableNetwork) continue
       const response = await window.api.lyrics.searchNetwork(
         {
+          songId: song.id,
           title: song.title || '',
           artist: song.artist,
           album: song.album,
@@ -1040,7 +1046,14 @@ export async function resolveLyrics(
       source
     }).lines
     if (lines.length) {
-      if (source === 'network')
+      if (source === 'network') {
+        const latest = await readSongLyricSettings(song.id)
+        if (
+          latest.instrumental ||
+          latest.disableNetwork ||
+          (request?.isCurrent && !request.isCurrent())
+        )
+          return { lines: [], source: null, instrumental: latest.instrumental }
         await window.api.database.command('updateSongLyrics', {
           id: song.id,
           lrc,
@@ -1050,6 +1063,7 @@ export async function resolveLyrics(
           romanization,
           romanizationFormat
         })
+      }
       return {
         lines,
         source,

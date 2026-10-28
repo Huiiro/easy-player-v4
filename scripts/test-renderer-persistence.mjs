@@ -57,6 +57,7 @@ const stored = JSON.stringify({
   songPlayTrigger: 'single',
   genreSeparator: ';，',
   normalizeMetadataSeparator: true,
+  albumGroupByName: true,
   extremePlayback: true,
   playerLyricsFontFamily: 'Noto Sans SC',
   playlistHeaderCollapsed: true,

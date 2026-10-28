@@ -17,6 +17,7 @@ export async function querySongList(options: {
   sourceFilter: string
   artistSeparator: string
   genreSeparator: string
+  albumGroupByName?: boolean
   statistics: { enabled: boolean; generation: string }
 }): Promise<LibrarySong[]> {
   const {
@@ -26,6 +27,7 @@ export async function querySongList(options: {
     sourceFilter,
     artistSeparator,
     genreSeparator,
+    albumGroupByName,
     statistics
   } = options
   const { type } = source
@@ -59,6 +61,7 @@ export async function querySongList(options: {
           params: {
             album: source.album,
             artist: source.artist,
+            groupByName: albumGroupByName === true,
             search: appliedSearch
           }
         }

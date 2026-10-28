@@ -518,11 +518,20 @@ const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
   searchNetwork: (
-    { title, artist, album, preferWordTimed }: LyricSearchRequest,
+    { title, artist, album, preferWordTimed, songId }: LyricSearchRequest,
     options?: import('../shared/networkSources').SourceRequestOptions
   ) =>
     sourceRequest<import('../shared/networkSources').NetworkLyricCandidate[]>(
-      { operation: 'lyrics.search', query: { title, artist, album, preferWordTimed } },
+      {
+        operation: 'lyrics.search',
+        query: {
+          title,
+          artist,
+          album,
+          preferWordTimed,
+          ...(songId === undefined ? {} : { songId })
+        }
+      },
       options
     )
 }

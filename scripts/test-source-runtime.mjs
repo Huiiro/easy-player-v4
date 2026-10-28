@@ -71,6 +71,9 @@ const policy = {
   }
 }
 const mocks = {
+  [path.resolve('src/main/database/repository/songLyrics.ts')]: {
+    songAllowsNetworkLyrics: () => true
+  },
   [path.resolve('src/main/service/playbackMode.ts')]: policy,
   [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key }
 }
@@ -492,6 +495,12 @@ assert.equal(
   true
 )
 assert.equal(bridgeCalls.at(-1).request.requestId, 'explicit')
+await api.lyrics.searchNetwork({ title: 'Title', songId: 42 })
+assert.equal(
+  bridgeCalls.at(-1).request.query.songId,
+  42,
+  'song identity reaches the main-process lyric policy'
+)
 assert.equal((await api.downloads.search('test', 'Title')).length, 0)
 
 // A cancelled automatic lookup cannot persist late lyrics or start the next source.
@@ -500,7 +509,7 @@ let current = true,
   writes = 0,
   sentOptions
 const resolver = loader(
-  {},
+  { '@/utils/eventBus': { default: { emit() {} } } },
   {
     window: {
       api: {
@@ -511,7 +520,12 @@ const resolver = loader(
           }
         },
         database: {
-          command: async () => {
+          command: async (action) => {
+            if (action === 'getSongLyricSettings')
+              return {
+                success: true,
+                data: { songId: 1, offsetMs: null, disableNetwork: false, instrumental: false }
+              }
             writes++
             return { success: true }
           }
@@ -528,6 +542,7 @@ const resolving = resolver.resolveLyrics(
   true,
   { requestId: 'automatic', isCurrent: () => current }
 )
+await tick()
 current = false
 networkLyrics.resolve({ success: true, data: [{ lrc: '[00:01.00]Late lyric', format: 'lrc' }] })
 assert.equal((await resolving).lines.length, 0)

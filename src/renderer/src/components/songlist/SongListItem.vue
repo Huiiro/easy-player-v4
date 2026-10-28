@@ -21,6 +21,7 @@ const props = defineProps<{
   keyword: string
   showFileName: boolean
   compact: boolean
+  hideDividers?: boolean
   columns?: SongListColumns
 }>()
 
@@ -94,8 +95,8 @@ function openAlbum(): void {
 
 <template>
   <div
-    class="border-b border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
-    :class="compact ? 'h-14' : 'h-16'"
+    class="border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
+    :class="[compact ? 'h-14' : 'h-16', { 'border-b': !hideDividers }]"
   >
     <div
       class="song-list-row grid h-full items-center gap-3 px-5 transition-colors hover:bg-hover"
@@ -146,24 +147,6 @@ function openAlbum(): void {
                 <template v-else>{{ part.text }}</template>
               </template>
             </span>
-            <SvgIcon
-              v-if="song.preference === 1"
-              name="play-like"
-              class-name="size-3.5 shrink-0 text-primary"
-              :title="t('songList.like')"
-            />
-            <SvgIcon
-              v-else-if="song.preference === -1"
-              name="play-dislike"
-              class-name="size-4 shrink-0 text-danger"
-              :title="t('songList.dislike')"
-            />
-            <SvgIcon
-              v-if="song.sourceId !== null"
-              name="menu-remote"
-              class-name="size-3.5 shrink-0 text-primary"
-              :title="t('songList.remoteSong')"
-            />
           </span>
           <span v-if="song.playTime" class="mt-0.5 block text-xs text-text-l">
             {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
@@ -218,11 +201,73 @@ function openAlbum(): void {
       >
         {{ displayedGenre || '-' }}
       </span>
-      <span v-if="columns?.year" class="text-right text-sm tabular-nums text-text-l">
+      <span v-if="columns?.year" class="text-center text-sm tabular-nums text-text-l">
         {{ songYear(song) ?? '-' }}
       </span>
-      <span v-if="columns?.playTimes" class="text-right text-sm tabular-nums text-text-l">
+      <span v-if="columns?.playTimes" class="text-center text-sm tabular-nums text-text-l">
         {{ songPlayCount(song) ?? '-' }}
+      </span>
+      <span
+        v-if="columns?.disableNetworkLyrics"
+        class="flex items-center justify-center text-sm text-text-l"
+        :title="song.disableNetworkLyrics ? t('lyrics.disableNetwork') : undefined"
+      >
+        <SvgIcon
+          v-if="song.disableNetworkLyrics"
+          name="common-no-internet"
+          class-name="size-4 shrink-0 text-primary"
+          :aria-label="t('lyrics.disableNetwork')"
+          :aria-hidden="false"
+          role="img"
+        />
+      </span>
+      <span
+        v-if="columns?.instrumental"
+        class="flex items-center justify-center text-sm text-text-l"
+        :title="song.instrumental ? t('lyrics.instrumental') : undefined"
+      >
+        <SvgIcon
+          v-if="song.instrumental"
+          name="common-music-notes"
+          class-name="size-4 shrink-0 text-primary"
+          :aria-label="t('lyrics.instrumental')"
+          :aria-hidden="false"
+          role="img"
+        />
+      </span>
+      <span v-if="columns?.preference" class="flex items-center justify-center text-sm text-text-l">
+        <SvgIcon
+          v-if="song.preference === 1"
+          name="play-like"
+          class-name="size-4 shrink-0 text-primary"
+          :title="t('songList.like')"
+          :aria-label="t('songList.like')"
+          :aria-hidden="false"
+          role="img"
+        />
+        <SvgIcon
+          v-else-if="song.preference === -1"
+          name="play-dislike"
+          class-name="size-4 shrink-0 text-danger"
+          :title="t('songList.dislike')"
+          :aria-label="t('songList.dislike')"
+          :aria-hidden="false"
+          role="img"
+        />
+      </span>
+      <span
+        v-if="columns?.remoteSource"
+        class="flex items-center justify-center text-sm text-text-l"
+      >
+        <SvgIcon
+          v-if="song.sourceId != null"
+          name="menu-remote"
+          class-name="size-4 shrink-0 text-primary"
+          :title="t('songList.remoteSong')"
+          :aria-label="t('songList.remoteSong')"
+          :aria-hidden="false"
+          role="img"
+        />
       </span>
       <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
     </div>
@@ -233,7 +278,7 @@ function openAlbum(): void {
 .song-list-row {
   grid-template-columns: var(
     --song-list-grid-columns,
-    3rem minmax(12rem, 1.8fr) minmax(8rem, 1fr) minmax(8rem, 1fr) 4rem
+    2.5rem minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(8rem, 1.2fr) 3.5rem
   );
 }
 </style>
