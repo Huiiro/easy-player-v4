@@ -1,3 +1,4 @@
+import type { RemoteConnection } from '../shared/remoteSources'
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { LogEntry } from '../main/service/loggerService'
 import type {
@@ -600,12 +601,9 @@ declare global {
         ): () => void
       }
       remoteSource: {
-        test(config: {
-          type: 'navidrome' | 'jellyfin'
-          baseUrl: string
-          user: string
-          secret: string
-        }): Promise<{ success: boolean; data?: { version: string }; error?: string }>
+        test(
+          config: RemoteConnection
+        ): Promise<{ success: boolean; data?: { version: string }; error?: string }>
         chooseCacheDirectory(): Promise<{ success: boolean; data?: string }>
         defaultCacheDirectory(): Promise<{ success: boolean; data?: string }>
         cacheSize(directory: string): Promise<{ success: boolean; data?: number }>

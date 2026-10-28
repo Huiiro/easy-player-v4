@@ -49,6 +49,8 @@
     "perf:playback": "node scripts/check-playback-performance.cjs",
     "test:track-switch": "electron scripts/check-track-switch.cjs && electron scripts/check-player-panel-switch.cjs",
     "perf:app": "electron scripts/check-player-app.cjs",
+    "test:remote-sources:ui": "electron scripts/check-remote-source-ui.cjs",
+    "test:remote-sources": "node scripts/test-remote-sources.mjs && node scripts/test-file-transfer.mjs && node scripts/test-remote-source-storage.mjs",
     "test:network-sources": "node scripts/test-network-sources.mjs && node scripts/test-lyric-providers.mjs",
     "test:source-metadata": "node scripts/test-source-metadata.mjs",
     "test:source-metadata:ui": "electron scripts/check-source-metadata.cjs",
@@ -71,7 +73,9 @@
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",
+    "@xmldom/xmldom": "^0.9.12",
     "adm-zip": "^0.6.0",
+    "basic-ftp": "^6.2.3",
     "better-sqlite3": "^12.4.1",
     "electron-updater": "^6.6.2",
     "kuroshiro": "^1.2.1",
@@ -80,7 +84,8 @@
     "node-id3": "^0.2.9",
     "opencc-js": "^1.4.2",
     "pinyin-pro": "^3.29.5",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "ssh2": "^1.17.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "3.0.0",
@@ -91,6 +96,7 @@
     "@types/adm-zip": "^0.5.8",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.19.1",
+    "@types/ssh2": "^1.15.6",
     "@vitejs/plugin-vue": "^6.0.2",
     "ajv": "8.20.0",
     "cmake-js": "^8.0.0",
@@ -108,6 +114,7 @@
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "prettier": "^3.7.4",
+    "selfsigned": "^5.5.0",
     "typescript": "^5.9.3",
     "vite": "^7.2.6",
     "vite-plugin-svg-icons": "^2.0.1",

@@ -1,0 +1,13 @@
+{
+  "id": "huiiro.columbina-moonveil",
+  "displayName": "Columbina · Moonveil",
+  "author": { "name": "Huiiro" },
+  "version": "1.0.0",
+  "apiVersion": 2,
+  "sources": [],
+  "kind": "theme",
+  "theme": {
+    "displayName": "Columbina · Moonveil",
+    "names": { "zh": "哥伦比娅 · 月纱", "en": "Columbina · Moonveil" }
+  }
+}

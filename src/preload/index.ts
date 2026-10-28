@@ -1,3 +1,4 @@
+import type { RemoteConnection } from '../shared/remoteSources'
 import type { SourceResourceRef } from '../shared/networkSources'
 import type {
   SourceTrackSummary,
@@ -443,12 +444,7 @@ const desktopLyricsAPI = {
 }
 
 const remoteSourceAPI = {
-  test: (config: {
-    type: 'navidrome' | 'jellyfin'
-    baseUrl: string
-    user: string
-    secret: string
-  }) =>
+  test: (config: RemoteConnection) =>
     ipcRenderer.invoke('remote-source:test', config) as Promise<{
       success: boolean
       data?: { version: string }

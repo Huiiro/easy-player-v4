@@ -1,3 +1,4 @@
+import { normalizeRemoteConnection } from '../../shared/remoteSources'
 import { dialog, ipcMain } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
@@ -10,31 +11,10 @@ import { getDataPath } from '../utils/pathUtils'
 export function registerRemoteSourceIpcHandlers(): void {
   ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
     return logOperation('[IPC] remote-source:test', {}, async () => {
-      const value = config as {
-        type?: unknown
-        baseUrl?: unknown
-        user?: unknown
-        secret?: unknown
-      }
-      if (
-        (value?.type !== 'navidrome' && value?.type !== 'jellyfin') ||
-        typeof value?.baseUrl !== 'string' ||
-        typeof value.user !== 'string' ||
-        typeof value.secret !== 'string'
-      ) {
-        return { success: false, error: t('invalidSourceConfig') }
-      }
       try {
         return {
           success: true,
-          data: await testRemoteSource(
-            value as {
-              type: 'navidrome' | 'jellyfin'
-              baseUrl: string
-              user: string
-              secret: string
-            }
-          )
+          data: await testRemoteSource(normalizeRemoteConnection(config))
         }
       } catch (error) {
         return { success: false, error: error instanceof Error ? error.message : String(error) }

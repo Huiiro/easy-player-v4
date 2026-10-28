@@ -1,10 +1,30 @@
+import { normalizeRemoteConnection, emptyRemoteAuth } from '../../../shared/remoteSources'
 import { t } from '../../i18n'
 import { safeStorage } from 'electron'
 import { getDatabase } from '../index'
 import { invalidateDailyRecommendations } from '../recommendations'
 import { Logger } from '../../service/loggerService'
 import { refreshNewestSongs } from '../newestSongs'
+import type { RemoteAuthType } from '../../../shared/remoteSources'
 import type { MusicSource, MusicSourceInput } from '../types'
+
+/** Existing SQLite row, kept private to this compatibility boundary. */
+interface StoredMusicSource {
+  id: number
+  name: string
+  type: string | null
+  server: string | null
+  baseUrl: string | null
+  user: string | null
+  secret: string | null
+  authType: string | null
+  status: string | null
+  sourceOrder: number
+  importedCount: number
+  songCount: number
+  lastConnect: string | null
+  credentialError?: MusicSource['credentialError']
+}
 
 const SOURCE_COLUMNS =
   'id, name, type, server, base_url AS baseUrl, user, secret, auth_type AS authType, status, source_order AS sourceOrder, imported_count AS importedCount, song_count AS songCount, last_connect AS lastConnect'
@@ -14,7 +34,7 @@ const sourceCredentialWarnings = new Map<number, MusicSource['credentialError']>
 export function listSources(): MusicSource[] {
   const sources = getDatabase()
     .prepare(`SELECT ${SOURCE_COLUMNS} FROM music_source ORDER BY source_order, id`)
-    .all() as MusicSource[]
+    .all() as StoredMusicSource[]
   return sources.map(readSourceCredentials)
 }
 
@@ -26,7 +46,7 @@ function encryptSourceSecret(secret: string | null | undefined): string | null {
   return `${SOURCE_SECRET_PREFIX}${safeStorage.encryptString(secret).toString('base64')}`
 }
 
-function readSourceCredentials(source: MusicSource): MusicSource {
+function decryptSourceCredentials(source: StoredMusicSource): StoredMusicSource {
   const secret = source.secret
   if (!secret || !secret.startsWith(SOURCE_SECRET_PREFIX)) {
     sourceCredentialWarnings.delete(source.id)
@@ -59,6 +79,67 @@ function readSourceCredentials(source: MusicSource): MusicSource {
   return { ...source, secret: null, credentialError }
 }
 
+/** v2 stores the complete auth union as one encrypted envelope in the existing secret column. */
+function readSourceCredentials(row: StoredMusicSource): MusicSource {
+  const source = decryptSourceCredentials(row)
+  const versioned = source.authType?.startsWith('v2:')
+  const type = (
+    versioned
+      ? source.authType!.slice(3)
+      : source.type === 'smb'
+        ? 'system'
+        : source.type === 'webdav'
+          ? source.user || source.secret
+            ? 'basic'
+            : 'anonymous'
+          : 'password'
+  ) as RemoteAuthType
+  const { id, name, status, sourceOrder, importedCount, songCount, lastConnect } = source
+  const stats = { id, name, status, sourceOrder, importedCount, songCount, lastConnect }
+  try {
+    if (source.credentialError) throw new Error('Credential unavailable')
+    const config = normalizeRemoteConnection(
+      versioned
+        ? {
+            ...source,
+            auth: source.secret ? JSON.parse(source.secret) : emptyRemoteAuth(type),
+            hostKey: source.server || undefined
+          }
+        : source
+    )
+    return { ...stats, ...config }
+  } catch {
+    return {
+      ...stats,
+      type: source.type as MusicSource['type'],
+      baseUrl: source.baseUrl || '',
+      auth: emptyRemoteAuth(type),
+      hostKey: versioned ? source.server || undefined : undefined,
+      credentialError: source.credentialError || 'invalid-config'
+    }
+  }
+}
+
+function storedConnection(input: MusicSourceInput): {
+  type: string
+  baseUrl: string
+  server: string | null
+  secret: string | null
+  authType: string
+} {
+  const config = normalizeRemoteConnection(input)
+  return {
+    type: config.type,
+    baseUrl: config.baseUrl,
+    server: config.hostKey || null,
+    secret:
+      config.auth.type === 'anonymous' || config.auth.type === 'system'
+        ? null
+        : encryptSourceSecret(JSON.stringify(config.auth)),
+    authType: `v2:${config.auth.type}`
+  }
+}
+
 /** Encrypt legacy plaintext credentials after the app's key store is available. */
 export function migrateSourceSecrets(): void {
   if (!safeStorage.isEncryptionAvailable()) return
@@ -79,6 +160,8 @@ export function migrateSourceSecrets(): void {
 }
 
 export function createSource(input: MusicSourceInput): MusicSource {
+  if (!input.name?.trim()) throw new Error(t('invalidSourceConfig'))
+  const connection = storedConnection(input)
   const db = getDatabase()
   const result = db
     .prepare(
@@ -86,26 +169,33 @@ export function createSource(input: MusicSourceInput): MusicSource {
     )
     .run(
       input.name,
-      input.type ?? null,
-      input.server ?? null,
-      input.baseUrl ?? null,
-      input.user ?? null,
-      encryptSourceSecret(input.secret),
-      input.authType ?? null,
+      connection.type,
+      connection.server,
+      connection.baseUrl,
+      null,
+      connection.secret,
+      connection.authType,
       input.status ?? null
     )
   return getSource(Number(result.lastInsertRowid))!
 }
 
 export function updateSource(source: MusicSource): boolean {
-  // A null password returned after a failed read is not a request to erase the
-  // saved ciphertext. Keep it when updating other source fields.
-  const retained =
-    source.credentialError && !source.secret
-      ? (getDatabase().prepare('SELECT secret FROM music_source WHERE id = ?').get(source.id) as
-          { secret: string | null } | undefined)
-      : undefined
-  const storedSecret = retained ? retained.secret : encryptSourceSecret(source.secret)
+  if (!source.name?.trim()) throw new Error(t('invalidSourceConfig'))
+  const current = getSource(source.id)
+  const keepCredential =
+    current?.credentialError &&
+    source.credentialError &&
+    current.type === source.type &&
+    current.baseUrl === source.baseUrl &&
+    current.hostKey === source.hostKey &&
+    JSON.stringify(current.auth) === JSON.stringify(source.auth)
+  const saved = keepCredential
+    ? (getDatabase()
+        .prepare(`SELECT ${SOURCE_COLUMNS} FROM music_source WHERE id = ?`)
+        .get(source.id) as StoredMusicSource)
+    : null
+  const connection = saved || storedConnection(source)
   return (
     getDatabase()
       .prepare(
@@ -113,12 +203,12 @@ export function updateSource(source: MusicSource): boolean {
       )
       .run(
         source.name,
-        source.type,
-        source.server,
-        source.baseUrl,
-        source.user,
-        storedSecret,
-        source.authType,
+        connection.type,
+        connection.server,
+        connection.baseUrl,
+        saved ? saved.user : null,
+        connection.secret,
+        connection.authType,
         source.status,
         source.sourceOrder,
         source.importedCount,
@@ -143,7 +233,7 @@ export function deleteSource(id: number): boolean {
 export function getSource(id: number): MusicSource | null {
   const source = getDatabase()
     .prepare(`SELECT ${SOURCE_COLUMNS} FROM music_source WHERE id = ?`)
-    .get(id) as MusicSource | undefined
+    .get(id) as StoredMusicSource | undefined
   return source ? readSourceCredentials(source) : null
 }
 

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "colorMode": "dark",
+  "accentColor": "#cbc8ff",
+  "headerBackground": "rgb(19 29 48 / 88%)",
+  "footerBackground": "rgb(15 25 43 / 96%)",
+  "chromeBorder": "rgb(160 181 214 / 22%)",
+  "background": "linear-gradient(120deg, #111c2e, #1b2b40 62%, #161f35)",
+  "tokens": {
+    "--color-bg": "#151e30",
+    "--color-bg-l": "#202b40",
+    "--color-bg-l2": "#29354c",
+    "--color-bg-d": "#101726",
+    "--color-text": "#eef3fb",
+    "--color-text-l": "#c3cddd",
+    "--color-text-l2": "#aebed3",
+    "--color-icon": "var(--color-text)",
+    "--color-icon-l": "var(--color-text-l2)",
+    "--color-border": "#536682",
+    "--color-border-l": "#6d82a2",
+    "--color-hover": "color-mix(in srgb, var(--color-primary) 10%, transparent)",
+    "--color-hover-bg": "#33415c",
+    "--scrollbar-thumb": "rgb(175 190 215 / 35%)",
+    "--scrollbar-thumb-hover": "rgb(190 203 228 / 58%)",
+    "--ep-sidebar-bg": "linear-gradient(180deg, rgb(15 23 40 / 88%), rgb(21 30 50 / 82%))",
+    "--ep-sidebar-text": "var(--color-text-l)",
+    "--ep-sidebar-active-bg": "color-mix(in srgb, var(--color-primary) 14%, transparent)",
+    "--ep-sidebar-active-text": "var(--color-primary)",
+    "--ep-button-radius": "0.5rem",
+    "--ep-dialog-bg": "var(--color-bg-l)",
+    "--ep-dialog-radius": "1.25rem",
+    "--ep-floating-radius": "0.875rem",
+    "--ep-overlay-bg": "rgb(7 12 25 / 66%)",
+    "--ep-surface-shadow": "0 20px 56px rgb(4 8 20 / 38%)",
+    "--ep-focus-ring": "color-mix(in srgb, var(--color-primary) 36%, transparent)",
+    "--ep-progress-track": "rgb(173 190 215 / 24%)",
+    "--ep-progress-fill": "var(--color-primary)",
+    "--ep-switch-inactive": "rgb(173 190 215 / 22%)",
+    "--ep-skeleton-bg": "rgb(195 205 221 / 10%)",
+    "--ep-background-scrim": "transparent",
+    "--ep-background-image-overlay": "linear-gradient(90deg, rgb(8 15 30 / 82%), rgb(12 22 42 / 55%) 42%, rgb(12 22 42 / 42%) 65%, rgb(8 17 34 / 62%))"
+  },
+  "rules": {
+    ".ep-app-background": { "background-position": "56% center" },
+    ".ep-sidebar": { "backdrop-filter": "blur(18px)" },
+    ".ep-header": { "backdrop-filter": "blur(18px)" },
+    ".ep-footer": {
+      "backdrop-filter": "blur(24px)",
+      "box-shadow": "0 12px 36px rgb(5 10 25 / 30%)"
+    },
+    ".ep-home": {
+      "background": "linear-gradient(90deg, rgb(13 20 36 / 56%), rgb(13 20 36 / 0%) 58%)"
+    }
+  },
+  "assets": {
+    "resources": {
+      "moonveil": { "type": "image", "path": "image1.png" }
+    },
+    "slots": { "appBackground": { "image": "moonveil" } },
+    "text": { "homeWelcome": "让月色与旋律，一同缓缓流淌。" },
+    "licenses": ["licenses/IMAGE-ATTRIBUTION.txt"]
+  }
+}

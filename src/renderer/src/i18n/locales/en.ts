@@ -392,11 +392,36 @@ export default {
     back: 'Back'
   },
   remote: {
+    invalidConfiguration:
+      'Invalid connection configuration. Edit the address or authentication details.',
+    authentication: 'Authentication',
+    authModes: {
+      anonymous: 'Anonymous',
+      system: 'System authentication',
+      password: 'Username and password',
+      basic: 'HTTP Basic',
+      bearer: 'Bearer token',
+      'api-key': 'API key',
+      'private-key': 'SSH private key'
+    },
+    token: 'Token / API key',
+    privateKey: 'SSH private key (PEM / OpenSSH)',
+    passphrase: 'Private key passphrase (optional)',
+    hostKey: 'Server host key fingerprint',
+    hostKeyHint:
+      'Enter the SHA256 fingerprint supplied by your administrator to verify the server.',
+
+    smbPlaceholder: 'smb://nas/music or mounted directory',
+    smbHint:
+      'SMB uses OS authentication. Connect the share first. On Windows use UNC or smb://; on other systems enter the mounted directory.',
+    webdavHint:
+      'Enter the HTTP(S) URL of your WebDAV music directory. Choose anonymous, Basic or Bearer authentication.',
+
     all: 'All',
     title: 'Remote sources',
     refresh: 'Refresh sources',
     refreshed: 'Source list refreshed',
-    supported: 'Currently supports Navidrome and Jellyfin.',
+    supported: 'Supports NAS (WebDAV, SMB, FTP, FTPS, SFTP), Navidrome, Subsonic and Jellyfin.',
     add: 'Add source',
     edit: 'Edit remote source',
     delete: 'Delete',

@@ -26,7 +26,8 @@ export default defineConfig({
           'kuromoji',
           /\.node$/, // Native addons
           'koffi', // FFI alternative
-          'better-sqlite3'
+          'better-sqlite3',
+          'ssh2' // Keep optional SSH native acceleration relative to its installed package.
         ]
       }
     }

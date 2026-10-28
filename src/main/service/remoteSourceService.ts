@@ -29,38 +29,17 @@ import {
 import type { MusicSource } from '../database/types'
 import { getDataPath } from '../utils/pathUtils'
 
-export type RemoteProviderId = 'navidrome' | 'jellyfin'
-
-interface RemoteTrack {
-  id: string
-  title: string
-  artist?: string
-  album?: string
-  duration?: number
-  coverId?: string
-  year?: number
-  genre?: string
-  bitrate?: number
-  sampleRate?: number
-  bitDepth?: number
-  channels?: number
-  format?: string
-  path?: string
-  size?: number
-  track?: number
-  discNumber?: number
-}
-
-interface RemoteProvider {
-  readonly id: RemoteProviderId
-  test(config: RemoteConnection): Promise<{ version: string }>
-  listTracks(source: ConfiguredSource): Promise<RemoteTrack[]>
-  fetchCover(source: ConfiguredSource, coverId: string): Promise<Response>
-  fetchStream(source: ConfiguredSource, trackId: string): Promise<Response>
-}
-
-type RemoteConnection = { baseUrl: string; user: string; secret: string; type: RemoteProviderId }
-type ConfiguredSource = MusicSource & RemoteConnection
+import { normalizeRemoteConnection } from '../../shared/remoteSources'
+import type { RemoteConnection, RemoteProviderId } from '../../shared/remoteSources'
+import type { ConfiguredSource, RemoteProvider, RemoteTrack } from './remoteProvider'
+import { smbProvider, webdavProvider } from './nasProviders'
+import {
+  ftpProvider,
+  ftpsProvider,
+  implicitFtpsProvider,
+  sftpProvider
+} from './fileTransferProviders'
+export type { RemoteProviderId } from '../../shared/remoteSources'
 
 const REMOTE_REQUEST_TIMEOUT_MS = 20_000
 const MAX_REMOTE_JSON_BYTES = 5 * 1024 * 1024
@@ -86,7 +65,11 @@ function remoteFetch(input: string, options: RequestInit = {}): Promise<Response
     '[Remote] request',
     { url: logUrl(input), method: options.method ?? 'GET' },
     () => {
-      return fetch(input, { ...options, signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS) })
+      return fetch(input, {
+        ...options,
+        redirect: 'error',
+        signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS)
+      })
     },
     { successLevel: 'debug', warnOnFalse: false }
   )
@@ -148,9 +131,8 @@ function providerFor(type: string | null | undefined): RemoteProvider {
 function validateSource(source: MusicSource | null): asserts source is ConfiguredSource {
   if (source?.credentialError === 'unavailable') throw new Error(t('credentialStoreUnavailable'))
   if (source?.credentialError === 'decrypt-failed') throw new Error(t('credentialDecryptFailed'))
-  if (!source?.baseUrl || !source.user || !source.secret)
-    throw new Error(t('sourceConfigIncomplete'))
-  providerFor(source.type)
+  if (!source) throw new Error(t('sourceConfigIncomplete'))
+  Object.assign(source, normalizeRemoteConnection(source))
 }
 
 function subsonicUrl(
@@ -158,10 +140,11 @@ function subsonicUrl(
   endpoint: string,
   parameters: Record<string, string> = {}
 ): string {
+  if (source.auth.type !== 'password') throw new Error(t('invalidSourceConfig'))
   const salt = randomBytes(8).toString('hex')
-  const token = createHash('md5').update(`${source.secret}${salt}`).digest('hex')
+  const token = createHash('md5').update(`${source.auth.password}${salt}`).digest('hex')
   const query = new URLSearchParams({
-    u: source.user,
+    u: source.auth.username,
     t: token,
     s: salt,
     v: '1.16.1',
@@ -307,6 +290,8 @@ interface JellyfinAuth {
 }
 
 async function jellyfinToken(connection: RemoteConnection): Promise<string> {
+  if (connection.auth.type === 'api-key') return connection.auth.token
+  if (connection.auth.type !== 'password') throw new Error(t('invalidSourceConfig'))
   const response = await remoteFetch(
     `${normalizedBaseUrl(connection.baseUrl)}/Users/AuthenticateByName`,
     {
@@ -316,7 +301,7 @@ async function jellyfinToken(connection: RemoteConnection): Promise<string> {
         Authorization:
           'MediaBrowser Client="EasyPlayer", Device="EasyPlayer Desktop", DeviceId="easy-player-desktop", Version="3.0.0"'
       },
-      body: JSON.stringify({ Username: connection.user, Pw: connection.secret })
+      body: JSON.stringify({ Username: connection.auth.username, Pw: connection.auth.password })
     }
   )
   const result = (await readJson<JellyfinAuth & { Message?: string }>(response)) || {}
@@ -402,6 +387,13 @@ const jellyfinProvider: RemoteProvider = {
 
 const providers: Record<RemoteProviderId, RemoteProvider> = {
   navidrome: navidromeProvider,
+  subsonic: { ...navidromeProvider, id: 'subsonic' },
+  webdav: webdavProvider,
+  smb: smbProvider,
+  ftp: ftpProvider,
+  ftps: ftpsProvider,
+  'ftps-implicit': implicitFtpsProvider,
+  sftp: sftpProvider,
   jellyfin: jellyfinProvider
 }
 
@@ -410,9 +402,8 @@ export async function testRemoteSource(config: RemoteConnection): Promise<{ vers
     '[Remote] testSource',
     { type: config.type, server: logUrl(config.baseUrl) },
     async () => {
-      if (!config.baseUrl.trim() || !config.user.trim() || !config.secret)
-        throw new Error(t('sourceConfigIncomplete'))
-      return providerFor(config.type).test(config)
+      const connection = normalizeRemoteConnection(config)
+      return providerFor(connection.type).test(connection)
     },
     { successLevel: 'debug', warnOnFalse: false }
   )
@@ -529,11 +520,18 @@ function cacheDirectory(): string {
     ? configured
     : join(getDataPath(), 'cache')
 }
-function cleanupCache(directory: string): void {
+function cleanupCache(directory: string, retainedPath: string): void {
   const configured = getAppSetting('remote.cache-limit-gb')
   const maxBytes = (typeof configured === 'number' ? configured : 2) * 1024 * 1024 * 1024
   const files = readdirSync(directory, { withFileTypes: true })
-    .filter((entry) => entry.isFile())
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        /^(navidrome|subsonic|jellyfin|webdav|smb|ftp|ftps|ftps-implicit|sftp)-\d+-.*\.[a-zA-Z0-9]+$/.test(
+          entry.name
+        ) &&
+        !entry.name.endsWith('.part')
+    )
     .map((entry) => {
       const path = join(directory, entry.name)
       const stat = statSync(path)
@@ -544,6 +542,7 @@ function cleanupCache(directory: string): void {
   let removedFiles = 0
   for (const file of files.sort((a, b) => a.mtime - b.mtime)) {
     if (total <= maxBytes) break
+    if (file.path === retainedPath) continue
     unlinkSync(file.path)
     total -= file.size
     removedFiles++
@@ -558,7 +557,17 @@ function cleanupCache(directory: string): void {
 }
 
 /** Returns a local file path, downloading a provider stream on a cache miss. */
-export async function cacheRemoteSong(songId: number): Promise<string> {
+const pendingCache = new Map<number, Promise<string>>()
+
+export function cacheRemoteSong(songId: number): Promise<string> {
+  const existing = pendingCache.get(songId)
+  if (existing) return existing
+  const task = downloadRemoteSong(songId).finally(() => pendingCache.delete(songId))
+  pendingCache.set(songId, task)
+  return task
+}
+
+async function downloadRemoteSong(songId: number): Promise<string> {
   return logOperation(
     '[Remote] cacheSong',
     { songId },
@@ -575,7 +584,11 @@ export async function cacheRemoteSong(songId: number): Promise<string> {
           .replace(/[^a-zA-Z0-9]/g, '') || 'mp3'
       const filePath = join(
         directory,
-        `${source.type}-${source.id}-${song.remoteId.replace(/[^a-zA-Z0-9._-]/g, '_')}.${extension}`
+        `${source.type}-${source.id}-${createHash('sha256')
+          .update(
+            `${source.baseUrl}\0${'username' in source.auth ? source.auth.username : source.auth.type}\0${song.remoteId}`
+          )
+          .digest('hex')}.${extension}`
       )
       if (existsSync(filePath)) {
         Logger.debug('[Remote] cache hit', { songId, sourceId: source.id, filePath })
@@ -585,15 +598,19 @@ export async function cacheRemoteSong(songId: number): Promise<string> {
       const response = await providerFor(source.type).fetchStream(source, song.remoteId)
       if (!response.ok) throw new Error(t('remoteDownloadFailed', { status: response.status }))
       const temporaryPath = `${filePath}.part`
-      await writeResponseToFile(response, temporaryPath, MAX_REMOTE_STREAM_BYTES, t('remoteSong'))
-      if (existsSync(filePath)) unlinkSync(filePath)
-      renameSync(temporaryPath, filePath)
+      try {
+        await writeResponseToFile(response, temporaryPath, MAX_REMOTE_STREAM_BYTES, t('remoteSong'))
+        renameSync(temporaryPath, filePath)
+      } catch (error) {
+        if (existsSync(temporaryPath)) unlinkSync(temporaryPath)
+        throw error
+      }
       Logger.debug('[Remote] cached stream saved', {
         songId,
         filePath,
         bytes: statSync(filePath).size
       })
-      cleanupCache(directory)
+      cleanupCache(directory, filePath)
       return filePath
     },
     { successLevel: 'debug', warnOnFalse: false }

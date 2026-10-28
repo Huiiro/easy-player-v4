@@ -25,10 +25,9 @@ import type { LibrarySong } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
-interface MusicSourceOption {
-  id: number
-  name: string
-}
+import type { MusicSource } from '../../../../shared/remoteSources'
+
+type MusicSourceOption = Pick<MusicSource, 'id' | 'name'>
 
 const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
   source: () => ({ type: 'songs' })

@@ -384,11 +384,33 @@ export default {
     back: '返回'
   },
   remote: {
+    invalidConfiguration: '连接配置无效，请编辑地址或认证信息。',
+    authentication: '认证方式',
+    authModes: {
+      anonymous: '匿名',
+      system: '系统认证',
+      password: '账号密码',
+      basic: 'HTTP Basic',
+      bearer: 'Bearer Token',
+      'api-key': 'API Key',
+      'private-key': 'SSH 私钥'
+    },
+    token: 'Token / API Key',
+    privateKey: 'SSH 私钥（PEM / OpenSSH）',
+    passphrase: '私钥口令（可选）',
+    hostKey: '服务器公钥指纹',
+    hostKeyHint: '填写管理员提供的 SHA256 指纹，用于验证服务器身份。',
+
+    smbPlaceholder: 'smb://nas/music 或系统挂载目录',
+    smbHint:
+      'SMB 使用系统认证。请先在系统中连接共享；Windows 可填写 UNC 或 smb:// 地址，其他系统填写挂载目录。',
+    webdavHint: '填写 WebDAV 音乐目录的 HTTP(S) 地址。可选择匿名、Basic 或 Bearer 认证。',
+
     all: '全部',
     title: '远程音源',
     refresh: '刷新音源',
     refreshed: '音源列表已刷新',
-    supported: '当前支持 Navidrome 和 Jellyfin。',
+    supported: '支持 NAS（WebDAV、SMB、FTP、FTPS、SFTP）、Navidrome、Subsonic 和 Jellyfin。',
     add: '新增音源',
     edit: '编辑远程音源',
     delete: '删除',

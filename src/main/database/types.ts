@@ -99,33 +99,7 @@ export interface TagInput {
   color?: string | null
   description?: string | null
 }
-export interface MusicSource {
-  id: number
-  name: string
-  type: string | null
-  server: string | null
-  baseUrl: string | null
-  user: string | null
-  secret: string | null
-  /** Read status only; never stored in the database. Failed reads return a null secret. */
-  credentialError?: 'unavailable' | 'decrypt-failed'
-  authType: string | null
-  status: string | null
-  sourceOrder: number
-  importedCount: number
-  songCount: number
-  lastConnect: string | null
-}
-export interface MusicSourceInput {
-  name: string
-  type?: string | null
-  server?: string | null
-  baseUrl?: string | null
-  user?: string | null
-  secret?: string | null
-  authType?: string | null
-  status?: string | null
-}
+export type { MusicSource, MusicSourceInput } from '../../shared/remoteSources'
 export interface LibraryFolder {
   id: number
   pid: number | null

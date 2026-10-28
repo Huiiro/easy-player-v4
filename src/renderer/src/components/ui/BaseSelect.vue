@@ -149,9 +149,11 @@ function onClear(): void {
         leave-from-class="opacity-100 scale-100"
         leave-to-class="opacity-0 scale-95"
       >
+        <!-- Cancel label activation after the option handles selection, so it cannot reopen the trigger. -->
         <ListboxOptions
           class="ep-select-options w-full overflow-y-auto custom-scrollbar rounded-xl border p-1 shadow-lg focus:outline-none"
           style="max-height: min(15rem, var(--ep-floating-available-height, 15rem))"
+          @click.prevent
         >
           <ListboxOption
             v-for="opt in options"
