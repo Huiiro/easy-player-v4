@@ -26,6 +26,8 @@ PluginThemeData 的 tokens、rules、assets 沿用第三方主题的安全 CSS �
 
 主题协议开发规范见 [维护约定](../../docs/theme-plugins.md)。SDK 包同时包含 schemas/theme-plugin-manifest.schema.json 与 schemas/theme.schema.json；宿主运行 npm run sync:theme-contract 同步独立插件仓库快照，npm run test:theme-contract 验证一致性。主题包打包器在独立仓库消费固定 Schema，运行时最终校验由宿主管理。
 
+当前宿主的配色与明暗适配见 [第三方主题适配指南](https://github.com/Huiiro/easy-player-v4/blob/master/docs/theme-authoring.md)，具体变量见 [主题变量参考](https://github.com/Huiiro/easy-player-v4/blob/master/docs/theme-variables.md)。`colorMode` 仅声明设计模式，不改变用户偏好；匹配模式时才应用设计专用样式与槽位。主按钮由有效填充计算黑/白前景和悬停色，独立改背景时需同时适配前景；背景和控件由宿主在资源就绪后统一过渡，默认使用 `--motion-duration-theme`（220ms）。这些为宿主行为说明，未新增 SDK 字段或改变主题格式版本。
+
 PluginManifest.author 可声明 PluginAuthor（name、可选 HTTPS url），作为维护者展示元信息；旧包可省略。displayName 与作者可重复，插件身份和更新始终以 id 为准。作者字段不授予官方身份，也不提供签名认证。
 
 主题 shader 纹理支持 rg32f 查表与 image 图片，均声明 width/height；宿主对图片解码尺寸校验并提供 mipmap。shader.fps 可选 1–30，默认 30。制作雨夜等图片背景需要相应新版宿主，原浮点纹理主题保持兼容。

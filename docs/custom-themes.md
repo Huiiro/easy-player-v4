@@ -1,25 +1,25 @@
-# 自定义主题开发规范
+# 旧 JSON/ZIP 主题格式与迁移参考
 
-> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请制作 .epp 并通过插件管理安装，见 [主题插件约定](theme-plugins.md)。已有旧主题仅保留选择和删除操作。
+> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请从 [第三方主题适配指南](theme-authoring.md) 开始，制作 `.epp` 并通过插件管理安装。已有旧主题仅保留选择和删除操作。
 
 本文描述原 JSON/ZIP 自定义主题。通过插件管理安装的 .epp 主题，见 [主题插件开发与维护约定](theme-plugins.md)；原资源、插槽和 CSS 规则继续兼容。
 
 本文对应主题格式 `version: 1`，面向主题作者与样式维护者。完整属性见 [主题变量参考](theme-variables.md)，图片、字体与文字清单见 [资源包规范](theme-packages.md) 和 [manifest JSON Schema](themes/manifest.schema.json)。
 
-## 入口与发布形式
+## 历史入口与文件形式
 
-入口：**设置 → 主题 → 自定义主题**。
+旧版本曾在 **设置 → 主题 → 自定义主题** 导入以下文件；当前不再提供该入口。此处保留字段与生命周期说明，用于读取旧数据和迁移到 `.epp`。
 
 | 形式          | 内容                                          | 适合用途                   |
 | ------------- | --------------------------------------------- | -------------------------- |
 | `.theme.json` | 变量与组件规则                                | 配色、圆角、进度条、布局   |
 | `.theme.zip`  | 根目录 `manifest.json`、主题 JSON、声明的资源 | 图片、字体、指定位置的文字 |
 
-`.theme` 是推荐命名约定；实际导入支持 JSON、ZIP。主题是声明式样式，不能执行 JavaScript，也不是可安装代码的插件接口。
+旧文件使用 `.theme` 命名约定，历史导入器支持 JSON、ZIP。旧主题是声明式样式，不能执行 JavaScript；当前第三方 `.epp` 仍采用声明式主题与受限 shader，不提供脚本入口。
 
 ## 最小可用主题
 
-保存为 `ocean.theme.json` 后导入。示例同时设置文字和表面颜色，避免深色背景搭配浅色模式的深色文字。
+以下 `ocean.theme.json` 展示旧字段；新主题请迁移到 `.epp` 的 `theme.json`，并补齐 `colorMode`、场景颜色等必填字段，见当前适配指南。示例同时设置文字和表面颜色。
 
 ```json
 {
@@ -45,12 +45,12 @@
   },
   "rules": {
     ".ep-dialog-panel": { "border": "1px solid var(--color-border)" },
-    ".ep-button--primary:hover": { "filter": "brightness(1.1)" }
+    ".ep-button--primary:focus-visible": { "outline": "2px solid var(--color-primary)" }
   }
 }
 ```
 
-更多可导入示例：[Neon JSON](themes/neon-test.theme.json)、[资源包](themes/resource-demo.theme.zip)、[图片进度滑块主题](themes/nyan-cat.theme.zip)。示例资源的再发布须遵守其许可。
+旧格式示例：[Neon JSON](themes/neon-test.theme.json)、[资源包](themes/resource-demo.theme.zip)、[图片进度滑块主题](themes/nyan-cat.theme.zip)。这些供迁移参考，不作为当前新主题的交付格式。示例资源的再发布须遵守其许可。
 
 ## JSON 字段与校验
 
@@ -81,7 +81,7 @@ JSON 不支持注释、尾逗号或原始 CSS 文本。文件最多 **128 KiB（
 
 主题样式注入**主渲染文档**。主页、侧栏、顶栏、底栏以及同一文档内传送到 `body` 的菜单、对话框都在覆盖范围内。播放器详情页使用自己的背景与部分自动对比色，不等于主页背景；详见歌词变量的局部限制。
 
-迷你播放器、桌面歌词等独立窗口有各自文档，不会自动收到主窗口的主题样式与包字体。操作系统窗口边框、文件选择框等原生界面也不属于这些 CSS 的作用范围。导入确认框使用固定样式与浏览器顶层对话框，不提供主题覆写入口。
+迷你播放器、桌面歌词等独立窗口有各自文档，不注入主窗口的 rules、图片或包字体。当前迷你播放器会同步有效基础配色、按钮前景及歌曲材质；桌面歌词使用自己的颜色设置。操作系统窗口边框、文件选择框等原生界面也不属于这些 CSS 的作用范围。旧主题预览恢复框使用固定样式与浏览器顶层对话框，不提供主题覆写入口。
 
 主题不会设置 `.dark` 类、系统深浅色或用户字体偏好。当前格式只提供一套声明，不支持 `@media` 或按深浅色分别声明规则；未覆写的变量仍跟随底层模式，发布前要检查混用效果。
 
@@ -121,20 +121,20 @@ JSON 不支持注释、尾逗号或原始 CSS 文本。文件最多 **128 KiB（
 
 ## 公开组件类
 
-| 区域             | 可覆写类                                                                                                          | 覆盖范围与注意事项                                      |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| 主界面背景、首页 | `.ep-app-background`、`.ep-home`                                                                                  | 背景层与首页内容容器是两个区域                          |
-| 窗口框架         | `.ep-header`、`.ep-footer`                                                                                        | 顶栏、底部播放栏                                        |
-| 侧边栏           | `.ep-sidebar`、`.ep-sidebar-item`、`.ep-sidebar-item--active`                                                     | 容器、导航项、当前导航项                                |
-| 按钮             | `.ep-button`、`.ep-button--primary`、`.ep-button--secondary`、`.ep-button--ghost`、`.ep-button--danger`           | BaseButton；不保证覆盖手写播放控制按钮或所有原生 button |
-| 输入、选择       | `.ep-input`、`.ep-select`、`.ep-select-options`                                                                   | BaseInput 实际输入元素、选择触发器、下拉面板            |
-| 开关             | `.ep-switch`、`.ep-switch-thumb`                                                                                  | 开关容器与滑块；尺寸可能由组件内联设置                  |
-| 自绘滑块         | `.ep-slider`、`.ep-progress-track`、`.ep-progress-fill`、`.ep-progress-thumb`                                     | BaseSlider 容器与轨道、填充、滑块 DOM                   |
-| 原生滑块         | `.ep-range`、`.ep-playback-progress`                                                                              | BaseRange；后者标记底栏及播放器详情的播放进度 input     |
-| 对话框           | `.ep-dialog`、`.ep-dialog-panel`、`.ep-dialog-header`、`.ep-dialog-title`、`.ep-dialog-body`、`.ep-dialog-footer` | BaseDialog 根节点、面板及内容分区                       |
-| 抽屉             | `.ep-drawer`、`.ep-drawer-panel`、`.ep-drawer-header`、`.ep-drawer-body`、`.ep-drawer-footer`                     | BaseDrawer 根节点、面板及内容分区                       |
-| 遮罩             | `.ep-overlay`                                                                                                     | BaseDialog、BaseDrawer 共用遮罩                         |
-| 菜单、浮层       | `.ep-menu`、`.ep-popover`                                                                                         | BaseMenu、底栏菜单、BasePopover                         |
+| 区域             | 可覆写类                                                                                                          | 覆盖范围与注意事项                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 主界面背景、首页 | `.ep-app-background`、`.ep-home`                                                                                  | 背景层与首页内容容器是两个区域                                |
+| 窗口框架         | `.ep-header`、`.ep-footer`                                                                                        | 顶栏、底部播放栏                                              |
+| 侧边栏           | `.ep-sidebar`、`.ep-sidebar-item`、`.ep-sidebar-item--active`                                                     | 容器、导航项、当前导航项                                      |
+| 按钮             | `.ep-button`、`.ep-button--primary`、`.ep-button--secondary`、`.ep-button--ghost`、`.ep-button--danger`           | BaseButton 及接入语义变体的业务操作；不保证所有按钮有相同尺寸 |
+| 输入、选择       | `.ep-input`、`.ep-select`、`.ep-select-options`                                                                   | BaseInput 实际输入元素、选择触发器、下拉面板                  |
+| 开关             | `.ep-switch`、`.ep-switch-thumb`                                                                                  | 开关容器与滑块；尺寸可能由组件内联设置                        |
+| 自绘滑块         | `.ep-slider`、`.ep-progress-track`、`.ep-progress-fill`、`.ep-progress-thumb`                                     | BaseSlider 容器与轨道、填充、滑块 DOM                         |
+| 原生滑块         | `.ep-range`、`.ep-playback-progress`                                                                              | BaseRange；后者标记底栏及播放器详情的播放进度 input           |
+| 对话框           | `.ep-dialog`、`.ep-dialog-panel`、`.ep-dialog-header`、`.ep-dialog-title`、`.ep-dialog-body`、`.ep-dialog-footer` | BaseDialog 根节点、面板及内容分区                             |
+| 抽屉             | `.ep-drawer`、`.ep-drawer-panel`、`.ep-drawer-header`、`.ep-drawer-body`、`.ep-drawer-footer`                     | BaseDrawer 根节点、面板及内容分区                             |
+| 遮罩             | `.ep-overlay`                                                                                                     | BaseDialog、BaseDrawer 共用遮罩                               |
+| 菜单、浮层       | `.ep-menu`、`.ep-popover`                                                                                         | BaseMenu、底栏菜单、BasePopover                               |
 
 组件分区按实际插槽与状态渲染；主题不能创建不存在的标题或页脚。菜单、对话框可能 Teleport 到 `body`：全局 `.ep-menu` 可命中，但 `.ep-sidebar .ep-menu` 不能命中已移出侧栏的节点。旧 `.input-base` 虽复用输入材料，但不属于主题规则允许的类名。
 
@@ -157,6 +157,8 @@ JSON 不支持注释、尾逗号或原始 CSS 文本。文件最多 **128 KiB（
 
 ## 导入、保存与卸载
 
+本节记录历史导入器行为；当前 UI 不提供以下 JSON/ZIP 新导入、导出操作，`.epp` 按插件流程安装。
+
 只有导入 JSON 或 ZIP（包括同名重新导入）时进入 **10 秒预览确认**。确认后保存主题及选择；取消、Escape 或超时恢复上一个主题，未确认的导入不会在重启后自动启用。
 
 同名主题在确认前保留旧声明和旧资源，确认后才替换；取消时清理本次新资源。已安装主题的后续切换，以及选择默认、浅色、深色、内置或自定义背景，均立即生效，无需确认或倒计时。
@@ -166,6 +168,8 @@ JSON 不支持注释、尾逗号或原始 CSS 文本。文件最多 **128 KiB（
 第三方主题可能遮挡内容、影响阅读或消耗资源。导入限制、资源白名单和预览恢复降低风险，不构成对资源解码器或视觉欺骗的全面安全保证。不要通过主题承载脚本；资源规则详见 [资源包规范](theme-packages.md#安全边界)。
 
 ## 开发与验收
+
+新主题采用 [当前发布验收流程](theme-authoring.md#发布验收)。以下旧格式导入与预览步骤仅用于兼容层维护，不表示恢复已移除的入口。主按钮应使用宿主计算的前景/悬停色，浅色模式不叠加全局白色遮罩，具体适配规则以当前指南为准。
 
 1. 从少量语义变量开始，先保证文字、背景、边框、悬停和禁用态可读，再添加区域规则。优先复用已有变量，避免对每个组件重复写颜色。
 2. 检查底层浅色、深色、动态背景，主页与播放器详情，按钮各变体、输入焦点、选择下拉、菜单、对话框和抽屉。

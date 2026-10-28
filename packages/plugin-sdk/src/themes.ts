@@ -39,13 +39,16 @@ export interface PluginThemeAssets {
 }
 export interface PluginThemeData {
   version: 1
+  /** Design mode; does not change the user's preference. Scoped styles/assets apply on match. */
   colorMode: 'light' | 'dark'
+  /** Scene accent. The host derives button foreground/hover unless the theme overrides them. */
   accentColor: string
   headerBackground: string
   footerBackground: string
   chromeBorder: string
+  /** Color/gradient fallback while resources load or fail; not the legacy replace/inherit flag. */
   background: string
-  /** Theme tokens; custom themes retain precedence. */
+  /** Public semantic tokens; user custom themes and descendant-local declarations retain precedence. */
   tokens?: Record<string, string>
   /** Same scoped declarations and resource slots as custom theme packages. */
   rules?: Record<string, Record<string, string>>

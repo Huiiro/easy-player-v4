@@ -343,6 +343,7 @@ npm run pack:theme -- examples/nyan-cat dist/examples
 
 - [公共 SDK 说明](../packages/plugin-sdk/README.md)
 - [主题宿主维护约定](theme-plugins.md)
+- [第三方主题适配指南](theme-authoring.md)
 - [独立仓库主题开发规范](https://github.com/Huiiro/easy-player-plugin/blob/master/THEMES.md)
 - [网络来源阶段记录](player/network-source-architecture.md)
 - [外观规则与调度](theme-architecture.md)

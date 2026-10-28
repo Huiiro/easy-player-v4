@@ -1,6 +1,6 @@
 # Nyan Cat 主题插件
 
-原主题保留在 nyan-cat/ 与 nyan-cat.theme.zip，继续支持原自定义主题入口。插件配置与资源位于独立仓库 easy-player-plugin/examples/nyan-cat。
+原主题保留在 nyan-cat/ 与 nyan-cat.theme.zip，供资源归属和迁移参考；旧格式的新导入/导出入口已移除，已有旧主题仍可选择或删除。当前插件配置与资源位于独立仓库 easy-player-plugin/examples/nyan-cat，配色与发布验收见 [第三方主题适配指南](../theme-authoring.md)。
 
 转换沿用原第三方主题规则：
 

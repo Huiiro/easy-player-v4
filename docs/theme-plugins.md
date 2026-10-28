@@ -2,6 +2,8 @@
 
 整体架构、来源调用与发布流程见 [插件系统总览](plugin-system.md)。
 
+主题作者先阅读 [第三方主题适配指南](theme-authoring.md)：当前 `.epp` 入口、明暗适配、按钮前景、状态色、背景过渡和发布验收均以该指南及 [变量参考](theme-variables.md) 为准。本文侧重宿主和插件仓库的维护分工。
+
 主题插件协议固定为 SDK 2.1、插件 API 2、主题数据格式 1。完整制作规范、容量限制与示例位于独立仓库的 [THEMES.md](https://github.com/Huiiro/easy-player-plugin/blob/master/THEMES.md)。本仓库维护公共 SDK、Schema 和宿主加载器；插件仓库维护主题源码、打包工具和官方分发索引。
 
 ## 公共契约
@@ -30,6 +32,8 @@ npm run test:theme-plugins
 npm run test:official-plugins
 npm run build:nocheck
 npm run test:appearance
+npm run test:theme-system
+npm run test:background-transition
 npm run test:plugin-project
 ```
 
@@ -39,7 +43,7 @@ sync:theme-contract 将 SDK 的两个 Schema 与版本/哈希快照同步到独�
 
 ## 生命周期与兼容
 
-安装 .epp 采用插件流程，导入后需在外观中选择；旧 .theme.json/.theme.zip 保持原自定义主题入口及 10 秒确认行为。两者共用 CSS/资源规则，原包不自动迁移或删除。[Nyan Cat 转换说明](themes/nyan-cat-plugin.md) 展示字段对应关系。
+安装 .epp 采用插件流程，导入后需在外观中选择，不触发旧主题的 10 秒预览。旧 .theme.json/.theme.zip 的新导入和导出入口已移除；已保存的旧主题仍可选择或删除，原包不自动迁移。两者沿用兼容的 CSS/资源规则，[Nyan Cat 转换说明](themes/nyan-cat-plugin.md) 展示字段对应关系。
 
 配色、规则、资源与文本只在插件选中且其设计模式匹配时生效。用户自定义主题保留优先级，选中插件背景时不显示旧自定义主题背景。原生窗口材质或启用的自定义主题背景可暂时覆盖插件背景，偏好保持不变。
 
@@ -52,6 +56,8 @@ sync:theme-contract 将 SDK 的两个 Schema 与版本/哈希快照同步到独�
 ## 验证边界
 
 契约测试覆盖 Schema/宿主声明一致性及原资源槽位一致性；主题包测试覆盖真实安装、重启、错误更新、提交失败回滚、资源访问与卸载。界面测试使用真实 Pinia、主题组件、应用 CSP、资源协议与 GPU shader；同时检查 CSS 覆盖、字体加载与清理。原 JSON/ZIP 导入、字体字形、预览确认和来源插件回归继续保留。
+
+旧 JSON/ZIP 的解析和资源回归属于兼容层验证，不代表当前 UI 重新提供导入入口。新增主题配色矩阵验证普通明暗、官方主题、歌曲极端取色、栏位与迷你窗口的公共组件表面；背景过渡检查验证配色等待资源就绪后统一交接。任意第三方包仍需按作者指南在目标宿主验收。
 
 插件项目隔离测试将整个工程复制到应用外，独立安装、构建、测试并比较目录移动前后的官方哈希；打包测试另比较 LF/CRLF 输入。原生平台材质和不同 GPU 的实际表现仍需在目标系统验收。
 

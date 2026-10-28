@@ -1,10 +1,10 @@
-# 带资源的主题包规范
+# 旧 ZIP 主题资源与迁移参考
 
-> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请制作 .epp 并通过插件管理安装，见 [主题插件约定](theme-plugins.md)。已有旧主题仅保留选择和删除操作。
+> 以下 JSON/ZIP 导入与导出流程为历史格式记录，当前应用已移除这些入口及对应 IPC。新主题请参照 [第三方主题适配指南](theme-authoring.md) 制作 `.epp`，将资源声明放入 `theme.json` 的 `assets`。已有旧主题仅保留选择和删除操作。
 
 本文描述原 JSON/ZIP 自定义主题。通过插件管理安装的 .epp 主题，见 [主题插件开发与维护约定](theme-plugins.md)；原资源、插槽和 CSS 规则继续兼容。
 
-资源包使用 `.theme.zip`，入口为 **设置 → 主题 → 自定义主题**。纯配色 JSON 仍可单独导入，见 [开发规范](custom-themes.md)；所有变量见 [变量参考](theme-variables.md)。清单格式可参考 [JSON Schema](themes/manifest.schema.json)，最终以运行时校验为准，Schema 不能代替资源类型、引用及 ZIP 内容检查。
+旧资源包使用 `.theme.zip`，历史入口为 **设置 → 主题 → 自定义主题**，也曾支持单独导入 JSON。当前仅保留格式和迁移参考，见 [旧字段说明](custom-themes.md)；所有公共变量见 [变量参考](theme-variables.md)。下方 [旧清单 Schema](themes/manifest.schema.json) 不是 `.epp` 清单；新主题使用 SDK 分发的主题插件 Schema。
 
 ## 目录与最小文件
 
@@ -151,6 +151,8 @@ ocean.theme.zip
 只能使用这两个文字槽位，不能替换歌曲标题、艺术家、歌词或任意界面文案。
 
 ## 容量与安装生命周期
+
+本节为旧 ZIP 导入器的容量、预览和导出记录，不适用于当前 `.epp` 安装入口。新包容量与生命周期见 [主题插件规范](https://github.com/Huiiro/easy-player-plugin/blob/master/THEMES.md)。
 
 所有容量使用二进制单位：1 KiB = 1024 字节，1 MiB = 1024 KiB。
 
