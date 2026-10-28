@@ -115,3 +115,37 @@
   opacity: 0;
   transform: scale(0.97);
 }
+
+/* Collection and library headers share the same text-only hover feedback. */
+.ep-header-button,
+.ep-header-actions .ep-button--ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 400;
+  transition: color var(--motion-duration-standard);
+}
+.ep-header-button:enabled,
+.ep-header-actions .ep-button--ghost:enabled {
+  cursor: pointer;
+}
+.ep-header-button:enabled:hover,
+.ep-header-actions .ep-button--ghost:enabled:hover {
+  background: transparent;
+  color: var(--color-primary);
+}
+.ep-header-actions .ep-button--ghost:not(.ep-button--icon) {
+  padding-inline: 0.5rem;
+  gap: 0.25rem;
+}
+.ep-header-select .ep-select,
+.ep-header-select .ep-select:enabled:hover {
+  border-color: var(--color-border);
+  background: transparent;
+}
+.ep-header-select .ep-select:enabled:hover {
+  color: var(--color-primary);
+}
+.ep-header-select .ep-select:enabled:hover svg {
+  color: inherit;
+}

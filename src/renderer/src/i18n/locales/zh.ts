@@ -409,6 +409,14 @@ export default {
     back: '返回'
   },
   remote: {
+    requiredField: '请填写{field}',
+    invalidAddress:
+      '服务器地址无效，请检查地址格式、所选协议及端口，地址中不能包含账号、密码或查询参数。',
+    invalidAuthentication: '认证信息格式无效，请检查所选认证方式及输入内容。',
+    invalidHostKey: '服务器公钥指纹格式无效，应为 SHA256: 后接 Base64 指纹。',
+    nameExists: '音源名称已存在，请使用其他名称。',
+    idConflict: '音源标识冲突，无法保存。',
+    sourceNotFound: '此音源已不存在，请刷新后重试。',
     invalidConfiguration: '连接配置无效，请编辑地址或认证信息。',
     authentication: '认证方式',
     authModes: {
@@ -499,6 +507,10 @@ export default {
     back: '返回'
   },
   songDetails: {
+    coverAlt: '{title} 的封面',
+    noCover: '暂无封面',
+    flags: '歌曲标记',
+    unavailable: '文件不可用',
     title: '歌曲详情',
     loading: '正在加载歌曲详情…',
     loadFailed: '无法加载歌曲详情',

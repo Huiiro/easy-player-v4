@@ -10,7 +10,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import type { MusicSource, MusicSourceInput } from '../../../../shared/remoteSources'
 import {
   REMOTE_PROTOCOLS,
-  isRemoteConnection,
+  remoteConnectionIssue,
   emptyRemoteAuth,
   remoteProtocol,
   normalizeRemoteConnection
@@ -24,6 +24,7 @@ const dialogOpen = ref(false)
 const deleteTarget = ref<MusicSource | null>(null)
 const editing = ref<MusicSource | null>(null)
 const testing = ref(false)
+const saving = ref(false)
 const syncingSourceId = ref<number | null>(null)
 const providerFilter = ref('all')
 const draggedSourceId = ref<number | null>(null)
@@ -97,26 +98,70 @@ function openEdit(source: MusicSource): void {
   }
   dialogOpen.value = true
 }
+function validateConnection(config: unknown): boolean {
+  const issue = remoteConnectionIssue(config)
+  if (!issue) return true
+  const fields: Partial<Record<NonNullable<ReturnType<typeof remoteConnectionIssue>>, string>> = {
+    'address-required': 'remote.serverUrl',
+    username: 'remote.username',
+    password: 'remote.password',
+    token: 'remote.token',
+    'private-key': 'remote.privateKey',
+    'host-key-required': 'remote.hostKey'
+  }
+  const field = fields[issue]
+  error(
+    field
+      ? t('remote.requiredField', { field: t(field) })
+      : t(
+          issue === 'address'
+            ? 'remote.invalidAddress'
+            : issue === 'host-key'
+              ? 'remote.invalidHostKey'
+              : issue === 'auth'
+                ? 'remote.invalidAuthentication'
+                : 'remote.invalidConfiguration'
+        )
+  )
+  return false
+}
+function sourceError(cause: unknown, fallback: string): string {
+  const message =
+    cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : fallback
+  if (/UNIQUE constraint failed: music_source\.name/i.test(message)) return t('remote.nameExists')
+  if (/(?:UNIQUE|PRIMARY KEY) constraint failed: music_source\.id/i.test(message))
+    return t('remote.idConflict')
+  return message || fallback
+}
 async function saveSource(): Promise<void> {
-  if (!form.value.name.trim() || !isRemoteConnection(form.value)) {
-    error(t('remote.connectionRequired'))
+  if (saving.value) return
+  if (!form.value.name.trim()) {
+    error(t('remote.requiredField', { field: t('remote.name') }))
     return
   }
-  // Project each auth variant to primitive fields before crossing the preload bridge.
-  const payload = { ...normalizeRemoteConnection(form.value), name: form.value.name.trim() }
+  if (!validateConnection(form.value)) return
+  saving.value = true
   try {
+    // Project auth variants to primitive fields before crossing the preload bridge.
+    const payload = { ...normalizeRemoteConnection(form.value), name: form.value.name.trim() }
     const response = editing.value
       ? await window.api.database.command('updateSource', { ...editing.value, ...payload })
       : await window.api.database.command('createSource', payload)
     if (!response.success) {
-      error(response.error || t('remote.saveFailed'))
+      error(sourceError(response.error, t('remote.saveFailed')))
+      return
+    }
+    if (response.data === false) {
+      error(t('remote.sourceNotFound'))
       return
     }
     dialogOpen.value = false
     await load()
     success(t('remote.saved'))
   } catch (cause) {
-    error(cause instanceof Error ? cause.message : t('remote.saveFailed'))
+    error(sourceError(cause, t('remote.saveFailed')))
+  } finally {
+    saving.value = false
   }
 }
 async function test(source: MusicSource | null = null): Promise<void> {
@@ -135,15 +180,12 @@ async function test(source: MusicSource | null = null): Promise<void> {
   const config = source
     ? { type: source.type, baseUrl: source.baseUrl, auth: source.auth, hostKey: source.hostKey }
     : form.value
-  if (!isRemoteConnection(config)) {
-    error(t('remote.connectionRequired'))
-    return
-  }
+  if (testing.value || !validateConnection(config)) return
   testing.value = true
   try {
     const response = await window.api.remoteSource.test(normalizeRemoteConnection(config))
     if (!response.success) {
-      error(response.error || t('remote.connectionFailed'))
+      error(sourceError(response.error, t('remote.connectionFailed')))
       return
     }
     success(
@@ -152,7 +194,7 @@ async function test(source: MusicSource | null = null): Promise<void> {
         : t('remote.connectionSucceeded')
     )
   } catch (cause) {
-    error(cause instanceof Error ? cause.message : t('remote.connectionFailed'))
+    error(sourceError(cause, t('remote.connectionFailed')))
   } finally {
     testing.value = false
   }
@@ -228,8 +270,14 @@ onMounted(() => void load())
           :options="providerOptions"
           :aria-label="t('remote.provider')"
           size="sm"
-          class="w-36"
+          class="w-48"
         />
+        <BaseButton size="sm" @click="openCreate">
+          <template #left>
+            <SvgIcon name="common-plus" class-name="size-4" />
+          </template>
+          {{ t('remote.add') }}
+        </BaseButton>
         <BaseButton
           variant="ghost"
           size="sm"
@@ -240,12 +288,6 @@ onMounted(() => void load())
         >
           <SvgIcon name="common-refresh" class-name="size-4" />
           <span class="sr-only">{{ t('remote.refresh') }}</span>
-        </BaseButton>
-        <BaseButton size="sm" @click="openCreate">
-          <template #left>
-            <SvgIcon name="common-plus" class-name="size-4" />
-          </template>
-          {{ t('remote.add') }}
         </BaseButton>
       </div>
     </header>
@@ -261,8 +303,10 @@ onMounted(() => void load())
         v-for="source in filteredSources"
         :key="source.id"
         draggable="true"
-        class="rounded-xl border border-border p-4"
+        class="remote-source-card rounded-xl border border-border p-4"
+        :class="{ 'remote-source-card--dragging': draggedSourceId === source.id }"
         @dragstart="draggedSourceId = source.id"
+        @dragend="draggedSourceId = null"
         @dragover.prevent
         @drop.prevent="dropSource(source.id)"
       >
@@ -338,6 +382,7 @@ onMounted(() => void load())
   <BaseDialog
     v-model="dialogOpen"
     :title="editing ? t('remote.edit') : t('remote.add')"
+    :close-on-overlay="false"
     width="max-w-md"
   >
     <div class="space-y-3">
@@ -432,6 +477,8 @@ onMounted(() => void load())
       </button>
       <button
         class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm"
+        :disabled="saving"
+        :aria-busy="saving"
         @click="saveSource"
       >
         {{ t('common.save') }}
@@ -460,3 +507,30 @@ onMounted(() => void load())
     </template>
   </BaseDialog>
 </template>
+
+<style scoped>
+.remote-source-card {
+  --remote-source-card-lift: -3px;
+  transition:
+    transform var(--motion-duration-standard) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-standard) var(--motion-ease-standard),
+    border-color var(--motion-duration-standard) var(--motion-ease-standard);
+}
+@media (hover: hover) {
+  .remote-source-card:not(.remote-source-card--dragging):hover {
+    transform: translateY(var(--remote-source-card-lift));
+    border-color: color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+    box-shadow: 0 8px 20px rgb(0 0 0 / 10%);
+  }
+}
+:global(.reduce-motion) .remote-source-card {
+  --remote-source-card-lift: 0px;
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .remote-source-card {
+    --remote-source-card-lift: 0px;
+    transition: none;
+  }
+}
+</style>

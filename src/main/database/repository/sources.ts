@@ -161,14 +161,17 @@ export function migrateSourceSecrets(): void {
 
 export function createSource(input: MusicSourceInput): MusicSource {
   if (!input.name?.trim()) throw new Error(t('invalidSourceConfig'))
-  const connection = storedConnection(input)
+  const name = input.name.trim()
   const db = getDatabase()
+  if (db.prepare('SELECT id FROM music_source WHERE name = ?').get(name))
+    throw new Error(t('sourceNameExists'))
+  const connection = storedConnection(input)
   const result = db
     .prepare(
       `INSERT INTO music_source (name, type, server, base_url, user, secret, auth_type, status, source_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(source_order), 0) + 1 FROM music_source))`
     )
     .run(
-      input.name,
+      name,
       connection.type,
       connection.server,
       connection.baseUrl,
@@ -182,6 +185,13 @@ export function createSource(input: MusicSourceInput): MusicSource {
 
 export function updateSource(source: MusicSource): boolean {
   if (!source.name?.trim()) throw new Error(t('invalidSourceConfig'))
+  const name = source.name.trim()
+  if (
+    getDatabase()
+      .prepare('SELECT id FROM music_source WHERE name = ? AND id <> ?')
+      .get(name, source.id)
+  )
+    throw new Error(t('sourceNameExists'))
   const current = getSource(source.id)
   const keepCredential =
     current?.credentialError &&
@@ -202,7 +212,7 @@ export function updateSource(source: MusicSource): boolean {
         'UPDATE music_source SET name = ?, type = ?, server = ?, base_url = ?, user = ?, secret = ?, auth_type = ?, status = ?, source_order = ?, imported_count = ?, song_count = ?, last_connect = ? WHERE id = ?'
       )
       .run(
-        source.name,
+        name,
         connection.type,
         connection.server,
         connection.baseUrl,

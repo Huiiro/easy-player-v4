@@ -62,6 +62,7 @@ const { t } = useI18n()
       <slot v-if="!collapsed" name="details" />
     </div>
     <CollectionHeaderActions
+      play-variant="primary"
       :playing="playing"
       :play-label="t('playlist.play')"
       :back-label="t('playlist.back')"

@@ -11,7 +11,7 @@ const temporary = await mkdtemp(join(tmpdir(), 'easy-player-source-storage-'))
 const databasePath = join(temporary, 'sources.db')
 let database = new DatabaseSync(databasePath)
 database.exec(`CREATE TABLE music_source (
-  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, type TEXT, server TEXT, base_url TEXT,
+  id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, type TEXT, server TEXT, base_url TEXT,
   user TEXT, secret TEXT, auth_type TEXT, status TEXT, source_order INTEGER DEFAULT 0,
   imported_count INTEGER DEFAULT 0, song_count INTEGER DEFAULT 0, last_connect TEXT
 )`)
@@ -91,6 +91,12 @@ try {
   }
   const source = repository.createSource(input)
   assert.deepEqual(source.auth, input.auth)
+  assert.throws(() => repository.createSource({ ...input, name: '  SFTP  ' }), /sourceNameExists/)
+  const another = repository.createSource({ ...input, name: 'Other' })
+  assert.throws(() => repository.updateSource({ ...another, name: ' SFTP ' }), /sourceNameExists/)
+  assert.equal(repository.getSource(another.id).name, 'Other')
+  assert.equal(repository.updateSource({ ...source, name: ' SFTP ' }), true)
+
   for (const field of ['user', 'secret', 'authType', 'server'])
     assert.equal(field in source, false, `storage field ${field} must not cross IPC`)
   const stored = database.prepare('SELECT * FROM music_source WHERE id = ?').get(source.id)

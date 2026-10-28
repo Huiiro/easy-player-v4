@@ -229,11 +229,11 @@ const batchMenuItems = computed(() => [
 
 <template>
   <header class="border-b border-border">
-    <div class="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+    <div class="flex flex-wrap items-center justify-between gap-2.5 px-5 py-2.5">
       <div class="flex items-center gap-1">
         <!-- multi select -->
         <button
-          class="btn-hover header-control header-icon-control"
+          class="header-button header-control header-icon-control"
           :aria-label="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
           :title="selectionMode ? t('songList.cancelSelection') : t('songList.select')"
           @click="emit('toggleSelection')"
@@ -261,7 +261,7 @@ const batchMenuItems = computed(() => [
           />
           <button
             v-if="keyword"
-            class="btn-hover absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center"
+            class="header-button absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center"
             :aria-label="t('songList.clearSearch')"
             :title="t('songList.clearSearch')"
             @click="emit('update:keyword', '')"
@@ -270,11 +270,11 @@ const batchMenuItems = computed(() => [
           </button>
         </div>
         <!-- count text -->
-        <p class="header-control text-text-l ml-2 cursor-default">
+        <p class="header-control text-text-l ml-1.5 cursor-default">
           {{ t('songList.total', { count: total }) }}
         </p>
       </div>
-      <div class="flex flex-wrap items-center justify-end gap-2">
+      <div class="flex flex-wrap items-center justify-end gap-1.5">
         <BaseMenu
           :model-value="sortBy"
           :items="sortMenuItems"
@@ -283,7 +283,7 @@ const batchMenuItems = computed(() => [
           :max-height="360"
         >
           <template #trigger>
-            <button class="btn-hover header-control px-2" :aria-label="t('songList.sort')">
+            <button class="header-button header-control px-2" :aria-label="t('songList.sort')">
               <SvgIcon name="common-sort" class-name="size-4" />
               {{ activeSortLabel }} {{ direction }}
             </button>
@@ -296,13 +296,13 @@ const batchMenuItems = computed(() => [
           :options="sourceOptions"
           :aria-label="t('songList.sourceFilter')"
           size="sm"
-          class="w-40"
+          class="header-source w-40"
           @update:model-value="emit('update:sourceFilter', $event)"
         />
         <!-- tag -->
         <button
           v-if="showTagManager"
-          class="btn-hover header-control header-icon-control"
+          class="header-button header-control header-icon-control"
           :aria-label="t('tags.manageAndFilter')"
           :title="t('tags.manageAndFilter')"
           @click="emit('openTagManager')"
@@ -318,14 +318,14 @@ const batchMenuItems = computed(() => [
         </span>
         <button
           v-if="activeTagFilterCount"
-          class="btn-hover header-control px-2 text-text-l"
+          class="header-button header-control px-2 text-text-l"
           @click="emit('clearTagFilters')"
         >
           {{ t('tags.clearFilter') }}
         </button>
         <!-- refresh -->
         <button
-          class="btn-hover header-control header-icon-control"
+          class="header-button header-control header-icon-control"
           :aria-label="t('songList.refresh')"
           :title="t('songList.refresh')"
           @click="emit('refresh')"
@@ -336,7 +336,7 @@ const batchMenuItems = computed(() => [
         <BaseMenu :items="moreMenuItems" size="sm" width="w-56" :max-height="440">
           <template #trigger>
             <button
-              class="btn-hover header-control header-icon-control"
+              class="header-button header-control header-icon-control"
               :aria-label="t('songList.more')"
               :title="t('songList.more')"
             >
@@ -347,18 +347,19 @@ const batchMenuItems = computed(() => [
       </div>
     </div>
 
-    <div v-if="selectionMode" class="flex flex-wrap items-center gap-1 px-5 pb-3 text-xs">
-      <BaseButton size="sm" variant="ghost" @click="emit('toggleAll')">
+    <div v-if="selectionMode" class="flex flex-wrap items-center gap-0.5 px-5 pb-2.5 text-xs">
+      <BaseButton class="header-button" size="sm" variant="ghost" @click="emit('toggleAll')">
         <template #left>
           <SvgIcon :name="allSelected ? 'common-close' : 'common-check'" class-name="size-4" />
         </template>
         {{ allSelected ? t('songList.clearSelection') : t('songList.selectAll') }}
       </BaseButton>
-      <BaseButton size="sm" variant="ghost" @click="emit('selectNewest')">
+      <BaseButton class="header-button" size="sm" variant="ghost" @click="emit('selectNewest')">
         <template #left><SvgIcon name="common-select" class-name="size-4" /></template>
         {{ t('songList.selectNewest') }}
       </BaseButton>
       <BaseButton
+        class="header-button"
         size="sm"
         variant="ghost"
         :disabled="selectedCount === 0"
@@ -368,6 +369,7 @@ const batchMenuItems = computed(() => [
         {{ t('songList.play') }}
       </BaseButton>
       <BaseButton
+        class="header-button"
         size="sm"
         variant="ghost"
         :disabled="selectedCount === 0"
@@ -377,6 +379,7 @@ const batchMenuItems = computed(() => [
         {{ t('songList.addToPlaylist') }}
       </BaseButton>
       <BaseButton
+        class="header-button"
         size="sm"
         variant="ghost"
         :disabled="selectedCount === 0"
@@ -387,7 +390,12 @@ const batchMenuItems = computed(() => [
       </BaseButton>
       <BaseMenu :items="batchMenuItems" size="sm" width="w-60" :max-height="400">
         <template #trigger>
-          <BaseButton size="sm" variant="ghost" :disabled="selectedCount === 0">
+          <BaseButton
+            class="header-button"
+            size="sm"
+            variant="ghost"
+            :disabled="selectedCount === 0"
+          >
             <template #left><SvgIcon name="common-preference" class-name="size-4" /></template>
             {{ t('songList.batchFeedback') }}
             <template #right><SvgIcon name="arrow-arrow-down" class-name="size-3" /></template>
@@ -395,6 +403,7 @@ const batchMenuItems = computed(() => [
         </template>
       </BaseMenu>
       <BaseButton
+        class="header-button"
         size="sm"
         variant="ghost"
         :disabled="selectedCount === 0"
@@ -407,7 +416,7 @@ const batchMenuItems = computed(() => [
         size="sm"
         variant="ghost"
         :disabled="selectedCount === 0"
-        class="text-danger!"
+        class="header-button text-danger!"
         @click="emit('batchDelete')"
       >
         <template #left><SvgIcon name="common-delete" class-name="size-4" /></template>
@@ -485,6 +494,37 @@ const batchMenuItems = computed(() => [
     2.5rem minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(8rem, 1.2fr) 3.5rem
   );
 }
+.header-button {
+  background: transparent;
+  font-weight: 400;
+  transition: color var(--motion-duration-standard);
+}
+.header-button.ep-button {
+  padding-inline: 0.5rem;
+  gap: 0.25rem;
+}
+.header-button.header-control:not(.header-icon-control) {
+  padding-inline: 0.375rem;
+}
+.header-button:enabled {
+  cursor: pointer;
+}
+.header-button:enabled:hover {
+  background: transparent;
+  color: var(--color-primary);
+}
+.header-source :deep(.ep-select) {
+  background: transparent;
+  border-color: var(--color-border);
+}
+.header-source :deep(.ep-select:enabled:hover) {
+  background: transparent;
+  border-color: var(--color-border);
+  color: var(--color-primary);
+}
+.header-source :deep(.ep-select:enabled:hover svg) {
+  color: inherit;
+}
 .header-control {
   display: inline-flex;
   align-items: center;
@@ -495,7 +535,7 @@ const batchMenuItems = computed(() => [
   font-size: var(--text-xs);
   line-height: var(--text-xs--line-height);
   white-space: nowrap;
-  transition-property: color, background-color, border-color, box-shadow, opacity;
+  transition-property: color, opacity;
 }
 .header-icon-control {
   width: var(--ep-control-height-sm);

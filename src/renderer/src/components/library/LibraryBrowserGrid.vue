@@ -190,7 +190,7 @@ onActivated(() => {
           />
           <button
             v-if="keyword"
-            class="btn-hover absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center"
+            class="ep-header-button absolute right-1 top-1/2 grid size-5 -translate-y-1/2 place-items-center"
             :aria-label="t('library.clearSearch')"
             :title="t('library.clearSearch')"
             @click="keyword = ''"
@@ -199,8 +199,9 @@ onActivated(() => {
           </button>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-1.5">
         <BaseButton
+          class="ep-header-button"
           variant="ghost"
           size="sm"
           icon-only
@@ -211,6 +212,7 @@ onActivated(() => {
           <SvgIcon name="common-refresh" class-name="size-4" />
         </BaseButton>
         <BaseButton
+          class="ep-header-button"
           variant="ghost"
           size="sm"
           icon-only
@@ -229,7 +231,7 @@ onActivated(() => {
           :title="t('library.cardSize')"
           :aria-label="t('library.cardSize')"
           size="sm"
-          class="w-30"
+          class="ep-header-select w-30"
         />
       </div>
     </header>

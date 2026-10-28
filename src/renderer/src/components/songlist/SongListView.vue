@@ -547,10 +547,14 @@ watch([keyword, composing], () => {
       <RecycleScroller
         ref="scroller"
         class="song-list-scroller custom-scrollbar overflow-y-auto"
-        :class="{ invisible: loading || !filteredSongs.length }"
+        :class="{
+          invisible: loading || !filteredSongs.length,
+          'song-list-scroller--small': uiStore.smallSongList
+        }"
         :inert="loading || !filteredSongs.length"
         :items="filteredSongs"
         :item-size="rowHeight"
+        :disable-transform="uiStore.smallSongList === true"
         key-field="id"
         @scroll.passive="onListScroll"
         @resize="syncScrollLayout"
@@ -608,6 +612,10 @@ watch([keyword, composing], () => {
 }
 .song-list-scroller :deep(.vue-recycle-scroller__item-wrapper) {
   min-width: var(--song-list-min-width);
+}
+/* Small text should not be promoted to a transform compositing layer. */
+.song-list-scroller--small :deep(.vue-recycle-scroller__item-view) {
+  will-change: auto;
 }
 .song-list-backtop {
   bottom: var(--song-list-backtop-bottom, 7rem);

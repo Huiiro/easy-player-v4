@@ -1,4 +1,5 @@
 export default {
+  sourceNameExists: '音源名称已存在，请使用其他名称。',
   pluginCatalogLoadFailed: '无法读取官方插件源，请检查网络后重试。',
   pluginUninstallFailed: '插件卸载失败，请重试。',
   pluginDowngrade: '已安装的插件版本更新，无法安装旧版本，请刷新官方源。',

@@ -417,6 +417,15 @@ export default {
     back: 'Back'
   },
   remote: {
+    requiredField: 'Please enter {field}',
+    invalidAddress:
+      'Invalid server address. Check the address, selected protocol and port. Do not include credentials or query parameters.',
+    invalidAuthentication:
+      'Invalid authentication format. Check the selected method and credentials.',
+    invalidHostKey: 'Invalid server fingerprint. Use SHA256: followed by its Base64 fingerprint.',
+    nameExists: 'A source with this name already exists. Choose another name.',
+    idConflict: 'Source identifier conflict. The source could not be saved.',
+    sourceNotFound: 'This source no longer exists. Refresh and retry.',
     invalidConfiguration:
       'Invalid connection configuration. Edit the address or authentication details.',
     authentication: 'Authentication',
@@ -512,6 +521,10 @@ export default {
     back: 'Back'
   },
   songDetails: {
+    coverAlt: 'Cover for {title}',
+    noCover: 'No cover',
+    flags: 'Song flags',
+    unavailable: 'File unavailable',
     title: 'Song details',
     loading: 'Loading song details…',
     loadFailed: 'Unable to load song details',

@@ -78,6 +78,7 @@ async function playAll(): Promise<void> {
         </p>
       </div>
       <CollectionHeaderActions
+        play-variant="primary"
         :playing="playing"
         :disabled="!songList || songList.loading || !statistics.enabled"
         :play-label="t('playlist.play')"

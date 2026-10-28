@@ -150,50 +150,52 @@ export function normalizeRemoteConnection(value: unknown): RemoteConnection {
     ...(result.type === 'sftp' ? { hostKey: result.hostKey } : {})
   }
 }
-export function isRemoteConnection(value: unknown): value is RemoteConnection {
-  if (!value || typeof value !== 'object') return false
+export type RemoteConnectionIssue =
+  | 'protocol'
+  | 'address-required'
+  | 'address'
+  | 'auth'
+  | 'username'
+  | 'password'
+  | 'token'
+  | 'private-key'
+  | 'host-key-required'
+  | 'host-key'
+
+/** Report the reason for invalid input without including credential values. */
+export function remoteConnectionIssue(value: unknown): RemoteConnectionIssue | null {
+  if (!value || typeof value !== 'object') return 'protocol'
   const config = value as RemoteConnection
   const protocol = remoteProtocol(config.type)
-  if (
-    !protocol ||
-    typeof config.baseUrl !== 'string' ||
-    !config.baseUrl.trim() ||
-    !config.auth ||
-    !protocol.authTypes.includes(config.auth.type)
-  )
-    return false
+  if (!protocol) return 'protocol'
+  if (typeof config.baseUrl !== 'string' || !config.baseUrl.trim()) return 'address-required'
+  if (!config.auth || !protocol.authTypes.includes(config.auth.type)) return 'auth'
   const auth = config.auth
-  if (
-    ['ftp', 'ftps', 'ftps-implicit'].includes(config.type) &&
-    'password' in auth &&
-    /[\r\n\0]/.test(auth.username + auth.password)
-  )
-    return false
   const text = (value: unknown): value is string => typeof value === 'string' && !!value.trim()
-  if (
-    (auth.type === 'password' || auth.type === 'basic') &&
-    (!text(auth.username) || typeof auth.password !== 'string' || !auth.password)
-  )
-    return false
-  if (
-    (auth.type === 'bearer' || auth.type === 'api-key') &&
-    (!text(auth.token) || /[\r\n]/.test(auth.token))
-  )
-    return false
-  if (auth.type === 'basic' && auth.username.includes(':')) return false
-  if (
-    auth.type === 'private-key' &&
-    (!text(auth.username) ||
-      !text(auth.privateKey) ||
-      (auth.passphrase !== undefined && typeof auth.passphrase !== 'string'))
-  )
-    return false
-  if (
-    config.type === 'sftp' &&
-    (typeof config.hostKey !== 'string' || !/^SHA256:[A-Za-z0-9+/]{43}=?$/.test(config.hostKey))
-  )
-    return false
-  if (config.type === 'smb' && /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(config.baseUrl)) return true
+  if (auth.type === 'password' || auth.type === 'basic') {
+    if (!text(auth.username)) return 'username'
+    if (typeof auth.password !== 'string' || !auth.password) return 'password'
+    if (auth.type === 'basic' && auth.username.includes(':')) return 'auth'
+    if (
+      ['ftp', 'ftps', 'ftps-implicit'].includes(config.type) &&
+      /[\r\n\0]/.test(auth.username + auth.password)
+    )
+      return 'auth'
+  }
+  if (auth.type === 'bearer' || auth.type === 'api-key') {
+    if (!text(auth.token)) return 'token'
+    if (/[\r\n]/.test(auth.token)) return 'auth'
+  }
+  if (auth.type === 'private-key') {
+    if (!text(auth.username)) return 'username'
+    if (!text(auth.privateKey)) return 'private-key'
+    if (auth.passphrase !== undefined && typeof auth.passphrase !== 'string') return 'auth'
+  }
+  if (config.type === 'sftp') {
+    if (!text(config.hostKey)) return 'host-key-required'
+    if (!/^SHA256:[A-Za-z0-9+/]{43}=?$/.test(config.hostKey)) return 'host-key'
+  }
+  if (config.type === 'smb' && /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(config.baseUrl)) return null
   try {
     const url = new URL(config.baseUrl)
     if (
@@ -204,13 +206,16 @@ export function isRemoteConnection(value: unknown): value is RemoteConnection {
       url.search ||
       url.hash
     )
-      return false
+      return 'address'
     const path = decodeURIComponent(url.pathname)
-    if (/[\r\n\0\\]/.test(path) || path.split('/').includes('..')) return false
-    return true
+    if (/[\r\n\0\\]/.test(path) || path.split('/').includes('..')) return 'address'
+    return null
   } catch {
-    return false
+    return 'address'
   }
+}
+export function isRemoteConnection(value: unknown): value is RemoteConnection {
+  return remoteConnectionIssue(value) === null
 }
 
 /** Application DTO. Storage-only legacy fields never cross IPC. */

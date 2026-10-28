@@ -1,4 +1,5 @@
 export default {
+  sourceNameExists: 'A source with this name already exists. Choose another name.',
   pluginCatalogLoadFailed:
     'Unable to read the official plugin source. Check the network and retry.',
   pluginUninstallFailed: 'Unable to uninstall the plugin. Please retry.',

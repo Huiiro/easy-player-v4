@@ -145,7 +145,7 @@ function openAlbum(): void {
         <span class="min-w-0">
           <span class="flex min-w-0 items-center gap-1">
             <span
-              class="truncate cursor-pointer"
+              class="song-list-name truncate cursor-pointer"
               :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
             >
               <template v-for="(part, partIndex) in highlightedTitle" :key="partIndex">
@@ -315,6 +315,13 @@ function openAlbum(): void {
 .song-list-row--small .text-sm {
   font-size: 0.75rem;
   line-height: 1rem;
+}
+/* Keep the title distinct and use native text rasterization at this small size. */
+.song-list-row--small .song-list-name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  -webkit-font-smoothing: auto;
 }
 .song-list-row--small .song-list-cover {
   width: 1.75rem;

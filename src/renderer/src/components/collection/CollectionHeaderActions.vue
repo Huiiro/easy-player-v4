@@ -9,20 +9,29 @@ withDefaults(
     disabled?: boolean
     playLabel?: string
     backLabel?: string
+    playVariant?: 'primary' | 'ghost'
   }>(),
-  { playing: false, disabled: false }
+  { playing: false, disabled: false, playVariant: 'ghost' }
 )
 const emit = defineEmits<{ play: []; back: [] }>()
 const { t } = useI18n()
 </script>
 
 <template>
-  <div class="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2">
+  <div
+    class="ep-header-actions ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-1.5"
+  >
     <slot />
     <BaseButton variant="ghost" size="sm" @click="emit('back')">
       {{ backLabel || t('library.back') }}
     </BaseButton>
-    <BaseButton size="sm" :disabled="disabled" :loading="playing" @click="emit('play')">
+    <BaseButton
+      :variant="playVariant"
+      size="sm"
+      :disabled="disabled"
+      :loading="playing"
+      @click="emit('play')"
+    >
       <template v-if="!playing" #left>
         <SvgIcon name="play-play" class-name="size-4" />
       </template>

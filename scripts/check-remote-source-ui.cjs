@@ -31,6 +31,10 @@ app.whenReady().then(async () => {
     ipcMain.handle('database:command', (_event, request) => {
       calls.push(request)
       if (request.action === 'listSources') return { success: true, data: sources }
+      if (request.params?.name === 'Duplicate')
+        return { success: false, error: 'UNIQUE constraint failed: music_source.name' }
+      if (request.params?.name === 'ID-conflict')
+        return { success: false, error: 'UNIQUE constraint failed: music_source.id' }
       if (request.params?.name === 'Reject-save') throw new Error('Simulated save rejection')
       if (request.action === 'createSource')
         sources.push({ ...sources[0], ...request.params, id: 2 })
@@ -42,6 +46,8 @@ app.whenReady().then(async () => {
     })
     ipcMain.handle('remote-source:test', (_event, config) => {
       calls.push({ action: 'test', params: config })
+      if (config.baseUrl.includes('offline.invalid'))
+        return { success: false, error: 'ECONNREFUSED fixture' }
       if (config.auth.password === 'reject-test') throw new Error('Simulated test rejection')
       return { success: true, data: { version: 'fixture' } }
     })
@@ -148,7 +154,23 @@ app.whenReady().then(async () => {
       check(select.getAttribute('aria-expanded') === 'false' && !document.querySelector('[role=listbox]'), 'Protocol selection inside label stays closed');
       const createInputs = dialog().querySelectorAll('input');
       fill(createInputs[0], 'Created'); fill(createInputs[1], 'https://nas/new/'); fill(createInputs[2], 'new-user'); fill(createInputs[3], 'new-password');
-      notices.clear(); button(en.common.save, dialog()).click(); await wait();
+      notices.clear(); fill(createInputs[1], 'not-an-address'); button(en.common.save, dialog()).click(); await wait();
+      check(notices.messages.value.some(message=>message.message===en.remote.invalidAddress),'Malformed addresses show an address error instead of incomplete fields');
+      notices.clear(); fill(createInputs[1], 'ftp://nas/music'); button(en.remote.testConnection, dialog()).click(); await wait();
+      check(notices.messages.value.some(message=>message.message===en.remote.invalidAddress),'Protocol mismatch is reported as an invalid address');
+      notices.clear(); fill(createInputs[1], 'https://nas/new/'); fill(createInputs[2], ''); button(en.common.save, dialog()).click(); await wait();
+      check(notices.messages.value.some(message=>message.message.includes(en.remote.username)),'Missing credentials identify the required field');
+      fill(createInputs[2], 'new-user'); fill(createInputs[0], 'Duplicate'); notices.clear(); button(en.common.save, dialog()).click(); await wait();
+      check(!!dialog() && notices.messages.value.some(message=>message.message===en.remote.nameExists),'Duplicate source names show a dedicated message and retain form values');
+      fill(createInputs[0], 'ID-conflict'); notices.clear(); button(en.common.save, dialog()).click(); await wait();
+      check(notices.messages.value.some(message=>message.message===en.remote.idConflict),'Primary key conflicts are not reported as missing connection fields');
+      fill(createInputs[0], 'Created'); fill(createInputs[1], 'https://offline.invalid/'); notices.clear(); button(en.remote.testConnection, dialog()).click(); await wait();
+      check(notices.messages.value.some(message=>message.message==='ECONNREFUSED fixture'),'Connection failures retain their actual backend error');
+      fill(createInputs[1], 'https://nas/new/');
+      const overlay=document.querySelector('.ep-overlay');
+      for(const type of ['mousedown','mouseup','click'])overlay.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,button:0}));
+      await wait();check(!!dialog() && createInputs[0].value==='Created','Clicking outside the source dialog does not close or reset it');
+      notices.clear(); const save=button(en.common.save, dialog());save.click();save.click(); await wait();
       check(!dialog() && document.querySelectorAll('article').length === 2, 'Create serializes the nested authentication DTO');
       check(errors.length === 0, 'No unhandled dialog or IPC errors');
       instance.unmount();
