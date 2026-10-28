@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { getKuromojiDictionaryPath } from '../utils/pathUtils'
 import {
   addSequence,
   addTextTerms,
@@ -27,10 +27,7 @@ function romanizer(): Promise<Romanizer> {
     instance = (async () => {
       const Kuroshiro = nodeRequire('kuroshiro').default
       const Analyzer = nodeRequire('kuroshiro-analyzer-kuromoji')
-      const dict = join(dirname(nodeRequire.resolve('kuromoji/package.json')), 'dict').replace(
-        /app\.asar([\\/])/u,
-        'app.asar.unpacked$1'
-      )
+      const dict = getKuromojiDictionaryPath(nodeRequire.resolve('kuromoji/package.json'))
       const converter: Romanizer = new Kuroshiro()
       await converter.init(new (Analyzer.default ?? Analyzer)({ dictPath: dict }))
       return converter

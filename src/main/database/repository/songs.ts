@@ -1,10 +1,10 @@
 import { existsSync, statSync, unlinkSync } from 'node:fs'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { getDatabase } from '../index'
 import { invalidateDailyRecommendations } from '../recommendations'
 import { refreshNewestSongs } from '../newestSongs'
 import { buildSongSearchFilter } from '../../search/searchQuery'
-import { getDataPath } from '../../utils/pathUtils'
+import { getCoverPath } from '../../utils/pathUtils'
 import type { PagedResult, Song, SongQuery } from '../types'
 import { attachTags, songColumns, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 import { refreshPlaylistCover } from './playlists'
@@ -222,7 +222,7 @@ export function deleteSongs(songIds: number[], deleteLocalFiles = false): Delete
 
   // Embedded covers created by the local scanner are owned by player_data.
   // Remove only orphaned assets; shared/custom covers are deliberately kept.
-  const coverDirectory = resolve(join(getDataPath(), 'covers'))
+  const coverDirectory = getCoverPath()
   for (const cover of new Set(covers)) {
     const resolvedCover = resolve(cover)
     const coverRelativePath = relative(coverDirectory, resolvedCover)

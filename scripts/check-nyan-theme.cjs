@@ -43,7 +43,7 @@ vm.runInNewContext(transpile(fs.readFileSync('src/main/service/themePackageServi
   Buffer,
   require: (id) =>
     id === '../utils/pathUtils'
-      ? { getDataPath: () => path.join(temporary, 'data') }
+      ? { getThemePath: (...parts) => path.join(temporary, 'data', 'themes', ...parts) }
       : id === '../../shared/themePackage' || id === '../utils/themeResources'
         ? shared
         : require(id)

@@ -53,6 +53,12 @@ async function runChecks() {
   ].map((song) => ({
     ...song,
     title: 'Track ' + song.id,
+    ...(song.id === 1
+      ? {
+          playTime: '2026-10-29 10:00:00',
+          tags: [{ id: 1, name: 'Favorite tracks', color: '#7c3aed' }]
+        }
+      : {}),
     disableNetworkLyrics: true,
     instrumental: true,
     artist: 'Artist',
@@ -279,6 +285,63 @@ async function runChecks() {
     'flag visibility switches are independent'
   )
   aligned('one lyric flag column')
+  await menuAction('更多', '使用紧凑布局')
+  check(
+    window.ui.smallSongList &&
+      rows().every((row) => row.parentElement.getBoundingClientRect().height === 40),
+    'small layout switches virtualized rows to 40px'
+  )
+  check(
+    rows().every((row) => getComputedStyle(cells(row)[2]).fontSize === '12px'),
+    'small layout uses smaller text throughout the row'
+  )
+  aligned('small layout without covers')
+  await menuAction('更多', '显示封面')
+  check(
+    window.ui.smallSongList &&
+      !window.ui.compactSongList &&
+      rows()[0].querySelector('.song-list-cover').getBoundingClientRect().width === 28,
+    'small layout supports 28px covers independently of cover visibility'
+  )
+  const taggedRow = rows().find((row) => cells(row)[1].textContent.includes('Track 1'))
+  check(
+    !!taggedRow &&
+      [...cells(taggedRow)[1].querySelectorAll('[title]')].every(
+        (element) =>
+          element.getBoundingClientRect().bottom <= taggedRow.getBoundingClientRect().bottom
+      ),
+    'history and tags stay inside a small row'
+  )
+  aligned('small layout with covers')
+  await menuAction('更多', '使用标准布局')
+  check(
+    !window.ui.smallSongList &&
+      rows().every((row) => row.parentElement.getBoundingClientRect().height === 64),
+    'standard layout restores 64px rows after size switching'
+  )
+  aligned('restored standard layout')
+  scroller.scrollTop = 8 * 64 + 17
+  scroller.dispatchEvent(new Event('scroll'))
+  await wait()
+  const firstVisibleSong = cells(rows()[0])[0].textContent.trim()
+  await menuAction('更多', '使用紧凑布局')
+  check(
+    cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
+      Math.abs(scroller.scrollTop - (8 * 40 + (17 / 64) * 40)) < 1,
+    'shrinking layout preserves the first visible song and relative row offset'
+  )
+  await menuAction('更多', '使用标准布局')
+  check(
+    cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
+      Math.abs(scroller.scrollTop - (8 * 64 + 17)) < 2,
+    'restoring standard layout keeps the same visible song'
+  )
+  await menuAction('更多', '隐藏封面')
+  check(
+    cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
+      Math.abs(scroller.scrollTop - (8 * 56 + (17 / 64) * 56)) < 2,
+    'cover visibility changes also preserve the visible song'
+  )
   check(queries === 1, 'column toggles and local sorting never requery the database')
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   return checks

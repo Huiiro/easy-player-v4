@@ -331,7 +331,9 @@ try {
     [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
     [path.resolve('src/main/database/repository.ts')]: { getSong },
     [path.resolve('src/main/database/index.ts')]: { getDatabase: () => db },
-    [path.resolve('src/main/utils/pathUtils.ts')]: { getDataPath: () => root },
+    [path.resolve('src/main/utils/pathUtils.ts')]: {
+      getCoverPath: (...parts) => path.join(root, 'covers', ...parts)
+    },
     [path.resolve('src/main/service/metadataService.ts')]: {
       readMetadata: async () => ({ ...fileMetadata }),
       writeMetadata: async (_file, _type, patch) => {

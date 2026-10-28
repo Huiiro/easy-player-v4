@@ -11,6 +11,7 @@ import { createSongTextComparator, songSortText } from '@/utils/songTextSort'
 import {
   normalizeSongListColumns,
   songListLayout,
+  songListRowHeight,
   songPlayCount,
   songYear,
   type OptionalSongColumn,
@@ -49,9 +50,14 @@ const statistics = useStatisticsStore()
 const { t } = useI18n()
 const { success, warning, error: showError } = useMessage()
 const songs = ref<LibrarySong[]>([])
-const scroller = ref<{ el?: HTMLElement; scrollToItem?: (index: number) => void } | null>(null)
+const scroller = ref<{
+  el?: HTMLElement
+  scrollToItem?: (index: number) => void
+  scrollToPosition?: (position: number) => void
+} | null>(null)
+const rowHeight = computed(() => songListRowHeight(uiStore.compactSongList, uiStore.smallSongList))
 const columns = computed(() => normalizeSongListColumns(uiStore.songListColumns))
-const layoutStyle = computed(() => songListLayout(columns.value))
+const layoutStyle = computed(() => songListLayout(columns.value, uiStore.smallSongList === true))
 const scrollLeft = ref(0)
 const contentWidth = ref(0)
 function syncScrollLayout(): void {
@@ -187,6 +193,46 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
 }
 
 const filteredSongs = computed(() => songs.value.slice().sort(compareSongs))
+let layoutAnchor: { songId: number; rowFraction: number } | undefined
+watch(
+  rowHeight,
+  async (height, previousHeight, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
+    const element = scroller.value?.el
+    if (!element || loading.value || !filteredSongs.value.length) {
+      layoutAnchor = undefined
+      return
+    }
+    // This pre-render watcher reads the old scroll position before the shorter
+    // virtual content can clamp it. Keep the song, rather than its pixel index.
+    const firstIndex = Math.min(
+      Math.floor(element.scrollTop / previousHeight),
+      filteredSongs.value.length - 1
+    )
+    const anchor = layoutAnchor ?? {
+      songId: filteredSongs.value[firstIndex].id,
+      rowFraction: (element.scrollTop % previousHeight) / previousHeight
+    }
+    layoutAnchor = anchor
+    const revision = loadRevision
+    await nextTick()
+    if (cancelled || disposed) return
+    layoutAnchor = undefined
+    if (loading.value || revision !== loadRevision || scroller.value?.el !== element) return
+    const index = filteredSongs.value.findIndex((song) => song.id === anchor.songId)
+    if (index < 0) return
+    const position = (index + anchor.rowFraction) * height
+    if (scroller.value?.scrollToPosition) scroller.value.scrollToPosition(position)
+    else element.scrollTop = position
+    syncScrollLayout()
+    showBackTop.value = element.scrollTop > 320
+  },
+  { flush: 'pre' }
+)
+
 const {
   selectionMode,
   selectedIds,
@@ -459,6 +505,7 @@ watch([keyword, composing], () => {
       :all-selected="allSelected"
       :show-file-name="showFileName"
       :compact="uiStore.compactSongList"
+      :small="uiStore.smallSongList"
       :hide-dividers="uiStore.hideSongListDividers"
       :columns="columns"
       :scroll-left="scrollLeft"
@@ -475,6 +522,7 @@ watch([keyword, composing], () => {
       @select-newest="selectNewest"
       @toggle-file-name="showFileName = !showFileName"
       @toggle-compact="uiStore.compactSongList = !uiStore.compactSongList"
+      @toggle-size="uiStore.smallSongList = !uiStore.smallSongList"
       @toggle-dividers="uiStore.hideSongListDividers = !uiStore.hideSongListDividers"
       @toggle-column="toggleColumn"
       @batch-play="playSelected"
@@ -502,7 +550,7 @@ watch([keyword, composing], () => {
         :class="{ invisible: loading || !filteredSongs.length }"
         :inert="loading || !filteredSongs.length"
         :items="filteredSongs"
-        :item-size="uiStore.compactSongList ? 56 : 64"
+        :item-size="rowHeight"
         key-field="id"
         @scroll.passive="onListScroll"
         @resize="syncScrollLayout"
@@ -517,6 +565,7 @@ watch([keyword, composing], () => {
             :keyword="keyword"
             :show-file-name="showFileName"
             :compact="uiStore.compactSongList"
+            :small="uiStore.smallSongList"
             :hide-dividers="uiStore.hideSongListDividers"
             :columns="columns"
             @play="playSong"

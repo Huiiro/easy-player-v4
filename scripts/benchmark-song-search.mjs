@@ -71,7 +71,7 @@ try {
       /src[\\/]main[\\/]database[\\/]recommendations\.ts$/,
       'export const getDailyRecommendationGroups=()=>[]; export const getRecentDiscoveryGroups=()=>[]; export const invalidateDailyRecommendations=()=>{}'
     ],
-    [/src[\\/]main[\\/]utils[\\/]pathUtils\.ts$/, 'export const getDataPath=()=>"."']
+    [/src[\\/]main[\\/]utils[\\/]pathUtils\.ts$/, 'export const getCoverPath=(...parts)=>[".","covers",...parts].join("/")']
   ]
   const options = {
     bundle: true,

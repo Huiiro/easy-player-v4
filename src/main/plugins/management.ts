@@ -3,8 +3,7 @@ import { getAppSetting, setAppSetting } from '../database/repository/settings'
 import { Logger } from '../service/loggerService'
 import { configurePluginHost, getPluginManager } from './runtime'
 import type { PluginInfo } from '../../shared/plugins'
-import { app } from 'electron'
-import { join } from 'node:path'
+import { getPluginPath } from '../utils/pathUtils'
 import seedCatalog from '../../../resources/plugins/catalog.json'
 import { OfficialPluginPackages } from './packages'
 import { officialPluginBridge } from './bridge'
@@ -16,7 +15,7 @@ let packages: OfficialPluginPackages | undefined
 export function getOfficialPluginPackages(): OfficialPluginPackages {
   if (!packages)
     packages = new OfficialPluginPackages(
-      join(app.getPath('userData'), 'plugins'),
+      getPluginPath(),
       getPluginManager(),
       officialPluginBridge,
       seedCatalog as OfficialPluginCatalog,

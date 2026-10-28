@@ -43,7 +43,7 @@ const databaseApi = loadTypeScript(path.join(__dirname, '../src/main/database/in
   'node:path': path,
   './schema': { schemaV1, DATABASE_SCHEMA_VERSION },
   './newestSongs': loadTypeScript(path.join(__dirname, '../src/main/database/newestSongs.ts')),
-  '../utils/pathUtils': { getDataPath: () => '.' },
+  '../utils/pathUtils': { getDatabasePath: () => 'player.db' },
   '../search/schema': loadTypeScript(path.join(__dirname, '../src/main/search/schema.ts')),
   '../search/searchTokens': {
     normalizeSearchText: (value) => String(value ?? '').toLowerCase(),

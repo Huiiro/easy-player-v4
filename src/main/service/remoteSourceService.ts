@@ -27,7 +27,7 @@ import {
   updateSourceStats
 } from '../database/repository'
 import type { MusicSource } from '../database/types'
-import { getDataPath } from '../utils/pathUtils'
+import { getCachePath, getCoverPath } from '../utils/pathUtils'
 
 import { normalizeRemoteConnection } from '../../shared/remoteSources'
 import type { RemoteConnection, RemoteProviderId } from '../../shared/remoteSources'
@@ -427,9 +427,12 @@ function remoteFolderId(source: MusicSource): number {
 async function cacheCover(source: ConfiguredSource, coverId?: string): Promise<string | null> {
   await waitForBackgroundWork()
   if (!coverId) return null
-  const directory = join(getDataPath(), 'covers', 'remote')
+  const directory = getCoverPath('remote')
   mkdirSync(directory, { recursive: true })
-  const filePath = join(directory, `${source.id}-${coverId.replace(/[^a-zA-Z0-9._-]/g, '_')}.jpg`)
+  const filePath = getCoverPath(
+    'remote',
+    `${source.id}-${coverId.replace(/[^a-zA-Z0-9._-]/g, '_')}.jpg`
+  )
   if (existsSync(filePath)) return filePath
   const response = await providerFor(source.type).fetchCover(source, coverId)
   if (!response.ok) return null
@@ -516,9 +519,7 @@ export async function syncRemoteSource(
 
 function cacheDirectory(): string {
   const configured = getAppSetting('remote.cache-directory')
-  return typeof configured === 'string' && configured.trim()
-    ? configured
-    : join(getDataPath(), 'cache')
+  return typeof configured === 'string' && configured.trim() ? configured : getCachePath()
 }
 function cleanupCache(directory: string, retainedPath: string): void {
   const configured = getAppSetting('remote.cache-limit-gb')

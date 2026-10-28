@@ -1,10 +1,9 @@
 import { t } from '../i18n'
 import { logOperation } from '../service/operationLogger'
 import Database from 'better-sqlite3'
-import { join } from 'node:path'
 import { DATABASE_SCHEMA_VERSION, schemaV1 } from './schema'
 import { refreshNewestSongs } from './newestSongs'
-import { getDataPath } from '../utils/pathUtils'
+import { getDatabasePath } from '../utils/pathUtils'
 import { searchSchema } from '../search/schema'
 import { normalizeSearchText, japaneseSortReading } from '../search/searchTokens'
 
@@ -12,7 +11,7 @@ let database: Database.Database | undefined
 
 function databasePath(overridePath?: string): string {
   if (overridePath) return overridePath
-  return join(getDataPath(), 'player.db')
+  return getDatabasePath()
 }
 
 function migrate(db: Database.Database): void {

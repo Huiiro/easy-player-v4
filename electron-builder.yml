@@ -1,5 +1,5 @@
 appId: com.huiiro.easyplayer
-productName: Easy Player
+productName: EasyPlayer
 compression: maximum
 directories:
   buildResources: build

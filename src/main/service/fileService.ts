@@ -3,10 +3,9 @@ import { logOperation } from './operationLogger'
 import AdmZip from 'adm-zip'
 import { existsSync, mkdirSync, promises as fs, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
-import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { parseAudioFile } from './audioMetadataService'
-import { getDataPath } from '../utils/pathUtils'
+import { getCoverPath, getExportTempPath } from '../utils/pathUtils'
 import { getDatabase } from '../database'
 import { refreshNewestSongs } from '../database/newestSongs'
 import { normalizeLyricOffset } from '../../shared/songLyrics'
@@ -84,7 +83,7 @@ export function exportLibrary(filePath: string, parts: BackupPart[]): { filePath
     { filePath, parts },
     () => {
       const db = getDatabase()
-      const temp = join(tmpdir(), `easy-player-export-${Date.now()}`)
+      const temp = getExportTempPath()
       mkdirSync(temp, { recursive: true })
       const manifest: BackupManifest = {
         version: '1.0',
@@ -239,13 +238,13 @@ export async function importLibrary(
         }
       })()
       const updateCover = db.prepare('UPDATE song SET cover = ? WHERE id = ?')
-      const coverDir = join(getDataPath(), 'covers')
+      const coverDir = getCoverPath()
       mkdirSync(coverDir, { recursive: true })
       for (const [index, song] of imported.entries()) {
         try {
           const picture = (await parseAudioFile(song.audio)).common.picture?.[0]
           if (picture) {
-            const cover = join(coverDir, `${randomUUID()}.jpg`)
+            const cover = getCoverPath(`${randomUUID()}.jpg`)
             writeFileSync(cover, picture.data)
             updateCover.run(cover, song.id)
           }

@@ -22,7 +22,7 @@ const mocks = {
   './playbackMode': { waitForBackgroundWork: async () => {} },
   './operationLogger': { logOperation: (_name, _context, action) => action(), logError: String },
   './loggerService': { Logger: { debug() {}, warn() {} } },
-  '../utils/pathUtils': { getDataPath: () => root },
+  '../utils/pathUtils': { getCoverPath: (...parts) => path.join(root, 'covers', ...parts) },
   '../database/newestSongs': { refreshNewestSongs() {} },
   '../database': {
     getDatabase: () => ({

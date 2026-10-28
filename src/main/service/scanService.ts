@@ -6,7 +6,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { parseAudioFile } from './audioMetadataService'
 import { getDatabase } from '../database'
-import { getDataPath } from '../utils/pathUtils'
+import { getCoverPath } from '../utils/pathUtils'
 import { Logger } from './loggerService'
 import { refreshNewestSongs } from '../database/newestSongs'
 import { joinMetadataValues } from '../../shared/metadataValues'
@@ -134,7 +134,7 @@ export async function scanMusicDirectory(
       )
     `)
       const existsSong = db.prepare('SELECT 1 FROM song WHERE audio = ?')
-      const coverDir = path.join(getDataPath(), 'covers')
+      const coverDir = getCoverPath()
       await fs.promises.mkdir(coverDir, { recursive: true })
 
       callback?.(0, files.length, 0, 0)
@@ -163,7 +163,7 @@ export async function scanMusicDirectory(
           const picture = common.picture?.[0]
           let cover: string | null = null
           if (picture) {
-            const coverPath = path.join(coverDir, `${crypto.randomUUID()}.jpg`)
+            const coverPath = getCoverPath(`${crypto.randomUUID()}.jpg`)
             await fs.promises.writeFile(coverPath, picture.data)
             cover = coverPath
           }

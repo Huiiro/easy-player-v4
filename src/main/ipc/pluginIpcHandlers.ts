@@ -99,7 +99,7 @@ export function registerPluginIpcHandlers(): void {
       const window = BrowserWindow.fromWebContents(event.sender)
       const options = {
         properties: ['openFile'] as ['openFile'],
-        filters: [{ name: 'Easy Player Plugin', extensions: ['epp'] }]
+        filters: [{ name: 'EasyPlayer Plugin', extensions: ['epp'] }]
       }
       const selected = window
         ? await dialog.showOpenDialog(window, options)

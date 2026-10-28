@@ -22,7 +22,7 @@ import { createReadStream, existsSync, promises as fs } from 'node:fs'
 import { Readable } from 'node:stream'
 import { release as osRelease } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { AudioEngineManager } from './audioEngine'
 import { registerIpcHandlers } from './ipc/audioIpcHandlers'
@@ -52,10 +52,22 @@ import {
   initializeUpdater,
   quitAndInstallUpdate
 } from './service/updateService'
-import { getDataPath } from './utils/pathUtils'
+import {
+  getBaseDir,
+  setMainDirectory,
+  createDir,
+  getCoverPath,
+  getFontPath,
+  getBackgroundPath,
+  getIconPath,
+  getTrayIconPath,
+  getDockIconPath,
+  getPreloadPath,
+  getRendererPath,
+  getLyricTimelinePath
+} from './utils/pathUtils'
 import { createWindowMaterialManager } from './service/windowMaterialService'
 import { createWindowPresentation } from './service/windowPresentation'
-import { createDir } from './utils/pathUtils'
 import { Logger } from './service/loggerService'
 import sharp from 'sharp'
 import {
@@ -67,37 +79,20 @@ import {
 
 // Set this before Electron creates the macOS application menu. In development
 // the executable is Electron.app, but the visible app/menu name is ours.
-app.setName('Easy Player')
-process.title = 'Easy Player'
+setMainDirectory(__dirname)
+if (!createDir()) throw new Error('Unable to initialize EasyPlayer data directory')
+app.setPath('userData', getBaseDir())
+app.setName('EasyPlayer')
+process.title = 'EasyPlayer'
 
 /**
  * macOS cannot create a tray image from Windows `.ico` files, and Electron's
  * Tray API does not reliably decode SVG paths. Keep ICO for Windows and use
  * the PNG generated from the project SVG for macOS.
  */
-const icon = app.isPackaged
-  ? join(
-      process.resourcesPath,
-      'resources',
-      'icons',
-      process.platform === 'win32' ? 'easy-player.ico' : 'easy-player.png'
-    )
-  : join(
-      __dirname,
-      '../..',
-      process.platform === 'win32'
-        ? 'resources/icons/easy-player.ico'
-        : 'resources/icons/easy-player.png'
-    )
-const trayIcon =
-  process.platform === 'darwin'
-    ? app.isPackaged
-      ? join(process.resourcesPath, 'resources', 'icons', 'easy-playerTemplate.png')
-      : join(__dirname, '../..', 'resources/icons/easy-playerTemplate.png')
-    : icon
-const dockIcon = app.isPackaged
-  ? join(process.resourcesPath, 'icon.icns')
-  : join(__dirname, '../..', 'resources/icons/easy-player.icns')
+const icon = getIconPath(app.isPackaged)
+const trayIcon = getTrayIconPath(app.isPackaged)
+const dockIcon = getDockIconPath(app.isPackaged)
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -224,10 +219,10 @@ if (!app.requestSingleInstanceLock(audioLaunchRequest)) {
 function updateTrayMenu(): void {
   if (!tray) return
   const trackLabel = trayTrack.title || 'No track playing'
-  const artistLabel = trayTrack.artist || 'Easy Player'
+  const artistLabel = trayTrack.artist || 'EasyPlayer'
   const tooltip = trayTrack.title
     ? `${trayTrack.title}${trayTrack.artist ? ` — ${trayTrack.artist}` : ''}`
-    : 'Easy Player'
+    : 'EasyPlayer'
   tray.setToolTip(tooltip)
   if (process.platform === 'darwin') {
     // Keep the macOS menu-bar item compact; track details remain available in
@@ -445,10 +440,12 @@ function registerMediaProtocol(): void {
       : null
     if (!requestedPath) return new Response('Not Found', { status: 404 })
 
-    const coverDirectory = resolve(
-      getDataPath(),
-      url.hostname === 'font' ? 'ttf' : url.hostname === 'background' ? 'backgrounds' : 'covers'
-    )
+    const coverDirectory =
+      url.hostname === 'font'
+        ? getFontPath()
+        : url.hostname === 'background'
+          ? getBackgroundPath()
+          : getCoverPath()
     const coverPath = resolve(requestedPath)
     const pathRelativeToCovers = relative(coverDirectory, coverPath)
     if (
@@ -610,7 +607,7 @@ function createWindow(
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: getPreloadPath(),
       backgroundThrottling: false,
       spellcheck: false,
       contextIsolation: true,
@@ -708,7 +705,7 @@ function createWindow(
     )
   } else {
     mainWindow.loadFile(
-      join(__dirname, extremeView ? '../renderer/extreme.html' : '../renderer/index.html'),
+      getRendererPath(extremeView),
       !extremeView && normalRouteHash ? { hash: normalRouteHash.slice(1) } : undefined
     )
   }
@@ -732,7 +729,7 @@ function createMiniPlayerWindow(): BrowserWindow {
     skipTaskbar: true,
     backgroundColor: '#111614',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: getPreloadPath(),
       backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -758,7 +755,7 @@ function createMiniPlayerWindow(): BrowserWindow {
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     void miniWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/mini`)
   } else {
-    void miniWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/mini' })
+    void miniWindow.loadFile(getRendererPath(), { hash: '/mini' })
   }
   return miniWindow
 }
@@ -780,7 +777,7 @@ function createDesktopLyricsWindow(): BrowserWindow {
     skipTaskbar: true,
     backgroundColor: '#00000000',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: getPreloadPath(),
       backgroundThrottling: false,
       contextIsolation: true,
       nodeIntegration: false,
@@ -826,7 +823,7 @@ function createDesktopLyricsWindow(): BrowserWindow {
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     void desktopLyricsWindow.loadURL(`${process.env['ELECTRON_RENDERER_URL']}/#/lyric`)
   } else {
-    void desktopLyricsWindow.loadFile(join(__dirname, '../renderer/index.html'), { hash: '/lyric' })
+    void desktopLyricsWindow.loadFile(getRendererPath(), { hash: '/lyric' })
   }
   return desktopLyricsWindow
 }
@@ -853,7 +850,6 @@ app.whenReady().then(() =>
         if (!dockImage.isEmpty()) app.dock?.setIcon(dockImage)
         else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
       }
-      createDir()
       const libraryDatabase = initDatabase()
       searchIndexService = startSearchIndexService(
         libraryDatabase,
@@ -1099,7 +1095,7 @@ app.whenReady().then(() =>
           }
           if (!existsSync(audioPath)) return { success: false, error: t('songFileUnavailable') }
 
-          const payloadPath = join(app.getPath('temp'), `lyric-timeline-${randomUUID()}.json`)
+          const payloadPath = getLyricTimelinePath(randomUUID())
           const payload = {
             version: 1,
             audioPath,

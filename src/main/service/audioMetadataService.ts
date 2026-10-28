@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { getMetadataTempPrefix } from '../utils/pathUtils'
 import path from 'node:path'
 import { parseFile } from 'music-metadata'
 import { writeNativeMetadata } from '../audioEngine'
@@ -30,7 +30,7 @@ export async function parseAudioFile(
       { filePath },
       logError(error)
     )
-    const directory = await fs.mkdtemp(path.join(tmpdir(), 'easy-player-metadata-'))
+    const directory = await fs.mkdtemp(getMetadataTempPrefix())
     try {
       const copyPath = path.join(directory, `audio${path.extname(filePath).toLowerCase()}`)
       await fs.copyFile(filePath, copyPath)

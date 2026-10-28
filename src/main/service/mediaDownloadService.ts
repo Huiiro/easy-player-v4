@@ -1,3 +1,4 @@
+import { getDownloadStagingPrefix } from '../utils/pathUtils'
 import { t } from '../i18n'
 import { requireBackgroundWork } from './playbackMode'
 import { logError, logOperation } from './operationLogger'
@@ -256,7 +257,7 @@ async function startHttpDownload(
         `${request.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 180)} [${resourceSuffix.replace(/[\\/:*?"<>|]/g, '_').slice(0, 100)}].${extension}`
       )
       // Publish the final filename only after remux/validation.
-      const stagingDirectory = await fs.mkdtemp(join(request.directory, '.easy-player-download-'))
+      const stagingDirectory = await fs.mkdtemp(getDownloadStagingPrefix(request.directory))
       const stagedPath = join(stagingDirectory, `audio.${extension}`)
       try {
         await downloadHttpMedia(plan, stagedPath, (progress) => {

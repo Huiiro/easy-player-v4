@@ -6,7 +6,7 @@ import { t } from '../i18n'
 import { cacheRemoteSong, syncRemoteSource, testRemoteSource } from '../service/remoteSourceService'
 import { Logger } from '../service/loggerService'
 import { logError, logOperation } from '../service/operationLogger'
-import { getDataPath } from '../utils/pathUtils'
+import { getCachePath } from '../utils/pathUtils'
 
 export function registerRemoteSourceIpcHandlers(): void {
   ipcMain.handle('remote-source:test', async (_event, config: unknown) => {
@@ -36,7 +36,7 @@ export function registerRemoteSourceIpcHandlers(): void {
   })
   ipcMain.handle('remote-source:default-cache-directory', () => ({
     success: true,
-    data: join(getDataPath(), 'cache')
+    data: getCachePath()
   }))
   ipcMain.handle('remote-source:cache-size', async (_event, directory: unknown) => {
     if (typeof directory !== 'string' || !existsSync(directory)) return { success: true, data: 0 }

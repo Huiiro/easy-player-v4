@@ -75,6 +75,7 @@ export const UI_PREFERENCE_KEYS = [
   'themeBackgroundEnabled',
   'useCardView',
   'compactSongList',
+  'smallSongList',
   'hideSongListDividers',
   'songListColumns',
   'useCustomBg',
@@ -302,6 +303,7 @@ export const useUIStore = defineStore(
     } | null>(null)
     const useCardView = ref(false)
     const compactSongList = ref(false)
+    const smallSongList = ref(false)
     const hideSongListDividers = ref(false)
     const songListColumns = ref<SongListColumns>({
       genre: false,
@@ -993,6 +995,7 @@ export const useUIStore = defineStore(
       themeBeforeFollowingSystem,
       useCardView,
       compactSongList,
+      smallSongList,
       hideSongListDividers,
       songListColumns,
       useCustomBg,

@@ -7,7 +7,6 @@ import {
 import { t } from '../i18n'
 import { isPlaybackOnly } from './playbackMode'
 import fs from 'node:fs'
-import path from 'node:path'
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import { getLogPath } from '../utils/pathUtils'
 import { getAppSetting, setAppSetting } from '../database/repository'
@@ -98,7 +97,7 @@ export class Logger {
       const directory = getLogPath()
       fs.mkdirSync(directory, { recursive: true })
       const day = new Date(entry.timestamp).toISOString().slice(0, 10)
-      fs.appendFileSync(path.join(directory, `log-${day}.log`), `${line}\n`, 'utf8')
+      fs.appendFileSync(getLogPath(`log-${day}.log`), `${line}\n`, 'utf8')
     } catch (error) {
       console.error('Could not write application log:', error)
     }

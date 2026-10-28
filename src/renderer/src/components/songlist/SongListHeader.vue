@@ -29,6 +29,7 @@ const props = defineProps<{
   allSelected: boolean
   showFileName: boolean
   compact: boolean
+  small?: boolean
   hideDividers?: boolean
   columns?: SongListColumns
   scrollLeft?: number
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   selectNewest: []
   toggleFileName: []
   toggleCompact: []
+  toggleSize: []
   toggleDividers: []
   toggleColumn: [column: OptionalSongColumn]
   batchPlay: []
@@ -133,6 +135,10 @@ const moreMenuItems = computed(() => [
     type: 'group' as const,
     label: t('songList.displayOptions'),
     children: [
+      {
+        label: t(props.small ? 'songList.standardLayout' : 'songList.smallLayout'),
+        onClick: () => emit('toggleSize')
+      },
       {
         label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
         onClick: () => emit('toggleCompact')
@@ -471,6 +477,8 @@ const batchMenuItems = computed(() => [
 
 <style scoped>
 .song-list-columns {
+  column-gap: var(--song-list-gap, 0.75rem);
+  padding-inline: var(--song-list-padding-inline, 1.25rem);
   min-width: var(--song-list-min-width, 38.5rem);
   grid-template-columns: var(
     --song-list-grid-columns,

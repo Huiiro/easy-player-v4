@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads'
-import { join } from 'node:path'
+import { getSearchWorkerPath } from '../utils/pathUtils'
 import type Database from 'better-sqlite3'
 import { isPlaybackOnly, onPlaybackModeChanged } from '../service/playbackMode'
 import { Logger } from '../service/loggerService'
@@ -105,7 +105,7 @@ export function startSearchIndexService(
 
   function convert(fields: SearchFields): Promise<WorkerResult> {
     if (!worker) {
-      worker = new Worker(join(__dirname, 'searchWorker.js'))
+      worker = new Worker(getSearchWorkerPath())
       const active = worker
       worker.on('message', (result: WorkerResult) => {
         if (worker !== active || result.requestId !== requestId) return

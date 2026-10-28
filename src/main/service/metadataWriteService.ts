@@ -2,11 +2,11 @@ import { t } from '../i18n'
 import { assertMetadataFileWritable } from './metadataWriteGuard'
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
-import { basename, extname, join } from 'node:path'
+import { basename, extname } from 'node:path'
 import sharp from 'sharp'
 import { getSong } from '../database/repository'
 import { getDatabase } from '../database'
-import { getDataPath } from '../utils/pathUtils'
+import { getCoverPath } from '../utils/pathUtils'
 import { readMetadata, writeMetadata, type SongMetadata } from './metadataService'
 import {
   SOURCE_METADATA_FIELDS,
@@ -34,9 +34,9 @@ async function saveCoverDataUrl(dataUrl: string): Promise<string> {
     .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
     .jpeg({ quality: 90 })
     .toBuffer()
-  const directory = join(getDataPath(), 'covers')
+  const directory = getCoverPath()
   mkdirSync(directory, { recursive: true })
-  const file = join(directory, 'metadata-' + randomUUID() + '.jpg')
+  const file = getCoverPath('metadata-' + randomUUID() + '.jpg')
   writeFileSync(file, buffer)
   return file
 }
@@ -134,8 +134,8 @@ async function writeSongMetadataUnlocked(
     const picture = updatedMeta.cover
     if (picture) {
       const uuid = randomUUID()
-      const coverDir = join(getDataPath(), 'covers')
-      const coverPath = join(coverDir, `${uuid}.jpg`)
+      const coverDir = getCoverPath()
+      const coverPath = getCoverPath(`${uuid}.jpg`)
       mkdirSync(coverDir, { recursive: true })
       writeFileSync(coverPath, picture)
 
@@ -236,9 +236,9 @@ export async function reloadSongMetadata(songId: number): Promise<void> {
     const metadata = await readMetadata(song.audio)
     let cover: string | null = null
     if (metadata.cover) {
-      const directory = join(getDataPath(), 'covers')
+      const directory = getCoverPath()
       mkdirSync(directory, { recursive: true })
-      cover = join(directory, randomUUID() + '.jpg')
+      cover = getCoverPath(randomUUID() + '.jpg')
       writeFileSync(cover, metadata.cover)
     }
     const fileName = basename(song.audio, extname(song.audio))

@@ -190,7 +190,8 @@ try {
       'export const logError = e => String(e); export const logUrl = u => u; export const logOperation = (_name, _context, task) => task()',
     './loggerService': 'export const Logger = { debug(){}, warn(){}, error(){} }',
     '../i18n': 'export const t = key => key',
-    '../utils/pathUtils': 'export const getDataPath = () => globalThis.remoteFixture.directory',
+    '../utils/pathUtils':
+      'import { join } from "node:path"; export const getCachePath = (...parts) => join(globalThis.remoteFixture.directory, "cache", ...parts); export const getCoverPath = (...parts) => join(globalThis.remoteFixture.directory, "covers", ...parts)',
     '../database/newestSongs': 'export function refreshNewestSongs() {}',
     '../database/repository': `export const getSource = () => globalThis.remoteFixture.source;
       export const getSong = id => globalThis.remoteFixture.songs[id - 1];

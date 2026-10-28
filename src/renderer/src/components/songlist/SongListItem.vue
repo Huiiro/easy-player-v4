@@ -10,7 +10,12 @@ import { artistDisplayTokens } from '@/utils/artists'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useSongActivation } from '@/hooks/useSongActivation'
 import { formatGenres } from '@/utils/genres'
-import { songPlayCount, songYear, type SongListColumns } from '@/utils/songListLayout'
+import {
+  songPlayCount,
+  songYear,
+  songListRowHeight,
+  type SongListColumns
+} from '@/utils/songListLayout'
 
 const props = defineProps<{
   song: LibrarySong
@@ -21,6 +26,7 @@ const props = defineProps<{
   keyword: string
   showFileName: boolean
   compact: boolean
+  small?: boolean
   hideDividers?: boolean
   columns?: SongListColumns
 }>()
@@ -96,15 +102,17 @@ function openAlbum(): void {
 <template>
   <div
     class="border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
-    :class="[compact ? 'h-14' : 'h-16', { 'border-b': !hideDividers }]"
+    :class="{ 'border-b': !hideDividers }"
+    :style="{ height: `${songListRowHeight(compact, small)}px` }"
   >
     <div
       class="song-list-row grid h-full items-center gap-3 px-5 transition-colors hover:bg-hover"
-      :class="
+      :class="[
+        { 'song-list-row--small': small },
         current
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
-      "
+      ]"
       @click="activateSong($event, () => emit('play', song))"
       @dblclick="activateSong($event, () => emit('play', song))"
       @contextmenu.prevent.stop="requestMenu"
@@ -120,17 +128,17 @@ function openAlbum(): void {
         />
         <span>{{ index + 1 }}</span>
       </span>
-      <span class="flex min-w-0 items-center gap-3">
+      <span class="song-list-title flex min-w-0 items-center gap-3">
         <img
           v-if="!compact && coverUrl && !coverFailed"
           :src="coverUrl"
-          class="size-10 shrink-0 rounded-md object-cover"
+          class="song-list-cover size-10 shrink-0 rounded-md object-cover"
           :alt="song.title"
           @error="coverFailed = true"
         />
         <span
           v-else-if="!compact"
-          class="grid size-10 shrink-0 place-items-center rounded-md bg-bg-l"
+          class="song-list-cover grid size-10 shrink-0 place-items-center rounded-md bg-bg-l"
         >
           <svgIcon name="common-music" class-name="size-5" />
         </span>
@@ -148,16 +156,33 @@ function openAlbum(): void {
               </template>
             </span>
           </span>
-          <span v-if="song.playTime" class="mt-0.5 block text-xs text-text-l">
-            {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
-          </span>
-          <span v-if="song.tags?.length" class="mt-0.5 flex gap-1 overflow-hidden">
+          <span
+            v-if="song.playTime || song.tags?.length"
+            class="mt-0.5 min-w-0"
+            :class="small ? 'flex items-center gap-2' : 'block'"
+          >
             <span
-              v-for="tag in song.tags"
-              :key="tag.id"
-              class="max-w-24 truncate rounded-full px-1.5 py-px text-[10px] leading-4 text-white"
-              :style="{ backgroundColor: tag.color || '#7c3aed' }"
-              >{{ tag.name }}
+              v-if="song.playTime"
+              class="block truncate text-text-l"
+              :class="small ? 'text-[10px] leading-3 max-w-1/2 shrink-0' : 'text-xs'"
+              :title="t('history.lastPlayed', { time: formatPlayTime(song.playTime) })"
+            >
+              {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
+            </span>
+            <span
+              v-if="song.tags?.length"
+              class="flex min-w-0 gap-1 overflow-hidden"
+              :class="{ 'mt-0.5': !small && song.playTime }"
+            >
+              <span
+                v-for="tag in song.tags"
+                :key="tag.id"
+                class="max-w-24 shrink-0 truncate rounded-full px-1.5 py-px text-[10px] text-white"
+                :class="small ? 'leading-3' : 'leading-4'"
+                :style="{ backgroundColor: tag.color || '#7c3aed' }"
+                :title="tag.name"
+                >{{ tag.name }}</span
+              >
             </span>
           </span>
         </span>
@@ -276,9 +301,27 @@ function openAlbum(): void {
 
 <style scoped>
 .song-list-row {
+  column-gap: var(--song-list-gap, 0.75rem);
+  padding-inline: var(--song-list-padding-inline, 1.25rem);
   grid-template-columns: var(
     --song-list-grid-columns,
     2.5rem minmax(12rem, 2fr) minmax(7rem, 1fr) minmax(8rem, 1.2fr) 3.5rem
   );
+}
+.song-list-title {
+  gap: var(--song-list-gap, 0.75rem);
+}
+.song-list-row--small,
+.song-list-row--small .text-sm {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+.song-list-row--small .song-list-cover {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.song-list-row--small :deep(.svg-icon) {
+  width: 0.875rem;
+  height: 0.875rem;
 }
 </style>

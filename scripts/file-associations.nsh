@@ -27,12 +27,12 @@
   ${EndIf}
   WriteRegStr SHELL_CONTEXT "Software\Classes\EasyPlayer.Audio\DefaultIcon" "" '"$INSTDIR\easy-player.exe",0'
   WriteRegStr SHELL_CONTEXT "Software\Classes\EasyPlayer.Audio\shell\open\command" "" '"$INSTDIR\easy-player.exe" "%1"'
-  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\easy-player.exe" "FriendlyAppName" "Easy Player"
+  WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\easy-player.exe" "FriendlyAppName" "EasyPlayer"
   WriteRegStr SHELL_CONTEXT "Software\Classes\Applications\easy-player.exe\shell\open\command" "" '"$INSTDIR\easy-player.exe" "%1"'
-  WriteRegStr SHELL_CONTEXT "Software\EasyPlayer\Capabilities" "ApplicationName" "Easy Player"
-  WriteRegStr SHELL_CONTEXT "Software\EasyPlayer\Capabilities" "ApplicationDescription" "Play local audio files with Easy Player"
+  WriteRegStr SHELL_CONTEXT "Software\EasyPlayer\Capabilities" "ApplicationName" "EasyPlayer"
+  WriteRegStr SHELL_CONTEXT "Software\EasyPlayer\Capabilities" "ApplicationDescription" "Play local audio files with EasyPlayer"
   WriteRegStr SHELL_CONTEXT "Software\EasyPlayer\Capabilities" "ApplicationIcon" '"$INSTDIR\easy-player.exe",0'
-  WriteRegStr SHELL_CONTEXT "Software\RegisteredApplications" "Easy Player" "Software\EasyPlayer\Capabilities"
+  WriteRegStr SHELL_CONTEXT "Software\RegisteredApplications" "EasyPlayer" "Software\EasyPlayer\Capabilities"
   !insertmacro RegisterAudioExtension mp3 MP3
   !insertmacro RegisterAudioExtension aac AAC
   !insertmacro RegisterAudioExtension m4a M4A
@@ -62,6 +62,6 @@
   DeleteRegKey SHELL_CONTEXT "Software\Classes\EasyPlayer.Audio"
   DeleteRegKey SHELL_CONTEXT "Software\Classes\Applications\easy-player.exe"
   DeleteRegKey SHELL_CONTEXT "Software\EasyPlayer\Capabilities"
-  DeleteRegValue SHELL_CONTEXT "Software\RegisteredApplications" "Easy Player"
+  DeleteRegValue SHELL_CONTEXT "Software\RegisteredApplications" "EasyPlayer"
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend

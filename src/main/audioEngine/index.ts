@@ -1,8 +1,12 @@
 import { logOperation } from '../service/operationLogger'
-import { join } from 'path'
 import { existsSync } from 'node:fs'
 import { AutoMixStemService, type AutoMixStemRequest } from '../service/autoMixStemService'
-import { getDataPath } from '../utils/pathUtils'
+import {
+  getNativeAddonPath,
+  getStemPythonPath,
+  getStemWorkerPath,
+  getStemCachePath
+} from '../utils/pathUtils'
 import { app } from 'electron'
 import { isPlaybackOnly, setPlaybackOnly } from '../service/playbackMode'
 import { Logger } from '../service/loggerService'
@@ -23,27 +27,8 @@ function loadNativeAddon(): boolean {
   if (nativeAddon) return true
 
   try {
-    // In development: load from build/native-addon/
-    // In production: load from extraResources/native/
-    const isDev = !app.isPackaged
-
-    if (isDev) {
-      // Development: load from build/native-addon/
-      const addonPath = join(
-        __dirname,
-        '..',
-        '..',
-        'build',
-        'native-addon',
-        'easy_player_native.node'
-      )
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      nativeAddon = require(addonPath)
-    } else {
-      const addonPath = join(process.resourcesPath, 'native', 'easy_player_native.node')
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      nativeAddon = require(addonPath)
-    }
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    nativeAddon = require(getNativeAddonPath(app.isPackaged))
 
     Logger.debug('[AudioEngineManager] native addon loaded', {
       packaged: app.isPackaged,
@@ -78,32 +63,13 @@ export class AudioEngineManager {
         Logger.write(levels[level] ?? 'info', 'native', message)
       })
       this.restoreDspSettings()
-      const projectRoot = join(__dirname, '..', '..')
-      const python =
-        process.env.EASY_PLAYER_STEM_PYTHON ||
-        (app.isPackaged
-          ? join(
-              process.resourcesPath,
-              'tools',
-              'auto-mix-python',
-              process.platform === 'win32' ? 'python.exe' : 'bin/python3'
-            )
-          : join(
-              projectRoot,
-              'build',
-              'stem-runtime',
-              process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3'
-            ))
-      const worker = app.isPackaged
-        ? join(process.resourcesPath, 'resources', 'auto-mix', 'stem_worker.py')
-        : join(projectRoot, 'resources', 'auto-mix', 'stem_worker.py')
+      const python = getStemPythonPath(app.isPackaged)
+      const worker = getStemWorkerPath(app.isPackaged)
       if (existsSync(python) && existsSync(worker)) {
         this.stemService = new AutoMixStemService({
           python,
           worker,
-          cache: app.isPackaged
-            ? join(getDataPath(), 'cache', 'auto-mix-stems')
-            : join(projectRoot, 'build', 'auto-mix-stems'),
+          cache: getStemCachePath(app.isPackaged),
           ffmpeg: process.env.EASY_PLAYER_STEM_FFMPEG,
           onReady: (request, outgoing, incoming, cue, outStart) => {
             const accepted = this.engine?.setAutoMixVocals?.(
@@ -134,7 +100,7 @@ export class AudioEngineManager {
         app.once('before-quit', () => clearInterval(deviceEvents))
       }
       Logger.info(
-        `[AudioEngineManager] Easy Player Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
+        `[AudioEngineManager] EasyPlayer Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
       )
     }
   }

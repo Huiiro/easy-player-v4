@@ -118,10 +118,10 @@ export function registerFileAssociationHandlers(window: () => BrowserWindow | nu
         try {
           await runFile(
             'reg.exe',
-            ['query', `${hive}\\Software\\RegisteredApplications`, '/v', 'Easy Player', '/reg:64'],
+            ['query', `${hive}\\Software\\RegisteredApplications`, '/v', 'EasyPlayer', '/reg:64'],
             { windowsHide: true }
           )
-          query = `?${parameter}=${encodeURIComponent('Easy Player')}`
+          query = `?${parameter}=${encodeURIComponent('EasyPlayer')}`
           break
         } catch {
           /* Try the next installation scope; older installs use the general page. */

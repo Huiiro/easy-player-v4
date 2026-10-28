@@ -20,6 +20,9 @@ const compiled = ts.transpileModule(source, {
 function load(parser, writer) {
   const exports = {}
   const mocks = {
+    '../utils/pathUtils': {
+      getMetadataTempPrefix: () => path.join(directory, 'easy_player_metadata_')
+    },
     'music-metadata': { parseFile: parser },
     '../audioEngine': { writeNativeMetadata: writer },
     './loggerService': {

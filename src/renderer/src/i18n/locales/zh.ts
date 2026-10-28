@@ -256,6 +256,8 @@ export default {
     duplicates: '重复 {count}'
   },
   songList: {
+    standardLayout: '使用标准布局',
+    smallLayout: '使用紧凑布局',
     showDividers: '显示分割线',
     hideDividers: '隐藏分割线',
     displayOptions: '显示方式',

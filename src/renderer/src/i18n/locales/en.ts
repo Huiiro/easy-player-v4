@@ -264,6 +264,8 @@ export default {
     duplicates: 'Duplicates {count}'
   },
   songList: {
+    standardLayout: 'Use standard layout',
+    smallLayout: 'Use compact layout',
     showDividers: 'Show row dividers',
     hideDividers: 'Hide row dividers',
     displayOptions: 'Display',

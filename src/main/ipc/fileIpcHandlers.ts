@@ -11,8 +11,8 @@ import {
 import { exportLibrary, importLibrary, recoverMovedSongs } from '../service/fileService'
 import { copyFile, mkdir, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
-import { extname, join, relative, resolve, isAbsolute } from 'node:path'
-import { getDataPath } from '../utils/pathUtils'
+import { extname, relative, resolve, isAbsolute } from 'node:path'
+import { getBackgroundPath } from '../utils/pathUtils'
 
 function showOpenDialogFor(
   event: Electron.IpcMainInvokeEvent,
@@ -35,7 +35,7 @@ export function registerFileIpcHandlers(): void {
       const url = new URL(mediaUrl)
       if (url.protocol !== 'easy-player-media:' || url.hostname !== 'background')
         return { success: false }
-      const directory = resolve(getDataPath(), 'backgrounds')
+      const directory = getBackgroundPath()
       const target = resolve(url.searchParams.get('path') || '')
       const relativePath = relative(directory, target)
       if (
@@ -57,9 +57,9 @@ export function registerFileIpcHandlers(): void {
       const info = await stat(source)
       if (!info.isFile() || info.size === 0 || info.size > 2 * 1024 ** 3)
         return { success: false, error: 'The video must be smaller than 2 GB.' }
-      const directory = join(getDataPath(), 'backgrounds')
+      const directory = getBackgroundPath()
       await mkdir(directory, { recursive: true })
-      const target = join(directory, `${randomUUID()}.mp4`)
+      const target = getBackgroundPath(`${randomUUID()}.mp4`)
       await copyFile(source, target)
       return {
         success: true,
@@ -74,8 +74,8 @@ export function registerFileIpcHandlers(): void {
     async (event, parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>) => {
       return logOperation('[IPC] files:export-library', { parts }, async () => {
         const result = await showSaveDialogFor(event, {
-          defaultPath: `easy-player-backup-${Date.now()}.epb`,
-          filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
+          defaultPath: `easy_player_backup_${Date.now()}.epb`,
+          filters: [{ name: 'EasyPlayer Backup', extensions: ['epb'] }]
         })
         if (result.canceled || !result.filePath) return { success: false, cancelled: true }
         return { success: true, data: exportLibrary(result.filePath, parts) }
@@ -86,7 +86,7 @@ export function registerFileIpcHandlers(): void {
     return logOperation('[IPC] files:import-library', {}, async () => {
       const result = await showOpenDialogFor(event, {
         properties: ['openFile'],
-        filters: [{ name: 'Easy Player Backup', extensions: ['epb'] }]
+        filters: [{ name: 'EasyPlayer Backup', extensions: ['epb'] }]
       })
       if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
       return {

@@ -32,7 +32,7 @@ vm.runInNewContext(compile('src/main/service/themePackageService.ts'), {
   Buffer,
   require: (id) =>
     id === '../utils/pathUtils'
-      ? { getDataPath: () => target }
+      ? { getThemePath: (...parts) => join(target, 'themes', ...parts) }
       : id === '../../shared/themePackage' || id === '../utils/themeResources'
         ? shared
         : require(id)

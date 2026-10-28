@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { inflateRawSync } from 'node:zlib'
 import { mkdir, readFile, writeFile, rm, lstat, realpath } from 'node:fs/promises'
 import { resolve, relative, isAbsolute, dirname } from 'node:path'
-import { getDataPath } from '../utils/pathUtils'
+import { getThemePath } from '../utils/pathUtils'
 import {
   isPackageId,
   parseThemeManifest,
@@ -14,10 +14,9 @@ import {
 const MAX_ZIP = 32 * 1024 * 1024
 const MAX_TOTAL = 64 * 1024 * 1024
 const MAX_FILE = 16 * 1024 * 1024
-const directory = (): string => resolve(getDataPath(), 'themes')
 function packageDirectory(id: string): string {
   if (!isPackageId(id)) throw new Error('Invalid installed theme id')
-  return resolve(directory(), id)
+  return getThemePath(id)
 }
 
 export async function importThemePackage(
@@ -131,6 +130,6 @@ export async function resolveThemeResource(id: string, path: string): Promise<st
 }
 export async function removeThemePackage(id: string): Promise<void> {
   const target = packageDirectory(id)
-  if (relative(directory(), target) !== id) throw new Error('Invalid theme directory')
+  if (relative(getThemePath(), target) !== id) throw new Error('Invalid theme directory')
   await rm(target, { recursive: true, force: true })
 }

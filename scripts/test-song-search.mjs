@@ -329,7 +329,7 @@ try {
     'search-test-logger': 'export const Logger={debug(){},info(){},warn(){},error(){}}',
     'search-test-recommendations':
       'export const getDailyRecommendationGroups=()=>[]; export const getRecentDiscoveryGroups=()=>[]; export const invalidateDailyRecommendations=()=>{}; export const getRecommendationScores=()=>[]; export const selectRecommendationGroups=()=>({recommended:[],discovery:[],lessRecommended:[]})',
-    'search-test-path': 'export const getDataPath=()=>"."'
+    'search-test-path': 'export const getCoverPath=(...parts)=>[".","covers",...parts].join("/")'
   }
   const alias = {}
   for (const [name, content] of Object.entries(mocks)) {

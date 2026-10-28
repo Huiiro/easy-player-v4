@@ -1,7 +1,6 @@
 import { app, net } from 'electron'
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { getYtdlpCommand } from '../utils/pathUtils'
 import { t } from '../i18n'
 import { onPlaybackModeChanged, requireBackgroundWork } from './playbackMode'
 import { logOperation } from './operationLogger'
@@ -99,18 +98,7 @@ export function backgroundRequest(url: string, signal?: AbortSignal): Electron.C
 }
 
 export function ytdlpCommand(): string {
-  const executable = process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp'
-  const sourceDirectory =
-    process.platform === 'win32'
-      ? 'win'
-      : process.platform === 'darwin'
-        ? 'mac'
-        : join('linux', process.arch)
-  const bundled = app.isPackaged
-    ? join(process.resourcesPath, 'lib', 'yt-dlp', executable)
-    : join(app.getAppPath(), 'resources', 'lib', 'yt-dlp', sourceDirectory, executable)
-  if (existsSync(bundled)) return bundled
-  return process.env.EASY_PLAYER_YTDLP_PATH || 'yt-dlp'
+  return getYtdlpCommand(app.isPackaged, app.getAppPath())
 }
 
 export function runYtDlp(args: string[], signal?: AbortSignal): Promise<string> {

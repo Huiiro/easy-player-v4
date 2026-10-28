@@ -21,7 +21,7 @@
 
 ## 文件位置与格式
 
-日志目录由 `getLogPath()` 指定：Windows 为 `%APPDATA%/easy-player/player_log`，其他平台目前为 `~/Library/Application Support/easy-player/player_log`。文件按 UTC 日期命名为 `log-YYYY-MM-DD.log`；每行格式为：
+日志目录由 `getLogPath()` 指定：Windows 为 `%APPDATA%/easy_player/player_log`，macOS 为 `~/Library/Application Support/easy_player/player_log`，Linux 为 `${XDG_CONFIG_HOME:-~/.config}/easy_player/player_log`。文件按 UTC 日期命名为 `log-YYYY-MM-DD.log`；每行格式为：
 
 ```text
 [2026-09-25T10:00:00.000Z] [WARN] [native] CoreAudio: example message

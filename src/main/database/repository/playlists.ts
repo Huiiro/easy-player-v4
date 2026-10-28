@@ -1,10 +1,10 @@
 import { t } from '../../i18n'
 import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { extname, join } from 'node:path'
+import { extname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { getDatabase } from '../index'
 import { buildSongSearchFilter } from '../../search/searchQuery'
-import { getDataPath } from '../../utils/pathUtils'
+import { getCoverPath } from '../../utils/pathUtils'
 import type {
   PagedResult,
   Playlist,
@@ -110,9 +110,9 @@ function savePlaylistCover(sourcePath: string | null, dataUrl?: string): string 
   if (dataUrl === undefined) return sourcePath ? copyPlaylistCover(sourcePath) : null
   const match = /^data:image\/jpeg;base64,([A-Za-z0-9+/]+={0,2})$/.exec(dataUrl)
   if (!match) throw new Error(t('coverFormatUnsupported'))
-  const coverDirectory = join(getDataPath(), 'covers')
+  const coverDirectory = getCoverPath()
   mkdirSync(coverDirectory, { recursive: true })
-  const destination = join(coverDirectory, `playlist-${randomUUID()}.jpg`)
+  const destination = getCoverPath(`playlist-${randomUUID()}.jpg`)
   writeFileSync(destination, Buffer.from(match[1], 'base64'))
   return destination
 }
@@ -123,9 +123,9 @@ function copyPlaylistCover(sourcePath: string): string {
   if (!['.jpg', '.jpeg', '.png', '.webp', '.gif'].includes(extension)) {
     throw new Error(t('coverFormatUnsupported'))
   }
-  const coverDirectory = join(getDataPath(), 'covers')
+  const coverDirectory = getCoverPath()
   mkdirSync(coverDirectory, { recursive: true })
-  const destination = join(coverDirectory, `playlist-${randomUUID()}${extension}`)
+  const destination = getCoverPath(`playlist-${randomUUID()}${extension}`)
   copyFileSync(sourcePath, destination)
   return destination
 }

@@ -54,7 +54,7 @@ const mocks = {
     }
   },
   [path.resolve('src/main/i18n.ts')]: { t: (key) => key },
-  [path.resolve('src/main/utils/pathUtils.ts')]: { getLogPath: () => directory },
+  [path.resolve('src/main/utils/pathUtils.ts')]: { getLogPath: (...parts) => path.join(directory, ...parts) },
   [path.resolve('src/main/database/repository.ts')]: {
     getAppSetting: (key) => settings.get(key),
     setAppSetting: (key, value) => settings.set(key, value)
