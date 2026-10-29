@@ -550,6 +550,15 @@ declare global {
         ): () => void
         onOpenFilesError(callback: () => void): () => void
         setLocale(locale: 'zh' | 'en'): void
+        getTaskbarControls(): Promise<{
+          success: boolean
+          data?: { available: boolean; enabled: boolean }
+        }>
+        setTaskbarControls(enabled: boolean): Promise<{
+          success: boolean
+          error?: string
+          data?: { available: boolean; enabled: boolean }
+        }>
         setCloseToTray(enabled: boolean): Promise<{ success: boolean }>
         setAutoStart(enabled: boolean): Promise<{ success: boolean }>
         getMicaState(): Promise<{
@@ -569,7 +578,13 @@ declare global {
           success: boolean
           data?: { available: boolean; enabled: boolean }
         }>
-        updateTray(data: { title: string; artist: string; isPlaying: boolean }): void
+        updateTray(data: {
+          title: string
+          artist: string
+          isPlaying: boolean
+          hasTrack?: boolean
+          album?: string
+        }): void
         onTrayAction(callback: (action: 'previous' | 'toggle' | 'next') => void): () => void
       }
       miniPlayer: {

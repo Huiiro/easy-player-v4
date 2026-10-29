@@ -1,4 +1,7 @@
 export default {
+  trayUnknownTrack: 'Unknown track',
+  taskbarControlsUnavailable:
+    'The taskbar playback bar is unavailable. Please reinstall the player.',
   trayNoTrack: 'No track playing',
   trayPrevious: 'Previous',
   trayPlay: 'Play',

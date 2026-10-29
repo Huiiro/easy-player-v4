@@ -53,6 +53,8 @@ win:
         - 'easy_player_native.node'
         - '*.dll'
         - '!easy_player_native.dll'
+    - from: 'build/taskbar-controls/bin/Release/easy_player_taskbar.exe'
+      to: 'native/easy_player_taskbar.exe'
     - from: 'resources/lib/yt-dlp/win/yt-dlp.exe'
       to: 'lib/yt-dlp/yt-dlp.exe'
 nsis:

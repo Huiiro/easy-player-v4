@@ -16,6 +16,33 @@ const { error: showError } = useMessage()
 const logLevel = ref<LogEntry['level']>('info')
 const logLevelBusy = ref(true)
 const associationBusy = ref(false)
+const taskbarAvailable = ref(false)
+const taskbarEnabled = ref(false)
+const taskbarBusy = ref(true)
+async function changeTaskbar(enabled: boolean | string | number): Promise<void> {
+  if (typeof enabled !== 'boolean') return
+  taskbarBusy.value = true
+  try {
+    const result = await window.api.system.setTaskbarControls(enabled)
+    if (result.success && result.data) taskbarEnabled.value = result.data.enabled
+    else showError(t('settings.taskbarControlsFailed'))
+  } catch {
+    showError(t('settings.taskbarControlsFailed'))
+  } finally {
+    taskbarBusy.value = false
+  }
+}
+onMounted(async () => {
+  try {
+    const result = await window.api.system.getTaskbarControls()
+    taskbarAvailable.value = result.success && result.data?.available === true
+    taskbarEnabled.value = result.data?.enabled === true
+  } catch {
+    taskbarAvailable.value = false
+  } finally {
+    taskbarBusy.value = false
+  }
+})
 const changelogOpen = ref(false)
 async function openDefaultApps(): Promise<void> {
   associationBusy.value = true
@@ -133,6 +160,18 @@ watch(
     :description="t('settings.closeToTrayDescription')"
   >
     <BaseSwitch v-model="ui.closeToTray" size="md" />
+  </SettingRow>
+  <SettingRow
+    v-if="taskbarAvailable"
+    :label="t('settings.taskbarControls')"
+    :description="t('settings.taskbarControlsDescription')"
+  >
+    <BaseSwitch
+      :model-value="taskbarEnabled"
+      :disabled="taskbarBusy"
+      size="md"
+      @update:model-value="changeTaskbar"
+    />
   </SettingRow>
   <SettingRow :label="t('settings.autoStart')" :description="t('settings.autoStartDescription')">
     <BaseSwitch v-model="ui.autoStart" size="md" />

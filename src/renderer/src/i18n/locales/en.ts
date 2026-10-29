@@ -820,6 +820,10 @@ export default {
     }
   },
   settings: {
+    taskbarControls: 'Taskbar playback bar',
+    taskbarControlsDescription:
+      'Show song information and playback controls beside the system tray.',
+    taskbarControlsFailed: 'Unable to update the taskbar playback bar. Please retry.',
     extremePlaybackActive: 'Lightweight mode is active',
     returnFullPlayer: 'Return to full player',
     extremePlayback: 'Lightweight mode',

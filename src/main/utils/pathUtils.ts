@@ -112,6 +112,12 @@ export function getTrayIconPath(isPackaged: boolean): string {
     : getIconPath(isPackaged)
 }
 
+export function getTaskbarHelperPath(isPackaged: boolean): string {
+  return isPackaged
+    ? path.join(process.resourcesPath, 'native', 'easy_player_taskbar.exe')
+    : getProjectPath('build', 'taskbar-controls', 'bin', 'Release', 'easy_player_taskbar.exe')
+}
+
 export function getDockIconPath(isPackaged: boolean): string {
   return isPackaged
     ? path.join(process.resourcesPath, 'icon.icns')

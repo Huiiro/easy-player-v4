@@ -1,0 +1,12 @@
+cmake_minimum_required(VERSION 3.20)
+project(easy_player_taskbar LANGUAGES CXX)
+if(NOT WIN32)
+  message(FATAL_ERROR "Taskbar controls are Windows-only")
+endif()
+add_executable(easy_player_taskbar main.cpp)
+target_compile_features(easy_player_taskbar PRIVATE cxx_std_17)
+target_compile_definitions(easy_player_taskbar PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(easy_player_taskbar PRIVATE user32 gdi32 comctl32 advapi32)
+set_property(TARGET easy_player_taskbar PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+
+set_target_properties(easy_player_taskbar PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

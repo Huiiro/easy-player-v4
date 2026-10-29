@@ -61,11 +61,13 @@ import {
   getBackgroundPath,
   getIconPath,
   getTrayIconPath,
+  getTaskbarHelperPath,
   getDockIconPath,
   getPreloadPath,
   getRendererPath,
   getLyricTimelinePath
 } from './utils/pathUtils'
+import { createTaskbarPlaybackControls } from './service/taskbarPlaybackService'
 import { createWindowMaterialManager } from './service/windowMaterialService'
 import { createWindowPresentation } from './service/windowPresentation'
 import { Logger } from './service/loggerService'
@@ -116,9 +118,15 @@ let audioEngine: AudioEngineManager | null = null
 let flushPlaybackCheckpoint: (() => void) | undefined
 let tray: Tray | null = null
 let trayMenu: Menu | null = null
-let trayTrack = { title: '', artist: '', isPlaying: false }
+let trayTrack = { title: '', artist: '', album: '', isPlaying: false }
 let isQuitting = false
 let trafficLightPositionTimer: ReturnType<typeof setTimeout> | undefined
+
+const taskbarPlayback = createTaskbarPlaybackControls({
+  platform: process.platform,
+  command: getTaskbarHelperPath(app.isPackaged),
+  onAction: sendTrayAction
+})
 
 const TRAFFIC_LIGHT_POSITION = { x: 16, y: 14 }
 
@@ -187,6 +195,7 @@ function quitApplication(): void {
   audioEngine?.flushDspSettings()
   saveDesktopLyricsWindowState()
   globalShortcut.unregisterAll()
+  taskbarPlayback.dispose()
   tray?.destroy()
   tray = null
   shutdownPlugins()
@@ -869,6 +878,7 @@ app.whenReady().then(() =>
         setAppSetting('system.locale', locale)
         setMainLocale(locale)
         updateTrayMenu()
+        taskbarPlayback.update()
       })
       Logger.registerIpc()
       Logger.info('[Main] starting application', {
@@ -892,6 +902,23 @@ app.whenReady().then(() =>
       registerFileAssociationHandlers(() => mainWindow)
       registerDownloadIpcHandlers()
       createTray()
+      if (taskbarPlayback.state().available)
+        taskbarPlayback.setEnabled(getAppSetting('system.taskbar-controls') !== false)
+      ipcMain.handle('system:get-taskbar-controls', () => ({
+        success: true,
+        data: taskbarPlayback.state()
+      }))
+      ipcMain.handle('system:set-taskbar-controls', (event, enabled: unknown) => {
+        if (event.sender !== mainWindow?.webContents || typeof enabled !== 'boolean')
+          return { success: false }
+        try {
+          taskbarPlayback.setEnabled(enabled)
+          setAppSetting('system.taskbar-controls', enabled)
+          return { success: true, data: taskbarPlayback.state() }
+        } catch {
+          return { success: false, error: t('taskbarControlsUnavailable') }
+        }
+      })
       ipcMain.handle('system:set-close-to-tray', (_event, enabled: boolean) => {
         return logOperation('[IPC] system:set-close-to-tray', { enabled }, () => {
           setAppSetting('system.close-to-tray', enabled === true)
@@ -937,13 +964,25 @@ app.whenReady().then(() =>
       })
       ipcMain.on(
         'tray:update',
-        (_event, data: { title?: string; artist?: string; isPlaying?: boolean }) => {
+        (
+          event,
+          data: {
+            title?: string
+            artist?: string
+            album?: string
+            isPlaying?: boolean
+            hasTrack?: boolean
+          }
+        ) => {
+          if (event.sender !== mainWindow?.webContents) return
           trayTrack = {
             title: data.title || '',
             artist: data.artist || '',
+            album: data.album || '',
             isPlaying: data.isPlaying === true
           }
           updateTrayMenu()
+          taskbarPlayback.update({ ...trayTrack, hasTrack: data.hasTrack === true })
         }
       )
       ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
@@ -1244,6 +1283,7 @@ app.whenReady().then(() =>
             if (code === -3) return
             if (previous && !previous.isDestroyed()) {
               mainWindow = previous
+              taskbarPlayback.update()
               previous.show()
             }
             replacement.destroy()
@@ -1293,6 +1333,7 @@ app.on('window-all-closed', () => {
 })
 
 app.on('will-quit', () => {
+  taskbarPlayback.dispose()
   Logger.debug('[Main] will quit; flushing settings and closing database')
   isQuitting = true
   flushPlaybackCheckpoint?.()

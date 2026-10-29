@@ -2171,7 +2171,9 @@ export const usePlayerStore = defineStore('player', () => {
     window.api.system.updateTray({
       title: metadata?.title || song?.title || '',
       artist: metadata?.artist || song?.artist || '',
-      isPlaying: isPlaying.value
+      album: metadata?.album || song?.album || '',
+      isPlaying: isPlaying.value,
+      hasTrack: Boolean(currentFile.value)
     })
   }
 
@@ -2188,7 +2190,9 @@ export const usePlayerStore = defineStore('player', () => {
     else if (currentFile.value) void play()
   }
 
-  watch([currentQueueSong, trackInfo, isPlaying], publishMiniPlayerState, { deep: true })
+  watch([currentQueueSong, trackInfo, currentFile, isPlaying], publishMiniPlayerState, {
+    deep: true
+  })
   watch([queueTransitionEntries, currentQueueIndex, playMode], () => {
     if (isPlaying.value) void syncNextTrack()
   })

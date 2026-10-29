@@ -808,6 +808,9 @@ export default {
     capabilities: { lyrics: '歌词', artwork: '封面', metadata: '元数据', download: '下载' }
   },
   settings: {
+    taskbarControls: '任务栏播控条',
+    taskbarControlsDescription: '在任务栏右侧显示歌曲信息和播控按钮。',
+    taskbarControlsFailed: '无法更新任务栏播控条，请重试。',
     extremePlaybackActive: '处于轻量模式',
     returnFullPlayer: '返回完整播放器',
     extremePlayback: '轻量模式',

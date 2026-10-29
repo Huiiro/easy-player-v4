@@ -1,4 +1,6 @@
 export default {
+  trayUnknownTrack: '未知歌曲',
+  taskbarControlsUnavailable: '任务栏播控条不可用，请重新安装播放器。',
   trayNoTrack: '暂未播放',
   trayPrevious: '上一首',
   trayPlay: '播放',

@@ -645,6 +645,9 @@ const systemAPI = {
     return () => ipcRenderer.removeListener('system:open-files-error', listener)
   },
   setLocale: (locale: 'zh' | 'en'): void => ipcRenderer.send('system:set-locale', locale),
+  getTaskbarControls: () => ipcRenderer.invoke('system:get-taskbar-controls'),
+  setTaskbarControls: (enabled: boolean) =>
+    ipcRenderer.invoke('system:set-taskbar-controls', enabled),
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
   setAutoStart: (enabled: boolean) => ipcRenderer.invoke('system:set-auto-start', enabled),
   getMicaState: () => ipcRenderer.invoke('system:get-mica-state'),
@@ -652,8 +655,13 @@ const systemAPI = {
   setWindowMaterial: (material: import('../shared/windowMaterial').WindowMaterial) =>
     ipcRenderer.invoke('system:set-window-material', material),
   setMicaEnabled: (enabled: boolean) => ipcRenderer.invoke('system:set-mica-enabled', enabled),
-  updateTray: (data: { title: string; artist: string; isPlaying: boolean }) =>
-    ipcRenderer.send('tray:update', data),
+  updateTray: (data: {
+    title: string
+    artist: string
+    album?: string
+    isPlaying: boolean
+    hasTrack?: boolean
+  }) => ipcRenderer.send('tray:update', data),
   onTrayAction: (callback: (action: 'previous' | 'toggle' | 'next') => void): (() => void) => {
     const listener = (
       _event: Electron.IpcRendererEvent,

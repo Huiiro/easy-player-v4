@@ -6,6 +6,7 @@ This document lists features, improvements, and fixes in descending version orde
 
 ## v3.3.0
 
+- Added a persistent Windows playback bar beside the system tray, showing the song title and artist, with previous, play/pause, and next controls and a toggle in System settings.
 - Added a plugin management page for on-demand installation, updates, enabling, disabling, and removal of official source and theme plugins, plus log filtering, export, and clearing. Startup does not download plugins automatically.
 - Moved NetEase Cloud Music, Kugou, and QQ Music lyrics, artwork, and metadata, plus Bilibili and YouTube media search and downloads, into independent official plugins, with a public plugin SDK.
 - Moved Black Hole, Rainy Night, Aurora, Ocean, Sunset, Forest, Matrix, Starfield, Star Trails, and DNA backgrounds into separately installable theme plugins. Added local third-party data and shader theme packages; official code backgrounds run in sandboxed frames.
