@@ -8,6 +8,7 @@ import { getCoverPath } from '../../utils/pathUtils'
 import type { PagedResult, Song, SongQuery } from '../types'
 import { attachTags, songColumns, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 import { refreshPlaylistCover } from './playlists'
+import { normalizeLyricOffset } from '../../../shared/songLyrics'
 
 export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
@@ -110,8 +111,15 @@ export function updateSongLyrics(
     translationFormat?: string
     romanization?: string
     romanizationFormat?: string
+    offsetMs?: number | null
   }
 ): boolean {
+  if (
+    payload.offsetMs !== undefined &&
+    payload.offsetMs !== null &&
+    !Number.isFinite(payload.offsetMs)
+  )
+    throw new Error('Invalid lyric offset')
   const result = getDatabase()
     .prepare(
       `UPDATE song
@@ -120,10 +128,21 @@ export function updateSongLyrics(
            translation = @translation,
            translation_format = @translationFormat,
            romanization = @romanization,
-           romanization_format = @romanizationFormat
+           romanization_format = @romanizationFormat,
+           offset_ms = CASE WHEN @hasOffset THEN @offsetMs ELSE offset_ms END
        WHERE id = @id`
     )
-    .run({ id, ...payload })
+    .run({
+      id,
+      lrc: payload.lrc,
+      lyricFormat: payload.lyricFormat ?? null,
+      translation: payload.translation ?? null,
+      translationFormat: payload.translationFormat ?? null,
+      romanization: payload.romanization ?? null,
+      romanizationFormat: payload.romanizationFormat ?? null,
+      hasOffset: payload.offsetMs !== undefined ? 1 : 0,
+      offsetMs: payload.offsetMs == null ? null : normalizeLyricOffset(payload.offsetMs)
+    })
   return result.changes > 0
 }
 

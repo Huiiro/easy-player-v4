@@ -109,6 +109,8 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   const metadataEditOpen = ref(false)
   const metadataEditSongId = ref<number | null>(null)
   const metadataEditCoverUrl = ref<string | null>(null)
+  const lyricsEditorOpen = ref(false)
+  const lyricsEditorSongId = ref<number | null>(null)
   const openMenu = async (song: LibrarySong, x: number, y: number): Promise<void> => {
     activeMenuSong.value = song
     menuPosition.value = { left: `${x}px`, top: `${y}px` }
@@ -288,6 +290,13 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   function onMetadataSaved(): void {
     void props.refresh()
   }
+  function openLyricsEditor(): void {
+    const id = activeMenuSong.value?.id
+    closeMenu()
+    if (id == null) return
+    lyricsEditorSongId.value = id
+    lyricsEditorOpen.value = true
+  }
   function openBatchTags(): void {
     if (!props.selectedIds.size) return
     batchTagSongIds.value = [...props.selectedIds]
@@ -362,6 +371,9 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     metadataEditOpen,
     metadataEditSongId,
     metadataEditCoverUrl,
+    lyricsEditorOpen,
+    lyricsEditorSongId,
+    openLyricsEditor,
     openMenu,
     closeMenu,
     addActiveMenuSongToQueue,

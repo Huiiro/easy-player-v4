@@ -9,6 +9,7 @@ import SongDetailsDialog from './SongDetailsDialog.vue'
 import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
 import MetadataEditDialog from './MetadataEditDialog.vue'
+import LyricsEditorDialog from '@/components/lyrics/LyricsEditorDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 const props = defineProps<SongActionContext>()
 const emit = defineEmits<{ clearSelection: [] }>()
@@ -37,6 +38,9 @@ const {
   metadataEditOpen,
   metadataEditSongId,
   metadataEditCoverUrl,
+  lyricsEditorOpen,
+  lyricsEditorSongId,
+  openLyricsEditor,
   openMenu,
   closeMenu,
   addActiveMenuSongToQueue,
@@ -179,6 +183,13 @@ defineExpose({
       </button>
       <button
         class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+        @click="openLyricsEditor"
+      >
+        <SvgIcon name="common-edit-lrc" class-name="size-4" />
+        {{ t('lyricEditor.title') }}
+      </button>
+      <button
+        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
         @click="openSongDetails"
       >
         <SvgIcon name="common-detail" class-name="size-4" />
@@ -298,6 +309,7 @@ defineExpose({
   <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="refresh" />
   <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="batchTagSongIds" @changed="refresh" />
   <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
+  <LyricsEditorDialog v-model="lyricsEditorOpen" :song-id="lyricsEditorSongId" @saved="refresh" />
   <MetadataEditDialog
     v-model="metadataEditOpen"
     :song-id="metadataEditSongId"

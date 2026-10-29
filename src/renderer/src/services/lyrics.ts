@@ -112,7 +112,7 @@ export function isLyricFormat(value: unknown): value is LyricFormat {
   return ['lrc', 'elrc', 'yrc', 'krc', 'ttml', 'plain'].includes(String(value))
 }
 
-function detectLyricFormat(content: string): LyricFormat {
+export function detectLyricFormat(content: string): LyricFormat {
   const source = content.replace(/^\uFEFF/, '').trim()
   if (/<tt(?:\s|>)/i.test(source)) return 'ttml'
   if (/^\s*\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(source)) return 'krc'
