@@ -27,6 +27,7 @@ const {
   setMenuLyricFlag,
   activeMenuSong,
   activeMenuQueueIndex,
+  menuId,
   menuPosition,
   playlistDialogOpen,
   playlistSongIds,
@@ -175,7 +176,7 @@ defineExpose({
     <div
       v-if="activeMenuSong"
       :ref="setMenuElement"
-      data-song-context-menu
+      :data-song-context-menu="menuId"
       class="fixed z-[9999] w-47 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
       :style="menuPosition"
       @click.stop
@@ -312,6 +313,7 @@ defineExpose({
     >
       <div
         ref="marksPanel"
+        :data-song-context-menu="menuId"
         role="menu"
         :aria-label="t('songList.marksAndPreference')"
         class="w-64 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left text-text shadow-xl"
@@ -384,6 +386,7 @@ defineExpose({
     >
       <div
         ref="editPanel"
+        :data-song-context-menu="menuId"
         role="menu"
         :aria-label="t('songList.editSong')"
         class="w-52 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left text-text shadow-xl"

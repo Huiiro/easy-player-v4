@@ -608,6 +608,63 @@ async function runFixture() {
   button(zh.playerPanel.lyricSaveDatabase).click()
   await wait()
   check(writes.at(-1).id === 7, 'context-menu lyric search saves to the selected remote song')
+
+  const footer = document.createElement('footer')
+  footer.innerHTML = '<button><svg><path /></svg></button><img alt="Cover">'
+  let footerClicks = 0
+  footer.addEventListener('click', (event) => {
+    event.stopPropagation()
+    footerClicks++
+  })
+  footer.addEventListener('contextmenu', (event) => event.stopPropagation())
+  document.body.append(footer)
+  for (const selector of ['button', 'svg path', 'img']) {
+    await openMenu()
+    button(zh.songList.editSong).click()
+    await wait()
+    footer.querySelector(selector).dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await wait()
+    check(
+      !document.querySelector('[data-song-context-menu]') && !editSubmenu(),
+      'outside clicks close both menus despite stopped footer bubbling: ' + selector
+    )
+  }
+  check(footerClicks === 3, 'closing the context menu preserves footer control actions')
+  await openMenu()
+  document
+    .querySelector('[data-song-context-menu]')
+    .dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  await wait()
+  check(
+    !!document.querySelector('[data-song-context-menu]'),
+    'clicking the main menu surface does not dismiss it'
+  )
+  button(zh.songList.editSong).click()
+  await wait()
+  for (const type of ['click', 'contextmenu']) {
+    editSubmenu().dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true }))
+    await wait()
+    check(!!editSubmenu(), 'a teleported submenu remains open for internal ' + type)
+  }
+  footer.querySelector('img').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true }))
+  await wait()
+  check(
+    !document.querySelector('[data-song-context-menu]'),
+    'outside context menus dismiss song menus despite stopped bubbling'
+  )
+  footer.addEventListener('contextmenu', () => void menu.value.openMenu(menuSongs[1], 300, 100))
+  await openMenu()
+  footer.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+  await wait()
+  button(zh.songList.editSong).click()
+  await wait()
+  button(zh.lyricEditor.title).click()
+  await wait()
+  check(
+    document.querySelector('[data-fixture-dialog="LyricsEditorDialog"]')?.dataset.songId === '7',
+    'a new row context menu can reopen after capture closes the old menu'
+  )
+  footer.remove()
   menuApp.unmount()
   menuHost.remove()
   check(fileWrites === 0, 'lyric management never writes embedded audio metadata')

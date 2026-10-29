@@ -1,4 +1,13 @@
-import { computed, nextTick, onMounted, onBeforeUnmount, onDeactivated, ref, shallowRef } from 'vue'
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  onDeactivated,
+  ref,
+  shallowRef,
+  useId
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useMessage } from '@/components/ui/useMessage'
@@ -22,6 +31,7 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     player.queue.findIndex((song) => song.id === activeMenuSong.value?.id)
   )
   const menuElement = ref<HTMLElement | null>(null)
+  const menuId = useId()
   const menuPosition = ref({ left: '0px', top: '0px' })
   const playlistDialogOpen = ref(false)
   const playlistSongIds = ref<number[]>([])
@@ -351,16 +361,26 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   const onSongActionsMenuOpened = (source: 'footer' | 'songlist'): void => {
     if (source !== 'songlist') closeMenu()
   }
+  function onOutsideMenuInteraction(event: MouseEvent): void {
+    if (!activeMenuSong.value) return
+    // Submenus are teleported; include every surface owned by this menu.
+    const inside = event
+      .composedPath()
+      .some(
+        (element) => element instanceof HTMLElement && element.dataset.songContextMenu === menuId
+      )
+    if (!inside) closeMenu()
+  }
   onMounted(() => {
     eventBus.on('songActionsMenuOpened', onSongActionsMenuOpened)
-    window.addEventListener('click', closeMenu)
-    window.addEventListener('contextmenu', closeMenu)
+    window.addEventListener('click', onOutsideMenuInteraction, true)
+    window.addEventListener('contextmenu', onOutsideMenuInteraction, true)
   })
   onDeactivated(closeMenu)
   onBeforeUnmount(() => {
     eventBus.off('songActionsMenuOpened', onSongActionsMenuOpened)
-    window.removeEventListener('click', closeMenu)
-    window.removeEventListener('contextmenu', closeMenu)
+    window.removeEventListener('click', onOutsideMenuInteraction, true)
+    window.removeEventListener('contextmenu', onOutsideMenuInteraction, true)
   })
   function setMenuElement(element: unknown): void {
     menuElement.value = element instanceof HTMLElement ? element : null
@@ -377,6 +397,7 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     setMenuLyricFlag,
     activeMenuSong,
     activeMenuQueueIndex,
+    menuId,
     menuPosition,
     playlistDialogOpen,
     playlistSongIds,
