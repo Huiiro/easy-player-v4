@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -101,139 +102,150 @@ onBeforeUnmount(() => offProgress?.())
 </script>
 
 <template>
-  <SettingRow
-    :label="t('settings.importSongs')"
-    :description="t('settings.importSongsDescription')"
-  >
-    <button class="btn-hover-base text-sm" type="button" @click="eventBus.emit('importLocalMusic')">
-      {{ t('settings.importSongs') }}
-    </button>
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.importSingleSong')"
-    :description="t('settings.importSingleSongDescription')"
-  >
-    <button
-      class="btn-hover-base text-sm disabled:cursor-wait disabled:opacity-50"
-      type="button"
-      :disabled="importingSong"
-      @click="importSingleSong"
+  <SettingGroup :title="t('settings.groups.importMusic')">
+    <SettingRow
+      :label="t('settings.importSongs')"
+      :description="t('settings.importSongsDescription')"
     >
-      {{ t('settings.importSingleSong') }}
-    </button>
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.ignoreShortSongs')"
-    :description="t('settings.ignoreShortSongsDescription')"
-  >
-    <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
-  </SettingRow>
-  <hr class="mx-5 my-4 border-0 border-t border-border" />
-  <SettingRow
-    :label="t('settings.albumGroupByName')"
-    :description="t('settings.albumGroupByNameDescription')"
-  >
-    <BaseSwitch v-model="ui.albumGroupByName" size="md" />
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.genreSeparator')"
-    :description="t('settings.genreSeparatorDescription')"
-  >
-    <div class="w-64">
-      <input
-        v-model="ui.genreSeparator"
-        class="input-base text-center"
-        :aria-label="t('settings.genreSeparator')"
-        :placeholder="t('settings.genreSeparatorPlaceholder')"
-        maxlength="8"
-      />
-    </div>
-  </SettingRow>
-  <div class="setting-row text-nowrap">
-    <div>
-      <h3>{{ t('settings.artistSeparator') }}</h3>
-      <p>{{ t('settings.artistSeparatorDescription') }}</p>
-    </div>
-    <div class="w-64">
-      <input
-        v-model="ui.artistSeparator"
-        class="input-base text-center"
-        :placeholder="t('settings.artistSeparatorPlaceholder')"
-        maxlength="8"
-      />
-    </div>
-  </div>
-  <SettingRow
-    :label="t('settings.normalizeMetadataSeparator')"
-    :description="t('settings.normalizeMetadataSeparatorDescription')"
-  >
-    <BaseSwitch v-model="ui.normalizeMetadataSeparator" size="md" />
-  </SettingRow>
-  <hr class="mx-5 my-4 border-0 border-t border-border" />
-  <SettingRow
-    :label="t('settings.libraryBackup')"
-    :description="t('settings.libraryBackupDescription')"
-  >
-    <div class="actions">
-      <button class="btn-hover-base text-sm" type="button" @click="run('exportLibrary')">
-        {{ t('settings.exportLibrary') }}
+      <button
+        class="btn-hover-base text-sm"
+        type="button"
+        @click="eventBus.emit('importLocalMusic')"
+      >
+        {{ t('settings.importSongs') }}
       </button>
-      <button class="btn-hover-base text-sm" type="button" @click="run('importLibrary')">
-        {{ t('settings.importLibrary') }}
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.importSingleSong')"
+      :description="t('settings.importSingleSongDescription')"
+    >
+      <button
+        class="btn-hover-base text-sm disabled:cursor-wait disabled:opacity-50"
+        type="button"
+        :disabled="importingSong"
+        @click="importSingleSong"
+      >
+        {{ t('settings.importSingleSong') }}
       </button>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.ignoreShortSongs')"
+      :description="t('settings.ignoreShortSongsDescription')"
+    >
+      <BaseSwitch v-model="ui.ignoreShortSongs" size="md" />
+    </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.groups.libraryDisplay')">
+    <SettingRow
+      :label="t('settings.albumGroupByName')"
+      :description="t('settings.albumGroupByNameDescription')"
+    >
+      <BaseSwitch v-model="ui.albumGroupByName" size="md" />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.genreSeparator')"
+      :description="t('settings.genreSeparatorDescription')"
+    >
+      <div class="w-64">
+        <input
+          v-model="ui.genreSeparator"
+          class="input-base text-center"
+          :aria-label="t('settings.genreSeparator')"
+          :placeholder="t('settings.genreSeparatorPlaceholder')"
+          maxlength="8"
+        />
+      </div>
+    </SettingRow>
+    <div class="setting-row text-nowrap">
+      <div>
+        <h3>{{ t('settings.artistSeparator') }}</h3>
+        <p>{{ t('settings.artistSeparatorDescription') }}</p>
+      </div>
+      <div class="w-64">
+        <input
+          v-model="ui.artistSeparator"
+          class="input-base text-center"
+          :placeholder="t('settings.artistSeparatorPlaceholder')"
+          maxlength="8"
+        />
+      </div>
     </div>
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.recoverMovedFiles')"
-    :description="t('settings.recoverMovedFilesDescription')"
-  >
-    <button class="btn-hover-base text-sm" type="button" @click="run('recoverMovedSongs')">
-      {{ t('settings.recover') }}
-    </button>
-  </SettingRow>
-  <SettingRow
-    :label="t('settings.checkMissingSongs')"
-    :description="t('settings.checkMissingSongsDescription')"
-  >
-    <button class="btn-hover-base text-sm" type="button" @click="checkMissingSongs">
-      {{ t('settings.check') }}
-    </button>
-  </SettingRow>
-  <div v-if="importProgress" class="progress">
-    <div>
-      <span>{{ t('library.loading') }}</span>
-      <span>
-        {{ importProgress.total ? `${importProgress.current} / ${importProgress.total}` : '—' }}
+    <SettingRow
+      :label="t('settings.normalizeMetadataSeparator')"
+      :description="t('settings.normalizeMetadataSeparatorDescription')"
+    >
+      <BaseSwitch v-model="ui.normalizeMetadataSeparator" size="md" />
+    </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.groups.libraryMaintenance')">
+    <SettingRow
+      :label="t('settings.libraryBackup')"
+      :description="t('settings.libraryBackupDescription')"
+    >
+      <div class="actions">
+        <button class="btn-hover-base text-sm" type="button" @click="run('exportLibrary')">
+          {{ t('settings.exportLibrary') }}
+        </button>
+        <button class="btn-hover-base text-sm" type="button" @click="run('importLibrary')">
+          {{ t('settings.importLibrary') }}
+        </button>
+      </div>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.recoverMovedFiles')"
+      :description="t('settings.recoverMovedFilesDescription')"
+    >
+      <button class="btn-hover-base text-sm" type="button" @click="run('recoverMovedSongs')">
+        {{ t('settings.recover') }}
+      </button>
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.checkMissingSongs')"
+      :description="t('settings.checkMissingSongsDescription')"
+    >
+      <button class="btn-hover-base text-sm" type="button" @click="checkMissingSongs">
+        {{ t('settings.check') }}
+      </button>
+    </SettingRow>
+    <div v-if="importProgress" class="progress">
+      <div>
+        <span>{{ t('library.loading') }}</span>
+        <span>
+          {{ importProgress.total ? `${importProgress.current} / ${importProgress.total}` : '—' }}
+        </span>
+      </div>
+      <span class="track">
+        <span
+          :style="{
+            width: importProgress.total
+              ? `${(importProgress.current / importProgress.total) * 100}%`
+              : '0%'
+          }"
+        />
       </span>
     </div>
-    <span class="track">
-      <span
-        :style="{
-          width: importProgress.total
-            ? `${(importProgress.current / importProgress.total) * 100}%`
-            : '0%'
-        }"
-      />
-    </span>
-  </div>
 
-  <BaseDialog
-    v-model="removeMissingDialogOpen"
-    :title="t('settings.removeMissingSongs')"
-    width="max-w-sm"
-  >
-    <p class="text-sm text-text-l">
-      {{ t('settings.removeMissingSongsConfirm', { count: missingSongIds.length }) }}
-    </p>
-    <template #footer>
-      <button class="btn-hover px-3 py-1.5 text-sm" @click="removeMissingDialogOpen = false">
-        {{ t('common.cancel') }}
-      </button>
-      <button class="rounded-lg ep-button--danger px-3 py-1.5 text-sm" @click="removeMissingSongs">
-        {{ t('settings.remove') }}
-      </button>
-    </template>
-  </BaseDialog>
+    <BaseDialog
+      v-model="removeMissingDialogOpen"
+      :title="t('settings.removeMissingSongs')"
+      width="max-w-sm"
+    >
+      <p class="text-sm text-text-l">
+        {{ t('settings.removeMissingSongsConfirm', { count: missingSongIds.length }) }}
+      </p>
+      <template #footer>
+        <button class="btn-hover px-3 py-1.5 text-sm" @click="removeMissingDialogOpen = false">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          class="rounded-lg ep-button--danger px-3 py-1.5 text-sm"
+          @click="removeMissingSongs"
+        >
+          {{ t('settings.remove') }}
+        </button>
+      </template>
+    </BaseDialog>
+  </SettingGroup>
 </template>
 
 <style scoped>

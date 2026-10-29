@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
@@ -27,111 +28,115 @@ const desktopLyricsPreviewFontSize = computed(() =>
 
 <template>
   <SettingCard>
-    <SettingRow
-      :label="t('settings.desktopLyricsEnabled')"
-      :description="t('settings.desktopLyricsEnabledDescription')"
-    >
-      <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
-    </SettingRow>
-    <div class="desktop-lyrics-layout">
-      <div class="desktop-lyrics-controls">
-        <div class="desktop-lyrics-font-row">
-          <span class="desktop-lyrics-label">{{ t('settings.desktopLyricsFontFamily') }}</span>
-          <BaseSelect
-            v-model="ui.desktopLyricsStyles.fontFamily"
-            :options="desktopLyricsFontOptions"
-            :placeholder="t('settings.desktopLyricsFontInherit')"
-            teleport
-            class="w-64"
-          />
-        </div>
-        <div class="desktop-lyrics-size-row">
-          <div class="slider-label">
-            <span>{{ t('settings.desktopLyricsFontSize') }}</span>
-            <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+    <SettingGroup :title="t('settings.groups.visibility')">
+      <SettingRow
+        :label="t('settings.desktopLyricsEnabled')"
+        :description="t('settings.desktopLyricsEnabledDescription')"
+      >
+        <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.lyricStyle')">
+      <div class="desktop-lyrics-layout">
+        <div class="desktop-lyrics-controls">
+          <div class="desktop-lyrics-font-row">
+            <span class="desktop-lyrics-label">{{ t('settings.desktopLyricsFontFamily') }}</span>
+            <BaseSelect
+              v-model="ui.desktopLyricsStyles.fontFamily"
+              :options="desktopLyricsFontOptions"
+              :placeholder="t('settings.desktopLyricsFontInherit')"
+              teleport
+              class="w-64"
+            />
           </div>
-          <BaseSlider
-            v-model="ui.desktopLyricsStyles.fontSize"
-            :min="24"
-            :max="64"
-            :step="1"
-            size="sm"
-          />
-        </div>
-        <div class="desktop-lyrics-colors">
-          <label class="desktop-lyrics-color-control">
-            <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
-            <BaseColorPicker
-              v-model="ui.desktopLyricsStyles.activeColor"
-              :presets="presetColors"
-              teleport
+          <div class="desktop-lyrics-size-row">
+            <div class="slider-label">
+              <span>{{ t('settings.desktopLyricsFontSize') }}</span>
+              <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
+            </div>
+            <BaseSlider
+              v-model="ui.desktopLyricsStyles.fontSize"
+              :min="24"
+              :max="64"
+              :step="1"
+              size="sm"
             />
-          </label>
-          <label class="desktop-lyrics-color-control">
-            <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
-            <BaseColorPicker
-              v-model="ui.desktopLyricsStyles.inactiveColor"
-              :presets="presetColors"
-              teleport
-            />
-          </label>
+          </div>
+          <div class="desktop-lyrics-colors">
+            <label class="desktop-lyrics-color-control">
+              <span>{{ t('settings.desktopLyricsActiveColor') }}</span>
+              <BaseColorPicker
+                v-model="ui.desktopLyricsStyles.activeColor"
+                :presets="presetColors"
+                teleport
+              />
+            </label>
+            <label class="desktop-lyrics-color-control">
+              <span>{{ t('settings.desktopLyricsInactiveColor') }}</span>
+              <BaseColorPicker
+                v-model="ui.desktopLyricsStyles.inactiveColor"
+                :presets="presetColors"
+                teleport
+              />
+            </label>
+          </div>
+          <div class="desktop-lyrics-toggles">
+            <label class="desktop-lyrics-toggle">
+              <span>{{ t('settings.desktopLyricsBold') }}</span>
+              <BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" size="sm" />
+            </label>
+            <label class="desktop-lyrics-toggle">
+              <span>{{ t('settings.desktopLyricsGlow') }}</span>
+              <BaseSwitch v-model="ui.desktopLyricsStyles.glow" size="sm" />
+            </label>
+            <label class="desktop-lyrics-toggle">
+              <span>{{ t('settings.desktopLyricsSweep') }}</span>
+              <BaseSwitch v-model="ui.desktopLyricsStyles.sweep" size="sm" />
+            </label>
+            <label class="desktop-lyrics-toggle">
+              <span>{{ t('settings.desktopLyricsTranslation') }}</span>
+              <BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" size="sm" />
+            </label>
+            <label class="desktop-lyrics-toggle">
+              <span>{{ t('settings.desktopLyricsAutoHide') }}</span>
+              <BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" size="sm" />
+            </label>
+          </div>
         </div>
-        <div class="desktop-lyrics-toggles">
-          <label class="desktop-lyrics-toggle">
-            <span>{{ t('settings.desktopLyricsBold') }}</span>
-            <BaseSwitch v-model="ui.desktopLyricsStyles.fontBold" size="sm" />
-          </label>
-          <label class="desktop-lyrics-toggle">
-            <span>{{ t('settings.desktopLyricsGlow') }}</span>
-            <BaseSwitch v-model="ui.desktopLyricsStyles.glow" size="sm" />
-          </label>
-          <label class="desktop-lyrics-toggle">
-            <span>{{ t('settings.desktopLyricsSweep') }}</span>
-            <BaseSwitch v-model="ui.desktopLyricsStyles.sweep" size="sm" />
-          </label>
-          <label class="desktop-lyrics-toggle">
-            <span>{{ t('settings.desktopLyricsTranslation') }}</span>
-            <BaseSwitch v-model="ui.desktopLyricsStyles.showTranslation" size="sm" />
-          </label>
-          <label class="desktop-lyrics-toggle">
-            <span>{{ t('settings.desktopLyricsAutoHide') }}</span>
-            <BaseSwitch v-model="ui.desktopLyricsStyles.autoHideBackground" size="sm" />
-          </label>
+        <div class="desktop-lyrics-preview-panel">
+          <span class="desktop-lyrics-preview-label">{{ t('settings.desktopLyricsPreview') }}</span>
+          <div
+            class="desktop-lyrics-preview"
+            :style="{
+              '--desktop-active': ui.desktopLyricsStyles.activeColor,
+              '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
+              '--desktop-size': `${desktopLyricsPreviewFontSize}px`,
+              fontFamily: desktopLyricsPreviewFontFamily
+            }"
+          >
+            <strong
+              :class="[
+                ui.desktopLyricsStyles.glow &&
+                  !ui.desktopLyricsStyles.sweep &&
+                  'desktop-lyrics-preview--glow',
+                ui.desktopLyricsStyles.sweep && 'desktop-lyrics-preview--sweep'
+              ]"
+              :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+              >{{ t('settings.desktopLyricsPreviewLine') }}</strong
+            >
+            <span
+              v-if="ui.desktopLyricsStyles.showTranslation"
+              :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
+            >
+              {{ t('settings.desktopLyricsPreviewTranslation') }}
+            </span>
+            <span v-else :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }">
+              {{ t('settings.desktopLyricsPreviewNext') }}
+            </span>
+          </div>
         </div>
       </div>
-      <div class="desktop-lyrics-preview-panel">
-        <span class="desktop-lyrics-preview-label">{{ t('settings.desktopLyricsPreview') }}</span>
-        <div
-          class="desktop-lyrics-preview"
-          :style="{
-            '--desktop-active': ui.desktopLyricsStyles.activeColor,
-            '--desktop-inactive': ui.desktopLyricsStyles.inactiveColor,
-            '--desktop-size': `${desktopLyricsPreviewFontSize}px`,
-            fontFamily: desktopLyricsPreviewFontFamily
-          }"
-        >
-          <strong
-            :class="[
-              ui.desktopLyricsStyles.glow &&
-                !ui.desktopLyricsStyles.sweep &&
-                'desktop-lyrics-preview--glow',
-              ui.desktopLyricsStyles.sweep && 'desktop-lyrics-preview--sweep'
-            ]"
-            :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
-            >{{ t('settings.desktopLyricsPreviewLine') }}</strong
-          >
-          <span
-            v-if="ui.desktopLyricsStyles.showTranslation"
-            :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }"
-          >
-            {{ t('settings.desktopLyricsPreviewTranslation') }}
-          </span>
-          <span v-else :style="{ fontWeight: ui.desktopLyricsStyles.fontBold ? 700 : 500 }">
-            {{ t('settings.desktopLyricsPreviewNext') }}
-          </span>
-        </div>
-      </div>
-    </div>
+    </SettingGroup>
   </SettingCard>
 </template>
 

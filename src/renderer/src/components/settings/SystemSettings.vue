@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -11,7 +12,19 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import type { LogEntry } from '@/types/audio'
 
 const ui = useUIStore()
-const { t } = useI18n()
+const { locale, t } = useI18n()
+const language = computed<'zh' | 'en'>({
+  get: () => (locale.value === 'en' ? 'en' : 'zh'),
+  set: (value) => {
+    locale.value = value
+    ui.locale = value
+  }
+})
+const languageOptions = computed(() => [
+  { label: t('settings.languageChinese'), value: 'zh' },
+  { label: t('settings.languageEnglish'), value: 'en' }
+])
+
 const { error: showError } = useMessage()
 const logLevel = ref<LogEntry['level']>('info')
 const logLevelBusy = ref(true)
@@ -128,121 +141,141 @@ watch(
 </script>
 
 <template>
-  <div class="setting-row welcome-row">
-    <div>
-      <h3 id="home-welcome-label">{{ t('settings.homeWelcomeText') }}</h3>
-      <p id="home-welcome-description">{{ t('settings.homeWelcomeTextDescription') }}</p>
+  <SettingGroup :title="t('settings.groups.personalization')">
+    <SettingRow
+      :label="t('settings.interfaceLanguage')"
+      :description="t('settings.interfaceLanguageDescription')"
+    >
+      <BaseSelect
+        v-model="language"
+        :options="languageOptions"
+        :aria-label="t('settings.interfaceLanguage')"
+        teleport
+        class="w-48"
+      />
+    </SettingRow>
+    <div class="setting-row welcome-row">
+      <div>
+        <h3 id="home-welcome-label">{{ t('settings.homeWelcomeText') }}</h3>
+        <p id="home-welcome-description">{{ t('settings.homeWelcomeTextDescription') }}</p>
+      </div>
+      <BaseInput
+        v-model="ui.homeWelcomeText"
+        :placeholder="t('settings.homeWelcomeTextPlaceholder')"
+        :maxlength="120"
+        aria-labelledby="home-welcome-label"
+        aria-describedby="home-welcome-description"
+        class="w-full sm:w-72 sm:shrink-0"
+      />
     </div>
-    <BaseInput
-      v-model="ui.homeWelcomeText"
-      :placeholder="t('settings.homeWelcomeTextPlaceholder')"
-      :maxlength="120"
-      aria-labelledby="home-welcome-label"
-      aria-describedby="home-welcome-description"
-      class="w-full sm:w-72 sm:shrink-0"
-    />
-  </div>
-  <div v-if="ui.platform === 'win'" class="setting-row">
-    <div>
-      <h3>{{ t('settings.fileAssociation') }}</h3>
-      <p>{{ t('settings.fileAssociationDescription') }}</p>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.groups.startup')">
+    <div v-if="ui.platform === 'win'" class="setting-row">
+      <div>
+        <h3>{{ t('settings.fileAssociation') }}</h3>
+        <p>{{ t('settings.fileAssociationDescription') }}</p>
+      </div>
+      <button
+        class="btn-hover-base text-sm text-nowrap"
+        :disabled="associationBusy"
+        @click="openDefaultApps"
+      >
+        {{ t('settings.configureFileAssociation') }}
+      </button>
     </div>
-    <button
-      class="btn-hover-base text-sm text-nowrap"
-      :disabled="associationBusy"
-      @click="openDefaultApps"
+    <SettingRow
+      :label="t('settings.closeToTray')"
+      :description="t('settings.closeToTrayDescription')"
     >
-      {{ t('settings.configureFileAssociation') }}
-    </button>
-  </div>
-  <SettingRow
-    :label="t('settings.closeToTray')"
-    :description="t('settings.closeToTrayDescription')"
-  >
-    <BaseSwitch v-model="ui.closeToTray" size="md" />
-  </SettingRow>
-  <SettingRow
-    v-if="taskbarAvailable"
-    :label="t('settings.taskbarControls')"
-    :description="t('settings.taskbarControlsDescription')"
-  >
-    <BaseSwitch
-      :model-value="taskbarEnabled"
-      :disabled="taskbarBusy"
-      size="md"
-      @update:model-value="changeTaskbar"
-    />
-  </SettingRow>
-  <SettingRow :label="t('settings.autoStart')" :description="t('settings.autoStartDescription')">
-    <BaseSwitch v-model="ui.autoStart" size="md" />
-  </SettingRow>
-  <SettingRow :label="t('settings.logLevel')" :description="t('settings.logLevelDescription')">
-    <BaseSelect
-      :model-value="logLevel"
-      :options="logLevelOptions"
-      :disabled="logLevelBusy"
-      :aria-label="t('settings.logLevel')"
-      teleport
-      class="w-48 shrink-0"
-      @update:model-value="changeLogLevel"
-    />
-  </SettingRow>
-  <div class="setting-row">
-    <div>
-      <h3>{{ t('settings.appUpdate') }}</h3>
-      <p v-if="updateStatus.state === 'available'">
-        {{ t('settings.updateAvailable', { version: updateStatus.version }) }}
-      </p>
-      <p v-else-if="updateStatus.state === 'downloading'">
-        {{ t('settings.updateDownloading', { percent: Math.round(updateStatus.percent || 0) }) }}
-      </p>
-      <p v-else-if="updateStatus.state === 'downloaded'">
-        {{ t('settings.updateDownloaded', { version: updateStatus.version }) }}
-      </p>
-      <p v-else-if="updateStatus.state === 'not-available'">
-        {{ t('settings.updateNotAvailable') }}
-      </p>
-      <p v-else-if="updateStatus.state === 'error'">{{ updateStatus.message }}</p>
-      <p v-else>{{ t('settings.appUpdateDescription') }}</p>
+      <BaseSwitch v-model="ui.closeToTray" size="md" />
+    </SettingRow>
+    <SettingRow
+      v-if="taskbarAvailable"
+      :label="t('settings.taskbarControls')"
+      :description="t('settings.taskbarControlsDescription')"
+    >
+      <BaseSwitch
+        :model-value="taskbarEnabled"
+        :disabled="taskbarBusy"
+        size="md"
+        @update:model-value="changeTaskbar"
+      />
+    </SettingRow>
+    <SettingRow :label="t('settings.autoStart')" :description="t('settings.autoStartDescription')">
+      <BaseSwitch v-model="ui.autoStart" size="md" />
+    </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.groups.logs')">
+    <SettingRow :label="t('settings.logLevel')" :description="t('settings.logLevelDescription')">
+      <BaseSelect
+        :model-value="logLevel"
+        :options="logLevelOptions"
+        :disabled="logLevelBusy"
+        :aria-label="t('settings.logLevel')"
+        teleport
+        class="w-48 shrink-0"
+        @update:model-value="changeLogLevel"
+      />
+    </SettingRow>
+  </SettingGroup>
+  <SettingGroup :title="t('settings.groups.updates')">
+    <div class="setting-row">
+      <div>
+        <h3>{{ t('settings.appUpdate') }}</h3>
+        <p v-if="updateStatus.state === 'available'">
+          {{ t('settings.updateAvailable', { version: updateStatus.version }) }}
+        </p>
+        <p v-else-if="updateStatus.state === 'downloading'">
+          {{ t('settings.updateDownloading', { percent: Math.round(updateStatus.percent || 0) }) }}
+        </p>
+        <p v-else-if="updateStatus.state === 'downloaded'">
+          {{ t('settings.updateDownloaded', { version: updateStatus.version }) }}
+        </p>
+        <p v-else-if="updateStatus.state === 'not-available'">
+          {{ t('settings.updateNotAvailable') }}
+        </p>
+        <p v-else-if="updateStatus.state === 'error'">{{ updateStatus.message }}</p>
+        <p v-else>{{ t('settings.appUpdateDescription') }}</p>
+      </div>
+      <button
+        v-if="updateStatus.state === 'available'"
+        class="btn-hover-base text-sm text-nowrap"
+        :disabled="updateBusy"
+        @click="downloadUpdate"
+      >
+        {{ t('settings.downloadUpdate') }}
+      </button>
+      <button
+        v-else-if="updateStatus.state === 'downloaded'"
+        class="btn-hover-base text-sm text-nowrap"
+        @click="installUpdate"
+      >
+        {{ t('settings.restartAndInstall') }}
+      </button>
+      <button
+        v-else
+        class="btn-hover-base text-sm text-nowrap"
+        :disabled="
+          updateBusy || updateStatus.state === 'checking' || updateStatus.state === 'downloading'
+        "
+        @click="checkForUpdate"
+      >
+        {{ t('settings.checkForUpdates') }}
+      </button>
     </div>
-    <button
-      v-if="updateStatus.state === 'available'"
-      class="btn-hover-base text-sm text-nowrap"
-      :disabled="updateBusy"
-      @click="downloadUpdate"
-    >
-      {{ t('settings.downloadUpdate') }}
-    </button>
-    <button
-      v-else-if="updateStatus.state === 'downloaded'"
-      class="btn-hover-base text-sm text-nowrap"
-      @click="installUpdate"
-    >
-      {{ t('settings.restartAndInstall') }}
-    </button>
-    <button
-      v-else
-      class="btn-hover-base text-sm text-nowrap"
-      :disabled="
-        updateBusy || updateStatus.state === 'checking' || updateStatus.state === 'downloading'
-      "
-      @click="checkForUpdate"
-    >
-      {{ t('settings.checkForUpdates') }}
-    </button>
-  </div>
-  <SettingRow :label="t('settings.changelog')" :description="t('settings.changelogDescription')">
-    <button
-      class="btn-hover-base text-sm text-nowrap"
-      type="button"
-      aria-haspopup="dialog"
-      :aria-expanded="changelogOpen"
-      @click="changelogOpen = true"
-    >
-      {{ t('settings.viewChangelog') }}
-    </button>
-  </SettingRow>
-  <ChangelogDialog v-model="changelogOpen" />
+    <SettingRow :label="t('settings.changelog')" :description="t('settings.changelogDescription')">
+      <button
+        class="btn-hover-base text-sm text-nowrap"
+        type="button"
+        aria-haspopup="dialog"
+        :aria-expanded="changelogOpen"
+        @click="changelogOpen = true"
+      >
+        {{ t('settings.viewChangelog') }}
+      </button>
+    </SettingRow>
+    <ChangelogDialog v-model="changelogOpen" />
+  </SettingGroup>
 </template>
 
 <style scoped>

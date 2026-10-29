@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
 import { useI18n } from 'vue-i18n'
@@ -14,46 +15,56 @@ const lyricSourceKey = (source: string): string => source
 
 <template>
   <SettingCard>
-    <SettingRow
-      :label="t('settings.lyricsOffsetPerSong')"
-      :description="t('settings.lyricsOffsetPerSongDescription')"
-    >
-      <BaseSwitch v-model="ui.lyricsOffsetPerSong" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.autoSearchNetworkLyrics')"
-      :description="t('settings.autoSearchNetworkLyricsDescription')"
-    >
-      <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.preferWordTimedNetworkLyrics')"
-      :description="t('settings.preferWordTimedNetworkLyricsDescription')"
-    >
-      <BaseSwitch v-model="ui.preferWordTimedNetworkLyrics" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.lyricsPriority')"
-      :description="t('settings.lyricsPriorityDescription')"
-    >
-    </SettingRow>
-    <Draggable v-model="ui.lyricSourceOrder" :item-key="lyricSourceKey" handle=".lyric-drag-handle">
-      <template #item="{ element: source, index }">
-        <div class="setting-row lyric-source-item">
-          <div class="flex items-center gap-3">
-            <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
-              <SvgIcon name="common-drag" class-name="size-4" />
-            </button>
-            <div>
-              <h3>{{ t(`lyrics.source.${source}`) }}</h3>
-              <p>
-                {{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}
-              </p>
+    <SettingGroup :title="t('settings.groups.lyricSync')">
+      <SettingRow
+        :label="t('settings.lyricsOffsetPerSong')"
+        :description="t('settings.lyricsOffsetPerSongDescription')"
+      >
+        <BaseSwitch v-model="ui.lyricsOffsetPerSong" size="md" />
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.lyricSearch')">
+      <SettingRow
+        :label="t('settings.autoSearchNetworkLyrics')"
+        :description="t('settings.autoSearchNetworkLyricsDescription')"
+      >
+        <BaseSwitch v-model="ui.autoSearchNetworkLyrics" size="md" />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.preferWordTimedNetworkLyrics')"
+        :description="t('settings.preferWordTimedNetworkLyricsDescription')"
+      >
+        <BaseSwitch v-model="ui.preferWordTimedNetworkLyrics" size="md" />
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.lyricSources')">
+      <SettingRow
+        :label="t('settings.lyricsPriority')"
+        :description="t('settings.lyricsPriorityDescription')"
+      >
+      </SettingRow>
+      <Draggable
+        v-model="ui.lyricSourceOrder"
+        :item-key="lyricSourceKey"
+        handle=".lyric-drag-handle"
+      >
+        <template #item="{ element: source, index }">
+          <div class="setting-row lyric-source-item">
+            <div class="flex items-center gap-3">
+              <button class="lyric-drag-handle" :title="t('settings.lyricsDrag')">
+                <SvgIcon name="common-drag" class-name="size-4" />
+              </button>
+              <div>
+                <h3>{{ t(`lyrics.source.${source}`) }}</h3>
+                <p>
+                  {{ index === 0 ? t('settings.lyricsFirst') : t('settings.lyricsFallback') }}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </template>
-    </Draggable>
+        </template>
+      </Draggable>
+    </SettingGroup>
   </SettingCard>
 </template>
 

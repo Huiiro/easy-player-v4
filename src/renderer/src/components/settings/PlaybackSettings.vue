@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
@@ -33,73 +34,79 @@ function setSmartShuffle(value: boolean | string | number): void {
 </script>
 <template>
   <SettingCard>
-    <SettingRow
-      :label="t('settings.audioControlPanel')"
-      :description="t('settings.audioControlPanelDescription')"
-    >
-      <button class="secondary-button" type="button" @click="openAudioControls">
-        {{ t('settings.openAudioControlPanel') }}
-      </button>
-    </SettingRow>
-    <hr class="mx-5 my-4 border-0 border-t border-border" />
-    <SleepTimerSettings />
-    <SettingRow
-      :label="t('settings.songPlayTrigger')"
-      :description="t('settings.songPlayTriggerDescription')"
-    >
-      <BaseSelect
-        v-model="ui.songPlayTrigger"
-        class="w-48"
-        :options="songPlayTriggerOptions"
-        :aria-label="t('settings.songPlayTrigger')"
-        teleport
-      />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.playQueuePosition')"
-      :description="t('settings.playQueuePositionDescription')"
-    >
-      <BaseSelect
-        v-model="ui.playQueuePosition"
-        class="w-48"
-        :options="playQueuePositionOptions"
-        :aria-label="t('settings.playQueuePosition')"
-        teleport
-      />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.autoPlayOnRestore')"
-      :description="t('settings.autoPlayOnRestoreDescription')"
-    >
-      <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.smartShuffle')"
-      :description="t('settings.smartShuffleDescription')"
-    >
-      <BaseSwitch
-        :model-value="player.smartShuffleEnabled"
-        size="md"
-        @update:model-value="setSmartShuffle"
-      />
-    </SettingRow>
-    <hr class="mx-5 my-4 border-0 border-t border-border" />
-    <SettingRow
-      :label="t('settings.reduceMotion')"
-      :description="t('settings.reduceMotionDescription')"
-    >
-      <BaseSwitch v-model="ui.reduceMotion" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.extremePlayback')"
-      :description="t('settings.extremePlaybackDescription')"
-    >
-      <BaseSwitch
-        :model-value="ui.extremePlayback"
-        :disabled="player.playbackModeChanging"
-        size="md"
-        @update:model-value="player.setExtremePlayback($event === true)"
-      />
-    </SettingRow>
+    <SettingGroup :title="t('settings.groups.audio')">
+      <SettingRow
+        :label="t('settings.audioControlPanel')"
+        :description="t('settings.audioControlPanelDescription')"
+      >
+        <button class="secondary-button" type="button" @click="openAudioControls">
+          {{ t('settings.openAudioControlPanel') }}
+        </button>
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.timer')">
+      <SleepTimerSettings />
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.playback')">
+      <SettingRow
+        :label="t('settings.songPlayTrigger')"
+        :description="t('settings.songPlayTriggerDescription')"
+      >
+        <BaseSelect
+          v-model="ui.songPlayTrigger"
+          class="w-48"
+          :options="songPlayTriggerOptions"
+          :aria-label="t('settings.songPlayTrigger')"
+          teleport
+        />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.playQueuePosition')"
+        :description="t('settings.playQueuePositionDescription')"
+      >
+        <BaseSelect
+          v-model="ui.playQueuePosition"
+          class="w-48"
+          :options="playQueuePositionOptions"
+          :aria-label="t('settings.playQueuePosition')"
+          teleport
+        />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.autoPlayOnRestore')"
+        :description="t('settings.autoPlayOnRestoreDescription')"
+      >
+        <BaseSwitch v-model="ui.autoPlayOnRestore" size="md" />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.smartShuffle')"
+        :description="t('settings.smartShuffleDescription')"
+      >
+        <BaseSwitch
+          :model-value="player.smartShuffleEnabled"
+          size="md"
+          @update:model-value="setSmartShuffle"
+        />
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.performance')">
+      <SettingRow
+        :label="t('settings.reduceMotion')"
+        :description="t('settings.reduceMotionDescription')"
+      >
+        <BaseSwitch v-model="ui.reduceMotion" size="md" />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.extremePlayback')"
+        :description="t('settings.extremePlaybackDescription')"
+      >
+        <BaseSwitch
+          :model-value="ui.extremePlayback"
+          :disabled="player.playbackModeChanging"
+          size="md"
+          @update:model-value="player.setExtremePlayback($event === true)"
+        />
+      </SettingRow>
+    </SettingGroup>
   </SettingCard>
 </template>

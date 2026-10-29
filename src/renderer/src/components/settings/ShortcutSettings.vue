@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
@@ -29,27 +30,31 @@ function reset(): void {
 </script>
 <template>
   <div class="settings-card shortcut-card">
-    <SettingRow
-      :label="t('settings.globalShortcuts')"
-      :description="t('settings.globalShortcutsDescription')"
-    >
-      <div class="flex items-center gap-3">
-        <button class="btn-hover-base text-sm" type="button" @click="reset">
-          {{ t('settings.resetShortcutDefaults') }}
-        </button>
-        <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
+    <SettingGroup :title="t('settings.groups.shortcutControls')">
+      <SettingRow
+        :label="t('settings.globalShortcuts')"
+        :description="t('settings.globalShortcutsDescription')"
+      >
+        <div class="flex items-center gap-3">
+          <button class="btn-hover-base text-sm" type="button" @click="reset">
+            {{ t('settings.resetShortcutDefaults') }}
+          </button>
+          <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
+        </div>
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.shortcutBindings')">
+      <div class="shortcut-grid">
+        <span>-</span>
+        <span>{{ t('settings.localShortcuts') }}</span>
+        <span>{{ t('settings.globalShortcuts') }}</span>
+        <template v-for="item in actions" :key="item.key">
+          <span class="action">{{ t(item.label) }}</span>
+          <ShortcutInput :action="item.key" scope="local" />
+          <ShortcutInput :action="item.key" scope="global" :disabled="!ui.useGlobalShortcutKeys" />
+        </template>
       </div>
-    </SettingRow>
-    <div class="shortcut-grid">
-      <span>-</span>
-      <span>{{ t('settings.localShortcuts') }}</span>
-      <span>{{ t('settings.globalShortcuts') }}</span>
-      <template v-for="item in actions" :key="item.key">
-        <span class="action">{{ t(item.label) }}</span>
-        <ShortcutInput :action="item.key" scope="local" />
-        <ShortcutInput :action="item.key" scope="global" :disabled="!ui.useGlobalShortcutKeys" />
-      </template>
-    </div>
+    </SettingGroup>
     <!--    <p class="hint">{{ t('settings.shortcutSpecialKeys') }}</p>-->
   </div>
 </template>

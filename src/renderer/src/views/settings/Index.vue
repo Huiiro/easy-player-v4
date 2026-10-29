@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -31,7 +32,7 @@ const lyricsUtilUrl = 'https://github.com/Huiiro/easy-lyrics'
 const musicTagUrl = 'https://www.cnblogs.com/vinlxc/p/11347744.html'
 const mp3tagUrl = 'https://www.mp3tag.de/'
 const tagScannerUrl = 'https://www.xdlab.ru/en/download.htm'
-const { locale, t } = useI18n()
+const { t } = useI18n()
 const activeSection = ref('playback')
 const resetThemeVisible = ref(false)
 const settingsScroller = ref<HTMLElement | null>(null)
@@ -42,14 +43,13 @@ let sidebarScrollTimer: number | undefined
 const sectionIcons = {
   playback: { name: 'common-headphone', size: 26, navSize: 20 },
   fonts: { name: 'menu-font', size: 15.6, navSize: 12 },
-  language: { name: 'common-locale', size: 19.5, navSize: 15 },
   background: { name: 'menu-display', size: 19.5, navSize: 15 },
   theme: { name: 'common-dark-sun', size: 36.4, navSize: 28 },
   customBackground: { name: 'common-theme', size: 28.6, navSize: 22 },
   lyrics: { name: 'common-lyrics-music', size: 19.5, navSize: 15 },
   'desktop-lyrics': { name: 'common-lyrics2', size: 23.4, navSize: 18 },
   shortcuts: { name: 'common-shortcuts', size: 23.4, navSize: 18 },
-  plugins: { name: 'common-settings', size: 20.8, navSize: 16 },
+  plugins: { name: 'common-plugin', size: 20.8, navSize: 16 },
   'network-sources': { name: 'common-link', size: 20.8, navSize: 16 },
   library: { name: 'menu-library', size: 23.4, navSize: 18 },
   cache: { name: 'common-database', size: 23.4, navSize: 18 },
@@ -60,7 +60,6 @@ const navigationSections = computed(() =>
   [
     { id: 'playback', label: t('settings.playback') },
     { id: 'fonts', label: t('settings.fonts') },
-    { id: 'language', label: t('settings.language') },
     { id: 'background', label: t('settings.playerBackground') },
     { id: 'theme', label: t('settings.theme') },
     { id: 'customBackground', label: t('settings.customBackground') },
@@ -78,17 +77,6 @@ const navigationSections = computed(() =>
     icon: sectionIcons[section.id as keyof typeof sectionIcons]
   }))
 )
-const language = computed<'zh' | 'en'>({
-  get: () => (locale.value === 'en' ? 'en' : 'zh'),
-  set: (value) => {
-    locale.value = value
-    ui.locale = value
-  }
-})
-const languageOptions = computed(() => [
-  { label: t('settings.languageChinese'), value: 'zh' },
-  { label: t('settings.languageEnglish'), value: 'en' }
-])
 const fontOptions = computed(() => [
   { label: t('settings.fontSystemDefault'), value: '' },
   { label: t('settings.fontSystemUi'), value: 'system-ui' },
@@ -228,72 +216,51 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="settings-card">
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.interfaceFont') }}</h3>
-                <p>{{ t('settings.interfaceFontDescription') }}</p>
+            <SettingGroup :title="t('settings.groups.fonts')">
+              <div class="setting-row">
+                <div>
+                  <h3>{{ t('settings.interfaceFont') }}</h3>
+                  <p>{{ t('settings.interfaceFontDescription') }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <BaseSelect
+                    v-model="ui.customFontFamily"
+                    :options="fontOptions"
+                    :placeholder="t('settings.fontSystemDefault')"
+                    teleport
+                    class="w-64"
+                  />
+                  <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
+                    {{ t('settings.refreshFonts') }}
+                  </button>
+                  <button
+                    class="secondary-button text-nowrap"
+                    type="button"
+                    @click="openFontDirectory"
+                  >
+                    {{ t('settings.openFontDirectory') }}
+                  </button>
+                </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="setting-row">
+                <div>
+                  <h3>{{ t('settings.playerLyricsFont') }}</h3>
+                  <p>{{ t('settings.playerLyricsFontDescription') }}</p>
+                </div>
                 <BaseSelect
-                  v-model="ui.customFontFamily"
-                  :options="fontOptions"
-                  :placeholder="t('settings.fontSystemDefault')"
+                  v-model="ui.playerLyricsFontFamily"
+                  :options="playerLyricsFontOptions"
+                  :placeholder="t('settings.playerLyricsFontInherit')"
+                  :aria-label="t('settings.playerLyricsFont')"
                   teleport
                   class="w-64"
                 />
-                <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
-                  {{ t('settings.refreshFonts') }}
-                </button>
-                <button
-                  class="secondary-button text-nowrap"
-                  type="button"
-                  @click="openFontDirectory"
-                >
-                  {{ t('settings.openFontDirectory') }}
-                </button>
               </div>
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.playerLyricsFont') }}</h3>
-                <p>{{ t('settings.playerLyricsFontDescription') }}</p>
-              </div>
-              <BaseSelect
-                v-model="ui.playerLyricsFontFamily"
-                :options="playerLyricsFontOptions"
-                :placeholder="t('settings.playerLyricsFontInherit')"
-                :aria-label="t('settings.playerLyricsFont')"
-                teleport
-                class="w-64"
-              />
-            </div>
+            </SettingGroup>
           </div>
         </section>
         <!-- language -->
-        <section id="language" class="settings-section">
-          <div class="section-heading">
-            <div>
-              <h2>
-                <SvgIcon
-                  :name="sectionIcons.language.name"
-                  :size="sectionIcons.language.size"
-                  class-name="settings-heading-icon"
-                />
-                <span>{{ t('settings.language') }}</span>
-              </h2>
-              <p>{{ t('settings.languageDescription') }}</p>
-            </div>
-          </div>
-          <div class="settings-card">
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.interfaceLanguage') }}</h3>
-                <p>{{ t('settings.interfaceLanguageDescription') }}</p>
-              </div>
-              <BaseSelect v-model="language" :options="languageOptions" teleport class="w-64" />
-            </div>
-          </div>
-        </section>
+
         <!-- player theme -->
         <section id="background" class="settings-section">
           <div class="section-heading">
@@ -415,7 +382,11 @@ onBeforeUnmount(() => {
               <p>{{ t('plugins.description') }}</p>
             </div>
           </div>
-          <div class="settings-card"><OfficialPluginSettings /></div>
+          <div class="settings-card">
+            <SettingGroup :title="t('settings.groups.plugins')">
+              <OfficialPluginSettings />
+            </SettingGroup>
+          </div>
         </section>
         <section id="network-sources" class="settings-section">
           <div class="section-heading">
@@ -430,7 +401,11 @@ onBeforeUnmount(() => {
               <p>{{ t('networkSources.description') }}</p>
             </div>
           </div>
-          <div class="settings-card"><NetworkSourceSettings /></div>
+          <div class="settings-card">
+            <SettingGroup :title="t('settings.groups.networkSources')">
+              <NetworkSourceSettings />
+            </SettingGroup>
+          </div>
         </section>
         <!-- library -->
         <section id="library" class="settings-section">
@@ -466,7 +441,11 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.cacheManagementDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card"><CacheSettings :key="preferencesRevision" /></div>
+          <div class="settings-card">
+            <SettingGroup :title="t('settings.groups.cache')">
+              <CacheSettings :key="preferencesRevision" />
+            </SettingGroup>
+          </div>
         </section>
         <!-- system -->
         <section id="system" class="settings-section">
@@ -501,87 +480,95 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="settings-card">
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.version') }}</h3>
+            <SettingGroup :title="t('settings.groups.version')">
+              <div class="setting-row">
+                <div>
+                  <h3>{{ t('settings.version') }}</h3>
+                </div>
+                <div class="flex items-center gap-2 cursor-pointer">
+                  <span class="text-text">v{{ VERSION }}</span>
+                  <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
+                </div>
               </div>
-              <div class="flex items-center gap-2 cursor-pointer">
-                <span class="text-text">v{{ VERSION }}</span>
-                <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
+              <div class="setting-row">
+                <div>
+                  <h3>{{ t('settings.buildNumber') }}</h3>
+                </div>
+                <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
               </div>
-            </div>
-            <div class="setting-row">
-              <div>
-                <h3>{{ t('settings.buildNumber') }}</h3>
+            </SettingGroup>
+            <SettingGroup :title="t('settings.groups.statistics')">
+              <StatisticsSettings />
+            </SettingGroup>
+            <SettingGroup :title="t('settings.groups.preferences')">
+              <ResetPreferencesSettings @reset="preferencesRevision++" />
+            </SettingGroup>
+            <SettingGroup :title="t('settings.groups.links')">
+              <div class="setting-row">
+                <h3 class="flex items-center gap-2">{{ t('settings.util') }}</h3>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <a
+                    :href="musicTagUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                    musicTag
+                  </a>
+                  <a
+                    :href="tagScannerUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                    tagScanner
+                  </a>
+                  <a
+                    :href="mp3tagUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                    mp3Tag
+                  </a>
+                </div>
               </div>
-              <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
-            </div>
-            <StatisticsSettings />
-            <ResetPreferencesSettings @reset="preferencesRevision++" />
-            <div class="setting-row">
-              <h3 class="flex items-center gap-2">{{ t('settings.util') }}</h3>
-              <div class="flex flex-wrap items-center justify-end gap-2">
-                <a
-                  :href="musicTagUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
-                  musicTag
-                </a>
-                <a
-                  :href="tagScannerUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
-                  tagScanner
-                </a>
-                <a
-                  :href="mp3tagUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="common-link" class-name="size-4 shrink-0" />
-                  mp3Tag
-                </a>
+              <div class="setting-row">
+                <h3 class="flex items-center gap-2">GitHub</h3>
+                <div class="flex flex-wrap items-center justify-end gap-2">
+                  <a
+                    :href="repositoryUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                    {{ t('settings.repository') }}
+                  </a>
+                  <a
+                    :href="themeDocumentationUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                    {{ t('settings.themeDocumentation') }}
+                  </a>
+                  <a
+                    :href="lyricsUtilUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="secondary-button"
+                  >
+                    <SvgIcon name="third-github" class-name="size-4 shrink-0" />
+                    {{ t('settings.lyricsUtil') }}
+                  </a>
+                </div>
               </div>
-            </div>
-            <div class="setting-row">
-              <h3 class="flex items-center gap-2">GitHub</h3>
-              <div class="flex flex-wrap items-center justify-end gap-2">
-                <a
-                  :href="repositoryUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
-                  {{ t('settings.repository') }}
-                </a>
-                <a
-                  :href="themeDocumentationUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
-                  {{ t('settings.themeDocumentation') }}
-                </a>
-                <a
-                  :href="lyricsUtilUrl"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="secondary-button"
-                >
-                  <SvgIcon name="third-github" class-name="size-4 shrink-0" />
-                  {{ t('settings.lyricsUtil') }}
-                </a>
-              </div>
-            </div>
+            </SettingGroup>
           </div>
         </section>
       </div>

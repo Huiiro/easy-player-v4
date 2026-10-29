@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
@@ -80,107 +81,111 @@ function clearBackground(): void {
       muted: !ui.useCustomBg
     }"
   >
-    <p v-if="ui.nativeMaterialEnabled" class="mx-5 mt-4 text-xs text-text-l">
-      {{ t('settings.appearanceMaterialNotice') }}
-    </p>
-    <div class="setting-row">
-      <div>
-        <h3>{{ t('settings.backgroundMedia') }}</h3>
-        <p>{{ ui.customBg.path || t('settings.noBackgroundSelected') }}</p>
+    <SettingGroup :title="t('settings.groups.backgroundMedia')">
+      <p v-if="ui.nativeMaterialEnabled" class="mx-5 mt-4 text-xs text-text-l">
+        {{ t('settings.appearanceMaterialNotice') }}
+      </p>
+      <div class="setting-row">
+        <div>
+          <h3>{{ t('settings.backgroundMedia') }}</h3>
+          <p>{{ ui.customBg.path || t('settings.noBackgroundSelected') }}</p>
+        </div>
+        <div class="flex shrink-0 gap-2">
+          <button
+            class="secondary-button"
+            type="button"
+            :disabled="importingBackground"
+            @click="chooseBackground"
+          >
+            {{ t('settings.selectBackground') }}
+          </button>
+          <button
+            v-if="ui.customBg.url"
+            class="icon-button"
+            type="button"
+            :title="t('settings.removeBackground')"
+            @click="clearBackground"
+          >
+            ×
+          </button>
+        </div>
+        <input
+          ref="backgroundInput"
+          class="hidden"
+          type="file"
+          accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.mp4"
+          @change="updateBackground"
+        />
       </div>
-      <div class="flex shrink-0 gap-2">
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="importingBackground"
-          @click="chooseBackground"
-        >
-          {{ t('settings.selectBackground') }}
-        </button>
-        <button
-          v-if="ui.customBg.url"
-          class="icon-button"
-          type="button"
-          :title="t('settings.removeBackground')"
-          @click="clearBackground"
-        >
-          ×
-        </button>
-      </div>
-      <input
-        ref="backgroundInput"
-        class="hidden"
-        type="file"
-        accept=".png,.jpg,.jpeg,.webp,.gif,.bmp,.avif,.svg,.mp4"
-        @change="updateBackground"
-      />
-    </div>
 
-    <div class="slider-row">
-      <div class="slider-label">
-        <span>{{ t('settings.brightness') }}</span>
-        <strong>{{ ui.customBg.brightness }}%</strong>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>{{ t('settings.brightness') }}</span>
+          <strong>{{ ui.customBg.brightness }}%</strong>
+        </div>
+        <BaseSlider
+          v-model="ui.customBg.brightness"
+          :min="10"
+          :max="110"
+          :step="1"
+          size="sm"
+          :disabled="!ui.useCustomBg"
+        />
       </div>
-      <BaseSlider
-        v-model="ui.customBg.brightness"
-        :min="10"
-        :max="110"
-        :step="1"
-        size="sm"
-        :disabled="!ui.useCustomBg"
-      />
-    </div>
-    <div class="slider-row">
-      <div class="slider-label">
-        <span>{{ t('settings.blur') }}</span>
-        <strong>{{ ui.customBg.blur }} px</strong>
+      <div class="slider-row">
+        <div class="slider-label">
+          <span>{{ t('settings.blur') }}</span>
+          <strong>{{ ui.customBg.blur }} px</strong>
+        </div>
+        <BaseSlider
+          v-model="ui.customBg.blur"
+          :min="0"
+          :max="30"
+          :step="1"
+          size="sm"
+          :disabled="!ui.useCustomBg"
+        />
       </div>
-      <BaseSlider
-        v-model="ui.customBg.blur"
-        :min="0"
-        :max="30"
-        :step="1"
-        size="sm"
-        :disabled="!ui.useCustomBg"
-      />
-    </div>
-    <div class="custom-background-chrome">
-      <div class="custom-background-chrome-heading">
-        <h3>{{ t('settings.backgroundChrome') }}</h3>
-        <p>{{ t('settings.backgroundChromeDescription') }}</p>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.backgroundChrome')">
+      <div class="custom-background-chrome">
+        <div class="custom-background-chrome-heading">
+          <h3>{{ t('settings.backgroundChrome') }}</h3>
+          <p>{{ t('settings.backgroundChromeDescription') }}</p>
+        </div>
+        <div class="custom-background-color-grid">
+          <label class="custom-background-color-control">
+            <span>{{ t('settings.headerBackground') }}</span>
+            <BaseColorPicker
+              v-model="ui.customBg.headerBackground"
+              :presets="presetColors"
+              show-alpha
+              teleport
+              :disabled="!ui.useCustomBg"
+            />
+          </label>
+          <label class="custom-background-color-control">
+            <span>{{ t('settings.footerBackground') }}</span>
+            <BaseColorPicker
+              v-model="ui.customBg.footerBackground"
+              :presets="presetColors"
+              show-alpha
+              teleport
+              :disabled="!ui.useCustomBg"
+            />
+          </label>
+          <label class="custom-background-color-control">
+            <span>{{ t('settings.globalBorder') }}</span>
+            <BaseColorPicker
+              v-model="ui.customBg.chromeBorder"
+              :presets="presetColors"
+              show-alpha
+              teleport
+              :disabled="!ui.useCustomBg"
+            />
+          </label>
+        </div>
       </div>
-      <div class="custom-background-color-grid">
-        <label class="custom-background-color-control">
-          <span>{{ t('settings.headerBackground') }}</span>
-          <BaseColorPicker
-            v-model="ui.customBg.headerBackground"
-            :presets="presetColors"
-            show-alpha
-            teleport
-            :disabled="!ui.useCustomBg"
-          />
-        </label>
-        <label class="custom-background-color-control">
-          <span>{{ t('settings.footerBackground') }}</span>
-          <BaseColorPicker
-            v-model="ui.customBg.footerBackground"
-            :presets="presetColors"
-            show-alpha
-            teleport
-            :disabled="!ui.useCustomBg"
-          />
-        </label>
-        <label class="custom-background-color-control">
-          <span>{{ t('settings.globalBorder') }}</span>
-          <BaseColorPicker
-            v-model="ui.customBg.chromeBorder"
-            :presets="presetColors"
-            show-alpha
-            teleport
-            :disabled="!ui.useCustomBg"
-          />
-        </label>
-      </div>
-    </div>
+    </SettingGroup>
   </div>
 </template>

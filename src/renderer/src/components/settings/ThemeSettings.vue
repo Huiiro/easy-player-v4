@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
@@ -114,28 +115,28 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
 
 <template>
   <SettingCard>
-    <p v-if="missingPluginTheme" role="status" class="px-5 py-3 text-sm text-text-l">
-      {{ t('plugins.themeMissing') }}
-    </p>
-    <p v-if="ui.pluginThemeLoadFailed" role="alert" class="px-5 py-3 text-sm text-danger">
-      {{ t('plugins.themeLoadFailed') }}
-    </p>
-    <div v-if="ui.availableWindowMaterials.length > 1" class="setting-row">
-      <div>
-        <h3>{{ t('settings.windowMaterial') }}</h3>
-        <p>{{ t('settings.windowMaterialDescription') }}</p>
+    <SettingGroup :title="t('settings.groups.colors')">
+      <p v-if="missingPluginTheme" role="status" class="px-5 py-3 text-sm text-text-l">
+        {{ t('plugins.themeMissing') }}
+      </p>
+      <p v-if="ui.pluginThemeLoadFailed" role="alert" class="px-5 py-3 text-sm text-danger">
+        {{ t('plugins.themeLoadFailed') }}
+      </p>
+      <div v-if="ui.availableWindowMaterials.length > 1" class="setting-row">
+        <div>
+          <h3>{{ t('settings.windowMaterial') }}</h3>
+          <p>{{ t('settings.windowMaterialDescription') }}</p>
+        </div>
+        <BaseSelect
+          :model-value="ui.nativeWindowMaterial"
+          :options="windowMaterialOptions"
+          :disabled="ui.windowMaterialPending"
+          :aria-label="t('settings.windowMaterial')"
+          class="w-56"
+          teleport
+          @update:model-value="selectWindowMaterial"
+        />
       </div>
-      <BaseSelect
-        :model-value="ui.nativeWindowMaterial"
-        :options="windowMaterialOptions"
-        :disabled="ui.windowMaterialPending"
-        :aria-label="t('settings.windowMaterial')"
-        class="w-56"
-        teleport
-        @update:model-value="selectWindowMaterial"
-      />
-    </div>
-    <div>
       <SettingRow
         :label="t('settings.appearanceMode')"
         :description="t('settings.followSystemThemeDescription')"
@@ -168,6 +169,8 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
         </div>
       </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.themeBackground')">
       <div class="setting-row theme-background-row">
         <div>
           <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -232,18 +235,18 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           </button>
         </div>
       </div>
-    </div>
-    <CustomThemeSettings v-if="ui.customThemes.length" />
-    <SettingRow
-      v-if="ui.effectiveCustomTheme && ui.effectiveCustomTheme.background !== 'inherit'"
-      :label="t('settings.useThemeBackground')"
-      :description="t('settings.useThemeBackgroundDescription')"
-    >
-      <BaseSwitch
-        :model-value="ui.customThemePreviewActive || ui.themeBackgroundEnabled"
-        :disabled="ui.customThemePreviewActive"
-        @update:model-value="ui.themeBackgroundEnabled = $event === true"
-      />
-    </SettingRow>
+      <CustomThemeSettings v-if="ui.customThemes.length" />
+      <SettingRow
+        v-if="ui.effectiveCustomTheme && ui.effectiveCustomTheme.background !== 'inherit'"
+        :label="t('settings.useThemeBackground')"
+        :description="t('settings.useThemeBackgroundDescription')"
+      >
+        <BaseSwitch
+          :model-value="ui.customThemePreviewActive || ui.themeBackgroundEnabled"
+          :disabled="ui.customThemePreviewActive"
+          @update:model-value="ui.themeBackgroundEnabled = $event === true"
+        />
+      </SettingRow>
+    </SettingGroup>
   </SettingCard>
 </template>

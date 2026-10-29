@@ -1,3 +1,19 @@
+.settings-page .settings-group + .settings-group {
+  margin-top: 0.35rem;
+  /* border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent); */
+  padding-top: 0.35rem;
+}
+
+.settings-page .settings-group-title {
+  margin: 0;
+  padding: 1rem 1.25rem 0.25rem;
+  color: var(--color-text-l);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.5;
+  letter-spacing: 0.025em;
+}
+
 .settings-page .settings-card {
   border: 1px solid color-mix(in srgb, var(--color-border) 76%, transparent);
   border-radius: 14px;
@@ -309,4 +325,18 @@
 .settings-page .reset-button[aria-pressed='true'] {
   background: var(--color-hover);
   color: var(--color-text);
+}
+
+@media (max-width: 1100px) {
+  .settings-page .setting-row {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  .settings-page .setting-row > :first-child {
+    min-width: 0;
+  }
+  .settings-page .setting-row > .flex {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
 }

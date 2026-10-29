@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
 import { computed } from 'vue'
@@ -37,133 +38,138 @@ const openFooterAnywhere = computed({
 
 <template>
   <SettingCard>
-    <div class="setting-row setting-row-stack">
-      <div>
-        <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
-        <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
+    <SettingGroup :title="t('settings.groups.artwork')">
+      <div class="setting-row setting-row-stack">
+        <div>
+          <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
+          <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
+        </div>
+        <div
+          class="theme-options"
+          role="radiogroup"
+          :aria-label="t('settings.playerBackgroundStyle')"
+        >
+          <button
+            type="button"
+            class="theme-option album-background-preview"
+            :class="{ selected: playerBackground === PlayerBgType.ALBUM }"
+            :aria-checked="playerBackground === PlayerBgType.ALBUM"
+            role="radio"
+            @click="playerBackground = PlayerBgType.ALBUM"
+          >
+            <span class="preview-window"><i /><b /></span>
+            <span>{{ t('settings.playerBackgroundAlbum') }}</span>
+          </button>
+          <button
+            type="button"
+            class="theme-option ambient-background-preview"
+            :class="{ selected: playerBackground === PlayerBgType.AMBIENT }"
+            :aria-checked="playerBackground === PlayerBgType.AMBIENT"
+            role="radio"
+            @click="playerBackground = PlayerBgType.AMBIENT"
+          >
+            <span class="preview-window"><i /><b /></span>
+            <span>{{ t('settings.playerBackgroundAmbient') }}</span>
+          </button>
+          <button
+            type="button"
+            class="theme-option liquid-background-preview"
+            :class="{ selected: playerBackground === PlayerBgType.LIQUID }"
+            :aria-checked="playerBackground === PlayerBgType.LIQUID"
+            role="radio"
+            @click="playerBackground = PlayerBgType.LIQUID"
+          >
+            <span class="preview-window"><i /><b /><em /></span>
+            <span>{{ t('settings.playerBackgroundLiquid') }}</span>
+          </button>
+        </div>
       </div>
-      <div
-        class="theme-options"
-        role="radiogroup"
-        :aria-label="t('settings.playerBackgroundStyle')"
+      <div class="setting-row setting-row-stack">
+        <div>
+          <h3>{{ t('settings.playerCoverStyle') }}</h3>
+          <p>{{ t('settings.playerCoverStyleDescription') }}</p>
+        </div>
+        <div class="theme-options" role="radiogroup" :aria-label="t('settings.playerCoverStyle')">
+          <button
+            type="button"
+            class="theme-option standard-cover-preview"
+            :class="{ selected: playerCoverStyle === PlayerCoverStyle.STANDARD }"
+            :aria-checked="playerCoverStyle === PlayerCoverStyle.STANDARD"
+            role="radio"
+            @click="playerCoverStyle = PlayerCoverStyle.STANDARD"
+          >
+            <span class="preview-window">
+              <span class="cover-preview-artwork" aria-hidden="true" />
+              <span class="cover-preview-lyrics" aria-hidden="true">
+                <span /><span /><span /><span />
+              </span>
+            </span>
+            <span>{{ t('settings.playerCoverStyleStandard') }}</span>
+          </button>
+          <button
+            type="button"
+            class="theme-option vinyl-cover-preview"
+            :class="{ selected: playerCoverStyle === PlayerCoverStyle.VINYL }"
+            :aria-checked="playerCoverStyle === PlayerCoverStyle.VINYL"
+            role="radio"
+            @click="playerCoverStyle = PlayerCoverStyle.VINYL"
+          >
+            <span class="preview-window">
+              <span class="cover-preview-artwork" aria-hidden="true" />
+              <span class="cover-preview-lyrics" aria-hidden="true">
+                <span /><span /><span /><span />
+              </span>
+            </span>
+            <span>{{ t('settings.playerCoverStyleVinyl') }}</span>
+          </button>
+        </div>
+      </div>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.lyricVisuals')">
+      <SettingRow
+        :label="t('settings.playerSpectrumStyle')"
+        :description="t('settings.playerSpectrumStyleDescription')"
       >
-        <button
-          type="button"
-          class="theme-option album-background-preview"
-          :class="{ selected: playerBackground === PlayerBgType.ALBUM }"
-          :aria-checked="playerBackground === PlayerBgType.ALBUM"
-          role="radio"
-          @click="playerBackground = PlayerBgType.ALBUM"
-        >
-          <span class="preview-window"><i /><b /></span>
-          <span>{{ t('settings.playerBackgroundAlbum') }}</span>
-        </button>
-        <button
-          type="button"
-          class="theme-option ambient-background-preview"
-          :class="{ selected: playerBackground === PlayerBgType.AMBIENT }"
-          :aria-checked="playerBackground === PlayerBgType.AMBIENT"
-          role="radio"
-          @click="playerBackground = PlayerBgType.AMBIENT"
-        >
-          <span class="preview-window"><i /><b /></span>
-          <span>{{ t('settings.playerBackgroundAmbient') }}</span>
-        </button>
-        <button
-          type="button"
-          class="theme-option liquid-background-preview"
-          :class="{ selected: playerBackground === PlayerBgType.LIQUID }"
-          :aria-checked="playerBackground === PlayerBgType.LIQUID"
-          role="radio"
-          @click="playerBackground = PlayerBgType.LIQUID"
-        >
-          <span class="preview-window"><i /><b /><em /></span>
-          <span>{{ t('settings.playerBackgroundLiquid') }}</span>
-        </button>
-      </div>
-    </div>
-    <div class="setting-row setting-row-stack">
-      <div>
-        <h3>{{ t('settings.playerCoverStyle') }}</h3>
-        <p>{{ t('settings.playerCoverStyleDescription') }}</p>
-      </div>
-      <div class="theme-options" role="radiogroup" :aria-label="t('settings.playerCoverStyle')">
-        <button
-          type="button"
-          class="theme-option standard-cover-preview"
-          :class="{ selected: playerCoverStyle === PlayerCoverStyle.STANDARD }"
-          :aria-checked="playerCoverStyle === PlayerCoverStyle.STANDARD"
-          role="radio"
-          @click="playerCoverStyle = PlayerCoverStyle.STANDARD"
-        >
-          <span class="preview-window">
-            <span class="cover-preview-artwork" aria-hidden="true" />
-            <span class="cover-preview-lyrics" aria-hidden="true">
-              <span /><span /><span /><span />
-            </span>
-          </span>
-          <span>{{ t('settings.playerCoverStyleStandard') }}</span>
-        </button>
-        <button
-          type="button"
-          class="theme-option vinyl-cover-preview"
-          :class="{ selected: playerCoverStyle === PlayerCoverStyle.VINYL }"
-          :aria-checked="playerCoverStyle === PlayerCoverStyle.VINYL"
-          role="radio"
-          @click="playerCoverStyle = PlayerCoverStyle.VINYL"
-        >
-          <span class="preview-window">
-            <span class="cover-preview-artwork" aria-hidden="true" />
-            <span class="cover-preview-lyrics" aria-hidden="true">
-              <span /><span /><span /><span />
-            </span>
-          </span>
-          <span>{{ t('settings.playerCoverStyleVinyl') }}</span>
-        </button>
-      </div>
-    </div>
-    <SettingRow
-      :label="t('settings.playerSpectrumStyle')"
-      :description="t('settings.playerSpectrumStyleDescription')"
-    >
-      <BaseSelect
-        v-model="ui.playerSpectrumStyle"
-        :options="spectrumStyleOptions"
-        teleport
-        class="w-32"
-      />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.karaokeAnimation')"
-      :description="t('settings.karaokeAnimationDescription')"
-    >
-      <BaseSelect
-        v-model="ui.karaokeAnimation"
-        :options="karaokeAnimationOptions"
-        teleport
-        class="w-32"
-      />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.autoAdjustLyricsDisplay')"
-      :description="t('settings.autoAdjustLyricsDisplayDescription')"
-    >
-      <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
-    </SettingRow>
-    <hr class="mx-5 my-4 border-0 border-t border-border" />
-    <SettingRow
-      :label="t('settings.footerOpenAnywhere')"
-      :description="t('settings.footerOpenModeDescription')"
-    >
-      <BaseSwitch v-model="openFooterAnywhere" size="md" />
-    </SettingRow>
-    <SettingRow
-      :label="t('settings.autoHideFooter')"
-      :description="t('settings.autoHideFooterDescription')"
-    >
-      <BaseSwitch v-model="ui.autoHideFooter" size="md" />
-    </SettingRow>
-    <FooterLayoutSettings />
+        <BaseSelect
+          v-model="ui.playerSpectrumStyle"
+          :options="spectrumStyleOptions"
+          teleport
+          class="w-32"
+        />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.karaokeAnimation')"
+        :description="t('settings.karaokeAnimationDescription')"
+      >
+        <BaseSelect
+          v-model="ui.karaokeAnimation"
+          :options="karaokeAnimationOptions"
+          teleport
+          class="w-32"
+        />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.autoAdjustLyricsDisplay')"
+        :description="t('settings.autoAdjustLyricsDisplayDescription')"
+      >
+        <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
+      </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.groups.footer')">
+      <SettingRow
+        :label="t('settings.footerOpenAnywhere')"
+        :description="t('settings.footerOpenModeDescription')"
+      >
+        <BaseSwitch v-model="openFooterAnywhere" size="md" />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.autoHideFooter')"
+        :description="t('settings.autoHideFooterDescription')"
+      >
+        <BaseSwitch v-model="ui.autoHideFooter" size="md" />
+      </SettingRow>
+      <FooterLayoutSettings />
+    </SettingGroup>
   </SettingCard>
 </template>
 
