@@ -218,11 +218,11 @@ if (!app.requestSingleInstanceLock(audioLaunchRequest)) {
 
 function updateTrayMenu(): void {
   if (!tray) return
-  const trackLabel = trayTrack.title || 'No track playing'
+  const trackLabel = trayTrack.title || t('trayNoTrack')
   const artistLabel = trayTrack.artist || 'EasyPlayer'
   const tooltip = trayTrack.title
     ? `${trayTrack.title}${trayTrack.artist ? ` — ${trayTrack.artist}` : ''}`
-    : 'EasyPlayer'
+    : `EasyPlayer — ${t('trayNoTrack')}`
   tray.setToolTip(tooltip)
   if (process.platform === 'darwin') {
     // Keep the macOS menu-bar item compact; track details remain available in
@@ -233,20 +233,20 @@ function updateTrayMenu(): void {
     { label: trackLabel, enabled: false },
     { label: artistLabel, enabled: false },
     { type: 'separator' },
-    { label: 'Previous', click: () => sendTrayAction('previous') },
+    { label: t('trayPrevious'), click: () => sendTrayAction('previous') },
     {
-      label: trayTrack.isPlaying ? 'Pause' : 'Play',
+      label: trayTrack.isPlaying ? t('trayPause') : t('trayPlay'),
       click: () => sendTrayAction('toggle')
     },
-    { label: 'Next', click: () => sendTrayAction('next') },
+    { label: t('trayNext'), click: () => sendTrayAction('next') },
     { type: 'separator' },
     {
-      label: 'Show window',
+      label: t('trayShowWindow'),
       click: showMainWindow
     },
     { type: 'separator' },
     {
-      label: 'Quit',
+      label: t('trayQuit'),
       click: quitApplication
     }
   ])
@@ -868,6 +868,7 @@ app.whenReady().then(() =>
         if (locale !== 'zh' && locale !== 'en') return
         setAppSetting('system.locale', locale)
         setMainLocale(locale)
+        updateTrayMenu()
       })
       Logger.registerIpc()
       Logger.info('[Main] starting application', {

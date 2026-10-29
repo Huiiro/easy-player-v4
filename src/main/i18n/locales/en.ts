@@ -1,4 +1,11 @@
 export default {
+  trayNoTrack: 'No track playing',
+  trayPrevious: 'Previous',
+  trayPlay: 'Play',
+  trayPause: 'Pause',
+  trayNext: 'Next',
+  trayShowWindow: 'Show window',
+  trayQuit: 'Quit',
   sourceNameExists: 'A source with this name already exists. Choose another name.',
   pluginCatalogLoadFailed:
     'Unable to read the official plugin source. Check the network and retry.',
@@ -25,10 +32,8 @@ export default {
   chooseCoverFailed: 'Failed to choose cover',
   searchCoverFailed: 'Failed to search covers',
   downloadCoverFailed: 'Failed to download cover',
-  metadataPlaybackSkipped:
-    'This track is still loaded by the player. Writing was skipped. Switch to another track and retry; pausing does not release the file.',
-  metadataFileBusy:
-    'The audio file is in use by another task or application. Nothing was written. Retry after it is released.',
+  metadataPlaybackSkipped: 'Switch to another song before saving changes.',
+  metadataFileBusy: 'The file is in use. Please try again later.',
   metadataWriteFailed: 'Failed to write metadata',
   lyricsLoadFailed: 'Unable to load lyrics',
   lyricsSearchFailed: 'Unable to search network lyrics',
@@ -56,16 +61,15 @@ export default {
   coverFileRemoved: 'The selected cover file no longer exists',
   coverFormatUnsupported: 'Unsupported cover image format',
   databaseNotReady: 'Database has not been initialized',
-  credentialEncryptUnavailable:
-    'System credential encryption is unavailable; the remote source password cannot be saved.',
+  credentialEncryptUnavailable: 'Unable to save sign-in details securely. Please try again later.',
   invalidSourceUrl: 'Invalid remote source URL',
   sourceProtocolUnsupported: 'Remote sources only support HTTP or HTTPS URLs',
   sourceUrlCredentials: 'Remote source URLs cannot contain a username or password',
   sourceTypeUnsupported: 'Unsupported remote source type: {type}',
   credentialStoreUnavailable:
-    'System credential storage is unavailable. Restore it and retry to read this source password.',
+    'Sign-in details are temporarily unavailable. Please try again later.',
   credentialDecryptFailed:
-    'The saved password cannot be decrypted. Edit the source and enter the password again.',
+    'Unable to read saved sign-in details. Edit the source to enter them again.',
   sourceConfigIncomplete: 'Remote source configuration is incomplete',
   remoteResponseTooLarge: 'Remote response exceeds the size limit',
   requestFailed: 'Request to {endpoint} failed',
@@ -82,9 +86,8 @@ export default {
   updateCheckPackaged: 'Update checks are only available in installed release builds.',
   updateDownloadPackaged: 'Update downloads are only available in installed release builds.',
   noDownloadedUpdate: 'No downloaded update is available.',
-  updateMetadataMissing:
-    'GitHub Release update metadata (latest.yml) was not found. Publish a release containing latest.yml before checking again.',
-  ytdlpMissing: 'yt-dlp was not found. Install it or set EASY_PLAYER_YTDLP_PATH.',
+  updateMetadataMissing: 'Updates are temporarily unavailable. Please try again later.',
+  ytdlpMissing: 'yt-dlp is unavailable. Please reinstall the player.',
   ytdlpFailed: 'yt-dlp failed (exit code {code}).',
   biliRequestFailed: 'Bilibili API request failed ({code}).',
   biliInvalidData: 'Bilibili returned unrecognized data.',
@@ -92,7 +95,7 @@ export default {
   biliInvalidId: 'No valid Bilibili BV ID was found.',
   biliNoMedia: 'No downloadable Bilibili media URL was found.',
   biliMediaFailed: 'Bilibili media request failed (HTTP {status}).',
-  downloadNoDiagnostics: 'Download process exited without diagnostics',
+  downloadNoDiagnostics: 'The download stopped unexpectedly. Please try again.',
   downloadFailed: 'Download failed.',
   invalidDownloadCoverUrl: 'Invalid cover URL.',
   coverSourceUnsupported: 'Unsupported cover source.',
@@ -127,6 +130,6 @@ export default {
   sourceCallBackgroundPaused: 'Playback-only mode has paused network requests.',
   sourceCallFailed: 'The network source request failed. Retry later.',
   sourceMetadataInvalid: 'Invalid metadata fields.',
-  sourceMetadataEmpty: 'Select at least one field to save.',
+  sourceMetadataEmpty: 'Select the details to save.',
   sourceMetadataConflict: 'Song information has changed. Reopen online matching before saving.'
 }

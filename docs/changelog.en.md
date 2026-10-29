@@ -4,6 +4,21 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
+## v3.3.0
+
+- Added a plugin management page for on-demand installation, updates, enabling, disabling, and removal of official source and theme plugins, plus log filtering, export, and clearing. Startup does not download plugins automatically.
+- Moved NetEase Cloud Music, Kugou, and QQ Music lyrics, artwork, and metadata, plus Bilibili and YouTube media search and downloads, into independent official plugins, with a public plugin SDK.
+- Moved Black Hole, Rainy Night, Aurora, Ocean, Sunset, Forest, Matrix, Starfield, Star Trails, and DNA backgrounds into separately installable theme plugins. Added local third-party data and shader theme packages; official code backgrounds run in sandboxed frames.
+- Added WebDAV, SMB, FTP, explicit and implicit FTPS, and SFTP remote file sources, and expanded Subsonic support. Unified connection and authentication settings, encrypted credential storage, SFTP host fingerprint verification, and remote song caching.
+- Added source metadata search and preview with selective local file updates for tags, artwork, and lyrics. Added tag reload, revision checks to prevent stale edits, and restrictions on modifying files in playback.
+- Expanded lyrics management with a timeline editor, original/translation/romanization processing, format conversion, import, export, and saving. Added per-song lyric offsets and batch flags for instrumental tracks and disabled network lyrics.
+- Added Auto Mix with beat, key, and boundary-silence analysis for adaptive crossfades, including continuous transitions across PCM sample rates, channel layouts, and bit depths. An optional local stem runtime provides vocal protection and entry near the next vocal; without it, standard Auto Mix remains available.
+- Added a compact player layout and refined artwork, lyrics, footer, and audio controls, including footer auto-hide and swipe interactions, narrow-window layouts, and page transitions.
+- Expanded Windows window materials with Mica and Acrylic, and unified theme colors, background transitions, and custom theme resource rendering.
+- Improved global and source search, album browsing, song sorting and columns, playlist headers, card motion, sidebar covers, and menu positioning.
+- Added batch song preferences and clearing of less-recommended records, and refined recommendation feedback and genre separator handling.
+- Fixed old tracks returning after queue clearing, navigation resets on queue refresh, and stale asynchronous track-switch updates. Improved window readiness, desktop lyrics stacking, downloaded audio finalization, and temporary file paths.
+
 ## v3.2.2
 
 - Added custom themes with JSON and ZIP package import, switching, export, replacement by name, and deletion.
