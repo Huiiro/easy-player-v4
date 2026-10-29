@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import InstrumentalNotice from './InstrumentalNotice.vue'
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { LyricChar, LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
 import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -50,7 +50,6 @@ const enableAutoScroll = computed(() => {
   return !isUserScrolling.value
 })
 let scrollTimer: number | null = null
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let snapTimer: ReturnType<typeof setTimeout> | null = null
 let autoScrollTimer: ReturnType<typeof setTimeout> | null = null
 let snapRaf = 0
@@ -313,12 +312,17 @@ const getCharStyle = (char: LyricChar) => {
   }
 }
 
-const onClickLyric = (line: number): void => {
-  if (line == null) return
-  if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => {
-    emit('seek', line)
-  }, 60)
+function canSeekLine(line: LyricLine): boolean {
+  return !line.untimed && !!line.text.trim() && Number.isFinite(line.timeMs)
+}
+
+function onClickLyric(line: LyricLine): void {
+  if (!canSeekLine(line)) return
+  if (scrollTimer) clearTimeout(scrollTimer)
+  scrollTimer = null
+  isUserScrolling.value = false
+  emit('seek', line.timeMs)
+  void nextTick(requestSnapToCurrent)
 }
 
 watch(
@@ -394,7 +398,6 @@ onUnmounted(() => {
   cancelAnimationFrame(raf)
   if (snapRaf) cancelAnimationFrame(snapRaf)
   if (scrollTimer) clearTimeout(scrollTimer)
-  if (debounceTimer) clearTimeout(debounceTimer)
   if (snapTimer) clearTimeout(snapTimer)
   if (autoScrollTimer) clearTimeout(autoScrollTimer)
   if (viewport) gsap.killTweensOf(viewport)
@@ -415,8 +418,15 @@ onUnmounted(() => {
         v-for="(line, idx) in lyrics"
         :key="idx"
         ref="lineRefs"
-        class="lyric-line group hover:bg-white/2"
+        class="lyric-line"
+        :class="{ 'lyric-line--seekable': canSeekLine(line) }"
         :style="lineStyles[idx]"
+        :role="canSeekLine(line) ? 'button' : undefined"
+        :tabindex="canSeekLine(line) ? 0 : undefined"
+        :aria-label="canSeekLine(line) ? line.text : undefined"
+        @click="onClickLyric(line)"
+        @keydown.enter.stop.prevent="onClickLyric(line)"
+        @keydown.space.stop.prevent="onClickLyric(line)"
       >
         <!-- 主歌词 -->
         <div class="lyric-main" :style="{ textAlign: alignMode }">
@@ -486,17 +496,6 @@ onUnmounted(() => {
           <div v-if="ui.showLyricsTranslation && line.translation" class="lyric-translation">
             {{ line.translation }}
           </div>
-        </div>
-        <!-- 右侧固定操作按钮轨道 -->
-        <div
-          class="absolute left-16 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-all duration-[var(--motion-duration-standard)]"
-        >
-          <button
-            class="flex text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded backdrop-blur"
-            @click.stop="onClickLyric(line.timeMs)"
-          >
-            ▶
-          </button>
         </div>
       </div>
     </div>
@@ -643,5 +642,37 @@ onUnmounted(() => {
   transform-origin: center bottom;
   scale: 1.06;
   letter-spacing: 3px;
+}
+
+/* Restore the whole sentence while inspecting a row, including timed glyphs. */
+.lyric-line--seekable {
+  cursor: pointer;
+}
+.lyric-line:is(:hover, :focus-visible) {
+  opacity: 1 !important;
+  filter: none !important;
+  border-radius: 0.75rem;
+  background-color: color-mix(in srgb, var(--lrc-highlight) 2%, transparent);
+  transition: none;
+}
+.lyric-line:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lrc-highlight) 40%, transparent);
+  outline-offset: -2px;
+}
+.lyric-line:is(:hover, :focus-visible)
+  :is(
+    .lyric-main,
+    .lyric-char,
+    .lyric-karaoke-char,
+    .lyric-translation,
+    .lyric-romanization,
+    .lyric-ruby rt
+  ) {
+  color: var(--lrc-highlight) !important;
+  opacity: 1 !important;
+}
+.lyric-line:is(:hover, :focus-visible) :is(.lyric-char, .lyric-karaoke-char) {
+  background-image: none;
+  transition: none;
 }
 </style>

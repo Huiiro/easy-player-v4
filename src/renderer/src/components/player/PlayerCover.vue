@@ -37,7 +37,11 @@ const particles = Array.from({ length: 24 }, (_, index) => {
 </script>
 
 <template>
-  <div class="cover-frame" :style="{ transform: `scale(${1 + rhythmAmount * 0.025})` }">
+  <div
+    class="cover-frame"
+    :style="{ transform: `scale(${1 + rhythmAmount * 0.025})` }"
+    @dragstart.prevent
+  >
     <CoverAuraCanvas
       v-if="visualEnabled"
       class="cover-aura"
@@ -76,6 +80,7 @@ const particles = Array.from({ length: 24 }, (_, index) => {
         :src="coverUrl"
         class="size-full object-cover"
         :alt="title"
+        draggable="false"
         crossorigin="anonymous"
         @load="emit('load', $event)"
         @error="emit('error', $event)"
@@ -90,6 +95,7 @@ const particles = Array.from({ length: 24 }, (_, index) => {
             :src="coverUrl"
             class="size-full object-cover"
             :alt="title"
+            draggable="false"
             crossorigin="anonymous"
             @load="emit('load', $event)"
             @error="emit('error', $event)"

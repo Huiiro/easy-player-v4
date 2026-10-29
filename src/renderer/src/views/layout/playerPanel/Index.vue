@@ -933,7 +933,10 @@ function changeLyricsOffset(event: WheelEvent): void {
               :title="player.isPlaying ? t('playerPanel.pause') : t('playerPanel.play')"
               @click="togglePlayback"
             >
-              <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-8" />
+              <SvgIcon
+                :name="player.isPlaying ? 'play-pause' : 'play-play'"
+                class-name="panel-secondary-text size-8"
+              />
             </button>
             <button
               class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"

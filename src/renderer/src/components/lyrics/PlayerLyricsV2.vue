@@ -121,7 +121,6 @@ const enableAutoScroll = computed(() => {
   return !isUserScrolling.value
 })
 let scrollTimer: ReturnType<typeof setTimeout> | null = null
-let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let snapTimer: ReturnType<typeof setTimeout> | null = null
 let snapRaf = 0
 let lyricLoadId = 0
@@ -231,7 +230,6 @@ async function load(): Promise<void> {
   visibleLineIndices.value = new Set()
   writeScroll(0)
   if (scrollTimer) clearTimeout(scrollTimer)
-  if (debounceTimer) clearTimeout(debounceTimer)
   isUserScrolling.value = false
   currentIndex.value = 0
   activeIndices.value = [0]
@@ -657,15 +655,17 @@ function getLineAlignment(line: LyricLine): 'left' | 'center' | 'right' {
   return line.vocalPosition ?? props.alignMode
 }
 
-const onClickLyric = (line: number): void => {
-  if (line == null) return
-  if (debounceTimer) clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => {
-    if (scrollTimer) clearTimeout(scrollTimer)
-    isUserScrolling.value = false
-    emit('seek', line)
-    requestSnapToCurrent()
-  }, 60)
+function canSeekLine(line: LyricLine): boolean {
+  return !line.untimed && !!line.text.trim() && Number.isFinite(line.timeMs)
+}
+
+function onClickLyric(line: LyricLine): void {
+  if (!canSeekLine(line)) return
+  if (scrollTimer) clearTimeout(scrollTimer)
+  scrollTimer = null
+  isUserScrolling.value = false
+  emit('seek', line.timeMs)
+  void nextTick(requestSnapToCurrent)
 }
 
 watch(
@@ -803,7 +803,6 @@ onUnmounted(() => {
   document.fonts.removeEventListener('loadingdone', refreshFontLayout)
   if (snapRaf) cancelAnimationFrame(snapRaf)
   if (scrollTimer) clearTimeout(scrollTimer)
-  if (debounceTimer) clearTimeout(debounceTimer)
   if (snapTimer) clearTimeout(snapTimer)
   stopMotion()
   cancelAnimationFrame(sweepRaf)
@@ -846,8 +845,9 @@ onUnmounted(() => {
           ui.lyricsStyle,
           alignMode
         ]"
-        class="lyric-line group hover:bg-white/2"
+        class="lyric-line"
         :class="{
+          'lyric-line--seekable': canSeekLine(line),
           'lyric-line--offscreen': !visibleLineIndices.has(idx),
           'lyric-line--interlude': !line.untimed && !line.text.trim(),
           'lyric-line--pending-interlude':
@@ -858,6 +858,12 @@ onUnmounted(() => {
           'lyric-line--background': line.isBackground
         }"
         :style="lineStyles[idx]"
+        :role="canSeekLine(line) ? 'button' : undefined"
+        :tabindex="canSeekLine(line) ? 0 : undefined"
+        :aria-label="canSeekLine(line) ? line.text : undefined"
+        @click="onClickLyric(line)"
+        @keydown.enter.stop.prevent="onClickLyric(line)"
+        @keydown.space.stop.prevent="onClickLyric(line)"
       >
         <div
           v-if="!line.untimed && !line.text.trim()"
@@ -954,20 +960,6 @@ onUnmounted(() => {
           <div v-if="ui.showLyricsTranslation && line.translation" class="lyric-translation">
             {{ line.translation }}
           </div>
-        </div>
-        <!-- 右侧固定操作按钮轨道 -->
-        <div
-          v-if="line.text.trim()"
-          class="absolute left-10 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 group-focus-within:opacity-50 transition-all duration-[var(--motion-duration-standard)]"
-        >
-          <button
-            :disabled="line.untimed || !line.text.trim()"
-            :aria-label="line.text"
-            class="flex text-xs bg-white/5 hover:bg-white/10 px-2 py-1 rounded"
-            @click.stop="onClickLyric(line.timeMs)"
-          >
-            ▶
-          </button>
         </div>
       </div>
     </div>
@@ -1184,5 +1176,37 @@ onUnmounted(() => {
 .no-transform .lyric-karaoke-char {
   transform: none;
   scale: none;
+}
+
+/* Restore the whole sentence while inspecting a row, including timed glyphs. */
+.lyric-line--seekable {
+  cursor: pointer;
+}
+.lyric-line:is(:hover, :focus-visible) {
+  opacity: 1 !important;
+  filter: none !important;
+  border-radius: 0.75rem;
+  background-color: color-mix(in srgb, var(--lrc-highlight) 2%, transparent);
+  transition: none;
+}
+.lyric-line:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lrc-highlight) 40%, transparent);
+  outline-offset: -2px;
+}
+.lyric-line:is(:hover, :focus-visible)
+  :is(
+    .lyric-main,
+    .lyric-char,
+    .lyric-karaoke-char,
+    .lyric-translation,
+    .lyric-romanization,
+    .lyric-ruby rt
+  ) {
+  color: var(--lrc-highlight) !important;
+  opacity: 1 !important;
+}
+.lyric-line:is(:hover, :focus-visible) :is(.lyric-char, .lyric-karaoke-char) {
+  background-image: none;
+  transition: none;
 }
 </style>

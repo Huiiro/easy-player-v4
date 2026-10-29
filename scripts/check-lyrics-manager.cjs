@@ -36,7 +36,17 @@ async function runFixture() {
     disableNetwork: false,
     instrumental: false
   })
-  const databaseLyrics = (id) => ({ lrc: '[00:01.00]Database ' + id, lyricFormat: 'lrc' })
+  const databaseLyrics = (id) => {
+    if (id === 4)
+      return {
+        lrc: '[00:00.00]<00:00.00>First <00:00.50>line\n[00:02.00]Second line\n[00:05.00]Third line',
+        lyricFormat: 'elrc',
+        translation: '[00:00.00]First translation\n[00:02.00]Second translation',
+        romanization: '[00:00.00]First romanization\n[00:02.00]Second romanization'
+      }
+    if (id === 5) return { lrc: 'Untimed first line\nUntimed second line', lyricFormat: 'plain' }
+    return { lrc: '[00:01.00]Database ' + id, lyricFormat: 'lrc' }
+  }
   const writes = [],
     reads = [],
     queries = [],
@@ -342,6 +352,93 @@ async function runFixture() {
     pureApp.unmount()
     host.remove()
   }
+  Object.assign(window.managerUi, {
+    lyricsStyle: 'follow',
+    showLyricsTranslation: true,
+    showLyricsRomanization: true
+  })
+  for (const [index, component] of [PlayerLyrics, PlayerLyricsV2].entries()) {
+    const host = document.createElement('div')
+    host.style.cssText =
+      'position:relative;height:300px;--lrc-size:24px;--lrc-padding:8px;--lrc-height:1.5;--lrc-highlight:#fff;--lrc-default:#888;--lrc-translate:#aaa'
+    document.body.append(host)
+    const style = document.createElement('style')
+    style.textContent = window.fixtureLyricStyles[index]
+    document.head.append(style)
+    const lyricState = reactive({ song: song(4), currentTime: 0 })
+    const seeks = []
+    const lyricApp = createApp({
+      render: () =>
+        h(component, {
+          ...lyricState,
+          sourceOrder: ['database'],
+          autoSearchNetwork: false,
+          onSeek: (time) => seeks.push(time)
+        })
+    }).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+    lyricApp.mount(host)
+    await wait()
+    const rows = [...host.querySelectorAll('.lyric-line')]
+    const second = rows.find((row) => row.textContent.includes('Second line'))
+    check(!!second && !host.querySelector('button'), 'lyric rows replace separate seek buttons')
+    second.querySelector('.lyric-translation').click()
+    check(seeks.join() === '2000', 'clicking a translation seeks its sentence immediately once')
+    second.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    )
+    second.dispatchEvent(
+      new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true })
+    )
+    check(
+      seeks.join() === '2000,2000,2000',
+      'Enter and Space seek the focused lyric without scrolling'
+    )
+    const first = rows.find((row) => row.textContent.includes('First'))
+    first.click()
+    check(seeks.at(-1) === 0, 'clicking the opening line can seek to zero')
+    first.setAttribute('data-fixture-inspect', '')
+    const inspect = (active) =>
+      new Promise((resolve, reject) => {
+        window.finishLyricHover = (error) => (error ? reject(Error(error)) : resolve())
+        window.fixtureLyricHover(active ? 'on' : 'off')
+      })
+    await inspect(true)
+    await wait(450)
+    const characters = [...first.querySelectorAll('.lyric-karaoke-char')]
+    check(
+      characters.length > 0 &&
+        getComputedStyle(first).opacity === '1' &&
+        getComputedStyle(first).filter === 'none' &&
+        characters.every(
+          (char) =>
+            getComputedStyle(char).color === 'rgb(255, 255, 255)' &&
+            getComputedStyle(char).opacity === '1' &&
+            getComputedStyle(char).backgroundImage === 'none'
+        ) &&
+        getComputedStyle(first.querySelector('.lyric-translation')).color === 'rgb(255, 255, 255)',
+      'hovering a row highlights all timed characters and its translation'
+    )
+    await inspect(false)
+    first.removeAttribute('data-fixture-inspect')
+    await wait(450)
+    check(
+      characters.some((char) => getComputedStyle(char).backgroundImage !== 'none'),
+      'leaving a lyric restores its timed word highlighting'
+    )
+    lyricState.song = song(5)
+    await wait()
+    const beforeUntimed = seeks.length
+    const untimed = host.querySelector('.lyric-line')
+    untimed.click()
+    untimed.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    check(
+      seeks.length === beforeUntimed && !host.querySelector('[role=button]'),
+      'untimed lyrics never seek or expose a false button role'
+    )
+    lyricApp.unmount()
+    style.remove()
+    host.remove()
+  }
   check(fileWrites === 0, 'lyric management never writes embedded audio metadata')
   return checks
 }
@@ -424,6 +521,46 @@ app.whenReady().then(async () => {
         JSON.stringify(css) +
         ';document.head.append(style);void 0;'
     )
+    await window.webContents.executeJavaScript(
+      'window.fixtureLyricStyles=' +
+        JSON.stringify(
+          ['PlayerLyrics.vue', 'PlayerLyricsV2.vue'].map((name) =>
+            parse(fs.readFileSync(path.join('src/renderer/src/components/lyrics', name), 'utf8'))
+              .descriptor.styles.map((style) => style.content)
+              .join('\n')
+          )
+        )
+    )
+    window.webContents.debugger.attach('1.3')
+    await window.webContents.debugger.sendCommand('DOM.enable')
+    await window.webContents.debugger.sendCommand('CSS.enable')
+    await window.webContents.debugger.sendCommand('Runtime.addBinding', {
+      name: 'fixtureLyricHover'
+    })
+    let inspectedNodeId
+    window.webContents.debugger.on('message', async (_event, method, params) => {
+      if (method !== 'Runtime.bindingCalled' || params.name !== 'fixtureLyricHover') return
+      let failure = null
+      try {
+        if (params.payload === 'on') {
+          const { root } = await window.webContents.debugger.sendCommand('DOM.getDocument')
+          const { nodeId } = await window.webContents.debugger.sendCommand('DOM.querySelector', {
+            nodeId: root.nodeId,
+            selector: '[data-fixture-inspect]'
+          })
+          inspectedNodeId = nodeId
+        }
+        await window.webContents.debugger.sendCommand('CSS.forcePseudoState', {
+          nodeId: inspectedNodeId,
+          forcedPseudoClasses: params.payload === 'on' ? ['hover'] : []
+        })
+      } catch (error) {
+        failure = String(error)
+      }
+      await window.webContents.executeJavaScript(
+        'window.finishLyricHover(' + JSON.stringify(failure) + ')'
+      )
+    })
     const results = await window.webContents.executeJavaScript('(' + runFixture.toString() + ')()')
     console.log(JSON.stringify(results, null, 2))
     window.destroy()
