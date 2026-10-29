@@ -29,9 +29,12 @@ async function runChecks() {
     await new Promise((resolve) => setTimeout(resolve, ms))
   }
   let queries = 0
+  let remoteSources = []
+  let pendingSourceRequests
   window.ui = reactive({
     compactSongList: false,
     musicSource: 'all',
+    musicSourceId: 0,
     artistSeparator: '/',
     genreSeparator: ';',
     normalizeMetadataSeparator: true,
@@ -89,7 +92,14 @@ async function runChecks() {
   window.api = {
     database: {
       onSearchIndexChanged: () => () => {},
-      command: async () => ({ success: true, data: [] })
+      command: async (action) => {
+        if (action === 'listSources') {
+          if (pendingSourceRequests)
+            return new Promise((resolve) => pendingSourceRequests.push(resolve))
+          return { success: true, data: remoteSources.map((source) => ({ ...source })) }
+        }
+        return { success: true, data: [] }
+      }
     }
   }
   const router = createRouter({
@@ -343,6 +353,84 @@ async function runChecks() {
     'cover visibility changes also preserve the visible song'
   )
   check(queries === 1, 'column toggles and local sorting never requery the database')
+  const { eventBus } = window.Check
+  const sourceTrigger = () => document.querySelector('button[aria-label="歌曲来源"]')
+  async function sourceOptions() {
+    sourceTrigger().click()
+    await wait()
+    const labels = [...document.querySelectorAll('[role=option]')].map((option) =>
+      option.textContent.trim()
+    )
+    const groups = [...document.querySelectorAll('.ep-select-group')].map((group) =>
+      group.textContent.trim()
+    )
+    sourceTrigger().click()
+    await wait()
+    return { labels, groups }
+  }
+  remoteSources = [{ id: 1, name: 'NAS A' }]
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  let options = await sourceOptions()
+  check(
+    options.labels.includes('NAS A') && options.groups.join() === '自定义远程来源',
+    'new remote sources appear in their own header group without remounting'
+  )
+  window.ui.musicSource = 'remote'
+  window.ui.musicSourceId = 1
+  await wait()
+  remoteSources[0].name = 'Renamed NAS'
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  check(
+    sourceTrigger().textContent.includes('Renamed NAS'),
+    'source rename updates the selected label'
+  )
+  remoteSources = [{ id: 2, name: 'NAS B' }, ...remoteSources]
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  options = await sourceOptions()
+  check(
+    options.labels.slice(-2).join() === 'NAS B,Renamed NAS',
+    'source ordering and additions synchronize in the existing header'
+  )
+  const beforeDelete = queries
+  remoteSources = [{ id: 2, name: 'NAS B' }]
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  check(
+    window.ui.musicSource === 'remote' &&
+      window.ui.musicSourceId === 0 &&
+      sourceTrigger().textContent.includes('远程文件') &&
+      queries === beforeDelete + 1,
+    'deleting the selected source falls back to all remote files and reloads songs once'
+  )
+  pendingSourceRequests = []
+  eventBus.emit('musicSourcesChanged')
+  eventBus.emit('musicSourcesChanged')
+  pendingSourceRequests[1]({ success: true, data: [{ id: 3, name: 'Newest NAS' }] })
+  await wait()
+  pendingSourceRequests[0]({ success: true, data: [{ id: 2, name: 'Stale NAS' }] })
+  await wait()
+  pendingSourceRequests = undefined
+  options = await sourceOptions()
+  check(
+    options.labels.includes('Newest NAS') && !options.labels.includes('Stale NAS'),
+    'late source requests cannot restore stale dropdown entries'
+  )
+  remoteSources = []
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  options = await sourceOptions()
+  check(
+    options.groups.length === 0 && options.labels.length === 3,
+    'empty remote source group disappears'
+  )
+  app.unmount()
+  const beforeUnmount = queries
+  eventBus.emit('musicSourcesChanged')
+  await wait()
+  check(queries === beforeUnmount, 'unmounted song lists stop reacting to source changes')
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   return checks
 }
@@ -361,7 +449,7 @@ app.whenReady().then(async () => {
       stdin: {
         resolveDir: process.cwd(),
         contents:
-          "export {RecycleScroller} from 'vue-virtual-scroller';export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {createRouter,createMemoryHistory} from 'vue-router';export {default as SongListView} from './src/renderer/src/components/songlist/SongListView.vue';export {default as LibraryBrowserGrid} from './src/renderer/src/components/library/LibraryBrowserGrid.vue';export {default as SvgIcon} from './src/renderer/src/components/svg/SvgIcon.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';"
+          "export {RecycleScroller} from 'vue-virtual-scroller';export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {createRouter,createMemoryHistory} from 'vue-router';export {default as eventBus} from './src/renderer/src/utils/eventBus';export {default as SongListView} from './src/renderer/src/components/songlist/SongListView.vue';export {default as LibraryBrowserGrid} from './src/renderer/src/components/library/LibraryBrowserGrid.vue';export {default as SvgIcon} from './src/renderer/src/components/svg/SvgIcon.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';"
       },
       bundle: true,
       write: false,

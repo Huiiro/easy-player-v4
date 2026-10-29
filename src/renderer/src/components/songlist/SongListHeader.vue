@@ -14,6 +14,7 @@ import type {
 interface SourceOption {
   label: string
   value: string
+  group?: string
 }
 
 const props = defineProps<{
@@ -296,7 +297,7 @@ const batchMenuItems = computed(() => [
           :options="sourceOptions"
           :aria-label="t('songList.sourceFilter')"
           size="sm"
-          class="header-source w-40"
+          class="header-source w-48"
           @update:model-value="emit('update:sourceFilter', $event)"
         />
         <!-- tag -->

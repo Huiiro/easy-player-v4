@@ -42,8 +42,11 @@ app.whenReady().then(async () => {
         sources = sources.map((source) =>
           source.id === request.params.id ? request.params : source
         )
+      if (request.action === 'deleteSource')
+        sources = sources.filter((source) => source.id !== request.params.id)
       return { success: true }
     })
+    ipcMain.handle('remote-source:sync', () => ({ success: true, data: { imported: 0 } }))
     ipcMain.handle('remote-source:test', (_event, config) => {
       calls.push({ action: 'test', params: config })
       if (config.baseUrl.includes('offline.invalid'))
@@ -61,7 +64,7 @@ app.whenReady().then(async () => {
     })
     const bundle = await esbuild.build({
       stdin: {
-        contents: `import * as Vue from 'vue'; import { createI18n } from 'vue-i18n'; import Page from './src/renderer/src/views/remote/Index.vue'; import BaseSelect from './src/renderer/src/components/ui/BaseSelect.vue'; import { useMessage } from './src/renderer/src/components/ui/useMessage'; import en from './src/renderer/src/i18n/locales/en'; export { Vue, createI18n, Page, BaseSelect, useMessage, en };`,
+        contents: `import * as Vue from 'vue'; import { createI18n } from 'vue-i18n'; import Page from './src/renderer/src/views/remote/Index.vue'; import BaseSelect from './src/renderer/src/components/ui/BaseSelect.vue'; import { useMessage } from './src/renderer/src/components/ui/useMessage'; import eventBus from './src/renderer/src/utils/eventBus'; import en from './src/renderer/src/i18n/locales/en'; export { Vue, createI18n, Page, BaseSelect, useMessage, eventBus, en };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -120,6 +123,8 @@ app.whenReady().then(async () => {
       const wait = async () => { await nextTick(); await new Promise(resolve => setTimeout(resolve, 100)); };
       const check = (value, message) => { if (!value) throw Error(message); results.push(message); };
       const notices = useMessage();
+      let sourceChanges = 0;
+      Fixture.eventBus.on('musicSourcesChanged', () => sourceChanges++);
       const i18n = () => createI18n({ legacy:false, locale:'en', messages:{en} });
       let instance = createApp(Page).use(i18n()); instance.mount('#app'); await wait();
       const button = (text, root = document) => [...root.querySelectorAll('button')].find(button => button.textContent.trim() === text);
@@ -142,9 +147,11 @@ app.whenReady().then(async () => {
       fill(inputs[0], 'Reject-save');
       button(en.common.save, dialog()).click(); await wait();
       check(!!dialog() && notices.messages.value.some(message => message.type === 'error'), 'Rejected save stays open and reports an error');
+      check(sourceChanges === 0, 'Failed edits do not publish source changes');
       notices.clear(); fill(inputs[0], 'Edited');
       button(en.common.save, dialog()).click(); await wait();
       check(!dialog() && document.querySelector('article h2').textContent === 'Edited', 'Save updates a connection without clone errors');
+      check(sourceChanges === 1, 'Successful edit notifies cached song headers');
       button(en.remote.add).click(); await wait();
       button(en.common.save, dialog()).click(); await wait();
       check(!!dialog() && notices.messages.value.some(message => message.type === 'error'), 'Incomplete configuration stays open with validation feedback');
@@ -164,6 +171,7 @@ app.whenReady().then(async () => {
       check(!!dialog() && notices.messages.value.some(message=>message.message===en.remote.nameExists),'Duplicate source names show a dedicated message and retain form values');
       fill(createInputs[0], 'ID-conflict'); notices.clear(); button(en.common.save, dialog()).click(); await wait();
       check(notices.messages.value.some(message=>message.message===en.remote.idConflict),'Primary key conflicts are not reported as missing connection fields');
+      check(sourceChanges === 1, 'Validation and database failures do not publish source changes');
       fill(createInputs[0], 'Created'); fill(createInputs[1], 'https://offline.invalid/'); notices.clear(); button(en.remote.testConnection, dialog()).click(); await wait();
       check(notices.messages.value.some(message=>message.message==='ECONNREFUSED fixture'),'Connection failures retain their actual backend error');
       fill(createInputs[1], 'https://nas/new/');
@@ -172,6 +180,14 @@ app.whenReady().then(async () => {
       await wait();check(!!dialog() && createInputs[0].value==='Created','Clicking outside the source dialog does not close or reset it');
       notices.clear(); const save=button(en.common.save, dialog());save.click();save.click(); await wait();
       check(!dialog() && document.querySelectorAll('article').length === 2, 'Create serializes the nested authentication DTO');
+      check(sourceChanges === 2, 'Successful creation notifies cached song headers once');
+      button(en.remote.refresh).click(); await wait();
+      check(sourceChanges === 3, 'Refreshing remote sources notifies song headers');
+      button(en.remote.sync, document.querySelector('article')).click(); await wait();
+      check(sourceChanges === 4, 'Syncing a remote library notifies song headers and lists');
+      button(en.remote.delete, document.querySelector('article')).click(); await wait();
+      button(en.remote.delete, dialog()).click(); await wait();
+      check(sourceChanges === 5 && document.querySelectorAll('article').length === 1, 'Successful deletion notifies cached song headers');
       check(errors.length === 0, 'No unhandled dialog or IPC errors');
       instance.unmount();
       for (const teleport of [false, true]) {

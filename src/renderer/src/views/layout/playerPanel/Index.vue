@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import BaseRange from '@/components/ui/BaseRange.vue'
+import BaseMenu from '@/components/ui/BaseMenu.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { usePlayerBackdrop } from '@/components/player/usePlayerBackdrop'
@@ -19,15 +21,17 @@ import LiquidBackground from '@/components/background/LiquidBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { usePlayerRhythm } from '@/components/player/usePlayerRhythm'
-import { formatArtists } from '@/utils/artists'
+import { formatArtists, splitArtists } from '@/utils/artists'
 import type { SongDetails } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
+import { writeSongLyricSettings } from '@/services/songLyricSettings'
 
 const ui = useUIStore()
 const player = usePlayerStore()
 const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
   useSeekProgress(player)
 const { t } = useI18n()
+const router = useRouter()
 const { error: showError, success } = useMessage()
 const savingOffset = ref(false)
 async function saveOffset(clear = false): Promise<void> {
@@ -87,8 +91,97 @@ watch(
 
 const coverFailed = ref(false)
 const showQueue = ref(false)
-const showLyricsManager = ref(false)
+const showLyricsSearch = ref(false)
 const showPlaylistPicker = ref(false)
+const playlistSongIds = ref<number[]>([])
+const lyricPolicyPending = ref(false)
+const currentArtists = computed(() =>
+  splitArtists(player.currentQueueSong?.artist, ui.artistSeparator)
+)
+function openArtist(artist: string): void {
+  const song = player.currentQueueSong
+  if (!song || !artist) return
+  void router.push({
+    path: '/artist/detail',
+    query: { name: artist, cover: song.cover || '' }
+  })
+  close()
+}
+function openAlbum(): void {
+  const song = player.currentQueueSong
+  if (!song?.album) return
+  void router.push({
+    path: '/album/detail',
+    query: { name: song.album, artist: song.artist || '', cover: song.cover || '' }
+  })
+  close()
+}
+function openPlaylistPicker(): void {
+  const song = player.currentQueueSong
+  if (!song) return
+  playlistSongIds.value = [song.id]
+  showPlaylistPicker.value = true
+}
+async function setLyricPolicy(
+  flag: 'disableNetwork' | 'instrumental',
+  enabled: boolean
+): Promise<void> {
+  const song = player.currentQueueSong
+  if (!song || lyricPolicyPending.value || !player.lyricsSettingsReady) return
+  lyricPolicyPending.value = true
+  try {
+    const settings = await writeSongLyricSettings(song.id, { [flag]: enabled })
+    song.disableNetworkLyrics = settings.disableNetwork
+    song.instrumental = settings.instrumental
+    if (currentSongDetails.value?.id === song.id) {
+      currentSongDetails.value.disableNetworkLyrics = settings.disableNetwork
+      currentSongDetails.value.instrumental = settings.instrumental
+    }
+  } catch (cause) {
+    showError(cause instanceof Error ? cause.message : t('settings.fileOperationFailed'))
+  } finally {
+    lyricPolicyPending.value = false
+  }
+}
+const moreOptions = computed(() => [
+  {
+    label: t('songList.addToPlaylist'),
+    icon: 'common-plus',
+    disabled: !player.currentQueueSong,
+    onClick: openPlaylistPicker
+  },
+  ...currentArtists.value.map((artist) => ({
+    label: `${t('footer.goArtist')} · ${artist}`,
+    icon: 'common-user',
+    onClick: () => openArtist(artist)
+  })),
+  {
+    label: t('footer.goAlbum'),
+    icon: 'common-album',
+    disabled: !player.currentQueueSong?.album,
+    onClick: openAlbum
+  },
+  { type: 'divider' as const },
+  ...(['disableNetwork', 'instrumental'] as const).map((flag) => {
+    const enabled = player.songLyricSettings[flag] === true
+    return {
+      label: t(
+        flag === 'disableNetwork'
+          ? enabled
+            ? 'songList.removeDisableNetwork'
+            : 'songList.addDisableNetwork'
+          : enabled
+            ? 'songList.removeInstrumental'
+            : 'songList.addInstrumental'
+      ),
+      icon: `common-${flag === 'disableNetwork' ? 'no-internet' : 'music-notes'}-${enabled ? 'remove' : 'add'}`,
+      disabled: !player.currentQueueSong || !player.lyricsSettingsReady || lyricPolicyPending.value,
+      onClick: () => {
+        void setLyricPolicy(flag, !enabled)
+      }
+    }
+  })
+])
 const showLyricsColorDialog = ref(false)
 const lyricReloadToken = ref(0)
 const progressStyle = ref<'thin' | 'thick'>('thin')
@@ -122,6 +215,39 @@ const playModeLabel = computed(() =>
 )
 const lyricsStyleLabel = computed(() =>
   t(`playerPanel.lyricEffect${ui.lyricsStyle[0].toUpperCase()}${ui.lyricsStyle.slice(1)}`)
+)
+const lyricAlignmentLabel = computed(() =>
+  t(`playerPanel.align${ui.lyricsAlignment[0].toUpperCase()}${ui.lyricsAlignment.slice(1)}`)
+)
+const alignmentOptions = computed(() =>
+  (['left', 'center', 'right'] as const).map((value) => ({
+    value,
+    label: t(`playerPanel.align${value[0].toUpperCase()}${value.slice(1)}`),
+    onClick: () => {
+      ui.lyricsAlignment = value
+    }
+  }))
+)
+const lyricStyleOptions = computed(() =>
+  (['none', 'glow', 'follow'] as const).map((value) => ({
+    value,
+    label: t(`playerPanel.lyricEffect${value[0].toUpperCase()}${value.slice(1)}`),
+    onClick: () => {
+      ui.lyricsStyle = value
+    }
+  }))
+)
+const lyricSourceOptions = computed(() =>
+  (['auto', 'embedded', 'database', 'local', 'network'] as const).map((value) => ({
+    value,
+    label: t(value === 'auto' ? 'playerPanel.lyricSourceAuto' : `lyrics.source.${value}`),
+    onClick: () => {
+      ui.lyricSourceMode = value
+    }
+  }))
+)
+const lyricSourceLabel = computed(
+  () => lyricSourceOptions.value.find((item) => item.value === ui.lyricSourceMode)?.label || ''
 )
 const lyricsFontScale = computed(() => ui.lyricsFontSize / 2.4)
 const lyricsFontSpacingScale = computed(() => ui.lyricsFontPadding / 30)
@@ -531,30 +657,6 @@ function changeLyricsOffset(event: WheelEvent): void {
             >
               <svg-icon name="common-rhythm" class-name="w-[16px] h-[16px]" />
             </button>
-            <!-- font size -->
-            <label
-              class="panel-tool vertical-tool"
-              :title="t('playerPanel.lyricFontSize')"
-              @wheel="changeLyricSize"
-            >
-              <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
-              </span>
-              <span class="vertical-popup">
-                <b>{{ lyricsFontScale.toFixed(1) }}×</b>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  min="0.6"
-                  max="2"
-                  step="0.1"
-                  :value="lyricsFontScale"
-                  @input="
-                    ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value) * 2.4)
-                  "
-                />
-              </span>
-            </label>
             <!-- lyrics timing -->
             <label
               class="panel-tool vertical-tool"
@@ -593,7 +695,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                     :title="t('playerPanel.lyricOffsetRemove')"
                     @click.prevent="saveOffset(true)"
                   >
-                    ×
+                    <SvgIcon name="common-close" class-name="size-3" />
                   </button>
                   <button
                     type="button"
@@ -604,6 +706,30 @@ function changeLyricsOffset(event: WheelEvent): void {
                     <SvgIcon name="common-refresh" class-name="size-3" />
                   </button>
                 </span>
+              </span>
+            </label>
+            <!-- font size -->
+            <label
+              class="panel-tool vertical-tool"
+              :title="t('playerPanel.lyricFontSize')"
+              @wheel="changeLyricSize"
+            >
+              <span class="w-[16px] h-[16px] flex items-center justify-center">
+                <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
+              </span>
+              <span class="vertical-popup">
+                <b>{{ lyricsFontScale.toFixed(1) }}×</b>
+                <input
+                  class="accent-primary"
+                  type="range"
+                  min="0.6"
+                  max="2"
+                  step="0.1"
+                  :value="lyricsFontScale"
+                  @input="
+                    ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value) * 2.4)
+                  "
+                />
               </span>
             </label>
             <!-- font padding -->
@@ -630,40 +756,52 @@ function changeLyricsOffset(event: WheelEvent): void {
                 />
               </span>
             </label>
-            <!-- lyrics align -->
-            <button
-              class="panel-tool"
-              :title="
-                t('playerPanel.lyricAlignment', {
-                  alignment: t(
-                    `playerPanel.align${ui.lyricsAlignment[0].toUpperCase()}${ui.lyricsAlignment.slice(1)}`
-                  )
-                })
-              "
-              @click="
-                ui.lyricsAlignment =
-                  ui.lyricsAlignment === 'left'
-                    ? 'center'
-                    : ui.lyricsAlignment === 'center'
-                      ? 'right'
-                      : 'left'
-              "
+            <!-- lyrics alignment -->
+            <BaseMenu
+              appearance="glass"
+              :model-value="ui.lyricsAlignment"
+              :items="alignmentOptions"
+              side="top"
+              align="start"
+              size="sm"
+              width="w-36"
+              teleport
             >
-              <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <svg-icon name="arrow-arrow-left-right" class-name="w-[12px] h-[12px]" />
-              </span>
-            </button>
+              <template #trigger>
+                <button
+                  type="button"
+                  class="panel-tool"
+                  :title="t('playerPanel.lyricAlignment', { alignment: lyricAlignmentLabel })"
+                  :aria-label="t('playerPanel.lyricAlignment', { alignment: lyricAlignmentLabel })"
+                >
+                  <span class="w-[16px] h-[16px] flex items-center justify-center">
+                    <svg-icon name="arrow-arrow-left-right" class-name="w-[12px] h-[12px]" />
+                  </span>
+                </button>
+              </template>
+            </BaseMenu>
             <!-- lyrics style -->
-            <button
-              class="panel-tool"
-              :title="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
-              :aria-label="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
-              @click="ui.handleClickStyle()"
+            <BaseMenu
+              appearance="glass"
+              :model-value="ui.lyricsStyle"
+              :items="lyricStyleOptions"
+              side="top"
+              align="start"
+              size="sm"
+              width="w-36"
+              teleport
             >
-              <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <svg-icon name="common-lyrics-effect" class-name="w-[16px] h-[16px]" />
-              </span>
-            </button>
+              <template #trigger>
+                <button
+                  type="button"
+                  class="panel-tool"
+                  :title="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
+                  :aria-label="t('playerPanel.lyricEffect', { effect: lyricsStyleLabel })"
+                >
+                  <SvgIcon name="common-lyrics-effect" class-name="size-4" />
+                </button>
+              </template>
+            </BaseMenu>
             <!-- lyrics colors -->
             <button
               class="panel-tool"
@@ -678,15 +816,38 @@ function changeLyricsOffset(event: WheelEvent): void {
                 }"
               />
             </button>
-            <!-- lyrics manager -->
+            <!-- playback lyric source is independent from searching -->
+            <BaseMenu
+              appearance="glass"
+              :model-value="ui.lyricSourceMode"
+              :items="lyricSourceOptions"
+              side="top"
+              align="start"
+              size="sm"
+              width="w-48"
+              teleport
+            >
+              <template #trigger>
+                <button
+                  type="button"
+                  class="panel-tool"
+                  :class="ui.lyricSourceMode !== 'auto' && 'active'"
+                  :title="t('playerPanel.lyricSourceSelection', { source: lyricSourceLabel })"
+                  :aria-label="t('playerPanel.lyricSourceSelection', { source: lyricSourceLabel })"
+                >
+                  <SvgIcon name="common-lyrics2" class-name="size-4" />
+                </button>
+              </template>
+            </BaseMenu>
+            <!-- search lyrics -->
             <button
               class="panel-tool"
-              :title="t('playerPanel.lyricManage')"
-              :aria-label="t('playerPanel.lyricManage')"
-              @click="showLyricsManager = true"
+              :title="t('playerPanel.lyricSearchTitle')"
+              :aria-label="t('playerPanel.lyricSearchTitle')"
+              @click="showLyricsSearch = true"
             >
               <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <SvgIcon name="common-lyrics2" class-name="w-[16px] h-[16px]" />
+                <SvgIcon name="common-search" class-name="w-[16px] h-[16px]" />
               </span>
             </button>
             <!-- translation-->
@@ -791,16 +952,28 @@ function changeLyricsOffset(event: WheelEvent): void {
             >
               <svg-icon name="control-playlist" class-name="size-6" />
             </button>
-            <!-- add current song to playlist -->
-            <button
-              class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
-              :disabled="!player.currentQueueSong"
-              :title="t('songList.addToPlaylist')"
-              :aria-label="t('songList.addToPlaylist')"
-              @click="showPlaylistPicker = true"
+            <!-- more song actions -->
+            <BaseMenu
+              :items="moreOptions"
+              appearance="glass"
+              side="top"
+              align="end"
+              size="sm"
+              width="w-64"
+              teleport
             >
-              <SvgIcon name="common-plus" class-name="size-6" />
-            </button>
+              <template #trigger>
+                <button
+                  type="button"
+                  class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
+                  :disabled="!player.currentQueueSong"
+                  :title="t('songList.more')"
+                  :aria-label="t('songList.more')"
+                >
+                  <SvgIcon name="menu-more-horizontal" class-name="size-6" />
+                </button>
+              </template>
+            </BaseMenu>
           </div>
         </section>
         <!-- lyrics -->
@@ -831,12 +1004,9 @@ function changeLyricsOffset(event: WheelEvent): void {
       </div>
       <!-- play queue-->
       <PlayQueueDrawer v-model="showQueue" />
-      <LyricsManagerDialog v-model="showLyricsManager" />
+      <LyricsManagerDialog v-model="showLyricsSearch" />
       <LyricsColorDialog v-model="showLyricsColorDialog" />
-      <AddSongsToPlaylistDialog
-        v-model="showPlaylistPicker"
-        :song-ids="player.currentQueueSong ? [player.currentQueueSong.id] : []"
-      />
+      <AddSongsToPlaylistDialog v-model="showPlaylistPicker" :song-ids="playlistSongIds" />
       <!-- play spectrum-->
       <div
         v-if="ui.showPlayerSpectrum"

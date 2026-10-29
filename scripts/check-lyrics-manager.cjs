@@ -39,7 +39,6 @@ async function runFixture() {
   const databaseLyrics = (id) => ({ lrc: '[00:01.00]Database ' + id, lyricFormat: 'lrc' })
   const writes = [],
     reads = [],
-    sourceLoads = [],
     queries = [],
     updates = []
   let holdRead = false,
@@ -71,8 +70,7 @@ async function runFixture() {
       }
     },
     lyrics: {
-      loadSource: async (audio, source) => {
-        sourceLoads.push({ audio, source })
+      loadSource: async () => {
         return { success: true, data: { content: '[00:01.00]Embedded', format: 'lrc' } }
       },
       searchNetwork: async (query) => {
@@ -176,28 +174,32 @@ async function runFixture() {
     queryTitle.value === 'Song 1' && document.body.textContent.includes('Song 1'),
     'search defaults and displayed target retain the plain opening snapshot'
   )
-  button('内嵌歌词').click()
+  check(
+    ![...document.querySelectorAll('button')].some(
+      (el) => el.textContent.trim() === '内嵌歌词' || el.textContent.trim() === '数据库歌词'
+    ),
+    'search dialog does not contain playback source controls'
+  )
+  window.managerUi.lyricSourceMode = 'embedded'
   await wait()
   check(
-    sourceLoads.at(-1).audio === 'song-1.flac',
-    'source previews load the snapshotted audio path after playback switches'
+    editor().value.includes('Draft for song 1') && reads.length === 1 && !editor().readOnly,
+    'playback source changes do not reload or lock the search draft'
   )
-  check(
-    [...document.querySelectorAll('textarea')].every((el) => el.readOnly) &&
-      button(zh.playerPanel.lyricSaveDatabase).disabled,
-    'embedded lyrics remain read-only'
-  )
-  button(zh.playerPanel.lyricSaveDatabase).dispatchEvent(new MouseEvent('click', { bubbles: true }))
-  await wait()
-  check(writes.length === 0, 'read-only previews cannot overwrite database lyrics')
-  button('数据库歌词').click()
-  await wait()
-  check(reads.at(-1) === 1, 'database source changes use the original song ID')
   button('搜索网络歌词').click()
   await wait()
   check(
     queries[0].title === 'Song 1' && queries[0].artist === 'Artist 1',
     'network searches keep the original song metadata'
+  )
+  check(
+    window.managerUi.lyricSourceMode === 'embedded',
+    'selecting a search result never changes playback source'
+  )
+  check(
+    !!document.querySelector('[data-lyric-search-sidebar] [data-lyric-search-results]') &&
+      !document.querySelector('[data-lyric-search-editor] [data-lyric-search-results]'),
+    'search results appear in the upper-left sidebar instead of the editor column'
   )
   await edit('[00:01.00]Saved for song 1')
   button(zh.playerPanel.lyricSaveDatabase).click()
@@ -240,29 +242,57 @@ async function runFixture() {
   state.open = true
   await wait()
   const queryCount = queries.length
-  document.querySelector('[role=switch][aria-label="不搜索网络歌词"]').click()
+  check(
+    !document.querySelector('[role=switch]'),
+    'search dialog no longer contains song flag switches'
+  )
+  await window.api.database.command('setSongLyricSettings', {
+    songId: 3,
+    patch: { disableNetwork: true }
+  })
+  eventBus.emit('songLyricSettingsChanged', 3)
   await wait()
   check(
-    policies.get(3).disableNetwork && button('搜索网络歌词').disabled,
-    'song network flag is persisted and blocks manual searches'
+    policies.get(3).disableNetwork && !button('搜索网络歌词').disabled,
+    'network marker does not disable manual searches'
   )
   button('搜索网络歌词').dispatchEvent(new MouseEvent('click', { bubbles: true }))
   await wait()
-  check(queries.length === queryCount, 'blocked songs never issue a network query')
-  document.querySelector('[role=switch][aria-label="纯音乐"]').click()
+  check(
+    queries.length === queryCount + 1 && queries.at(-1).searchMode === 'manual',
+    'manual searches send an explicit intent even when automatic matching is disabled'
+  )
+  await window.api.database.command('setSongLyricSettings', {
+    songId: 3,
+    patch: { instrumental: true }
+  })
+  eventBus.emit('songLyricSettingsChanged', 3)
   await wait()
   check(
-    policies.get(3).instrumental && !editor().value,
-    'instrumental marker clears the lyric preview without changing stored lyrics'
+    policies.get(3).instrumental &&
+      editor().value.includes('Network') &&
+      !button('搜索网络歌词').disabled,
+    'instrumental marker does not clear manual search results or disable searching'
   )
   await close()
   state.open = true
   await wait()
   check(
-    document.querySelector('[role=switch][aria-label="纯音乐"]').getAttribute('aria-checked') ===
-      'true',
-    'instrumental marker survives reopening the dialog'
+    editor().value.includes('Database 3') && !button('搜索网络歌词').disabled,
+    'reopening an instrumental song still allows manual lyric search and editing'
   )
+  button('搜索网络歌词').click()
+  await wait()
+  button(zh.playerPanel.lyricSaveDatabase).click()
+  await wait(250)
+  check(
+    writes.at(-1).id === 3 &&
+      writes.at(-1).lrc.includes('Network') &&
+      policies.get(3).instrumental &&
+      policies.get(3).disableNetwork,
+    'manual results can be saved without clearing either song marker'
+  )
+
   await close()
   window.managerPlayer.currentQueueSong = song(1)
   holdRead = true

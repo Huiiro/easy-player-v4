@@ -288,6 +288,7 @@ export default {
     sourceAll: '全部来源',
     sourceLocal: '本地文件',
     sourceRemote: '远程文件',
+    customRemoteSources: '自定义远程来源',
     remoteSong: '远程歌曲',
     refresh: '刷新',
     backToTop: '返回顶部',
@@ -1138,6 +1139,10 @@ export default {
     version: '版本'
   },
   playerPanel: {
+    lyricSearchHint: '输入歌曲信息后点击搜索，结果将显示在这里。',
+    lyricSearchResults: '搜索结果',
+    lyricSearchTitle: '搜索歌词',
+    lyricSourceSelection: '歌词来源：{source}',
     collapseLyrics: '收起为歌词视图',
     expandLyrics: '展开播放器',
     label: '播放器面板',
@@ -1229,7 +1234,8 @@ export default {
     disableNetwork: '不搜索网络歌词',
     instrumental: '纯音乐',
     instrumentalHint: '此歌曲已标记为纯音乐',
-    networkDisabledHint: '此歌曲不会搜索或匹配网络歌词；纯音乐标记还会显示专用歌词状态。',
+    networkDisabledHint:
+      '此歌曲不会自动搜索或匹配网络歌词，仍可手动搜索并保存；纯音乐标记会显示专用歌词状态。',
 
     source: {
       embedded: '内嵌歌词',

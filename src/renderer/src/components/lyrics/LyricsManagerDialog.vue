@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import { defaultSongLyricSettings } from '../../../../shared/songLyrics'
-import type { SongLyricSettingsPatch } from '../../../../shared/songLyrics'
-import { readSongLyricSettings, writeSongLyricSettings } from '@/services/songLyricSettings'
-import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createSourceRequestScope } from '@/services/sourceRequests'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -12,12 +8,7 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import eventBus from '@/utils/eventBus'
 import type { LibrarySong } from '@/types/library'
-import {
-  resolveLyrics,
-  type LyricFormat,
-  type LyricSource,
-  type NetworkLyricCandidate
-} from '@/services/lyrics'
+import type { LyricFormat, NetworkLyricCandidate } from '@/services/lyrics'
 
 const props = defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
@@ -26,30 +17,7 @@ const player = usePlayerStore()
 type EditingSong = Pick<LibrarySong, 'id' | 'audio' | 'title' | 'artist' | 'album'>
 const editingSong = shallowRef<EditingSong | null>(null)
 const saving = ref(false)
-const songSettings = ref(defaultSongLyricSettings(0))
 const settingsReady = ref(false)
-const networkBlocked = computed(
-  () => songSettings.value.disableNetwork || songSettings.value.instrumental
-)
-async function savePolicy(patch: SongLyricSettingsPatch): Promise<void> {
-  const song = editingSong.value
-  if (!song || saving.value || !settingsReady.value) return
-  const session = editSession
-  saving.value = true
-  cancelRequest()
-  try {
-    const updated = await writeSongLyricSettings(song.id, patch)
-    if (session !== editSession) return
-    songSettings.value = updated
-    candidates.value = []
-    await loadDraft()
-  } catch (cause) {
-    if (session === editSession)
-      error.value = cause instanceof Error ? cause.message : String(cause)
-  } finally {
-    if (session === editSession) saving.value = false
-  }
-}
 
 let editSession = 0
 const { t } = useI18n()
@@ -63,6 +31,7 @@ const loading = ref(false)
 function cancelRequest(): void {
   requests.cancelAll()
   loading.value = false
+  draftLoading.value = false
 }
 onBeforeUnmount(() => {
   editSession++
@@ -70,6 +39,7 @@ onBeforeUnmount(() => {
 })
 const error = ref('')
 const candidates = ref<NetworkLyricCandidate[]>([])
+const searched = ref(false)
 const selected = ref(0)
 const lyric = ref('')
 const translation = ref('')
@@ -78,23 +48,8 @@ const translationFormat = ref<LyricFormat | undefined>()
 const romanization = ref('')
 const romanizationFormat = ref<LyricFormat | undefined>()
 const query = ref({ title: '', artist: '', album: '' })
-const resolvedSource = ref<LyricSource | null>(null)
-const previewSource = ref<'auto' | LyricSource>('auto')
-const sourceLabel = computed(() => {
-  if (!resolvedSource.value) return t('playerPanel.lyricSourceNone')
-  return t(`lyrics.source.${resolvedSource.value}`)
-})
-const isReadOnlyPreview = computed(
-  () => previewSource.value === 'auto' || previewSource.value === 'embedded'
-)
-const sources = computed(() => [
-  { value: 'auto', label: t('playerPanel.lyricSourceAuto') },
-  { value: 'embedded', label: t('lyrics.source.embedded') },
-  { value: 'database', label: t('lyrics.source.database') },
-  { value: 'local', label: t('lyrics.source.local') },
-  { value: 'network', label: t('lyrics.source.network') }
-])
-async function loadDraft(source = previewSource.value): Promise<void> {
+const draftLoading = ref(false)
+async function loadDraft(): Promise<void> {
   requests.cancel('draft')
   const song = editingSong.value
   lyric.value = ''
@@ -103,72 +58,39 @@ async function loadDraft(source = previewSource.value): Promise<void> {
   lyricFormat.value = undefined
   translationFormat.value = undefined
   romanizationFormat.value = undefined
-  resolvedSource.value = null
-  if (!song || source === 'network' || songSettings.value.instrumental) return
+  draftLoading.value = false
+  if (!song) return
   const call = requests.start('draft')
-  if (source === 'auto') {
-    const result = await resolveLyrics(
-      song,
-      ui.lyricSourceOrder,
-      'auto',
-      ui.autoSearchNetworkLyrics,
-      ui.preferWordTimedNetworkLyrics,
-      { ...call.options, isCurrent: call.isCurrent }
-    )
-    if (!call.isCurrent()) return
-    resolvedSource.value = result.source
-    lyric.value = result.content || ''
-    lyricFormat.value = result.format
-    translation.value = result.translation || ''
-    translationFormat.value = result.translationFormat
-    romanization.value = result.romanization || ''
-    romanizationFormat.value = result.romanizationFormat
-    call.finish()
-    return
-  }
-  if (source === 'database') {
+  draftLoading.value = true
+  try {
     const response = await window.api.database.command('getSong', { id: song.id })
     if (!call.isCurrent()) return
-    const data = response.success
-      ? (response.data as {
-          lrc?: string | null
-          lyricFormat?: LyricFormat
-          translation?: string | null
-          translationFormat?: LyricFormat
-          romanization?: string | null
-          romanizationFormat?: LyricFormat
-        })
-      : null
+    if (!response.success) throw new Error(response.error)
+    const data = response.data as {
+      lrc?: string | null
+      lyricFormat?: LyricFormat
+      translation?: string | null
+      translationFormat?: LyricFormat
+      romanization?: string | null
+      romanizationFormat?: LyricFormat
+    } | null
     lyric.value = data?.lrc || ''
     lyricFormat.value = data?.lyricFormat
     translation.value = data?.translation || ''
     translationFormat.value = data?.translationFormat
     romanization.value = data?.romanization || ''
     romanizationFormat.value = data?.romanizationFormat
+  } catch (cause) {
+    if (call.isCurrent()) error.value = cause instanceof Error ? cause.message : String(cause)
+  } finally {
+    if (call.isCurrent()) draftLoading.value = false
     call.finish()
-    return
   }
-  const response = await window.api.lyrics.loadSource(song.audio, source)
-  if (!call.isCurrent()) return
-  lyric.value = response.success ? response.data?.content || '' : ''
-  lyricFormat.value = response.success ? response.data?.format : undefined
-  resolvedSource.value = lyric.value ? source : null
-  call.finish()
 }
 async function initializeDraft(): Promise<void> {
   const song = editingSong.value
   const session = editSession
   if (!song) return
-  try {
-    const policy = await readSongLyricSettings(song.id)
-    if (session !== editSession) return
-    songSettings.value = policy
-  } catch (cause) {
-    if (session === editSession) error.value = String(cause)
-    return
-  }
-  if (session !== editSession) return
-  settingsReady.value = true
   const metadata = player.trackInfo?.filePath === song?.audio ? player.trackInfo?.metadata : null
   query.value = {
     title: metadata?.title?.trim() || song?.title || '',
@@ -176,10 +98,11 @@ async function initializeDraft(): Promise<void> {
     album: metadata?.album?.trim() || song?.album || ''
   }
   candidates.value = []
+  searched.value = false
   selected.value = 0
   error.value = ''
-  previewSource.value = ui.lyricSourceMode
-  await loadDraft(previewSource.value)
+  await loadDraft()
+  if (session === editSession) settingsReady.value = true
 }
 function updateVisible(value: boolean): void {
   emit('update:modelValue', value)
@@ -189,7 +112,6 @@ watch(
   () => props.modelValue,
   (visible) => {
     editSession++
-    songSettings.value = defaultSongLyricSettings(0)
     settingsReady.value = false
     cancelRequest()
     saving.value = false
@@ -207,22 +129,12 @@ watch(
   },
   { immediate: true, flush: 'sync' }
 )
-async function selectSource(source: 'auto' | LyricSource): Promise<void> {
-  if (!props.modelValue || !editingSong.value || saving.value) return
-  cancelRequest()
-  previewSource.value = source
-  await loadDraft(source)
-}
-function applyPlaybackSource(): void {
-  ui.lyricSourceMode = previewSource.value
-}
 function selectCandidate(index: number): void {
   requests.cancel('draft')
+  draftLoading.value = false
   selected.value = index
   const item = candidates.value[index]
   if (item) {
-    previewSource.value = 'network'
-    resolvedSource.value = 'network'
     lyric.value = item.lrc
     lyricFormat.value = item.format
     translation.value = item.translation || ''
@@ -237,20 +149,22 @@ async function search(): Promise<void> {
     !editingSong.value ||
     saving.value ||
     !settingsReady.value ||
-    networkBlocked.value ||
     !query.value.title.trim()
   )
     return
   requests.cancel('draft')
+  draftLoading.value = false
   const call = requests.start('search')
   loading.value = true
   error.value = ''
   candidates.value = []
+  searched.value = false
   try {
     const response = await window.api.lyrics.searchNetwork(
       {
         ...query.value,
         songId: editingSong.value.id,
+        searchMode: 'manual',
         preferWordTimed: ui.preferWordTimedNetworkLyrics
       },
       call.options
@@ -258,8 +172,8 @@ async function search(): Promise<void> {
     if (!call.isCurrent()) return
     if (!response.success) throw new Error(response.error)
     candidates.value = response.data || []
+    searched.value = true
     if (candidates.value.length) selectCandidate(0)
-    else error.value = t('playerPanel.lyricSearchEmpty')
   } catch (reason) {
     if (call.isCurrent())
       error.value = reason instanceof Error ? reason.message : t('playerPanel.lyricSearchFailed')
@@ -269,7 +183,7 @@ async function search(): Promise<void> {
   }
 }
 async function save(): Promise<void> {
-  if (!props.modelValue || isReadOnlyPreview.value || saving.value) return
+  if (!props.modelValue || !settingsReady.value || draftLoading.value || saving.value) return
   const song = editingSong.value
   if (!song) return
   const session = editSession
@@ -298,87 +212,71 @@ async function save(): Promise<void> {
 <template>
   <BaseDialog
     :model-value="props.modelValue"
-    :title="t('playerPanel.lyricManage')"
+    :title="t('playerPanel.lyricSearchTitle')"
     :close-on-overlay="false"
     width="max-w-5xl"
     @update:model-value="updateVisible"
   >
-    <p
-      v-if="editingSong"
-      class="mb-3 truncate text-sm font-medium text-text"
-      :title="editingSong.title"
-    >
-      {{ editingSong.title
-      }}<span v-if="editingSong.artist" class="font-normal text-text-l">
-        — {{ editingSong.artist }}</span
-      >
-    </p>
     <div class="grid h-[min(68vh,45rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
-      <div class="custom-scrollbar min-h-0 space-y-4 overflow-y-auto pr-1">
-        <div>
-          <p class="text-xs text-text-l">{{ t('playerPanel.lyricBrowseSource') }}</p>
-          <p class="mb-2 mt-1 text-[10px] leading-relaxed text-text-l/70">
-            {{ t('playerPanel.lyricBrowseSourceHint') }}
+      <div class="flex min-h-0 flex-col gap-4 overflow-hidden" data-lyric-search-sidebar>
+        <div
+          class="candidate-list custom-scrollbar min-h-0 flex-1 overflow-y-auto pr-1"
+          data-lyric-search-results
+        >
+          <p v-if="candidates.length" class="mb-2 text-xs text-text-l">
+            {{ t('playerPanel.lyricSearchResults') }}
           </p>
-          <div class="grid gap-1">
+          <p
+            v-else
+            class="grid min-h-full place-items-center px-3 text-center text-xs leading-relaxed text-text-l"
+            role="status"
+          >
+            {{
+              loading
+                ? t('playerPanel.lyricSearching')
+                : searched
+                  ? t('playerPanel.lyricSearchEmpty')
+                  : t('playerPanel.lyricSearchHint')
+            }}
+          </p>
+          <div v-if="candidates.length" class="flex flex-col gap-2">
             <button
-              v-for="source in sources"
-              :key="source.value"
-              :disabled="saving || !editingSong || !settingsReady"
-              class="manager-button rounded-lg px-3 py-2 text-left text-sm"
+              v-for="(candidate, index) in candidates"
+              :key="candidate.id"
+              class="manager-button w-full max-w-full break-words rounded-lg px-2.5 py-1.5 text-left text-xs"
               :class="
-                previewSource === source.value
-                  ? 'bg-primary/25 text-primary'
-                  : 'bg-text/5 hover:bg-text/10'
+                selected === index ? 'bg-primary/25 text-primary' : 'bg-text/5 hover:bg-text/10'
               "
-              @click="selectSource(source.value as 'auto' | LyricSource)"
+              @click="selectCandidate(index)"
             >
-              <span>{{ source.label }}</span>
-              <span
-                v-if="source.value === 'auto' && previewSource === 'auto'"
-                class="ml-1 text-[10px] opacity-75"
-                >· {{ sourceLabel }}
+              <span class="block font-medium">
+                {{ candidate.title
+                }}<template v-if="candidate.artist"> — {{ candidate.artist }}</template>
               </span>
-            </button>
-            <button
-              class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
-              type="button"
-              :disabled="previewSource === ui.lyricSourceMode"
-              @click="applyPlaybackSource"
-            >
-              {{
-                previewSource === ui.lyricSourceMode
-                  ? t('playerPanel.lyricSourceCurrentSelection')
-                  : t('playerPanel.lyricSourceApply')
-              }}
+              <span class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
+                <span class="text-current/75">
+                  {{
+                    providerLabelKeys[candidate.provider]
+                      ? t(providerLabelKeys[candidate.provider])
+                      : candidate.providerName
+                  }}
+                </span>
+                <span class="inline-flex items-center gap-1 rounded bg-text/10 px-1.5 py-0.5">
+                  {{ (candidate.format || 'lrc').toUpperCase() }}
+                  ·
+                  {{
+                    t(
+                      candidate.supportsWordTiming
+                        ? 'playerPanel.lyricWordTimed'
+                        : 'playerPanel.lyricLineTimed'
+                    )
+                  }}
+                </span>
+              </span>
             </button>
           </div>
         </div>
-        <div class="space-y-3 border-t border-border pt-4">
-          <p class="text-xs text-text-l">{{ t('lyrics.songSettings') }}</p>
-          <label class="flex items-center justify-between gap-2 text-sm">
-            {{ t('lyrics.disableNetwork') }}
-            <BaseSwitch
-              :model-value="songSettings.disableNetwork"
-              :disabled="saving || !editingSong || !settingsReady"
-              :aria-label="t('lyrics.disableNetwork')"
-              @update:model-value="savePolicy({ disableNetwork: $event === true })"
-            />
-          </label>
-          <label class="flex items-center justify-between gap-2 text-sm">
-            {{ t('lyrics.instrumental') }}
-            <BaseSwitch
-              :model-value="songSettings.instrumental"
-              :disabled="saving || !editingSong || !settingsReady"
-              :aria-label="t('lyrics.instrumental')"
-              @update:model-value="savePolicy({ instrumental: $event === true })"
-            />
-          </label>
-          <p v-if="networkBlocked" class="text-xs text-text-l">
-            {{ t('lyrics.networkDisabledHint') }}
-          </p>
-        </div>
-        <div class="space-y-2 border-t border-border pt-4">
+        <div class="shrink-0 space-y-2 border-t border-border pt-3" data-lyric-search-form>
           <p class="text-xs text-text-l">{{ t('playerPanel.lyricSearch') }}</p>
           <input
             v-model="query.title"
@@ -397,14 +295,7 @@ async function save(): Promise<void> {
           />
           <button
             class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
-            :disabled="
-              loading ||
-              saving ||
-              !editingSong ||
-              !settingsReady ||
-              networkBlocked ||
-              !query.title.trim()
-            "
+            :disabled="loading || saving || !editingSong || !settingsReady || !query.title.trim()"
             @click="search"
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}
@@ -414,65 +305,37 @@ async function save(): Promise<void> {
           }}</BaseButton>
         </div>
       </div>
-      <div class="flex min-w-0 min-h-0 flex-col gap-3">
-        <div
-          v-if="candidates.length"
-          class="candidate-list custom-scrollbar shrink-0 overflow-y-auto pr-1"
-        >
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="(candidate, index) in candidates"
-              :key="candidate.id"
-              class="manager-button max-w-full rounded-lg px-2.5 py-1.5 text-left text-xs"
-              :class="
-                selected === index ? 'bg-primary/25 text-primary' : 'bg-text/5 hover:bg-text/10'
-              "
-              @click="selectCandidate(index)"
-            >
-              {{
-                providerLabelKeys[candidate.provider]
-                  ? t(providerLabelKeys[candidate.provider])
-                  : candidate.providerName
-              }}
-              · {{ candidate.title }} — {{ candidate.artist }}
-              <span
-                class="ml-2 inline-flex items-center gap-1 rounded bg-text/10 px-1.5 py-0.5 text-[10px]"
-              >
-                {{ (candidate.format || 'lrc').toUpperCase() }}
-                ·
-                {{
-                  t(
-                    candidate.supportsWordTiming
-                      ? 'playerPanel.lyricWordTimed'
-                      : 'playerPanel.lyricLineTimed'
-                  )
-                }}
-              </span>
-            </button>
-          </div>
-        </div>
+      <div class="flex min-w-0 min-h-0 flex-col gap-3" data-lyric-search-editor>
         <p v-if="error" class="text-sm text-danger">{{ error }}</p>
         <textarea
           v-model="lyric"
           class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1"
-          :readonly="isReadOnlyPreview || saving || !editingSong"
+          :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricEditorPlaceholder')"
         />
         <textarea
           v-model="translation"
           class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
-          :readonly="isReadOnlyPreview || saving || !editingSong"
+          :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
         />
         <textarea
           v-model="romanization"
           class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
-          :readonly="isReadOnlyPreview || saving || !editingSong"
+          :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricRomanizationPlaceholder')"
         />
       </div>
     </div>
     <template #footer>
+      <p
+        v-if="editingSong"
+        class="mr-auto min-w-0 flex-1 truncate text-xs text-text-l"
+        :title="[editingSong.title, editingSong.artist].filter(Boolean).join(' — ')"
+      >
+        {{ editingSong.title
+        }}<template v-if="editingSong.artist"> — {{ editingSong.artist }}</template>
+      </p>
       <button
         class="manager-button text-sm pr-4"
         type="button"
@@ -483,7 +346,7 @@ async function save(): Promise<void> {
       <button
         class="btn-hover-base rounded-lg ep-button--primary px-4 py-2 text-sm disabled:opacity-50"
         type="button"
-        :disabled="isReadOnlyPreview || saving || !editingSong"
+        :disabled="draftLoading || saving || !editingSong || !settingsReady"
         @click="save"
       >
         {{ t('playerPanel.lyricSaveDatabase') }}
@@ -528,9 +391,7 @@ async function save(): Promise<void> {
   line-height: 1.6;
 }
 .candidate-list {
-  min-height: 3rem;
-  max-height: 14rem;
-  resize: vertical;
+  overscroll-behavior: contain;
 }
 .lyric-editor--main {
   min-height: 8rem;

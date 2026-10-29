@@ -330,6 +330,9 @@ let child,
 const spawned = []
 const transport = loader({
   ...mocks,
+  [path.resolve('src/main/utils/pathUtils.ts')]: {
+    getYtdlpCommand: () => 'yt-dlp-fixture'
+  },
   electron: {
     app: { isPackaged: false, getAppPath: () => process.cwd() },
     net: {
@@ -495,7 +498,12 @@ assert.equal(
   true
 )
 assert.equal(bridgeCalls.at(-1).request.requestId, 'explicit')
-await api.lyrics.searchNetwork({ title: 'Title', songId: 42 })
+await api.lyrics.searchNetwork({ title: 'Title', songId: 42, searchMode: 'manual' })
+assert.equal(
+  bridgeCalls.at(-1).request.query.searchMode,
+  'manual',
+  'preload preserves explicit manual search intent'
+)
 assert.equal(
   bridgeCalls.at(-1).request.query.songId,
   42,

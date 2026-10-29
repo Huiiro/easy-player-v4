@@ -317,7 +317,20 @@ try {
   storage.setSongLyricSettings(1, { disableNetwork: false, instrumental: true })
   assert.deepEqual(await network.searchNetworkLyrics(query), [])
   assert.equal(providerCalls, 0)
-  storage.setSongLyricSettings(1, { instrumental: false })
+  assert.equal(
+    (await network.searchNetworkLyrics({ ...query, searchMode: 'manual' })).length,
+    1,
+    'instrumental songs allow explicit manual searches'
+  )
+  storage.setSongLyricSettings(1, { disableNetwork: true })
+  assert.equal(
+    (await network.searchNetworkLyrics({ ...query, searchMode: 'manual' })).length,
+    1,
+    'both markers still permit manual searches'
+  )
+  assert.equal(storage.getSongLyricSettings(1).instrumental, true)
+  assert.equal(storage.getSongLyricSettings(1).disableNetwork, true)
+  storage.setSongLyricSettings(1, { instrumental: false, disableNetwork: false })
   assert.equal((await network.searchNetworkLyrics(query)).length, 1)
   let finishProvider
   globalThis.lyricProvider = () =>
@@ -328,6 +341,15 @@ try {
   storage.setSongLyricSettings(1, { disableNetwork: true })
   finishProvider([{ resourceId: '1', title: 'Title', lrc: '[00:01]Late' }])
   assert.deepEqual(await pending, [], 'enabling the flag discards in-flight network results')
+  const manualPending = network.searchNetworkLyrics({ ...query, searchMode: 'manual' })
+  storage.setSongLyricSettings(1, { instrumental: true })
+  finishProvider([{ resourceId: '1', title: 'Title', lrc: '[00:01]Manual' }])
+  assert.equal(
+    (await manualPending).length,
+    1,
+    'marker changes do not discard in-flight manual results'
+  )
+
   console.log(
     'Song lyrics: SQLite restart, flags, saved zero, cascade, per-song/global scope, fast switches, late loads, instrumental and network suppression passed'
   )

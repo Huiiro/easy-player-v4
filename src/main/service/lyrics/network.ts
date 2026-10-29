@@ -41,7 +41,9 @@ export async function searchNetworkLyrics(
   request: LyricSearchRequest,
   options: SourceCallOptions = {}
 ): Promise<NetworkLyricCandidate[]> {
-  if (isPlaybackOnly() || !songAllowsNetworkLyrics(request?.songId)) return []
+  const allowsSearch = (): boolean =>
+    request?.searchMode === 'manual' || songAllowsNetworkLyrics(request?.songId)
+  if (isPlaybackOnly() || !allowsSearch()) return []
   if (!request?.title?.trim()) return []
   const searchProvider = async (source: NetworkSource): Promise<NetworkLyricCandidate[]> =>
     invokeSource(
@@ -53,7 +55,7 @@ export async function searchNetworkLyrics(
           wordTimed: boolean
         ): Promise<NetworkLyricCandidate[]> =>
           (
-            await (songAllowsNetworkLyrics(request.songId)
+            await (allowsSearch()
               ? activeSource.lyrics!.search(request, wordTimed, context)
               : Promise.resolve([]))
           ).map((candidate) => ({
@@ -93,7 +95,7 @@ export async function searchNetworkLyrics(
   if (options.signal?.aborted) throw new SourceCallError('CANCELLED')
   if (results.length && results.every((result) => result.status === 'rejected'))
     throw (results[0] as PromiseRejectedResult).reason
-  if (!songAllowsNetworkLyrics(request.songId)) return []
+  if (!allowsSearch()) return []
   return rankCandidates(
     results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
     request

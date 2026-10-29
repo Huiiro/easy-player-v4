@@ -100,7 +100,8 @@ const sourceOptions = computed(() => [
   { label: t('songList.sourceRemote'), value: 'remote' },
   ...remoteSources.value.map((source) => ({
     label: `${source.name}`,
-    value: `remote:${source.id}`
+    value: `remote:${source.id}`,
+    group: t('songList.customRemoteSources')
   }))
 ])
 const canFilterBySource = computed(() => props.source.type === 'songs')
@@ -412,9 +413,30 @@ const locateCurrentSong = (): void => {
   const index = filteredSongs.value.findIndex((song) => song.id === id)
   if (index >= 0) scroller.value?.scrollToItem?.(index)
 }
-async function loadRemoteSources(): Promise<void> {
-  const response = await window.api.database.command('listSources')
-  if (response.success) remoteSources.value = response.data as MusicSourceOption[]
+let remoteSourcesRevision = 0
+async function loadRemoteSources(): Promise<boolean> {
+  const revision = ++remoteSourcesRevision
+  try {
+    const response = await window.api.database.command('listSources')
+    if (disposed || revision !== remoteSourcesRevision || !response.success) return false
+    remoteSources.value = response.data as MusicSourceOption[]
+    if (
+      canFilterBySource.value &&
+      uiStore.musicSource === 'remote' &&
+      uiStore.musicSourceId > 0 &&
+      !remoteSources.value.some((source) => source.id === uiStore.musicSourceId)
+    )
+      uiStore.musicSourceId = 0
+    return true
+  } catch (error) {
+    if (!disposed && revision === remoteSourcesRevision)
+      console.warn('[SongList] Failed to load remote sources:', error)
+    return false
+  }
+}
+async function onMusicSourcesChanged(): Promise<void> {
+  const previousFilter = sourceFilter.value
+  if ((await loadRemoteSources()) && previousFilter === sourceFilter.value) void load()
 }
 onMounted(() => {
   offSearchIndex = window.api.database.onSearchIndexChanged(() => {
@@ -424,6 +446,7 @@ onMounted(() => {
   void loadRemoteSources()
   eventBus.on('scanFinished', onScanFinished)
   eventBus.on('tagsChanged', onTagsChanged)
+  eventBus.on('musicSourcesChanged', onMusicSourcesChanged)
   eventBus.on('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.on('songPreferencesCleared', onSongPreferencesCleared)
   eventBus.on('songsPreferenceChanged', onSongsPreferenceChanged)
@@ -438,6 +461,7 @@ onBeforeUnmount(() => {
   offSearchIndex?.()
   eventBus.off('scanFinished', onScanFinished)
   eventBus.off('tagsChanged', onTagsChanged)
+  eventBus.off('musicSourcesChanged', onMusicSourcesChanged)
   eventBus.off('songPreferenceChanged', onSongPreferenceChanged)
   eventBus.off('songPreferencesCleared', onSongPreferencesCleared)
   eventBus.off('songsPreferenceChanged', onSongsPreferenceChanged)

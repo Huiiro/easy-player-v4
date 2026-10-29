@@ -13,6 +13,7 @@ interface SelectOption {
   label: string
   value: string | number
   disabled?: boolean
+  group?: string
 }
 
 const props = withDefaults(
@@ -155,41 +156,53 @@ function onClear(): void {
           style="max-height: min(15rem, var(--ep-floating-available-height, 15rem))"
           @click.prevent
         >
-          <ListboxOption
-            v-for="opt in options"
-            :key="opt.value"
-            v-slot="{ active, selected: isSelected }"
-            :value="opt.value"
-            :disabled="opt.disabled"
-            as="template"
-          >
-            <li
-              :class="[
-                'ep-select-option flex min-w-0 items-center gap-2 rounded-lg cursor-pointer transition-colors select-none',
-                sizeClass,
-                `ep-control--${size}`,
-                opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
-                isSelected ? 'bg-primary/8 font-medium text-primary' : active ? 'bg-primary/4' : ''
-              ]"
+          <template v-for="(opt, index) in options" :key="opt.value">
+            <div
+              v-if="opt.group && opt.group !== options[index - 1]?.group"
+              class="ep-select-group px-2 py-1.5 text-xs text-text-l"
+              :class="index > 0 ? 'mt-1 border-t border-border pt-2' : ''"
+              role="presentation"
             >
-              <!-- checkmark -->
-              <svg
-                v-if="isSelected"
-                class="size-[1em] shrink-0 text-primary"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
+              {{ opt.group }}
+            </div>
+            <ListboxOption
+              v-slot="{ active, selected: isSelected }"
+              :value="opt.value"
+              :disabled="opt.disabled"
+              as="template"
+            >
+              <li
+                :class="[
+                  'ep-select-option flex min-w-0 items-center gap-2 rounded-lg cursor-pointer transition-colors select-none',
+                  sizeClass,
+                  `ep-control--${size}`,
+                  opt.disabled ? 'opacity-50 cursor-not-allowed' : '',
+                  isSelected
+                    ? 'bg-primary/8 font-medium text-primary'
+                    : active
+                      ? 'bg-primary/4'
+                      : ''
+                ]"
               >
-                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-              <span v-else class="size-[1em] shrink-0" />
+                <!-- checkmark -->
+                <svg
+                  v-if="isSelected"
+                  class="size-[1em] shrink-0 text-primary"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.5"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span v-else class="size-[1em] shrink-0" />
 
-              <slot name="option" :option="opt" :selected="isSelected" :active="active"
-                ><span class="min-w-0 flex-1 truncate">{{ opt.label }}</span></slot
-              >
-            </li>
-          </ListboxOption>
+                <slot name="option" :option="opt" :selected="isSelected" :active="active"
+                  ><span class="min-w-0 flex-1 truncate">{{ opt.label }}</span></slot
+                >
+              </li>
+            </ListboxOption>
+          </template>
 
           <!-- empty -->
           <div

@@ -6,6 +6,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useMessage } from '@/components/ui/useMessage'
+import eventBus from '@/utils/eventBus'
 
 import type { MusicSource, MusicSourceInput } from '../../../../shared/remoteSources'
 import {
@@ -72,7 +73,10 @@ async function load(): Promise<boolean> {
   return true
 }
 async function refreshSources(): Promise<void> {
-  if (await load()) success(t('remote.refreshed'))
+  if (await load()) {
+    eventBus.emit('musicSourcesChanged')
+    success(t('remote.refreshed'))
+  }
 }
 function openCreate(): void {
   editing.value = null
@@ -156,6 +160,7 @@ async function saveSource(): Promise<void> {
       return
     }
     dialogOpen.value = false
+    eventBus.emit('musicSourcesChanged')
     await load()
     success(t('remote.saved'))
   } catch (cause) {
@@ -219,6 +224,7 @@ async function sync(source: MusicSource): Promise<void> {
       error(response.error || t('remote.syncFailed'))
       return
     }
+    eventBus.emit('musicSourcesChanged')
     await load()
     success(t('remote.syncSucceeded', { count: response.data?.imported || 0 }))
   } finally {
@@ -233,6 +239,7 @@ async function remove(): Promise<void> {
     return
   }
   deleteTarget.value = null
+  eventBus.emit('musicSourcesChanged')
   await load()
   success(t('remote.deleted'))
 }
@@ -251,6 +258,8 @@ async function dropSource(targetId: number): Promise<void> {
   if (!response.success) {
     error(response.error || t('remote.reorderFailed'))
     await load()
+  } else {
+    eventBus.emit('musicSourcesChanged')
   }
 }
 onMounted(() => void load())
@@ -279,6 +288,7 @@ onMounted(() => void load())
           {{ t('remote.add') }}
         </BaseButton>
         <BaseButton
+          class="ep-header-button"
           variant="ghost"
           size="sm"
           icon-only

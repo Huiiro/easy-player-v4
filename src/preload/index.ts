@@ -518,7 +518,7 @@ const lyricsAPI = {
   loadSource: (audioPath: string, source: 'embedded' | 'local' | 'network') =>
     ipcRenderer.invoke('lyrics:load-source', { audioPath, source }),
   searchNetwork: (
-    { title, artist, album, preferWordTimed, songId }: LyricSearchRequest,
+    { title, artist, album, preferWordTimed, songId, searchMode }: LyricSearchRequest,
     options?: import('../shared/networkSources').SourceRequestOptions
   ) =>
     sourceRequest<import('../shared/networkSources').NetworkLyricCandidate[]>(
@@ -529,7 +529,8 @@ const lyricsAPI = {
           artist,
           album,
           preferWordTimed,
-          ...(songId === undefined ? {} : { songId })
+          ...(songId === undefined ? {} : { songId }),
+          ...(searchMode === undefined ? {} : { searchMode })
         }
       },
       options

@@ -39,6 +39,7 @@ const props = withDefaults(
     teleport?: boolean
     maxHeight?: number | string
     size?: ControlSize
+    appearance?: 'default' | 'glass'
   }>(),
   {
     items: () => [],
@@ -46,7 +47,8 @@ const props = withDefaults(
     side: 'auto',
     width: 'w-48',
     maxHeight: 300,
-    size: 'md'
+    size: 'md',
+    appearance: 'default'
   }
 )
 
@@ -115,7 +117,7 @@ function handleClick(item: MenuItemType): void {
       >
         <MenuItems
           class="ep-menu rounded-xl border shadow-lg p-1 no-scrollbar"
-          :class="[width, `ep-control--${size}`]"
+          :class="[width, `ep-control--${size}`, { 'ep-menu--glass': appearance === 'glass' }]"
           :style="maxHeightStyle"
         >
           <template v-for="(item, i) in items" :key="i">
@@ -132,6 +134,8 @@ function handleClick(item: MenuItemType): void {
                   <button
                     type="button"
                     :disabled="child.disabled"
+                    :data-active="active"
+                    :data-selected="isSelected(child)"
                     :class="[
                       'ep-menu-item w-full flex min-w-0 items-center gap-2 rounded-lg transition',
                       sizeClass,
@@ -159,6 +163,8 @@ function handleClick(item: MenuItemType): void {
               <button
                 type="button"
                 :disabled="item.disabled"
+                :data-active="active"
+                :data-selected="isSelected(item)"
                 :class="[
                   'ep-menu-item w-full flex min-w-0 items-center gap-2 rounded-lg transition',
                   sizeClass,
@@ -184,3 +190,22 @@ function handleClick(item: MenuItemType): void {
     </FloatingPanel>
   </Menu>
 </template>
+
+<style scoped>
+.ep-menu--glass {
+  border-color: rgb(255 255 255 / 12%);
+  border-radius: 0.5rem;
+  background: rgb(9 12 17 / 90%);
+  color: rgb(255 255 255 / 72%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
+}
+.ep-menu--glass .ep-menu-item[data-active='true'] {
+  background: rgb(255 255 255 / 9%);
+  color: white;
+}
+.ep-menu--glass .ep-menu-item[data-selected='true'] {
+  background: color-mix(in srgb, var(--color-primary) 38%, transparent);
+  color: white;
+}
+</style>

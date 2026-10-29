@@ -296,6 +296,7 @@ export default {
     sourceAll: 'All sources',
     sourceLocal: 'Local files',
     sourceRemote: 'Remote files',
+    customRemoteSources: 'Custom remote sources',
     remoteSong: 'Remote song',
     refresh: 'Refresh',
     refreshed: 'Song list refreshed',
@@ -1196,6 +1197,10 @@ export default {
     version: 'Version'
   },
   playerPanel: {
+    lyricSearchHint: 'Enter the song details and search. Results will appear here.',
+    lyricSearchResults: 'Search results',
+    lyricSearchTitle: 'Search lyrics',
+    lyricSourceSelection: 'Lyric source: {source}',
     collapseLyrics: 'Collapse to lyrics view',
     expandLyrics: 'Expand player',
     label: 'Player panel',
@@ -1290,7 +1295,7 @@ export default {
     instrumental: 'Instrumental',
     instrumentalHint: 'This song is marked as instrumental',
     networkDisabledHint:
-      'Network lyrics will not be searched or matched for this song. Instrumental songs display a dedicated lyric state.',
+      'Network lyrics will not be matched automatically. You can still search and save them manually. Instrumental songs display a dedicated lyric state.',
 
     source: {
       embedded: 'Embedded lyrics',

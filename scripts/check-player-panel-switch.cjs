@@ -38,10 +38,11 @@ app.whenReady().then(async () => {
         resolveDir: process.cwd(),
         contents: `
     import * as Vue from 'vue';import {createPinia} from 'pinia';import {createI18n} from 'vue-i18n';
+    import {createRouter,createMemoryHistory} from 'vue-router';
     import Panel from './src/renderer/src/views/layout/playerPanel/Index.vue';
     import {useUIStore} from './src/renderer/src/stores/ui/uiStore';
     import {CoverAnalyzer} from './src/renderer/src/hooks/useImageColors';
-    import zh from './src/renderer/src/i18n/locales/zh';export {Vue,createPinia,createI18n,Panel,useUIStore,CoverAnalyzer,zh};
+    import zh from './src/renderer/src/i18n/locales/zh';export {Vue,createPinia,createI18n,createRouter,createMemoryHistory,Panel,useUIStore,CoverAnalyzer,zh};
    `
       },
       bundle: true,
@@ -130,16 +131,53 @@ app.whenReady().then(async () => {
       ) + styles.join('\n')
     await window.webContents.executeJavaScript(`(async()=>{
    const style=document.createElement('style');style.textContent=${JSON.stringify(css)};document.head.append(style);
-   const {Vue,createPinia,createI18n,Panel,useUIStore,CoverAnalyzer,zh}=PanelCheck;
+   const {Vue,createPinia,createI18n,createRouter,createMemoryHistory,Panel,useUIStore,CoverAnalyzer,zh}=PanelCheck;
    window.panelWait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    window.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),16);window.cancelAnimationFrame=clearTimeout;
    window.panelAnalysis=[];const analyze=CoverAnalyzer.analyze;CoverAnalyzer.analyze=function(...args){const start=performance.now();const result=analyze.apply(this,args);window.panelAnalysis.push(performance.now()-start);return result};
    const lyric=Array.from({length:100},(_,index)=>'['+String(Math.floor(index*2/60)).padStart(2,'0')+':'+String(index*2%60).padStart(2,'0')+'.000]第'+index+'行切歌测试歌词 Beautiful music').join('\\n');
-   window.panelPlayer=Vue.reactive({currentQueueSong:{id:0,title:'Initial',artist:'Artist',audio:'0.flac',cover:'0'},trackInfo:null,positionMs:0,durationMs:180000,durationFormatted:'3:00',playbackSpeedConfig:{enabled:false,speed:1},volume:0.5,isPlaying:true,playMode:0,queue:[],getSongPreference:()=>0,setAudioAnalysisPollingRate(){},rhythmVisualConfig:{enabled:false,reducedMotion:false,intensity:1},audioAnalysis:{rms:0,lowEnergy:0,onsetStrength:0,beatSequence:0}});
-   window.api={database:{command:async(action,params)=>({success:true,data:action==='getSong'?{id:params.id,lrc:lyric,lyricFormat:'lrc'}:[]})},fonts:{list:async()=>({success:true,data:[]})}};
+   window.panelPlayer=Vue.reactive({lyricsOffsetMs:0,lyricsSettingsReady:true,songLyricSettings:{songId:0,offsetMs:null,disableNetwork:false,instrumental:false},currentQueueSong:{id:0,title:'Initial',artist:'Artist',audio:'0.flac',cover:'0'},trackInfo:null,positionMs:0,durationMs:180000,durationFormatted:'3:00',playbackSpeedConfig:{enabled:false,speed:1},volume:0.5,isPlaying:true,playMode:0,queue:[],getSongPreference:()=>0,setAudioAnalysisPollingRate(){},rhythmVisualConfig:{enabled:false,reducedMotion:false,intensity:1},audioAnalysis:{rms:0,lowEnergy:0,onsetStrength:0,beatSequence:0}});
+   const policies=new Map();
+   window.api={database:{command:async(action,params)=>{
+    if(action==='setSongLyricSettings'){
+     const settings={songId:params.songId,offsetMs:null,disableNetwork:false,instrumental:false,...policies.get(params.songId),...params.patch};
+     policies.set(params.songId,settings);
+     if(window.panelPlayer.currentQueueSong?.id===params.songId)window.panelPlayer.songLyricSettings=settings;
+     return {success:true,data:settings};
+    }
+    if(action==='getSongLyricSettings')return {success:true,data:policies.get(params.songId)||{songId:params.songId,offsetMs:null,disableNetwork:false,instrumental:false}};
+    return {success:true,data:action==='getSong'?{id:params.id,lrc:lyric,lyricFormat:'lrc'}:[]};
+   }},fonts:{list:async()=>({success:true,data:[]})}};
    const app=Vue.createApp({render:()=>Vue.h(Panel)});app.use(createPinia());app.use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));
+   const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
    const ui=useUIStore();ui.showPlayer=true;ui.playerBgType='album';ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
+   async function chooseLyricOption(prefix,label,verify){
+    const trigger=[...document.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label').startsWith(prefix));
+    if(!trigger)throw Error('Missing lyric option trigger: '+prefix);
+    trigger.click();await Vue.nextTick();await window.panelWait(80);
+    const option=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===label);
+    if(!option)throw Error('Missing lyric option: '+label);
+    option.click();await Vue.nextTick();await window.panelWait(220);
+    if(!verify())throw Error('Lyric option did not apply: '+label);
+    if(document.querySelector('.ep-menu'))throw Error('Lyric menu did not close after selection');
+   }
+   await chooseLyricOption('歌词对齐：','右对齐',()=>ui.lyricsAlignment==='right');
+   await chooseLyricOption('歌词效果：','跟随',()=>ui.lyricsStyle==='follow');
+   await chooseLyricOption('歌词来源：','数据库歌词',()=>ui.lyricSourceMode==='database');
+   if(!document.querySelector('button[aria-label="搜索歌词"]'))throw Error('Missing search lyrics action');
+   await chooseLyricOption('更多','标记不搜索网络歌词',()=>window.panelPlayer.songLyricSettings.disableNetwork===true);
+   await chooseLyricOption('更多','取消不搜索网络歌词标记',()=>window.panelPlayer.songLyricSettings.disableNetwork===false);
+   await chooseLyricOption('更多','标记为纯音乐',()=>window.panelPlayer.songLyricSettings.instrumental===true);
+   await chooseLyricOption('更多','取消纯音乐标记',()=>window.panelPlayer.songLyricSettings.instrumental===false);
+   if(document.querySelector('button[aria-label="添加到歌单"]'))throw Error('Playlist action should only appear inside More');
+   window.panelPlayer.currentQueueSong.artist='Artist A;Artist B';window.panelPlayer.currentQueueSong.album='Album';ui.artistSeparator=';';await Vue.nextTick();
+   await chooseLyricOption('更多','查看歌手 · Artist B',()=>router.currentRoute.value.path==='/artist/detail'&&router.currentRoute.value.query.name==='Artist B'&&router.currentRoute.value.query.cover==='0'&&!ui.showPlayer);
+   ui.showPlayer=true;await Vue.nextTick();
+   await chooseLyricOption('更多','查看专辑',()=>router.currentRoute.value.path==='/album/detail'&&router.currentRoute.value.query.name==='Album'&&router.currentRoute.value.query.artist==='Artist A;Artist B'&&router.currentRoute.value.query.cover==='0'&&!ui.showPlayer);
+   ui.showPlayer=true;
+   ui.lyricsAlignment='center';ui.lyricsStyle='none';
+
   })()`)
     const result = await window.webContents.executeJavaScript(`(async()=>{
    const durations=[],gaps=[],longTasks=[];window.panelAnalysis=[];

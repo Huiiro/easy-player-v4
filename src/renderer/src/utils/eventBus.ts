@@ -7,6 +7,7 @@ type Events = {
   playlistsChanged: void
   playlistRenamed: number
   tagsChanged: void
+  musicSourcesChanged: void
   songLyricSettingsChanged: number
   lyricsUpdated: number
   songActionsMenuOpened: 'footer' | 'songlist'

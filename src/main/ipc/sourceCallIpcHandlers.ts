@@ -41,6 +41,11 @@ async function dispatch(request: SourceRequest, signal: AbortSignal): Promise<un
         typeof request.query.preferWordTimed !== 'boolean'
       )
         throw new SourceCallError('INVALID_REQUEST')
+      if (
+        request.query.searchMode !== undefined &&
+        !['automatic', 'manual'].includes(request.query.searchMode)
+      )
+        throw new SourceCallError('INVALID_REQUEST')
       return searchNetworkLyrics(request.query, options)
     case 'artwork.fetch':
       return { dataUrl: await fetchArtworkDataUrl(request.imageUrl, options) }
