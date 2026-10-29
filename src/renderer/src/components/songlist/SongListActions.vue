@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FloatingPanel from '@/components/ui/FloatingPanel.vue'
 import { useSongActions, type SongActionContext } from './useSongActions'
@@ -10,6 +10,7 @@ import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
 import MetadataEditDialog from './MetadataEditDialog.vue'
 import LyricsEditorDialog from '@/components/lyrics/LyricsEditorDialog.vue'
+import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 const props = defineProps<SongActionContext>()
 const emit = defineEmits<{ clearSelection: [] }>()
@@ -41,7 +42,10 @@ const {
   lyricsEditorOpen,
   lyricsEditorSongId,
   openLyricsEditor,
-  openMenu,
+  lyricsSearchOpen,
+  lyricsSearchSong,
+  openLyricsSearch,
+  openMenu: openSongMenu,
   closeMenu,
   addActiveMenuSongToQueue,
   playActiveMenuSong,
@@ -64,36 +68,95 @@ const {
   reloadSelectedSongsFromDisk,
   setMenuElement
 } = useSongActions(props, () => emit('clearSelection'))
-const marksOpen = ref(false)
+function useSubmenu(
+  trigger: Ref<HTMLButtonElement | null>,
+  panel: Ref<HTMLElement | null>
+): {
+  open: Ref<boolean>
+  cancelHide: () => void
+  show: () => void
+  hide: () => void
+  deferHide: () => void
+  focusFirst: () => Promise<void>
+  returnToTrigger: () => void
+} {
+  const open = ref(false)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  function cancelHide(): void {
+    clearTimeout(timer)
+  }
+  function show(): void {
+    cancelHide()
+    open.value = true
+  }
+  function hide(): void {
+    cancelHide()
+    open.value = false
+  }
+  function deferHide(): void {
+    cancelHide()
+    timer = setTimeout(hide, 120)
+  }
+  async function focusFirst(): Promise<void> {
+    show()
+    // Wait for FloatingPanel to measure and reveal the menu before moving focus.
+    await nextTick()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    if (open.value) panel.value?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
+  }
+  function returnToTrigger(): void {
+    hide()
+    trigger.value?.focus()
+  }
+  watch(activeMenuSong, hide)
+  onBeforeUnmount(cancelHide)
+  return { open, cancelHide, show, hide, deferHide, focusFirst, returnToTrigger }
+}
 const marksTrigger = ref<HTMLButtonElement | null>(null)
 const marksPanel = ref<HTMLElement | null>(null)
-let marksHideTimer: ReturnType<typeof setTimeout> | undefined
-function cancelMarksHide(): void {
-  clearTimeout(marksHideTimer)
-}
-function showMarks(): void {
-  cancelMarksHide()
-  marksOpen.value = true
-}
-function hideMarks(): void {
-  cancelMarksHide()
-  marksOpen.value = false
-}
-function deferMarksHide(): void {
-  cancelMarksHide()
-  marksHideTimer = setTimeout(hideMarks, 120)
-}
-async function focusMarks(): Promise<void> {
-  showMarks()
-  await nextTick()
-  marksPanel.value?.querySelector('button')?.focus()
-}
-function returnToMarksTrigger(): void {
+const editTrigger = ref<HTMLButtonElement | null>(null)
+const editPanel = ref<HTMLElement | null>(null)
+const {
+  open: marksOpen,
+  cancelHide: cancelMarksHide,
+  show: showMarks,
+  hide: hideMarks,
+  deferHide: deferMarksHide,
+  focusFirst: focusMarks,
+  returnToTrigger: returnToMarksTrigger
+} = useSubmenu(marksTrigger, marksPanel)
+const {
+  open: editOpen,
+  cancelHide: cancelEditHide,
+  show: showEdit,
+  hide: hideEdit,
+  deferHide: deferEditHide,
+  focusFirst: focusEdit,
+  returnToTrigger: returnToEditTrigger
+} = useSubmenu(editTrigger, editPanel)
+watch(
+  marksOpen,
+  (open) => {
+    if (open) hideEdit()
+  },
+  { flush: 'sync' }
+)
+watch(
+  editOpen,
+  (open) => {
+    if (open) hideMarks()
+  },
+  { flush: 'sync' }
+)
+async function openMenu(
+  song: SongActionContext['songs'][number],
+  x: number,
+  y: number
+): Promise<void> {
   hideMarks()
-  marksTrigger.value?.focus()
+  hideEdit()
+  await openSongMenu(song, x, y)
 }
-watch(activeMenuSong, hideMarks)
-onBeforeUnmount(cancelMarksHide)
 
 defineExpose({
   openMenu,
@@ -112,6 +175,7 @@ defineExpose({
     <div
       v-if="activeMenuSong"
       :ref="setMenuElement"
+      data-song-context-menu
       class="fixed z-[9999] w-47 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
       :style="menuPosition"
       @click.stop
@@ -168,25 +232,28 @@ defineExpose({
         <SvgIcon name="arrow-arrow-right-thin" class-name="size-4" />
       </button>
       <button
+        ref="editTrigger"
+        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+        :class="{ 'bg-hover': editOpen }"
+        aria-haspopup="menu"
+        :aria-expanded="editOpen"
+        @click="showEdit"
+        @pointerenter="showEdit"
+        @pointerleave="deferEditHide"
+        @keydown.right.prevent="focusEdit"
+        @keydown.down.prevent="focusEdit"
+        @keydown.esc.stop.prevent="hideEdit"
+      >
+        <SvgIcon name="common-edit" class-name="size-4" />
+        <span class="flex-1">{{ t('songList.editSong') }}</span>
+        <SvgIcon name="arrow-arrow-right-thin" class-name="size-4" />
+      </button>
+      <button
         class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
         @click="openSongTags"
       >
         <SvgIcon name="common-tag" class-name="size-4" />
         {{ t('songList.editTags') }}
-      </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="openMetadataEdit"
-      >
-        <SvgIcon name="common-edit" class-name="size-4" />
-        {{ t('songList.editMetadata') }}
-      </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="openLyricsEditor"
-      >
-        <SvgIcon name="common-edit-lrc" class-name="size-4" />
-        {{ t('lyricEditor.title') }}
       </button>
       <button
         class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
@@ -305,11 +372,64 @@ defineExpose({
         </button>
       </div>
     </FloatingPanel>
+    <FloatingPanel
+      v-if="activeMenuSong && editOpen"
+      :open="editOpen"
+      :anchor="editTrigger"
+      side="right"
+      align="start"
+      :offset="12"
+      teleport
+      class="z-[10000]!"
+    >
+      <div
+        ref="editPanel"
+        role="menu"
+        :aria-label="t('songList.editSong')"
+        class="w-52 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left text-text shadow-xl"
+        @pointerenter="cancelEditHide"
+        @pointerleave="deferEditHide"
+        @click.stop
+        @dblclick.stop
+        @contextmenu.prevent.stop
+        @keydown.left.stop.prevent="returnToEditTrigger"
+        @keydown.esc.stop.prevent="returnToEditTrigger"
+      >
+        <button
+          role="menuitem"
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="openMetadataEdit"
+        >
+          <SvgIcon name="common-edit" class-name="size-4 shrink-0" />{{
+            t('songList.editMetadata')
+          }}
+        </button>
+        <button
+          role="menuitem"
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="openLyricsEditor"
+        >
+          <SvgIcon name="common-edit-lrc" class-name="size-4 shrink-0" />{{
+            t('lyricEditor.title')
+          }}
+        </button>
+        <button
+          role="menuitem"
+          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          @click="openLyricsSearch"
+        >
+          <SvgIcon name="common-search" class-name="size-4 shrink-0" />{{
+            t('playerPanel.lyricSearchTitle')
+          }}
+        </button>
+      </div>
+    </FloatingPanel>
   </Teleport>
   <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" @changed="refresh" />
   <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="batchTagSongIds" @changed="refresh" />
   <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
   <LyricsEditorDialog v-model="lyricsEditorOpen" :song-id="lyricsEditorSongId" @saved="refresh" />
+  <LyricsManagerDialog v-model="lyricsSearchOpen" :song="lyricsSearchSong" @saved="refresh" />
   <MetadataEditDialog
     v-model="metadataEditOpen"
     :song-id="metadataEditSongId"

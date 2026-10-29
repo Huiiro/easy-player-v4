@@ -327,6 +327,7 @@ function rememberSelection(event: Event | HTMLTextAreaElement): void {
     ) ?? null
 }
 async function toggleSearch(): Promise<void> {
+  const token = session
   const element = document.activeElement
   let text = ''
   if (element instanceof HTMLTextAreaElement && root.value?.contains(element)) {
@@ -341,8 +342,10 @@ async function toggleSearch(): Promise<void> {
     )
   showSearch.value = !showSearch.value
   if (!showSearch.value) return
+  showOffset.value = false
   if (text && !/[\r\n]/.test(text)) searchText.value = text
   await nextTick()
+  if (token !== session || !props.modelValue || !showSearch.value) return
   if (searchText.value && selection.value) {
     const selected = matches.value.find(
       (match) =>
@@ -361,6 +364,7 @@ async function toggleSearch(): Promise<void> {
 function toggleOffset(): void {
   flushCell()
   showOffset.value = !showOffset.value
+  if (showOffset.value) showSearch.value = false
 }
 function scrollSelectionIntoView(textarea: HTMLTextAreaElement, start: number, end: number): void {
   // setSelectionRange selects text but does not reliably scroll a textarea's
@@ -745,7 +749,7 @@ function keyboard(event: KeyboardEvent): void {
       <div
         v-if="showSearch"
         id="lyric-editor-search-panel"
-        class="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2"
+        class="flex flex-wrap items-center gap-2 border-b border-border py-3"
         data-lyric-search-tools
       >
         <BaseInput
@@ -836,7 +840,7 @@ function keyboard(event: KeyboardEvent): void {
       <div
         v-if="showOffset"
         id="lyric-editor-offset-panel"
-        class="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2"
+        class="flex flex-wrap items-center gap-2 border-b border-border py-3"
         data-lyric-offset-tools
       >
         <label for="song-lyric-editor-offset" class="text-xs">{{ t('lyricEditor.offset') }}</label>

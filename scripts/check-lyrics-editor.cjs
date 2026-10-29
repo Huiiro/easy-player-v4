@@ -365,6 +365,12 @@ async function run() {
   button('调整偏移').click()
   await wait()
   check(
+    !root().querySelector('[data-lyric-search-tools]') &&
+      !!root().querySelector('[data-lyric-offset-tools]') &&
+      button('查找替换').getAttribute('aria-expanded') === 'false',
+    'opening offset tools closes find/replace and updates its trigger'
+  )
+  check(
     !!(
       root().querySelector('[data-lyric-offset-tools]').compareDocumentPosition(track('lyric')) &
       Node.DOCUMENT_POSITION_FOLLOWING
@@ -382,6 +388,27 @@ async function run() {
   check(offset.value === '', 'offset changes can be undone independently')
   button('重做').click()
   await wait()
+  button('查找替换').click()
+  await wait()
+  check(
+    !!root().querySelector('[data-lyric-search-tools]') &&
+      !root().querySelector('[data-lyric-offset-tools]') &&
+      button('调整偏移').getAttribute('aria-expanded') === 'false',
+    'opening find/replace closes offset tools'
+  )
+  button('查找替换').click()
+  await wait()
+  check(
+    !root().querySelector('[data-lyric-search-tools]') &&
+      !root().querySelector('[data-lyric-offset-tools]'),
+    'clicking the active tool collapses both panels'
+  )
+  button('调整偏移').click()
+  await wait()
+  check(
+    document.getElementById('song-lyric-editor-offset').value === '1500',
+    'switching tools preserves the offset draft'
+  )
   button('调整偏移').click()
   await wait()
   check(

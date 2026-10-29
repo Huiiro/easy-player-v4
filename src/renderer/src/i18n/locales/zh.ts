@@ -358,6 +358,7 @@ export default {
     alreadyInPlaylist: '所选歌曲已在该歌单中',
     editTags: '编辑标签',
     editMetadata: '编辑元数据',
+    editSong: '编辑歌曲',
     details: '歌曲详情',
     openFolder: '打开所在文件夹',
     openFolderFailed: '无法打开歌曲所在文件夹',

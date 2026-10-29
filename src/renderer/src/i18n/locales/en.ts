@@ -365,6 +365,7 @@ export default {
     alreadyInPlaylist: 'The selected song(s) are already in this playlist',
     editTags: 'Edit tags',
     editMetadata: 'Edit metadata',
+    editSong: 'Edit song',
     details: 'Song details',
     openFolder: 'Open folder',
     openFolderFailed: 'Unable to open the song folder',

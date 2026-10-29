@@ -10,11 +10,11 @@ import eventBus from '@/utils/eventBus'
 import type { LibrarySong } from '@/types/library'
 import type { LyricFormat, NetworkLyricCandidate } from '@/services/lyrics'
 
-const props = defineProps<{ modelValue: boolean }>()
+type EditingSong = Pick<LibrarySong, 'id' | 'audio' | 'title' | 'artist' | 'album'>
+const props = defineProps<{ modelValue: boolean; song?: EditingSong | null }>()
 const emit = defineEmits<{ (e: 'update:modelValue', value: boolean): void; (e: 'saved'): void }>()
 const ui = useUIStore()
 const player = usePlayerStore()
-type EditingSong = Pick<LibrarySong, 'id' | 'audio' | 'title' | 'artist' | 'album'>
 const editingSong = shallowRef<EditingSong | null>(null)
 const saving = ref(false)
 const settingsReady = ref(false)
@@ -91,7 +91,10 @@ async function initializeDraft(): Promise<void> {
   const song = editingSong.value
   const session = editSession
   if (!song) return
-  const metadata = player.trackInfo?.filePath === song?.audio ? player.trackInfo?.metadata : null
+  const metadata =
+    player.currentQueueSong?.id === song.id && player.trackInfo?.filePath === song.audio
+      ? player.trackInfo?.metadata
+      : null
   query.value = {
     title: metadata?.title?.trim() || song?.title || '',
     artist: metadata?.artist?.trim() || song?.artist || '',
@@ -115,7 +118,7 @@ watch(
     settingsReady.value = false
     cancelRequest()
     saving.value = false
-    const song = visible ? player.currentQueueSong : null
+    const song = visible ? (props.song !== undefined ? props.song : player.currentQueueSong) : null
     editingSong.value = song
       ? {
           id: song.id,
@@ -127,7 +130,7 @@ watch(
       : null
     if (visible) void initializeDraft()
   },
-  { immediate: true, flush: 'sync' }
+  { immediate: true }
 )
 function selectCandidate(index: number): void {
   requests.cancel('draft')

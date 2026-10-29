@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onBeforeUnmount, onDeactivated, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, onDeactivated, ref, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useMessage } from '@/components/ui/useMessage'
@@ -111,6 +111,11 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   const metadataEditCoverUrl = ref<string | null>(null)
   const lyricsEditorOpen = ref(false)
   const lyricsEditorSongId = ref<number | null>(null)
+  const lyricsSearchOpen = ref(false)
+  const lyricsSearchSong = shallowRef<Pick<
+    LibrarySong,
+    'id' | 'audio' | 'title' | 'artist' | 'album'
+  > | null>(null)
   const openMenu = async (song: LibrarySong, x: number, y: number): Promise<void> => {
     activeMenuSong.value = song
     menuPosition.value = { left: `${x}px`, top: `${y}px` }
@@ -297,6 +302,19 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     lyricsEditorSongId.value = id
     lyricsEditorOpen.value = true
   }
+  function openLyricsSearch(): void {
+    const song = activeMenuSong.value
+    closeMenu()
+    if (!song) return
+    lyricsSearchSong.value = {
+      id: song.id,
+      audio: song.audio,
+      title: song.title,
+      artist: song.artist,
+      album: song.album
+    }
+    lyricsSearchOpen.value = true
+  }
   function openBatchTags(): void {
     if (!props.selectedIds.size) return
     batchTagSongIds.value = [...props.selectedIds]
@@ -374,6 +392,9 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     lyricsEditorOpen,
     lyricsEditorSongId,
     openLyricsEditor,
+    lyricsSearchOpen,
+    lyricsSearchSong,
+    openLyricsSearch,
     openMenu,
     closeMenu,
     addActiveMenuSongToQueue,

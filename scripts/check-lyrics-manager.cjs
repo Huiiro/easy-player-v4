@@ -9,7 +9,8 @@ app.setPath('userData', fs.mkdtempSync(path.resolve('build/lyrics-manager-ui-'))
 app.disableHardwareAcceleration()
 
 async function runFixture() {
-  const { Vue, createI18n, Manager, PlayerLyrics, PlayerLyricsV2, zh, eventBus } = window.Fixture
+  const { Vue, createI18n, Manager, SongListActions, PlayerLyrics, PlayerLyricsV2, zh, eventBus } =
+    window.Fixture
   const { h, createApp, reactive, nextTick } = Vue
   window.requestAnimationFrame = (callback) => setTimeout(() => callback(performance.now()), 16)
   window.cancelAnimationFrame = clearTimeout
@@ -439,6 +440,176 @@ async function runFixture() {
     style.remove()
     host.remove()
   }
+  const target = reactive({ open: true, song: song(6) })
+  window.managerPlayer.currentQueueSong = song(4)
+  window.managerPlayer.trackInfo = {
+    filePath: song(6).audio,
+    metadata: { title: 'Wrong playback title', artist: 'Wrong playback artist' }
+  }
+  const explicitHost = document.createElement('div')
+  document.body.append(explicitHost)
+  const explicitApp = createApp({
+    render: () =>
+      h(Manager, {
+        modelValue: target.open,
+        song: target.song,
+        'onUpdate:modelValue': (value) => (target.open = value)
+      })
+  }).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+  explicitApp.mount(explicitHost)
+  await wait()
+  check(
+    editor().value.includes('Database 6') &&
+      document.querySelector('[data-lyric-search-form] input').value === 'Song 6',
+    'an explicit search target supplies its own lyrics and metadata instead of playback'
+  )
+  target.song = song(7)
+  window.managerPlayer.currentQueueSong = song(8)
+  await wait()
+  button(zh.playerPanel.lyricSearch).click()
+  await wait()
+  check(
+    queries.at(-1).songId === 6 && queries.at(-1).title === 'Song 6',
+    'changing playback or target props does not retarget an open manual search'
+  )
+  button(zh.playerPanel.lyricSaveDatabase).click()
+  await wait()
+  check(writes.at(-1).id === 6, 'an explicit search saves lyrics to its original target')
+  target.song = null
+  target.open = true
+  await wait()
+  check(
+    button(zh.playerPanel.lyricSaveDatabase).disabled,
+    'an explicit null search target never falls back to the playing song'
+  )
+  target.open = false
+  await wait()
+  explicitApp.unmount()
+  explicitHost.remove()
+
+  const menuHost = document.createElement('div')
+  document.body.append(menuHost)
+  const menu = Vue.ref(null)
+  const menuSongs = [
+    { ...song(6), sourceId: null, preference: 0 },
+    { ...song(7), sourceId: 12, preference: 0 }
+  ]
+  Object.assign(window.managerPlayer, { queue: [], currentQueueSong: song(8) })
+  const menuApp = createApp({
+    render: () =>
+      h(SongListActions, {
+        ref: menu,
+        source: { type: 'all' },
+        songs: menuSongs,
+        selectedIds: new Set([6, 7]),
+        refresh: async () => {},
+        playSong: async () => {}
+      })
+  }).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+  menuApp.mount(menuHost)
+  const openMenu = async (index = 0, x = 300) => {
+    await menu.value.openMenu(menuSongs[index], x, 100)
+    await wait()
+  }
+  const editSubmenu = () => document.querySelector('[role=menu][aria-label="编辑歌曲"]')
+  await openMenu()
+  check(
+    !!button(zh.songList.editSong) &&
+      !editSubmenu() &&
+      ![...document.querySelectorAll('[data-song-context-menu] button')].some((element) =>
+        [zh.songList.editMetadata, zh.lyricEditor.title, zh.playerPanel.lyricSearchTitle].includes(
+          element.textContent.trim()
+        )
+      ),
+    'song editing actions are grouped under one collapsed submenu'
+  )
+  const editTrigger = button(zh.songList.editSong)
+  editTrigger.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })
+  )
+  await wait()
+  check(
+    editSubmenu()?.querySelectorAll('button').length === 3 &&
+      document.activeElement === editSubmenu().querySelector('button'),
+    'keyboard opens the edit submenu and focuses its first action'
+  )
+  const panelRect = editSubmenu().getBoundingClientRect()
+  check(
+    panelRect.left >= editTrigger.getBoundingClientRect().right,
+    'edit submenu opens beside its trigger'
+  )
+  document.activeElement.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+  )
+  await wait()
+  check(
+    !editSubmenu() && document.activeElement === editTrigger,
+    'Escape closes only the submenu and returns focus'
+  )
+  editTrigger.dispatchEvent(new PointerEvent('pointerenter'))
+  await wait()
+  button(zh.songList.marksAndPreference).dispatchEvent(new PointerEvent('pointerenter'))
+  await wait()
+  check(
+    !editSubmenu() && !!document.querySelector('[role=menu][aria-label="标记与喜好"]'),
+    'only one song submenu stays open'
+  )
+  editTrigger.dispatchEvent(new PointerEvent('pointerenter'))
+  await wait()
+  editTrigger.dispatchEvent(new PointerEvent('pointerleave'))
+  editSubmenu()?.dispatchEvent(new PointerEvent('pointerenter'))
+  await wait(180)
+  check(!!editSubmenu(), 'moving through the submenu gap keeps the edit menu open')
+  await openMenu(0, 950)
+  check(!editSubmenu(), 'reopening the same row clears the previous submenu')
+  button(zh.songList.editSong).click()
+  await wait()
+  check(
+    editSubmenu().getBoundingClientRect().right <=
+      button(zh.songList.editSong).getBoundingClientRect().left,
+    'edit submenu flips at the viewport edge'
+  )
+  button(zh.songList.editMetadata).click()
+  await wait()
+  check(
+    document.querySelector('[data-fixture-dialog="MetadataEditDialog"]')?.dataset.songId === '6' &&
+      !editSubmenu(),
+    'metadata editing targets the right-clicked song and closes the menu'
+  )
+  button('Close fixture').click()
+  await wait()
+  await openMenu(1)
+  button(zh.songList.editSong).click()
+  await wait()
+  button(zh.lyricEditor.title).click()
+  await wait()
+  check(
+    document.querySelector('[data-fixture-dialog="LyricsEditorDialog"]')?.dataset.songId === '7',
+    'lyric editing keeps the right-click target during multi-selection'
+  )
+  button('Close fixture').click()
+  await wait()
+  await openMenu(1)
+  button(zh.songList.editSong).click()
+  await wait()
+  button(zh.playerPanel.lyricSearchTitle).click()
+  await wait()
+  check(
+    editor().value.includes('Database 7') && !document.querySelector('[data-song-context-menu]'),
+    'the remote row opens the real lyric search independently of selection and playback'
+  )
+  window.managerPlayer.currentQueueSong = song(9)
+  button(zh.playerPanel.lyricSearch).click()
+  await wait()
+  check(
+    queries.at(-1).songId === 7 && queries.at(-1).searchMode === 'manual',
+    'context-menu lyric search uses the selected song and manual search policy'
+  )
+  button(zh.playerPanel.lyricSaveDatabase).click()
+  await wait()
+  check(writes.at(-1).id === 7, 'context-menu lyric search saves to the selected remote song')
+  menuApp.unmount()
+  menuHost.remove()
   check(fileWrites === 0, 'lyric management never writes embedded audio metadata')
   return checks
 }
@@ -449,7 +620,7 @@ app.whenReady().then(async () => {
       stdin: {
         resolveDir: process.cwd(),
         contents:
-          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsManagerDialog.vue';export {default as PlayerLyrics} from './src/renderer/src/components/lyrics/PlayerLyrics.vue';export {default as PlayerLyricsV2} from './src/renderer/src/components/lyrics/PlayerLyricsV2.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
+          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as SongListActions} from './src/renderer/src/components/songlist/SongListActions.vue';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsManagerDialog.vue';export {default as PlayerLyrics} from './src/renderer/src/components/lyrics/PlayerLyrics.vue';export {default as PlayerLyricsV2} from './src/renderer/src/components/lyrics/PlayerLyricsV2.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
       },
       bundle: true,
       platform: 'browser',
@@ -485,9 +656,33 @@ app.whenReady().then(async () => {
               loader: 'js'
             }))
             build.onLoad({ filter: /\.vue$/ }, ({ path: filename }) => {
+              const kind = path.basename(filename, '.vue')
+              if (
+                [
+                  'SongTagDialog',
+                  'BatchTagDialog',
+                  'SongDetailsDialog',
+                  'DeleteSongsDialog',
+                  'AddSongsToPlaylistDialog',
+                  'MetadataEditDialog',
+                  'LyricsEditorDialog'
+                ].includes(kind)
+              )
+                return {
+                  contents: `import {h} from 'vue';export default {inheritAttrs:false,props:['modelValue','songId'],emits:['update:modelValue','saved','changed','deleted'],render(){return this.modelValue?h('div',{'data-fixture-dialog':${JSON.stringify(kind)},'data-song-id':this.songId},[h('button',{onClick:()=>this.$emit('update:modelValue',false)},'Close fixture')]):null}}`,
+                  loader: 'js',
+                  resolveDir: path.dirname(filename)
+                }
               const { descriptor } = parse(fs.readFileSync(filename, 'utf8'), { filename })
               return {
-                contents: compileScript(descriptor, { id: filename, inlineTemplate: true }).content,
+                contents: compileScript(descriptor, {
+                  id: filename,
+                  inlineTemplate: true,
+                  fs: {
+                    fileExists: fs.existsSync,
+                    readFile: (name) => fs.readFileSync(name, 'utf8')
+                  }
+                }).content,
                 loader: 'ts',
                 resolveDir: path.dirname(filename)
               }
