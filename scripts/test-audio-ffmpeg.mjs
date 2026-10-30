@@ -8,10 +8,13 @@ import { createDsdFixtures } from './lib/dsd-fixtures.mjs'
 
 const require = createRequire(import.meta.url)
 const runtime = path.resolve(process.argv[2] || 'build/native-addon')
-const ffmpeg = path.join(runtime, 'ffmpeg.exe')
+const ffmpeg = path.join(runtime, process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg')
 const environment = {
   ...process.env,
-  PATH: path.join(process.env.SystemRoot || 'C:/Windows', 'System32')
+  PATH:
+    process.platform === 'win32'
+      ? path.join(process.env.SystemRoot || 'C:/Windows', 'System32')
+      : '/usr/bin:/bin'
 }
 const run = (args) => {
   const result = spawnSync(ffmpeg, ['-hide_banner', '-v', 'error', ...args], {

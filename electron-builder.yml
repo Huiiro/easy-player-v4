@@ -38,6 +38,7 @@ extraResources:
     filter:
       - '**/*'
       - '!lib{,/**/*}'
+      - '!entitlements.mac.plist'
 asarUnpack:
   - 'node_modules/kuromoji/dict/**'
   - resources/**
@@ -90,8 +91,22 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: true
 mac:
+  # Test artifacts use a complete ad-hoc signature. Public distribution must
+  # override identity, enable hardenedRuntime and configure notarization.
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
+  timestamp: none
+  minimumSystemVersion: '12.0'
+  artifactName: '${name}-${version}-mac-${arch}.${ext}'
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
   icon: resources/icons/easy-player.icns
-  entitlementsInherit: build/entitlements.mac.plist
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
   extraResources:
     - from: 'build/native-addon/easy_player_native.node'
       to: 'native/easy_player_native.node'
@@ -99,6 +114,12 @@ mac:
       to: 'native/deps/'
       filter:
         - '**/*.dylib'
+    - from: 'build/native-addon/ffmpeg'
+      to: 'native/ffmpeg'
+    - from: 'build/native-addon/macos-runtime.json'
+      to: 'native/macos-runtime.json'
+    - from: 'build/native-addon/FFmpeg-LICENSE.txt'
+      to: 'native/FFmpeg-LICENSE.txt'
     - from: 'resources/lib/yt-dlp/mac/yt-dlp'
       to: 'lib/yt-dlp/yt-dlp'
     - from: 'resources/lib/yt-dlp/mac/yt-dlp.manifest.json'
@@ -109,7 +130,7 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-mac-${arch}.${ext}
 linux:
   icon: resources/icons/easy-player.png
   extraResources:

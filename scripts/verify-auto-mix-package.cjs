@@ -3,6 +3,27 @@ const fs = require('node:fs')
 const path = require('node:path')
 
 module.exports = async (context) => {
+  if (context.electronPlatformName === 'darwin') {
+    const arch = context.arch === 3 ? 'arm64' : context.arch === 1 ? 'x64' : null
+    if (!arch) throw new Error('Verify individual Mac architectures before building universal')
+    require('./macos-runtime.cjs').verifyMacosRuntime(
+      path.join(context.packager.projectDir, 'build/native-addon'),
+      arch,
+      context.packager.projectDir
+    )
+    const crypto = require('node:crypto')
+    const root = context.packager.projectDir
+    const release = JSON.parse(
+      fs.readFileSync(path.join(root, 'resources/lib/ytdlp-release.json'), 'utf8')
+    )
+    const yt = fs.readFileSync(path.join(root, 'resources/lib/yt-dlp/mac/yt-dlp'))
+    if (
+      yt.length !== release.assets['yt-dlp_macos'].size ||
+      crypto.createHash('sha256').update(yt).digest('hex') !== release.assets['yt-dlp_macos'].sha256
+    )
+      throw new Error('Mac yt-dlp source asset does not match the locked official digest')
+    return
+  }
   if (context.electronPlatformName !== 'win32') return
   if (context.arch !== 1)
     throw new Error('The bundled Auto Mix runtime currently supports Windows x64 only')

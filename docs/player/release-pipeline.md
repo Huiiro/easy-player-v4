@@ -89,11 +89,53 @@ the corresponding ZIP. The release workflow runs these checks automatically
 and rejects base installers over 250 MiB. Component tests use isolated data
 directories and do not uninstall or clear the user's real component/cache.
 
+## macOS Apple Silicon build and validation
+
+The `macOS build` workflow builds ARM64 DMG/ZIP artifacts on a `macos-15`
+runner, with macOS 12.0 as the minimum deployment target. It builds the same
+pinned audio-only FFmpeg, libsamplerate and SoundTouch sources as Windows,
+using the `arm64-osx-audio` triplet. Homebrew supplies build tools only.
+Neither the old local FFmpeg SDK nor Homebrew audio libraries are selected.
+
+```sh
+brew install ninja autoconf automake libtool pkg-config
+npm ci
+npm run build:mac -- --publish never
+npm run test:audio-core
+npm run test:macos-package
+```
+
+Use native ARM64 Node.js. The build command prepares yt-dlp and native
+dependencies, checks TypeScript, builds the app and validates its packaged
+audio engine, SQLite and Sharp under Electron. CI also runs native DSP,
+Remix and backend recovery tests, then hides the SDK and repeats package
+loading and decoding checks. Artifacts are named
+`easy-player-<version>-mac-arm64.dmg` and `.zip`.
+
+The native audio runtime uses bundled `@loader_path` dylibs with no residual
+SDK search paths. Package checks reject missing/wrong-architecture libraries,
+newer deployment targets, video libraries and an audio runtime over 25 MiB.
+Official yt-dlp bytes are verified before signing; packaged execution, version
+and signature are verified afterwards.
+
+This is an Apple Silicon test build, using a complete ad-hoc app signature.
+The Mac test configuration sets `identity: '-'`, `hardenedRuntime: false` and
+`notarize: false` and `timestamp: none`; package verification checks the whole bundle signature.
+Entitlements are tracked in `resources/entitlements.mac.plist`, outside the
+ignored generated `build` directory.
+For public distribution, replace the identity, enable hardened runtime and
+configure notarization and restore a trusted timestamp server. Developer ID
+signing/notarization, Intel/universal validation and the optional Mac Python
+stem component remain separate work. CoreAudio currently supports the system
+default shared PCM output. Real-device playback and installation still need
+manual checks. See [Mac build and testing](macos-build.md).
+
 ## Repository secrets
 
-The current workflow deliberately builds unsigned packages so invalid or
-partial credentials cannot block a release. To distribute signed binaries,
-add the following secrets and wire them into the matching package job:
+The current workflow uses unsigned Windows packages and ad-hoc signed Mac test
+packages. To distribute binaries signed with a publisher identity, add the
+following secrets and wire them into the matching package job. For Mac, also
+override the test identity/hardened-runtime/notarization options above:
 
 | Platform           | Secret                        | Value                                                                            |
 | ------------------ | ----------------------------- | -------------------------------------------------------------------------------- |
@@ -109,7 +151,7 @@ Electron Builder imports `CSC_LINK` automatically. When the macOS certificate
 and all three Apple credentials are present, it signs the app and performs
 Apple notarization; `stapler` runs as part of the notarization flow.
 
-The macOS workflow uses `macos-14` and therefore produces an arm64 build. The
+The macOS workflow uses `macos-15` and therefore produces an arm64 build. The
 Windows workflow installs the native FFmpeg, libsamplerate and SoundTouch
 development dependencies through vcpkg and packages the generated `.node` and
 runtime DLL files.

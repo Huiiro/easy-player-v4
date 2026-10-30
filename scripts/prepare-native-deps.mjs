@@ -9,8 +9,8 @@ import { createRequire } from 'node:module'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const { nativeProfileHash } = createRequire(import.meta.url)('./native-runtime-paths.cjs')
-if (process.platform !== 'win32' || process.arch !== 'x64')
-  throw new Error('This dependency profile targets Windows x64')
+const { nativeTarget } = createRequire(import.meta.url)('./native-platform.cjs')
+const target = nativeTarget(process.platform, process.env.EASY_PLAYER_NATIVE_ARCH || process.arch)
 const manifestRoot = path.join(root, 'resources/lib/native-deps')
 const manifest = JSON.parse(fs.readFileSync(path.join(manifestRoot, 'vcpkg.json'), 'utf8'))
 const baseline = manifest['builtin-baseline']
@@ -52,9 +52,12 @@ const commit = spawnSync('git', ['-C', vcpkg, 'cat-file', '-e', `${baseline}^{co
   windowsHide: true
 })
 if (commit.status !== 0) run('git', ['-C', vcpkg, 'fetch', '--depth=1', 'origin', baseline])
-const executable = path.join(vcpkg, 'vcpkg.exe')
-if (!fs.existsSync(executable))
-  run('cmd.exe', ['/d', '/c', path.join(vcpkg, 'bootstrap-vcpkg.bat'), '-disableMetrics'])
+const executable = path.join(vcpkg, process.platform === 'win32' ? 'vcpkg.exe' : 'vcpkg')
+if (!fs.existsSync(executable)) {
+  if (process.platform === 'win32')
+    run('cmd.exe', ['/d', '/c', path.join(vcpkg, 'bootstrap-vcpkg.bat'), '-disableMetrics'])
+  else run('/bin/sh', [path.join(vcpkg, 'bootstrap-vcpkg.sh'), '-disableMetrics'])
+}
 const overlay = path.join(output, 'overlay/ffmpeg')
 fs.mkdirSync(overlay, { recursive: true })
 // Read the port from the pinned commit, not a mutable local vcpkg working tree.
@@ -72,10 +75,12 @@ if (original.split(anchor).length !== 2)
   throw new Error('Pinned FFmpeg port patch location changed')
 fs.writeFileSync(
   portfile,
-  original.replace(anchor, 'include("${CMAKE_CURRENT_LIST_DIR}/ffmpeg-profile.cmake")\n' + anchor)
+  original.replace(anchor, 'include("${CMAKE_CURRENT_LIST_DIR}/' + target.profile + '")\n' + anchor)
 )
 const profile = fs.readFileSync(path.join(manifestRoot, 'ffmpeg-profile.cmake'))
 fs.writeFileSync(path.join(overlay, 'ffmpeg-profile.cmake'), profile)
+if (target.platform === 'darwin')
+  fs.copyFileSync(path.join(manifestRoot, target.profile), path.join(overlay, target.profile))
 // Codeberg regenerated its release tarball. Pin the verified 2.4.0 Git commit
 // and archive hash instead of depending on the mutable tag archive.
 const soundtouch = path.join(output, 'overlay/soundtouch')
@@ -100,33 +105,43 @@ fs.writeFileSync(
     .replace('REF ${VERSION}', `REF ${soundtouchLock.commit}`)
     .replace(/SHA512 [a-f0-9]{128}/, `SHA512 ${soundtouchLock.sha512}`)
 )
-console.log(`[native-deps] Pinned vcpkg ${baseline}; audio-only FFmpeg, release x64`)
+console.log(`[native-deps] Pinned vcpkg ${baseline}; audio-only FFmpeg, ${target.triplet}`)
 run(executable, [
   'install',
   `--x-manifest-root=${manifestRoot}`,
   `--x-install-root=${path.join(output, 'installed')}`,
   `--overlay-ports=${path.dirname(overlay)}`,
   `--overlay-triplets=${path.join(manifestRoot, 'triplets')}`,
-  '--triplet=x64-windows-audio',
-  '--host-triplet=x64-windows',
+  `--triplet=${target.triplet}`,
+  `--host-triplet=${target.hostTriplet}`,
   `--x-buildtrees-root=${path.join(output, 'buildtrees')}`,
   `--x-packages-root=${path.join(output, 'packages')}`
 ])
-const installed = path.join(output, 'installed/x64-windows-audio')
+const installed = path.join(output, 'installed', target.triplet)
 const info = path.join(installed, 'share/ffmpeg')
-fs.writeFileSync(path.join(info, 'easy-player-profile.sha256'), nativeProfileHash(root))
+const profileHash = nativeProfileHash(root, target.platform, target.arch)
+fs.writeFileSync(path.join(info, 'easy-player-profile.sha256'), profileHash)
+const libraryDirectory = path.join(installed, target.platform === 'win32' ? 'bin' : 'lib')
 const dlls = fs
-  .readdirSync(path.join(installed, 'bin'))
-  .filter((name) => /^(avcodec|avformat|avutil|avfilter|swresample)-\d+\.dll$/i.test(name))
+  .readdirSync(libraryDirectory)
+  .filter((name) =>
+    target.platform === 'win32'
+      ? /^(avcodec|avformat|avutil|avfilter|swresample)-\d+\.dll$/i.test(name)
+      : /^lib(avcodec|avformat|avutil|avfilter|swresample)\.\d+\.dylib$/.test(name)
+  )
   .sort()
 for (const prefix of ['avcodec', 'avformat', 'avutil', 'avfilter', 'swresample'])
-  if (dlls.filter((name) => name.startsWith(prefix + '-')).length !== 1)
+  if (
+    dlls.filter((name) =>
+      name.startsWith(target.platform === 'win32' ? prefix + '-' : 'lib' + prefix + '.')
+    ).length !== 1
+  )
     throw new Error(`Missing audio FFmpeg DLL: ${prefix}`)
 const files = Object.fromEntries(
   dlls.map((name) => [
     name,
     createHash('sha256')
-      .update(fs.readFileSync(path.join(installed, 'bin', name)))
+      .update(fs.readFileSync(path.join(libraryDirectory, name)))
       .digest('hex')
   ])
 )
@@ -137,8 +152,15 @@ fs.writeFileSync(
       formatVersion: 1,
       profile: 'audio-core',
       baseline,
-      profileSha256: nativeProfileHash(root),
-      dlls: files
+      profileSha256: profileHash,
+      ...(target.platform === 'darwin'
+        ? {
+            platform: target.platform,
+            arch: target.arch,
+            deploymentTarget: target.deploymentTarget,
+            libraries: files
+          }
+        : { dlls: files })
     },
     null,
     2
