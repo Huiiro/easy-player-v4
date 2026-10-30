@@ -137,7 +137,7 @@ Homebrew 只提供构建工具。FFmpeg 8.1.2、libsamplerate、SoundTouch 和 z
 - `ffmpeg-profile-macos.cmake`：继承共用音频配置，关闭 Apple 视频/采集框架，通过 SecureTransport 支持 HTTPS。
 - `triplets/arm64-osx-audio.cmake`、`macos-dependencies.cmake`：指定架构、最低系统、SDK 路径与配置指纹。
 - `resources/native/`：音频 `.node`、精简 FFmpeg CLI、许可证、`macos-runtime.json`；7 个 dylib 位于 `deps/`。
-- dylib 依赖必须来自锁定 SDK；封装后统一为 `@loader_path`，删除 SDK 搜索路径，并重新 ad-hoc 签名。
+- dylib 依赖必须来自锁定 SDK；封装后统一为 `@loader_path`，删除 SDK 搜索路径，并重新 ad-hoc 签名；测试包的整个 `.app` 也会 ad-hoc 签名并验证。
 - better-sqlite3 按 Electron ABI 在 runner 安装；Sharp/libvips 选择 darwin-arm64 依赖，包内实际加载测试覆盖两者。
 - yt-dlp 使用版本锁中的官方 Mac universal 程序；打包前验证原始 SHA-256，签名后验证架构、签名和版本。
 

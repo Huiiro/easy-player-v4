@@ -90,6 +90,11 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: true
 mac:
+  # Test artifacts use a complete ad-hoc signature. Public distribution must
+  # override identity, enable hardenedRuntime and configure notarization.
+  identity: '-'
+  hardenedRuntime: false
+  notarize: false
   minimumSystemVersion: '12.0'
   artifactName: '${name}-${version}-mac-${arch}.${ext}'
   target:

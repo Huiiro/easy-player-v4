@@ -118,7 +118,11 @@ newer deployment targets, video libraries and an audio runtime over 25 MiB.
 Official yt-dlp bytes are verified before signing; packaged execution, version
 and signature are verified afterwards.
 
-This is an Apple Silicon test build, using ad-hoc signatures. Developer ID
+This is an Apple Silicon test build, using a complete ad-hoc app signature.
+The Mac test configuration sets `identity: '-'`, `hardenedRuntime: false` and
+`notarize: false`; package verification checks the whole bundle signature.
+For public distribution, replace the identity, enable hardened runtime and
+configure notarization. Developer ID
 signing/notarization, Intel/universal validation and the optional Mac Python
 stem component remain separate work. CoreAudio currently supports the system
 default shared PCM output. Real-device playback and installation still need
@@ -126,9 +130,10 @@ manual checks. See [Mac build and testing](macos-build.md).
 
 ## Repository secrets
 
-The current workflow deliberately builds unsigned packages so invalid or
-partial credentials cannot block a release. To distribute signed binaries,
-add the following secrets and wire them into the matching package job:
+The current workflow uses unsigned Windows packages and ad-hoc signed Mac test
+packages. To distribute binaries signed with a publisher identity, add the
+following secrets and wire them into the matching package job. For Mac, also
+override the test identity/hardened-runtime/notarization options above:
 
 | Platform           | Secret                        | Value                                                                            |
 | ------------------ | ----------------------------- | -------------------------------------------------------------------------------- |

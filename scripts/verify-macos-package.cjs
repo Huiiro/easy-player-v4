@@ -30,6 +30,7 @@ const executable = path.join(
   ])
 )
 assertArchitecture(executable, arch)
+execute('codesign', ['--verify', '--deep', '--strict', app])
 const inspectModules = (directory) => {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const file = path.join(directory, entry.name)
