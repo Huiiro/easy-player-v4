@@ -677,7 +677,7 @@ app.whenReady().then(async () => {
       stdin: {
         resolveDir: process.cwd(),
         contents:
-          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as SongListActions} from './src/renderer/src/components/songlist/SongListActions.vue';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsManagerDialog.vue';export {default as PlayerLyrics} from './src/renderer/src/components/lyrics/PlayerLyrics.vue';export {default as PlayerLyricsV2} from './src/renderer/src/components/lyrics/PlayerLyricsV2.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
+          "export * as Vue from 'vue';export {createI18n} from 'vue-i18n';export {default as SongListActions} from './src/renderer/src/components/songlist/SongListActions.vue';export {default as Manager} from './src/renderer/src/components/lyrics/LyricsSearchDialog.vue';export {default as PlayerLyrics} from './src/renderer/src/components/lyrics/PlayerLyrics.vue';export {default as PlayerLyricsV2} from './src/renderer/src/components/lyrics/PlayerLyricsV2.vue';export {default as zh} from './src/renderer/src/i18n/locales/zh';export {default as eventBus} from './src/renderer/src/utils/eventBus';"
       },
       bundle: true,
       platform: 'browser',

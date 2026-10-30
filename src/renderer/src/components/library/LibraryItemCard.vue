@@ -32,16 +32,17 @@ watch(
         :alt="name"
         @error="failed = true"
       />
-      <span v-else class="grid size-full place-items-center text-text-l"
-        ><SvgIcon :name="icon" class-name="size-12"
-      /></span>
+      <span v-else class="grid size-full place-items-center text-text-l">
+        <SvgIcon :name="icon" class-name="size-12" />
+      </span>
     </div>
     <span
       v-if="badge"
       class="absolute rounded bg-black/55 px-1.5 py-0.5 text-[10px] text-white"
       :class="circle ? 'bottom-1 right-[9%]' : 'bottom-1 right-1'"
-      >{{ badge }}</span
     >
+      {{ badge }}
+    </span>
   </div>
   <p class="mt-2 truncate text-sm font-medium">{{ name }}</p>
   <p v-if="subtitle" class="mt-0.5 truncate text-xs text-text-l">{{ subtitle }}</p>

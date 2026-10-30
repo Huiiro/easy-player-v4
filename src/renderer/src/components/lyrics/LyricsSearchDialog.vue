@@ -253,8 +253,8 @@ async function save(): Promise<void> {
               @click="selectCandidate(index)"
             >
               <span class="block font-medium">
-                {{ candidate.title
-                }}<template v-if="candidate.artist"> — {{ candidate.artist }}</template>
+                {{ candidate.title }}
+                <template v-if="candidate.artist"> — {{ candidate.artist }}</template>
               </span>
               <span class="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">
                 <span class="text-current/75">
@@ -303,9 +303,9 @@ async function save(): Promise<void> {
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}
           </button>
-          <BaseButton v-if="loading" variant="secondary" class="w-full" @click="cancelRequest">{{
-            t('common.cancelRequest')
-          }}</BaseButton>
+          <BaseButton v-if="loading" variant="secondary" class="w-full" @click="cancelRequest">
+            {{ t('common.cancelRequest') }}
+          </BaseButton>
         </div>
       </div>
       <div class="flex min-w-0 min-h-0 flex-col gap-3" data-lyric-search-editor>
@@ -336,8 +336,8 @@ async function save(): Promise<void> {
         class="mr-auto min-w-0 flex-1 truncate text-xs text-text-l"
         :title="[editingSong.title, editingSong.artist].filter(Boolean).join(' — ')"
       >
-        {{ editingSong.title
-        }}<template v-if="editingSong.artist"> — {{ editingSong.artist }}</template>
+        {{ editingSong.title }}
+        <template v-if="editingSong.artist"> — {{ editingSong.artist }}</template>
       </p>
       <button
         class="manager-button text-sm pr-4"

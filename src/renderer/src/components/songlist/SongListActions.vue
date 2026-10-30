@@ -10,7 +10,7 @@ import DeleteSongsDialog from './DeleteSongsDialog.vue'
 import AddSongsToPlaylistDialog from './AddSongsToPlaylistDialog.vue'
 import MetadataEditDialog from './MetadataEditDialog.vue'
 import LyricsEditorDialog from '@/components/lyrics/LyricsEditorDialog.vue'
-import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
+import LyricsSearchDialog from '@/components/lyrics/LyricsSearchDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 const props = defineProps<SongActionContext>()
 const emit = defineEmits<{ clearSelection: [] }>()
@@ -403,27 +403,24 @@ defineExpose({
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
           @click="openMetadataEdit"
         >
-          <SvgIcon name="common-edit" class-name="size-4 shrink-0" />{{
-            t('songList.editMetadata')
-          }}
+          <SvgIcon name="common-edit" class-name="size-4 shrink-0" />
+          {{ t('songList.editMetadata') }}
         </button>
         <button
           role="menuitem"
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
           @click="openLyricsEditor"
         >
-          <SvgIcon name="common-edit-lrc" class-name="size-4 shrink-0" />{{
-            t('lyricEditor.title')
-          }}
+          <SvgIcon name="common-edit-lrc" class-name="size-4 shrink-0" />
+          {{ t('lyricEditor.title') }}
         </button>
         <button
           role="menuitem"
           class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
           @click="openLyricsSearch"
         >
-          <SvgIcon name="common-search" class-name="size-4 shrink-0" />{{
-            t('playerPanel.lyricSearchTitle')
-          }}
+          <SvgIcon name="common-search" class-name="size-4 shrink-0" />
+          {{ t('playerPanel.lyricSearchTitle') }}
         </button>
       </div>
     </FloatingPanel>
@@ -432,7 +429,7 @@ defineExpose({
   <BatchTagDialog v-model="batchTagDialogOpen" :song-ids="batchTagSongIds" @changed="refresh" />
   <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
   <LyricsEditorDialog v-model="lyricsEditorOpen" :song-id="lyricsEditorSongId" @saved="refresh" />
-  <LyricsManagerDialog v-model="lyricsSearchOpen" :song="lyricsSearchSong" @saved="refresh" />
+  <LyricsSearchDialog v-model="lyricsSearchOpen" :song="lyricsSearchSong" @saved="refresh" />
   <MetadataEditDialog
     v-model="metadataEditOpen"
     :song-id="metadataEditSongId"

@@ -15,7 +15,7 @@ import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 import eventBus from '@/utils/eventBus'
-import LyricsManagerDialog from '@/components/lyrics/LyricsManagerDialog.vue'
+import LyricsSearchDialog from '@/components/lyrics/LyricsSearchDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/LiquidBackground.vue'
@@ -1015,7 +1015,7 @@ function changeLyricsOffset(event: WheelEvent): void {
       </div>
       <!-- play queue-->
       <PlayQueueDrawer v-model="showQueue" />
-      <LyricsManagerDialog v-model="showLyricsSearch" />
+      <LyricsSearchDialog v-model="showLyricsSearch" />
       <LyricsColorDialog v-model="showLyricsColorDialog" />
       <AddSongsToPlaylistDialog v-model="showPlaylistPicker" :song-ids="playlistSongIds" />
       <!-- play spectrum-->
