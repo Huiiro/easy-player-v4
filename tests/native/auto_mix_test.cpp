@@ -69,10 +69,11 @@ public:
                         }
                     }
                 }
-                // Advance the simulated device clock at a fixed rate. Sleeping
+                // Advance the simulated device clock at twice the audio rate. Sleeping
                 // after each callback adds processing and scheduler overhead to
                 // every tick, making the test run at different rates per OS.
-                next_tick += 1ms;
+                next_tick += std::chrono::nanoseconds(
+                    1000000000LL * shared_->frames.load() / (format_.sample_rate * 2));
                 std::this_thread::sleep_until(next_tick);
             }
         });
