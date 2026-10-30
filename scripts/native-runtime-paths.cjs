@@ -2,18 +2,20 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const crypto = require('node:crypto')
+const { nativeTarget } = require('./native-platform.cjs')
 
-function nativeDependencyRoot(root) {
-  return path.join(root, 'build/native-deps/installed/x64-windows-audio')
+function nativeDependencyRoot(root, platform = 'win32', arch = 'x64') {
+  return path.join(root, 'build/native-deps/installed', nativeTarget(platform, arch).triplet)
 }
 
-function nativeProfileHash(root) {
+function nativeProfileHash(root, platform = 'win32', arch = 'x64') {
   const config = path.join(root, 'resources/lib/native-deps')
   const hashes = [
     'ffmpeg-profile.cmake',
     'vcpkg.json',
-    'triplets/x64-windows-audio.cmake',
-    'sources.json'
+    `triplets/${nativeTarget(platform, arch).triplet}.cmake`,
+    'sources.json',
+    ...(platform === 'darwin' ? ['ffmpeg-profile-macos.cmake'] : [])
   ].map((file) =>
     crypto
       .createHash('sha256')

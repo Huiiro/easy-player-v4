@@ -100,7 +100,11 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && inputs.platforms == 'all'
     needs: verify-version
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 90
+    env:
+      VCPKG_ROOT: ''
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      EASY_PLAYER_NATIVE_ARCH: arm64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -108,13 +112,15 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - name: Install native dependencies
-        run: brew install ffmpeg libsamplerate sound-touch
+        run: brew install ninja autoconf automake libtool pkg-config
       - name: Install JavaScript dependencies
         run: npm ci
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Build macOS package
         run: npm run build:mac -- --publish never
+      - name: Verify Apple Silicon package
+        run: npm run test:macos-package
       - uses: actions/upload-artifact@v4
         with:
           name: macos-release
@@ -122,8 +128,8 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.dmg.blockmap
-            dist/*-mac.zip
-            dist/*-mac.zip.blockmap
+            dist/*-mac-arm64.zip
+            dist/*-mac-arm64.zip.blockmap
             dist/*.yml
             !dist/builder-debug.yml
 

@@ -5,11 +5,33 @@ import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
+const { nativeTarget } = require('./native-platform.cjs')
+const target = nativeTarget(process.platform, process.env.EASY_PLAYER_NATIVE_ARCH || process.arch)
 if (process.platform === 'win32') {
   const { nativeRuntimePaths } = require('./native-runtime-paths.cjs')
   try {
     nativeRuntimePaths(root, path.join(root, 'build/native-deps/no-addon-cache'))
   } catch {
+    const preparation = spawnSync(process.execPath, ['scripts/prepare-native-deps.mjs'], {
+      cwd: root,
+      stdio: 'inherit',
+      windowsHide: true
+    })
+    if (preparation.error) throw preparation.error
+    if (preparation.status !== 0) process.exit(preparation.status ?? 1)
+  }
+}
+if (process.platform === 'darwin') {
+  const fs = require('node:fs')
+  const { nativeDependencyRoot, nativeProfileHash } = require('./native-runtime-paths.cjs')
+  const stamp = path.join(
+    nativeDependencyRoot(root, target.platform, target.arch),
+    'share/ffmpeg/easy-player-profile.sha256'
+  )
+  if (
+    !fs.existsSync(stamp) ||
+    fs.readFileSync(stamp, 'utf8').trim() !== nativeProfileHash(root, target.platform, target.arch)
+  ) {
     const preparation = spawnSync(process.execPath, ['scripts/prepare-native-deps.mjs'], {
       cwd: root,
       stdio: 'inherit',
@@ -36,7 +58,13 @@ const args = [
   '--runtime-version',
   electron,
   '--arch',
-  process.platform === 'win32' ? 'x64' : process.arch,
+  target.arch,
+  ...(target.platform === 'darwin'
+    ? [
+        `--CDCMAKE_OSX_ARCHITECTURES=${target.cmakeArch}`,
+        `--CDCMAKE_OSX_DEPLOYMENT_TARGET=${target.deploymentTarget}`
+      ]
+    : []),
   ...extra
 ]
 console.log(`[build-native] Electron ${electron}, ${process.arch}; output=${output}`)
@@ -69,4 +97,12 @@ if (process.platform === 'win32') {
   })
   if (ffmpeg.error) throw ffmpeg.error
   process.exitCode = ffmpeg.status ?? 1
+}
+if (process.platform === 'darwin') {
+  const bundled = spawnSync(process.execPath, ['scripts/bundle-macos-native-deps.js', output], {
+    cwd: root,
+    stdio: 'inherit'
+  })
+  if (bundled.error) throw bundled.error
+  process.exitCode = bundled.status ?? 1
 }

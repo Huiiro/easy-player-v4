@@ -12,7 +12,8 @@ function backendLabel(backend: string): string {
   if (backend === 'wasapi_shared') return t('ap.wasapiShared')
   if (backend === 'wasapi_exclusive') return t('ap.wasapiExclusive')
   if (backend === 'asio') return 'ASIO'
-  if (backend === 'directsound') return 'DirectSound'
+  if (backend === 'directsound')
+    return window.electron.process.platform === 'darwin' ? 'CoreAudio' : 'DirectSound'
   return backend
 }
 const deviceOptions = computed(() =>

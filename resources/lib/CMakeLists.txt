@@ -5,50 +5,32 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # macOS uses the portable engine core plus the CoreAudio shared-output backend.
-# Keep this branch self-contained so the existing Windows/vcpkg configuration
-# remains unchanged below.
 if(APPLE)
     enable_language(OBJCXX)
-
-    if(CMAKE_OSX_ARCHITECTURES)
-        set(EASY_PLAYER_MACOS_ARCH "${CMAKE_OSX_ARCHITECTURES}")
-    elseif(CMAKE_HOST_SYSTEM_PROCESSOR STREQUAL "arm64")
-        set(EASY_PLAYER_MACOS_ARCH arm64)
-    else()
-        set(EASY_PLAYER_MACOS_ARCH x86_64)
-    endif()
-
-    set(HOMEBREW_PREFIX "/opt/homebrew")
-    if(EASY_PLAYER_MACOS_ARCH STREQUAL "x86_64")
-        set(HOMEBREW_PREFIX "/usr/local")
-    endif()
-    set(EASY_PLAYER_MACOS_DEPS_PREFIX "${HOMEBREW_PREFIX}/opt" CACHE PATH
-        "Homebrew opt directory containing FFmpeg, libsamplerate and SoundTouch")
+    include("${CMAKE_CURRENT_LIST_DIR}/native-deps/macos-dependencies.cmake")
 
     find_path(FFMPEG_INCLUDE_DIR libavcodec/avcodec.h
-        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/include" NO_DEFAULT_PATH)
-    find_library(AVCODEC_LIB avcodec PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
-    find_library(AVFORMAT_LIB avformat PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
-    find_library(AVUTIL_LIB avutil PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
-    find_library(SWRESAMPLE_LIB swresample PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/ffmpeg/lib" NO_DEFAULT_PATH)
+        PATHS "${AUDIO_DEPS_ROOT}/include" NO_DEFAULT_PATH)
+    find_library(AVCODEC_LIB avcodec PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(AVFORMAT_LIB avformat PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(AVUTIL_LIB avutil PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
+    find_library(SWRESAMPLE_LIB swresample PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
     find_path(SAMPLERATE_INCLUDE_DIR samplerate.h
-        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/libsamplerate/include" NO_DEFAULT_PATH)
+        PATHS "${AUDIO_DEPS_ROOT}/include" NO_DEFAULT_PATH)
     find_library(SAMPLERATE_LIB samplerate
-        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/libsamplerate/lib" NO_DEFAULT_PATH)
+        PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
     # engine-core includes <soundtouch/SoundTouch.h>, so retain the include
     # root rather than the nested soundtouch directory.
     find_path(SOUNDTOUCH_INCLUDE_DIR soundtouch/SoundTouch.h
-        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/sound-touch/include" NO_DEFAULT_PATH)
+        PATHS "${AUDIO_DEPS_ROOT}/include" NO_DEFAULT_PATH)
     find_library(SOUNDTOUCH_LIB SoundTouch
-        PATHS "${EASY_PLAYER_MACOS_DEPS_PREFIX}/sound-touch/lib" NO_DEFAULT_PATH)
+        PATHS "${AUDIO_DEPS_ROOT}/lib" NO_DEFAULT_PATH)
 
     if(NOT FFMPEG_INCLUDE_DIR OR NOT AVCODEC_LIB OR NOT AVFORMAT_LIB OR NOT AVUTIL_LIB OR
        NOT SWRESAMPLE_LIB OR NOT SAMPLERATE_INCLUDE_DIR OR NOT SAMPLERATE_LIB OR
        NOT SOUNDTOUCH_INCLUDE_DIR OR NOT SOUNDTOUCH_LIB)
         message(FATAL_ERROR
-            "macOS engine dependencies are missing. Install them with:\n"
-            "  brew install ffmpeg libsamplerate sound-touch\n"
-            "or set EASY_PLAYER_MACOS_DEPS_PREFIX to the Homebrew opt directory.")
+              "macOS engine dependencies are missing. Run npm run prepare:native.")
     endif()
 
     include("${CMAKE_CURRENT_LIST_DIR}/../../engine-core/engine_core_sources.cmake")

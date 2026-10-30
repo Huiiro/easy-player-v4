@@ -90,6 +90,13 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: true
 mac:
+  minimumSystemVersion: '12.0'
+  artifactName: '${name}-${version}-mac-${arch}.${ext}'
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
   icon: resources/icons/easy-player.icns
   entitlementsInherit: build/entitlements.mac.plist
   extraResources:
@@ -99,6 +106,12 @@ mac:
       to: 'native/deps/'
       filter:
         - '**/*.dylib'
+    - from: 'build/native-addon/ffmpeg'
+      to: 'native/ffmpeg'
+    - from: 'build/native-addon/macos-runtime.json'
+      to: 'native/macos-runtime.json'
+    - from: 'build/native-addon/FFmpeg-LICENSE.txt'
+      to: 'native/FFmpeg-LICENSE.txt'
     - from: 'resources/lib/yt-dlp/mac/yt-dlp'
       to: 'lib/yt-dlp/yt-dlp'
     - from: 'resources/lib/yt-dlp/mac/yt-dlp.manifest.json'
@@ -109,7 +122,7 @@ mac:
     - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-mac-${arch}.${ext}
 linux:
   icon: resources/icons/easy-player.png
   extraResources:

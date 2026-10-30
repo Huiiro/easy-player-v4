@@ -17,7 +17,8 @@ const directory = await fs.mkdtemp(path.resolve('build/native-metadata-test-'))
 const digest = (buffer) => createHash('sha256').update(buffer).digest('hex')
 function ffmpeg(args) {
   const result = spawnSync(
-    process.env.EASY_PLAYER_TEST_FFMPEG || path.resolve('build/native-addon/ffmpeg.exe'),
+    process.env.EASY_PLAYER_TEST_FFMPEG ||
+      path.resolve('build/native-addon', process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'),
     ['-hide_banner', '-loglevel', 'error', ...args],
     {
       encoding: 'utf8'
