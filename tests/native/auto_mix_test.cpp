@@ -31,6 +31,7 @@ struct BackendState {
     std::atomic<bool> overlap{false}, slow_stop{false}, stop_entered{false}, fail_flush{false}, fail_open{false};
     std::atomic<int> frames{64};
     std::atomic<int> longest_silence{0};
+    std::atomic<int64_t> rendered_frames{0};
     bool capture_output = false;
     std::vector<float> captured;
     std::atomic<bool> hold_output{false};
@@ -50,9 +51,11 @@ public:
         running_ = true;
         render_ = std::thread([this] {
             std::vector<float> output(256 * format_.channels);
+            auto next_tick = std::chrono::steady_clock::now();
             while (running_) {
                 if (!shared_->hold_output) {
                     callback_(output.data(), shared_->frames.load(), format_.channels);
+                    shared_->rendered_frames += shared_->frames.load();
                     if (shared_->capture_output)
                         shared_->captured.insert(shared_->captured.end(), output.begin(), output.begin() + shared_->frames.load() * format_.channels);
                     for (int i = 0; i < shared_->frames.load(); ++i) {
@@ -66,7 +69,11 @@ public:
                         }
                     }
                 }
-                std::this_thread::sleep_for(1ms);
+                // Advance the simulated device clock at a fixed rate. Sleeping
+                // after each callback adds processing and scheduler overhead to
+                // every tick, making the test run at different rates per OS.
+                next_tick += 1ms;
+                std::this_thread::sleep_until(next_tick);
             }
         });
         return true;
@@ -405,6 +412,10 @@ static void audible_overlap_regression() {
         CHECK(engine.play());
         const auto deadline = std::chrono::steady_clock::now() + 5s;
         while (transitions == 0 && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(2ms);
+        if (transitions != 1)
+            std::cerr << "Overlap timeout: position=" << engine.position_ms()
+                      << "ms, rendered_frames=" << factory->shared->rendered_frames.load()
+                      << ", state=" << static_cast<int>(engine.state()) << '\n';
         CHECK(transitions == 1); engine.stop();
     }
     const auto& pcm = factory->shared->captured;
