@@ -120,9 +120,11 @@ and signature are verified afterwards.
 
 This is an Apple Silicon test build, using a complete ad-hoc app signature.
 The Mac test configuration sets `identity: '-'`, `hardenedRuntime: false` and
-`notarize: false`; package verification checks the whole bundle signature.
+`notarize: false` and `timestamp: none`; package verification checks the whole bundle signature.
+Entitlements are tracked in `resources/entitlements.mac.plist`, outside the
+ignored generated `build` directory.
 For public distribution, replace the identity, enable hardened runtime and
-configure notarization. Developer ID
+configure notarization and restore a trusted timestamp server. Developer ID
 signing/notarization, Intel/universal validation and the optional Mac Python
 stem component remain separate work. CoreAudio currently supports the system
 default shared PCM output. Real-device playback and installation still need
