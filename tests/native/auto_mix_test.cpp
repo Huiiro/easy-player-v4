@@ -12,7 +12,7 @@
 #include <stdexcept>
 
 using namespace std::chrono_literals;
-#define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
+#define CHECK(x) do { if (!(x)) throw std::runtime_error(std::string(__func__) + ":" + std::to_string(__LINE__) + ": " + #x); } while (0)
 
 static void wait_for_mix_plan(AudioEngine& engine) {
     const auto deadline = std::chrono::steady_clock::now() + 10s;

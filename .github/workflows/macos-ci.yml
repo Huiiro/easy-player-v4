@@ -41,7 +41,7 @@ jobs:
       - name: Verify DSP, Remix and backend recovery
         run: |
           npm run test:macos-runtime
-          cmake -S tests/native -B build/macos-engine-tests -G Ninja -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake -S tests/native -B build/macos-engine-tests -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
           cmake --build build/macos-engine-tests --parallel 3
           ctest --test-dir build/macos-engine-tests --output-on-failure
       - name: Build macOS package
