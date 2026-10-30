@@ -118,7 +118,7 @@ Windows 使用 x64 独立 exe，macOS 使用官方 universal 独立程序，Linu
 
 ## macOS Apple Silicon
 
-GitHub Actions 的 `macOS build` 使用 `macos-14` ARM64 runner，生成 DMG 和 ZIP
+GitHub Actions 的 `macOS build` 使用 `macos-15` ARM64 runner，生成 DMG 和 ZIP
 测试产物。本地构建也必须在 Mac 上运行，并使用原生 ARM64 Node.js：
 
 ```sh

@@ -91,7 +91,7 @@ directories and do not uninstall or clear the user's real component/cache.
 
 ## macOS Apple Silicon build and validation
 
-The `macOS build` workflow builds ARM64 DMG/ZIP artifacts on a `macos-14`
+The `macOS build` workflow builds ARM64 DMG/ZIP artifacts on a `macos-15`
 runner, with macOS 12.0 as the minimum deployment target. It builds the same
 pinned audio-only FFmpeg, libsamplerate and SoundTouch sources as Windows,
 using the `arm64-osx-audio` triplet. Homebrew supplies build tools only.
@@ -149,7 +149,7 @@ Electron Builder imports `CSC_LINK` automatically. When the macOS certificate
 and all three Apple credentials are present, it signs the app and performs
 Apple notarization; `stapler` runs as part of the notarization flow.
 
-The macOS workflow uses `macos-14` and therefore produces an arm64 build. The
+The macOS workflow uses `macos-15` and therefore produces an arm64 build. The
 Windows workflow installs the native FFmpeg, libsamplerate and SoundTouch
 development dependencies through vcpkg and packages the generated `.node` and
 runtime DLL files.
