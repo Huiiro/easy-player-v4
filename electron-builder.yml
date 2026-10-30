@@ -9,9 +9,10 @@ files:
   # The desktop package runs the compiled Electron output only. Keep mobile
   # projects, native source trees and build artifacts out of app.asar.
   - '!{android-app,engine-android,mobile}/**/*'
-  - '!{engine-core,engine-windows}/**/*'
+  - '!{engine-core,engine-windows,engine-macos,tests}/**/*'
   - '!{build,dist,docs}/**/*'
-  - '!{.agents,.github,.idea,.tools,.vscode}/**/*'
+  - '!{.agents,.github,.idea,.tools,.vscode,.update}/**/*'
+  - '!{.nvmrc,*.tsbuildinfo}'
   - '!**/.git/**'
   - '!src/**/*'
   - '!plugins{,/**/*}'
@@ -55,11 +56,25 @@ win:
         - '*.dll'
         - 'ffmpeg.exe'
         - 'FFmpeg-LICENSE.txt'
+        - 'ffmpeg-runtime.json'
+        - 'msvc-runtime.json'
         - '!easy_player_native.dll'
     - from: 'build/taskbar-controls/bin/Release/easy_player_taskbar.exe'
       to: 'native/easy_player_taskbar.exe'
     - from: 'resources/lib/yt-dlp/win/yt-dlp.exe'
       to: 'lib/yt-dlp/yt-dlp.exe'
+    - from: 'resources/lib/yt-dlp/win/yt-dlp.exe.manifest.json'
+      to: 'lib/yt-dlp/yt-dlp.manifest.json'
+  # extraFiles targets the application directory, while extraResources targets resources/.
+  extraFiles:
+    - from: 'build/native-addon/'
+      to: '.'
+      filter:
+        - 'vcruntime*.dll'
+        - 'msvcp*.dll'
+        - 'msvcr*.dll'
+        - 'concrt*.dll'
+        - 'vccorlib*.dll'
 nsis:
   include: scripts/file-associations.nsh
   artifactName: ${name}-${version}-setup.${ext}
@@ -86,6 +101,8 @@ mac:
         - '**/*.dylib'
     - from: 'resources/lib/yt-dlp/mac/yt-dlp'
       to: 'lib/yt-dlp/yt-dlp'
+    - from: 'resources/lib/yt-dlp/mac/yt-dlp.manifest.json'
+      to: 'lib/yt-dlp/yt-dlp.manifest.json'
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -98,6 +115,8 @@ linux:
   extraResources:
     - from: 'resources/lib/yt-dlp/linux/${arch}/yt-dlp'
       to: 'lib/yt-dlp/yt-dlp'
+    - from: 'resources/lib/yt-dlp/linux/${arch}/yt-dlp.manifest.json'
+      to: 'lib/yt-dlp/yt-dlp.manifest.json'
   target:
     - AppImage
     - deb

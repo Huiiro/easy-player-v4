@@ -16,9 +16,13 @@ const addon = require(addonPath)
 const directory = await fs.mkdtemp(path.resolve('build/native-metadata-test-'))
 const digest = (buffer) => createHash('sha256').update(buffer).digest('hex')
 function ffmpeg(args) {
-  const result = spawnSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', ...args], {
-    encoding: 'utf8'
-  })
+  const result = spawnSync(
+    process.env.EASY_PLAYER_TEST_FFMPEG || path.resolve('build/native-addon/ffmpeg.exe'),
+    ['-hide_banner', '-loglevel', 'error', ...args],
+    {
+      encoding: 'utf8'
+    }
+  )
   assert.equal(result.status, 0, result.error?.message || result.stderr)
   return result.stdout.trim()
 }
@@ -54,6 +58,24 @@ async function checkUpdates(file) {
 }
 
 try {
+  const fixture = path.join(directory, 'tone.wav')
+  const rate = 44100
+  const wave = Buffer.alloc(44 + rate * 2)
+  wave.write('RIFF')
+  wave.writeUInt32LE(wave.length - 8, 4)
+  wave.write('WAVEfmt ', 8)
+  wave.writeUInt32LE(16, 16)
+  wave.writeUInt16LE(1, 20)
+  wave.writeUInt16LE(1, 22)
+  wave.writeUInt32LE(rate, 24)
+  wave.writeUInt32LE(rate * 2, 28)
+  wave.writeUInt16LE(2, 32)
+  wave.writeUInt16LE(16, 34)
+  wave.write('data', 36)
+  wave.writeUInt32LE(rate * 2, 40)
+  for (let i = 0; i < rate; i++)
+    wave.writeInt16LE(Math.round(5000 * Math.sin((i * Math.PI * 880) / rate)), 44 + i * 2)
+  await fs.writeFile(fixture, wave)
   const jpeg = path.join(directory, '新封面.jpg')
   const png = path.join(directory, '原封面.png')
   await sharp({ create: { width: 48, height: 32, channels: 3, background: '#336699' } })
@@ -69,10 +91,8 @@ try {
     for (const cover of [jpeg, png]) {
       const file = path.join(directory, `中文音频-${path.extname(cover).slice(1)}.${extension}`)
       ffmpeg([
-        '-f',
-        'lavfi',
         '-i',
-        'sine=frequency=440:sample_rate=44100',
+        fixture,
         '-i',
         cover,
         '-map',
@@ -124,18 +144,7 @@ try {
   // The playback decoder keeps its input open even after stop. Metadata replacement must still work.
   for (const extension of ['m4a', 'flac']) {
     const file = path.join(directory, 'active-' + extension + '.' + extension)
-    ffmpeg([
-      '-f',
-      'lavfi',
-      '-i',
-      'sine=frequency=440:sample_rate=44100',
-      '-t',
-      '1',
-      '-c:a',
-      extension === 'm4a' ? 'aac' : 'flac',
-      '-y',
-      file
-    ])
+    ffmpeg(['-i', fixture, '-t', '1', '-c:a', extension === 'm4a' ? 'aac' : 'flac', '-y', file])
     const result = spawnSync(
       process.execPath,
       [

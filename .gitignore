@@ -22,3 +22,4 @@ engine-android/deps/
 
 # Local yt-dlp executables
 resources/lib/yt-dlp/
+/resources/lib/cmake-build-debug/

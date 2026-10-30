@@ -2,7 +2,7 @@ import { app, net } from 'electron'
 import { Worker } from 'node:worker_threads'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { AutoMixRuntimeService } from './autoMixRuntimeService'
+import { AutoMixRuntimeService, autoMixReleaseUrl } from './autoMixRuntimeService'
 import {
   getMainPath,
   getStemCachePath,
@@ -17,6 +17,7 @@ export function createAutoMixRuntimeManager(
 ): AutoMixRuntimeService {
   const service = new AutoMixRuntimeService({
     root: getStemRuntimeRoot(),
+    releaseBaseUrl: autoMixReleaseUrl(app.getVersion()),
     cacheDirectory: getStemCachePath(),
     beforeMaintenance,
     fetch: (url, signal) => net.fetch(url, { signal }),

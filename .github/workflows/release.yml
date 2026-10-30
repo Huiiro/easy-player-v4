@@ -4,6 +4,12 @@ on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: 'Build targets (tag releases currently publish Windows x64 only)'
+        type: choice
+        options: [windows, all]
+        default: windows
 
 concurrency:
   group: release-${{ github.ref }}
@@ -24,6 +30,9 @@ jobs:
         if: github.ref_type == 'tag'
         run: |
           node -e "const actual = 'v' + require('./package.json').version; if (actual !== process.env.GITHUB_REF_NAME) { console.error('Version mismatch: expected ' + actual + ', got ' + process.env.GITHUB_REF_NAME); process.exit(1) }"
+      - name: Ensure package-lock version is synchronized
+        run: |
+          node -e "const pkg = require('./package.json'), lock = require('./package-lock.json'); if (lock.version !== pkg.version || lock.packages[''].version !== pkg.version) throw new Error('package.json and package-lock.json versions must match')"
 
   package-windows:
     needs: verify-version
@@ -46,15 +55,7 @@ jobs:
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Install native dependencies
-        shell: pwsh
-        run: |
-          $env:VCPKG_ROOT = Join-Path $env:RUNNER_TEMP 'easy-player-vcpkg'
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:VCPKG_ROOT"
-          git clone --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/vcpkg.exe" install 'ffmpeg[ffmpeg]' libsamplerate soundtouch --triplet x64-windows
+        run: npm run prepare:native
       - name: Build Windows installer
         shell: pwsh
         run: |
@@ -64,15 +65,22 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-windows-package.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:audio-core
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:packaging-deps
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run package:auto-mix
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:bundled-auto-mix
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:auto-mix-runtime
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/test-native-runtime-paths.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:auto-mix-component-install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $installer = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $installer = Get-Item -LiteralPath (Join-Path 'dist' "$($pkg.name)-$($pkg.version)-setup.exe")
           if ($null -eq $installer) { throw 'Windows installer was not generated' }
           Write-Host "Windows installer size: $([math]::Round($installer.Length / 1MB, 1)) MiB"
           if ($installer.Length -gt 250MB) { throw 'Windows base installer exceeds 250 MiB; refusing to publish' }
@@ -83,11 +91,13 @@ jobs:
           path: |
             dist/*.exe
             dist/*.exe.blockmap
-            dist/latest.yml
+            dist/*.yml
+            !dist/builder-debug.yml
             dist/easy-player-auto-mix-*.zip
             dist/easy-player-auto-mix-*.json
 
   package-macos:
+    if: github.event_name == 'workflow_dispatch' && inputs.platforms == 'all'
     needs: verify-version
     runs-on: macos-14
     timeout-minutes: 45
@@ -114,9 +124,11 @@ jobs:
             dist/*.dmg.blockmap
             dist/*-mac.zip
             dist/*-mac.zip.blockmap
-            dist/latest-mac.yml
+            dist/*.yml
+            !dist/builder-debug.yml
 
   package-linux:
+    if: github.event_name == 'workflow_dispatch' && inputs.platforms == 'all'
     needs: verify-version
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -139,12 +151,13 @@ jobs:
           path: |
             dist/*.AppImage
             dist/*.deb
-            dist/latest-linux.yml
+            dist/*.yml
+            !dist/builder-debug.yml
 
   publish:
     needs: [package-windows, package-macos, package-linux]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref_type == 'tag'
+    if: always() && github.event_name == 'push' && github.ref_type == 'tag' && needs.package-windows.result == 'success' && (needs.package-macos.result == 'success' || needs.package-macos.result == 'skipped') && (needs.package-linux.result == 'success' || needs.package-linux.result == 'skipped')
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -154,4 +167,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes
+        run: |
+          flags=()
+          if [[ "$TAG" == *-* ]]; then flags+=(--prerelease); fi
+          gh release create "$TAG" release-assets/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes "${flags[@]}"

@@ -25,5 +25,7 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Prepare yt-dlp
+        run: npm run prepare:ytdlp
       - name: Build unpacked Linux application
         run: npm run build:nocheck && npx electron-builder --linux --dir --publish never

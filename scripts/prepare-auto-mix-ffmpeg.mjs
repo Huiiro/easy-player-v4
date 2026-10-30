@@ -1,40 +1,50 @@
-/* eslint-disable @typescript-eslint/explicit-function-return-type -- Plain JavaScript build runner. */
 import fs from 'node:fs'
 import path from 'node:path'
-import { createHash } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 
 if (process.platform === 'win32') {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-  let bin = path.join(root, 'resources/lib/ffmpeg/bin')
-  let executable = path.join(bin, 'ffmpeg.exe')
-  let license = path.join(root, 'resources/lib/ffmpeg/LICENSE.txt')
-  if (!fs.existsSync(executable)) {
-    const installed =
-      process.env.VCPKG_INSTALLED_DIR ||
-      path.join(process.env.VCPKG_ROOT || path.join(root, 'vcpkg'), 'installed')
-    bin = path.join(installed, 'x64-windows/bin')
-    executable = path.join(installed, 'x64-windows/tools/ffmpeg/ffmpeg.exe')
-    license = path.join(installed, 'x64-windows/share/ffmpeg/copyright')
-  }
-  if (!fs.existsSync(executable))
-    throw new Error('Prepare resources/lib/ffmpeg or install vcpkg ffmpeg[ffmpeg] first')
-  const target = path.join(root, 'build/native-addon')
+  const { nativeRuntimePaths, copyIfDifferent, retireRuntimeFile } = createRequire(import.meta.url)(
+    './native-runtime-paths.cjs'
+  )
+  const target = path.resolve(root, process.argv[2] || 'build/native-addon')
+  const {
+    ffmpegBin: bin,
+    ffmpegExe: executable,
+    ffmpegLicense: license,
+    ffmpegDlls,
+    ffmpegManifest
+  } = nativeRuntimePaths(root, target)
+  if (!fs.existsSync(executable)) throw new Error('Run npm run prepare:native first')
   fs.mkdirSync(target, { recursive: true })
-  const hash = (file) => createHash('sha256').update(fs.readFileSync(file)).digest('hex')
-  for (const file of [
-    executable,
-    ...fs
-      .readdirSync(bin)
-      .filter((name) => name.endsWith('.dll'))
-      .map((name) => path.join(bin, name))
-  ]) {
-    const destination = path.join(target, path.basename(file))
-    if (!fs.existsSync(destination) || hash(file) !== hash(destination))
-      fs.copyFileSync(file, destination)
+  // Remove only known obsolete FFmpeg DLLs from previous SDK builds.
+  for (const name of fs.readdirSync(target)) {
+    if (
+      /^(avcodec|avformat|avutil|avfilter|avdevice|swresample|swscale|postproc)-\d+\.dll$/i.test(
+        name
+      ) &&
+      !ffmpegDlls.includes(name)
+    )
+      try {
+        fs.unlinkSync(path.join(target, name))
+      } catch (error) {
+        if (!['EPERM', 'EACCES', 'EBUSY'].includes(error.code)) throw error
+        retireRuntimeFile(path.join(target, name))
+      }
   }
-  fs.copyFileSync(license, path.join(target, 'FFmpeg-LICENSE.txt'))
+  for (const file of [executable, ...ffmpegDlls.map((name) => path.join(bin, name))])
+    copyIfDifferent(file, path.join(target, path.basename(file)))
+  copyIfDifferent(license, path.join(target, 'FFmpeg-LICENSE.txt'))
+  copyIfDifferent(ffmpegManifest, path.join(target, 'ffmpeg-runtime.json'))
+  const crt = spawnSync(
+    process.execPath,
+    [path.join(root, 'scripts/prepare-windows-runtime.mjs'), target],
+    { windowsHide: true, stdio: 'inherit' }
+  )
+  if (crt.error) throw crt.error
+  if (crt.status !== 0) throw new Error('VC++ runtime preparation failed')
   const result = spawnSync(path.join(target, 'ffmpeg.exe'), ['-version'], {
     windowsHide: true,
     stdio: 'ignore'

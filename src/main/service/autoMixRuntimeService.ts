@@ -10,6 +10,11 @@ import type {
 
 export const AUTO_MIX_RELEASE_URL =
   'https://github.com/Huiiro/easy-player-v4/releases/latest/download/'
+export function autoMixReleaseUrl(version: string): string {
+  return /^\d+\.\d+\.\d+-[0-9A-Za-z.-]+(?:\+[0-9A-Za-z.-]+)?$/.test(version)
+    ? `https://github.com/Huiiro/easy-player-v4/releases/download/v${encodeURIComponent(version)}/`
+    : AUTO_MIX_RELEASE_URL
+}
 export const AUTO_MIX_MANIFEST_ASSET = 'easy-player-auto-mix-win32-x64.json'
 const required = [
   'python/python.exe',
@@ -28,6 +33,7 @@ interface Options {
   supported?: boolean
   cacheDirectory?: string
   beforeMaintenance?: () => Promise<void>
+  releaseBaseUrl?: string
 }
 
 export function validateRuntimeManifest(value: unknown): AutoMixRuntimeManifest {
@@ -271,7 +277,7 @@ export class AutoMixRuntimeService {
     timeout.unref()
     try {
       const response = await this.options.fetch(
-        AUTO_MIX_RELEASE_URL + AUTO_MIX_MANIFEST_ASSET,
+        (this.options.releaseBaseUrl ?? AUTO_MIX_RELEASE_URL) + AUTO_MIX_MANIFEST_ASSET,
         signal
       )
       if (!response.ok)
@@ -282,7 +288,10 @@ export class AutoMixRuntimeService {
       if (text.length > 16_384) throw new Error('Component manifest is too large')
       const manifest = validateRuntimeManifest(JSON.parse(text))
       this.update({ phase: 'downloading', totalBytes: manifest.size, version: manifest.version })
-      const download = await this.options.fetch(AUTO_MIX_RELEASE_URL + manifest.asset, signal)
+      const download = await this.options.fetch(
+        (this.options.releaseBaseUrl ?? AUTO_MIX_RELEASE_URL) + manifest.asset,
+        signal
+      )
       if (!download.ok || !download.body) throw new Error('Component archive download failed')
       await fs.mkdir(staging, { recursive: true })
       const archive = path.join(staging, 'download.zip')

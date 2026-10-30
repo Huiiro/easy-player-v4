@@ -15,8 +15,16 @@ try {
   const js = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext }
   }).outputText
-  const { AutoMixRuntimeService, validateRuntimeManifest } = await import(
+  const { AutoMixRuntimeService, validateRuntimeManifest, autoMixReleaseUrl } = await import(
     'data:text/javascript;base64,' + Buffer.from(js).toString('base64')
+  )
+  assert.equal(
+    autoMixReleaseUrl('3.3.1'),
+    'https://github.com/Huiiro/easy-player-v4/releases/latest/download/'
+  )
+  assert.equal(
+    autoMixReleaseUrl('3.3.2-beta.1'),
+    'https://github.com/Huiiro/easy-player-v4/releases/download/v3.3.2-beta.1/'
   )
   const workerFile = path.join(directory, 'extract.cjs')
   await build({
@@ -50,6 +58,8 @@ try {
   let fetches = 0,
     verifications = 0
   const statuses = []
+  const requestedUrls = []
+  const releaseBaseUrl = autoMixReleaseUrl('3.3.2-beta.1')
   const cacheDirectory = path.join(directory, 'stem-cache')
   let beforeMaintenance = async () => {}
   const options = (root) => ({
@@ -57,8 +67,10 @@ try {
     cacheDirectory,
     beforeMaintenance: () => beforeMaintenance(),
     supported: true,
+    releaseBaseUrl,
     fetch: async (url) => {
       fetches++
+      requestedUrls.push(url)
       return new Response(url.endsWith('.json') ? JSON.stringify(manifest) : bytes)
     },
     extract: async (archive, target, limit) => extractRuntimeArchive(archive, target, limit),
@@ -77,6 +89,11 @@ try {
   await service.wait()
   assert.equal(service.status().installed, true)
   assert.equal(fetches, 2, 'Concurrent starts must share one download')
+  assert.deepEqual(
+    requestedUrls,
+    [releaseBaseUrl + 'easy-player-auto-mix-win32-x64.json', releaseBaseUrl + manifest.asset],
+    'Prerelease manifest and ZIP must come from the same tagged release'
+  )
   assert.equal(verifications, 1)
   assert.ok(statuses.some((status) => status.phase === 'downloading'))
   assert.ok(statuses.some((status) => status.phase === 'installing'))

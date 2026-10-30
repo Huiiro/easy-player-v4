@@ -1,21 +1,93 @@
 # Desktop release pipeline
 
-Pushing a tag named `v<package-version>` (for example `v3.0.21`) builds the
-Windows x64 installer, macOS arm64 DMG/ZIP, and Linux x64
-AppImage/DEB packages. It then creates a GitHub Release containing the
-installers, blockmaps, and update manifests. The tag is checked against
-`package.json` before any platform starts building.
+Pushing a tag named `v<package-version>` currently builds and publishes only
+the Windows x64 installer. The release also includes its update manifest and
+the optional Auto Mix component ZIP/JSON. The tag must match `package.json`;
+keep both version fields in `package-lock.json` in sync. Commit the changes
+before tagging so the workflow builds the intended source.
+
+A version with a prerelease suffix, such as `3.3.1-beta.1`, creates a GitHub
+prerelease and includes the matching update channel manifest. For prerelease
+apps, the optional component downloader uses that exact version's release
+assets; stable apps use the latest stable release.
 
 Pull requests and ordinary branch pushes run the Windows, macOS, and Linux CI
 workflows. They build the application but do not publish a release. Release
 tags skip these duplicate CI builds. A manual run of **Release desktop apps**
-packages all three platforms and retains the packages as workflow artifacts,
-without creating a GitHub Release.
+defaults to Windows; select `all` to additionally build macOS/Linux artifacts.
+Manual runs do not create a GitHub Release. Linux native audio packaging still
+needs separate validation before publishing Linux builds.
 
-The packaging workflows intentionally use `build:nocheck`, including the
-`build:linux` script. The current renderer type-check target has pre-existing
-errors outside the desktop build and must be repaired before it can become a
-required release gate.
+## Windows build and validation
+
+Use Node.js from `.nvmrc` (22.20.0), Visual Studio 2022 with Desktop C++ and
+Windows SDK, CMake and Git. Run `npm run prepare:native` to build the pinned
+FFmpeg 8.1.2 audio profile, libsamplerate and SoundTouch. `VCPKG_ROOT` may point
+to an existing Git checkout; otherwise the script creates one under `build`.
+Both CI and local builds use `resources/lib/native-deps/vcpkg.json`, the same
+overlay profile and the release-only `x64-windows-audio` triplet. Runtime files
+and SDK headers are generated under
+`build/native-deps/installed/x64-windows-audio`. The old full-featured
+`resources/lib/ffmpeg` SDK is no longer selected.
+
+The profile retains common audio/DSD decoding, HTTPS/HLS audio, artwork,
+metadata remuxing, audio resampling and PCM output for the optional stem worker.
+FFmpeg CLI requires a small avfilter library. Video encoders, hardware video,
+device capture, swscale, subtitles and external video/GPU libraries are omitted.
+The package contains exactly five manifest-verified FFmpeg DLLs and rejects
+video/device DLLs or an FFmpeg runtime over 15 MiB.
+SoundTouch 2.4.0 is pinned to an official Git commit and checked archive hash
+in `sources.json`, avoiding a regenerated upstream tag archive.
+
+Native compilation explicitly configures the installed Electron headers even
+when reusing an old build directory. Windows packaging defaults to BCJ/level 9
+locally and in CI. A running player can retain an old mapped DLL; the build
+preserves it as a backup outside packaging patterns. Restart to load the new
+runtime.
+
+Windows stages the required VC++ runtime DLLs from Visual Studio's x64
+redistributable directory and follows their PE imports recursively. They are
+packaged beside both the application EXE and the native FFmpeg CLI. Package
+verification checks their architecture, SHA-256 and dependency closure. Set
+`EASY_PLAYER_VC_REDIST_DIR` only when using a custom Visual Studio layout.
+
+yt-dlp is pinned across platforms in `resources/lib/ytdlp-release.json`.
+Preparation replaces stale caches, verifies official size/SHA-256 and executes
+`--version` before activation. Run `npm run update:ytdlp` to refresh the lock
+from the latest stable release and install the host asset. Commit the updated
+lock so Windows/macOS/Linux CI all use the same version.
+
+The Windows command runs both TypeScript checks and prepares yt-dlp/FFmpeg:
+
+```powershell
+npm ci
+npm run prepare:native
+npm run build:win -- --publish never
+node scripts/verify-windows-package.cjs
+node scripts/test-native-runtime-paths.cjs
+npm run test:audio-core
+npm run test:packaging-deps
+npm run test:auto-mix-runtime
+```
+
+Python 3.12.10 is a build dependency for the optional component, not for the
+base installer or users' systems. Its preparation downloads a CPU-only runtime
+and model, strips build/test files, and emits a separate archive:
+Build-time model downloads stay under `build/stem-downloads/model-cache`,
+separate from the application's installed components and stem cache.
+
+```powershell
+npm run package:auto-mix
+npm run test:bundled-auto-mix
+npm run test:auto-mix-component-install
+```
+
+Publish the installer, its `*.yml` update manifest, any blockmap, and both
+`easy-player-auto-mix-win32-x64-*.zip` and `easy-player-auto-mix-win32-x64.json`.
+The component JSON contains the archive size and SHA-256 and must accompany
+the corresponding ZIP. The release workflow runs these checks automatically
+and rejects base installers over 250 MiB. Component tests use isolated data
+directories and do not uninstall or clear the user's real component/cache.
 
 ## Repository secrets
 

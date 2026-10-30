@@ -27,9 +27,10 @@ An already-correct sample clock is retained without calling setSampleRate.
 ## Regression tests (PowerShell, Windows)
 
 ```powershell
-cmake -S tests/native -B build/asio-regression -A x64 '-DCMAKE_PREFIX_PATH=D:/program/vcpkg/installed/x64-windows'
+npm run prepare:native
+cmake -S tests/native -B build/asio-regression -A x64
 cmake --build build/asio-regression --config Release
-$env:PATH = "$PWD/resources/lib/ffmpeg/bin;D:/program/vcpkg/installed/x64-windows/bin;$env:PATH"
+$env:PATH = "$PWD/build/native-deps/installed/x64-windows-audio/bin;$env:PATH"
 ctest --test-dir build/asio-regression -C Release --output-on-failure
 ```
 

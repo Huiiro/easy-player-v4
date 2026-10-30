@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
 project(easy_player_dsp_tests LANGUAGES CXX)
+if(WIN32)
+  include(../../resources/lib/native-deps/audio-dependencies.cmake)
+endif()
 enable_testing()
 add_executable(dop_packer_test dop_packer_test.cpp)
 target_compile_features(dop_packer_test PRIVATE cxx_std_17)
@@ -58,10 +61,10 @@ if(SAMPLERATE_INCLUDE_DIR AND SAMPLERATE_LIBRARY AND SOUNDTOUCH_INCLUDE_DIR AND 
   add_test(NAME dsp_pipeline_order COMMAND dsp_pipeline_order_test)
 
   find_path(FFMPEG_TEST_INCLUDE libavcodec/avcodec.h
-    PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../resources/lib/ffmpeg/include)
+    PATHS ${FFMPEG_ROOT}/include)
   foreach(component avcodec avformat avutil swresample)
     find_library(FFMPEG_TEST_${component} NAMES ${component}
-      PATHS ${CMAKE_CURRENT_SOURCE_DIR}/../../resources/lib/ffmpeg/lib)
+      PATHS ${FFMPEG_ROOT}/lib)
   endforeach()
   if(FFMPEG_TEST_INCLUDE AND FFMPEG_TEST_avcodec AND FFMPEG_TEST_avformat AND FFMPEG_TEST_avutil AND FFMPEG_TEST_swresample)
     include(../../engine-core/engine_core_sources.cmake)

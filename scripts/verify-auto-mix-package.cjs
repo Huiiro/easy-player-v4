@@ -9,6 +9,10 @@ module.exports = async (context) => {
   const root = context.packager.projectDir
   for (const relative of [
     'build/native-addon/ffmpeg.exe',
+    'build/native-addon/ffmpeg-runtime.json',
+    'build/native-addon/msvc-runtime.json',
+    'resources/lib/yt-dlp/win/yt-dlp.exe',
+    'resources/lib/yt-dlp/win/yt-dlp.exe.manifest.json',
     'build/native-addon/easy_player_native.node',
     'build/native-addon/samplerate.dll',
     'build/native-addon/SoundTouch.dll',
@@ -17,7 +21,7 @@ module.exports = async (context) => {
   ]) {
     if (!fs.existsSync(path.join(root, relative))) {
       throw new Error(
-        `Missing Auto Mix package resource: ${relative}. Run npm run prepare:auto-mix first.`
+        `Missing base package resource: ${relative}. Run npm run build:native and npm run prepare:ffmpeg first.`
       )
     }
   }

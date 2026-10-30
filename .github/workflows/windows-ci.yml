@@ -34,17 +34,13 @@ jobs:
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Install native dependencies
-        shell: pwsh
-        run: |
-          $env:VCPKG_ROOT = Join-Path $env:RUNNER_TEMP 'easy-player-vcpkg'
-          Add-Content -LiteralPath $env:GITHUB_ENV -Value "VCPKG_ROOT=$env:VCPKG_ROOT"
-          git clone https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/vcpkg.exe" install 'ffmpeg[ffmpeg]' libsamplerate soundtouch --triplet x64-windows
+        run: npm run prepare:native
       - name: Build native addon
         run: npm run build:native
+      - name: Verify core audio formats and metadata writing
+        run: npm run test:audio-core
+      - name: Verify dependency cache and VC++ packaging checks
+        run: npm run test:packaging-deps
       - name: Build optional CPU stem component
         run: npm run package:auto-mix
       - name: Prepare bundled FFmpeg
@@ -56,7 +52,7 @@ jobs:
           $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '9'
           npm run build:nocheck
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          npx electron-builder --win --dir --publish never
+          node scripts/package-windows.mjs --dir --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-windows-package.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

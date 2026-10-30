@@ -38,7 +38,7 @@ try {
           }))
           builder.onLoad({ filter: /.*/, namespace: 'test-electron' }, () => ({
             contents:
-              'export const app={isPackaged:false,once:()=>{}}; export const net={fetch:(url)=>globalThis.componentTestFetch(url)};'
+              'export const app={isPackaged:false,once:()=>{},getVersion:()=>"3.3.1"}; export const net={fetch:(url)=>globalThis.componentTestFetch(url)};'
           }))
         }
       }

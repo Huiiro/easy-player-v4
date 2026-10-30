@@ -179,7 +179,17 @@ export function getStemFfmpegPath(isPackaged: boolean): string {
   if (!isPackaged && fs.existsSync(prepared)) return prepared
   return isPackaged
     ? path.join(process.resourcesPath, 'native', executable)
-    : getProjectPath('resources', 'lib', 'ffmpeg', 'bin', executable)
+    : process.platform === 'win32'
+      ? getProjectPath(
+          'build',
+          'native-deps',
+          'installed',
+          'x64-windows-audio',
+          'tools',
+          'ffmpeg',
+          executable
+        )
+      : getProjectPath('resources', 'lib', 'ffmpeg', 'bin', executable)
 }
 
 export function getStemModelPath(): string {

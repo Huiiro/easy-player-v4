@@ -7,26 +7,9 @@ $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 Set-Location $ProjectDir
 
-Write-Host "=== Killing existing Electron processes ===" -ForegroundColor Cyan
-taskkill /F /IM electron.exe 2>$null | Out-Null
-Start-Sleep 1
-
-Write-Host "=== Setting up CMake ===" -ForegroundColor Cyan
-$cmakePath = "D:\application\VisualStudio\IDE\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
-$env:Path = "$cmakePath;$env:Path"
-
-Write-Host "=== Compiling native addon ===" -ForegroundColor Cyan
-npx cmake-js compile --directory resources/lib --out build/native-addon
-if ($LASTEXITCODE -ne 0) { throw "cmake-js compile failed" }
-
-Write-Host "=== Copying .node and FFmpeg DLLs ===" -ForegroundColor Cyan
-Remove-Item -Force build/native-addon/easy_player_native.node -ErrorAction SilentlyContinue
-Copy-Item build/native-addon/Release/easy_player_native.dll build/native-addon/easy_player_native.node
-
-$ffmpegBin = "resources/lib/ffmpeg/bin"
-@("avcodec-63.dll", "avformat-63.dll", "avutil-61.dll", "swresample-7.dll") | ForEach-Object {
-    Copy-Item "$ffmpegBin/$_" build/native-addon/
-}
+Write-Host "=== Building native addon with pinned audio dependencies ===" -ForegroundColor Cyan
+npm run build:native
+if ($LASTEXITCODE -ne 0) { throw "Native audio build failed" }
 
 Write-Host "=== Build complete ===" -ForegroundColor Green
 
@@ -37,4 +20,4 @@ if ($NoRun) {
 
 Write-Host "=== Starting Electron ===" -ForegroundColor Cyan
 Remove-Item Env:\ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-npx electron-vite dev
+npm run dev

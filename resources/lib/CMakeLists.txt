@@ -90,16 +90,7 @@ endif()
 # when invoked via cmake-js.
 
 # ── Dependency roots ──
-# A local vcpkg checkout is optional. CI and other machines may provide
-# VCPKG_ROOT or VCPKG_INSTALLED_DIR instead; never depend on one developer's
-# absolute installation path.
-if(NOT DEFINED VCPKG_INSTALLED_ROOT)
-    if(DEFINED ENV{VCPKG_INSTALLED_DIR})
-        set(VCPKG_INSTALLED_ROOT "$ENV{VCPKG_INSTALLED_DIR}/x64-windows")
-    elseif(DEFINED ENV{VCPKG_ROOT})
-        set(VCPKG_INSTALLED_ROOT "$ENV{VCPKG_ROOT}/installed/x64-windows")
-    endif()
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/native-deps/audio-dependencies.cmake")
 
 # ── FFmpeg ──
 # Expected layout (vcpkg or manual):
@@ -107,16 +98,6 @@ endif()
 #     include/  (libavcodec/, libavformat/, libswresample/, libavutil/)
 #     lib/      (avcodec.lib, avformat.lib, swresample.lib, avutil.lib)
 #     bin/      (avcodec-*.dll, avformat-*.dll, ...)
-
-if(NOT DEFINED FFMPEG_ROOT)
-    # Local FFmpeg headers, libraries and binaries live directly in ffmpeg.
-    if(DEFINED VCPKG_INSTALLED_ROOT AND EXISTS "${VCPKG_INSTALLED_ROOT}/include/libavcodec")
-        set(FFMPEG_DEFAULT "${VCPKG_INSTALLED_ROOT}")
-    else()
-        set(FFMPEG_DEFAULT "${CMAKE_SOURCE_DIR}/ffmpeg")
-    endif()
-    set(FFMPEG_ROOT "${FFMPEG_DEFAULT}" CACHE PATH "FFmpeg install prefix")
-endif()
 
 find_library(AVCODEC_LIB    avcodec    PATHS "${FFMPEG_ROOT}/lib" NO_DEFAULT_PATH)
 find_library(AVFORMAT_LIB   avformat   PATHS "${FFMPEG_ROOT}/lib" NO_DEFAULT_PATH)
@@ -126,8 +107,7 @@ find_library(SWRESAMPLE_LIB swresample PATHS "${FFMPEG_ROOT}/lib" NO_DEFAULT_PAT
 if(NOT AVCODEC_LIB OR NOT AVFORMAT_LIB OR NOT AVUTIL_LIB OR NOT SWRESAMPLE_LIB)
     message(FATAL_ERROR
         "FFmpeg libraries not found in ${FFMPEG_ROOT}/lib.\n"
-        "Install FFmpeg development files or set FFMPEG_ROOT.\n"
-        "  vcpkg install ffmpeg[core,avcodec,avformat,swresample]:x64-windows")
+        "Run npm run prepare:native.")
 endif()
 
 # ── libsamplerate ──
@@ -233,14 +213,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # Development loads the addon directly from build/native-addon. cmake-js
 # normally invokes scripts/copy-native-assets.js, but a direct CMake build
 # does not. Copy the module and libsamplerate runtime for both workflows.
+find_program(EASY_PLAYER_NODE_EXECUTABLE NAMES node)
+if(NOT EASY_PLAYER_NODE_EXECUTABLE)
+    message(FATAL_ERROR "Node.js is required to stage the Windows native runtime")
+endif()
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<TARGET_FILE:${PROJECT_NAME}>" "${CMAKE_BINARY_DIR}/easy_player_native.node"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SAMPLERATE_DLL}" "${CMAKE_BINARY_DIR}/samplerate.dll"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${SOUNDTOUCH_DLL}" "${CMAKE_BINARY_DIR}/SoundTouch.dll"
-)
+    COMMAND "${EASY_PLAYER_NODE_EXECUTABLE}"
+        "${CMAKE_CURRENT_LIST_DIR}/../../scripts/copy-native-assets.js"
+        "${CMAKE_BINARY_DIR}" "$<CONFIG>"
+    VERBATIM)
 
 # ── Install ──
 # Copy FFmpeg DLLs alongside the .node binary
