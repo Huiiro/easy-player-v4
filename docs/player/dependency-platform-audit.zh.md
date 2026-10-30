@@ -1,5 +1,10 @@
 # 依赖打包与平台适配审查
 
+发布流程更新（2026-10-31）：版本标签已接入 Windows x64 + Mac ARM64 联合构建，
+两端校验成功后统一发布。Mac 日常 CI 与发布复用同一构建校验流程，产物包含
+DMG/ZIP、blockmap 和更新通道元数据；当前仍为 ad-hoc 签名。Linux 仍仅限手动
+构建，不纳入标签发布。下文的平台发布表保留为初次审查记录。
+
 Mac 后续适配（2026-10-31）：Apple Silicon 已改用锁定源码、音频白名单和
 `arm64-osx-audio` 构建，随包携带 FFmpeg CLI 与 7 个 dylib；已在 GitHub Actions
 通过编译、打包、9 种格式解码、标签封面以及包内 SQLite/Sharp 加载，隐藏 SDK 后
