@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { capturePreferenceDefaults } from '@/utils/preferenceDefaults'
+import { getAutomaticLyricsMetrics } from '@/utils/lyricsDisplay'
 import type { SongListColumns } from '@/utils/songListLayout'
 import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
@@ -898,6 +899,16 @@ export const useUIStore = defineStore(
       const root = document.documentElement
       root.style.setProperty('--lrc-padding', lyricsFontPadding.value + 'px')
     }
+    function adjustLyricsDisplay(): void {
+      const { fontSize, padding } = getAutomaticLyricsMetrics(
+        window.outerWidth,
+        window.outerHeight,
+        window.screen.availWidth,
+        window.screen.availHeight
+      )
+      setLyricsFontSize(fontSize)
+      setLyricsFontPadding(padding)
+    }
     function setLyricsOffset(offsetMs: number): void {
       lyricsOffsetMs.value = Math.max(-5000, Math.min(5000, Math.round(offsetMs / 100) * 100))
     }
@@ -1093,6 +1104,7 @@ export const useUIStore = defineStore(
       setCardStyle,
       setLyricsFontSize,
       setLyricsFontPadding,
+      adjustLyricsDisplay,
       setLyricsOffset,
       resetLyricsOffset,
       resetLyricsColors,

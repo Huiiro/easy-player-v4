@@ -5,7 +5,9 @@ import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useSeekProgress } from './useSeekProgress'
 import { formatArtists } from '@/utils/artists'
+import { getVolumeLevel } from '@/utils/volume'
 const player = usePlayerStore()
+const volumeLevel = computed(() => getVolumeLevel(player.volume))
 const { displayPositionMs, previewSeek, commitSeek, cancelSeek } = useSeekProgress(player)
 const ui = useUIStore()
 const { t } = useI18n()
@@ -90,8 +92,21 @@ function time(ms: number): string {
       </div>
       <div class="volume-row">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4 9v6h4l5 4V5L8 9H4z" />
-          <path class="sound-wave" d="M17 8a6 6 0 0 1 0 8" />
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.7"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M11 5 6 9H3v6h3l5 4V5Z" />
+            <path v-if="volumeLevel === 'mute'" d="m15.5 9.5 5 5m0-5-5 5" />
+            <path
+              v-if="volumeLevel === 'middle' || volumeLevel === 'high'"
+              d="M14.5 8.5a5 5 0 0 1 0 7"
+            />
+            <path v-if="volumeLevel === 'high'" d="M17.5 5.5a9 9 0 0 1 0 13" />
+          </g>
         </svg>
         <input
           class="slider"
@@ -255,12 +270,6 @@ svg {
   justify-self: center;
   width: 16px;
   height: 16px;
-}
-.sound-wave {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
 }
 .volume-row span {
   font-size: 10px;

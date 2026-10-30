@@ -416,15 +416,14 @@ async function copyLog(entry: {
         >
         <label
           >Intensity
-          <input
+          <select
             v-model.number="player.rhythmVisualConfig.intensity"
-            type="range"
-            min="0"
-            max="1"
-            step="0.05"
             @change="player.saveRhythmVisualConfig()"
-          />
-          {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%</label
+          >
+            <option :value="0.2">Gentle</option>
+            <option :value="0.6">Moderate</option>
+            <option :value="1">Strong</option>
+          </select></label
         >
         <label
           ><input

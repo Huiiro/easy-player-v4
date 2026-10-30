@@ -6,6 +6,7 @@ import BaseRange from '@/components/ui/BaseRange.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { getVolumeLevel } from '@/utils/volume'
 import { usePlayerBackdrop } from '@/components/player/usePlayerBackdrop'
 import { useSeekProgress } from '@/components/player/useSeekProgress'
 import { PlayMode } from '@/consts'
@@ -28,6 +29,7 @@ import { writeSongLyricSettings } from '@/services/songLyricSettings'
 
 const ui = useUIStore()
 const player = usePlayerStore()
+const volumeIcon = computed(() => `volume-volume-${getVolumeLevel(player.volume)}`)
 const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
   useSeekProgress(player)
 const { t } = useI18n()
@@ -144,6 +146,12 @@ async function setLyricPolicy(
   }
 }
 const moreOptions = computed(() => [
+  {
+    label: t('playerPanel.adjustLyricsDisplay'),
+    icon: 'common-refresh',
+    onClick: () => ui.adjustLyricsDisplay()
+  },
+  { type: 'divider' as const },
   {
     label: t('songList.addToPlaylist'),
     icon: 'common-plus',
@@ -900,7 +908,7 @@ function changeLyricsOffset(event: WheelEvent): void {
               :title="t('footer.volume')"
               @wheel="changeVolume"
             >
-              <svg-icon name="volume-volume-high" class-name="size-6" />
+              <SvgIcon :name="volumeIcon" class-name="size-6" />
               <span class="vertical-popup">
                 <small>{{ Math.round(player.volume * 100) }}%</small>
                 <input

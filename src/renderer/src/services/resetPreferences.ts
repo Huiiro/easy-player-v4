@@ -21,7 +21,7 @@ export async function restoreDefaultPreferences(): Promise<void> {
   if (!audio.success) throw new Error(audio.error || 'Unable to reset audio settings')
   await player.setSmartShuffleEnabled(false)
   if (player.smartShuffleEnabled) throw new Error('Unable to reset smart shuffle')
-  player.rhythmVisualConfig = { enabled: true, intensity: 0.65, reducedMotion: false }
+  player.rhythmVisualConfig = { enabled: true, intensity: 0.6, reducedMotion: false }
   await player.saveRhythmVisualConfig()
   await statistics.setEnabled(true)
   const results = await Promise.all([

@@ -880,19 +880,6 @@ function refreshOutputDevices(): void {
               />
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-xs text-text-l whitespace-nowrap">
-                {{ t('ap.intensity') }} {{ Math.round(player.rhythmVisualConfig.intensity * 100) }}%
-              </span>
-              <BaseSlider
-                v-model="player.rhythmVisualConfig.intensity"
-                :min="0"
-                :max="1"
-                :step="0.05"
-                class="w-48"
-                @change="player.saveRhythmVisualConfig()"
-              />
-            </div>
-            <div class="flex items-center gap-2">
               <span class="text-xs text-text-l">{{ t('ap.reduceMotion') }}</span>
               <BaseSwitch
                 :model-value="player.rhythmVisualConfig.reducedMotion"

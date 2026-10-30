@@ -13,6 +13,7 @@ import BaseDialog from '@/components/ui/BaseDialog.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { getVolumeLevel } from '@/utils/volume'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import SongDetailsDialog from '@/components/songlist/SongDetailsDialog.vue'
 import SongTagDialog from '@/components/tag/SongTagDialog.vue'
@@ -29,6 +30,7 @@ const emit = defineEmits<{
 const ui = useUIStore()
 const layoutStyle = computed(() => footerLayoutStyle(ui.footerLayout))
 const player = usePlayerStore()
+const volumeIcon = computed(() => `volume-volume-${getVolumeLevel(player.volume)}`)
 const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
   useSeekProgress(player)
 const { t } = useI18n()
@@ -487,10 +489,7 @@ onBeforeUnmount(() => {
             type="button"
             :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
           >
-            <SvgIcon
-              :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
-              class-name="size-5"
-            />
+            <SvgIcon :name="volumeIcon" class-name="size-5" />
           </button>
           <div
             class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-[var(--motion-duration-fast)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
@@ -563,10 +562,7 @@ onBeforeUnmount(() => {
             class="ep-menu custom-scrollbar absolute bottom-full right-0 z-[9999] mb-4 max-h-[min(70vh,480px)] w-56 overflow-y-auto rounded-xl border border-border bg-bg p-1 shadow-xl"
           >
             <div class="ep-footer-menu-volume items-center gap-2 px-3 py-2 text-sm">
-              <SvgIcon
-                :name="player.volume === 0 ? 'volume-volume-mute' : 'volume-volume-high'"
-                class-name="size-4 shrink-0"
-              />
+              <SvgIcon :name="volumeIcon" class-name="size-4 shrink-0" />
               <label for="footer-menu-volume">{{ t('footer.volume') }}</label>
               <input
                 id="footer-menu-volume"

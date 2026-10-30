@@ -32,6 +32,7 @@ import { t } from '@/i18n'
 import { PlayMode } from '@/consts'
 import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
+import { normalizeRhythmVisualIntensity } from '@/utils/rhythmVisual'
 
 export const usePlayerStore = defineStore('player', () => {
   const { warning, success, info } = useMessage()
@@ -70,7 +71,7 @@ export const usePlayerStore = defineStore('player', () => {
     integratedLufs: -70,
     spectrum: Array.from({ length: 64 }, () => 0)
   })
-  const rhythmVisualConfig = ref({ enabled: true, intensity: 0.65, reducedMotion: false })
+  const rhythmVisualConfig = ref({ enabled: true, intensity: 0.6, reducedMotion: false })
   const preampEnabled = ref(false)
   const preampDb = ref(0)
   const replayGainConfig = ref<{
@@ -1815,10 +1816,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (!parsed) return
       rhythmVisualConfig.value = {
         enabled: parsed.enabled !== false,
-        intensity: Math.max(
-          0,
-          Math.min(1, typeof parsed.intensity === 'number' ? parsed.intensity : 0.65)
-        ),
+        intensity: normalizeRhythmVisualIntensity(parsed.intensity),
         reducedMotion: parsed.reducedMotion === true
       }
       if (migratedLegacyConfig) {

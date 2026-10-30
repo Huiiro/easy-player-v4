@@ -957,6 +957,11 @@ export default {
     audioControlPanelDescription: '调整均衡器、DSP 和输出设备。',
     openAudioControlPanel: '打开音频控制',
     reduceMotion: '减少动态效果',
+    motionIntensity: '动效强度',
+    motionIntensityDescription: '调整随音乐变化的动效幅度。',
+    motionIntensityGentle: '柔和',
+    motionIntensityModerate: '适中',
+    motionIntensityStrong: '强烈',
     reduceMotionDescription: '减少背景和界面动画。',
     system: '系统设置',
     systemDescription: '设置语言、启动方式和应用更新。',
@@ -1167,6 +1172,7 @@ export default {
     version: '版本'
   },
   playerPanel: {
+    adjustLyricsDisplay: '自动调整占比',
     lyricSearchHint: '输入歌曲信息后点击搜索，结果将显示在这里。',
     lyricSearchResults: '搜索结果',
     lyricSearchTitle: '搜索歌词',

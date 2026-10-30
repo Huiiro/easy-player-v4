@@ -19,6 +19,12 @@ const songPlayTriggerOptions = computed(() => [
   { label: t('settings.songPlaySingleClick'), value: 'single' }
 ])
 
+const motionIntensityOptions = computed(() => [
+  { label: t('settings.motionIntensityGentle'), value: 0.2 },
+  { label: t('settings.motionIntensityModerate'), value: 0.6 },
+  { label: t('settings.motionIntensityStrong'), value: 1 }
+])
+
 const playQueuePositionOptions = computed(() => [
   { label: t('settings.playQueueRight'), value: 'right' },
   { label: t('settings.playQueueLeft'), value: 'left' }
@@ -90,6 +96,18 @@ function setSmartShuffle(value: boolean | string | number): void {
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.performance')">
+      <SettingRow
+        :label="t('settings.motionIntensity')"
+        :description="t('settings.motionIntensityDescription')"
+      >
+        <BaseSelect
+          v-model="player.rhythmVisualConfig.intensity"
+          class="w-48"
+          :options="motionIntensityOptions"
+          :aria-label="t('settings.motionIntensity')"
+          teleport
+        />
+      </SettingRow>
       <SettingRow
         :label="t('settings.reduceMotion')"
         :description="t('settings.reduceMotionDescription')"

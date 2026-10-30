@@ -972,6 +972,11 @@ export default {
     audioControlPanelDescription: 'Adjust the equalizer, DSP, and output device.',
     openAudioControlPanel: 'Open audio controls',
     reduceMotion: 'Reduce motion',
+    motionIntensity: 'Motion intensity',
+    motionIntensityDescription: 'Adjust how strongly visuals react to music.',
+    motionIntensityGentle: 'Gentle',
+    motionIntensityModerate: 'Moderate',
+    motionIntensityStrong: 'Strong',
     reduceMotionDescription: 'Reduce background and interface animations.',
     system: 'System',
     systemDescription: 'Manage language, startup, and application updates.',
@@ -1196,6 +1201,7 @@ export default {
     version: 'Version'
   },
   playerPanel: {
+    adjustLyricsDisplay: 'Auto-fit lyrics',
     lyricSearchHint: 'Enter the song details and search. Results will appear here.',
     lyricSearchResults: 'Search results',
     lyricSearchTitle: 'Search lyrics',
