@@ -34,6 +34,16 @@ function rpaths(output) {
 function isSystemLibrary(library) {
   return library.startsWith('/usr/lib/') || library.startsWith('/System/Library/')
 }
+function minimumMacosVersion(output) {
+  const versions = []
+  let active = false
+  for (const line of output.split('\n')) {
+    if (/\bcmd LC_/.test(line)) active = /\bcmd LC_(BUILD_VERSION|VERSION_MIN_MACOSX)\b/.test(line)
+    const match = active && /^\s*(?:minos|version) (\d+\.\d+(?:\.\d+)?)/.exec(line)
+    if (match) versions.push(match[1])
+  }
+  return versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]
+}
 function isInside(root, file) {
   const relative = path.relative(root, file)
   return relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)
@@ -113,6 +123,12 @@ function verifyMacosRuntime(directory, arch, projectRoot, execute = run) {
     const file = path.join(directory, relative)
     assertArchitecture(file, arch, execute)
     execute('codesign', ['--verify', '--strict', file])
+    const loadCommands = execute('otool', ['-l', file])
+    if (rpaths(loadCommands).length)
+      throw new Error(`Unexpected runtime search path remains: ${relative}`)
+    const minimum = minimumMacosVersion(loadCommands)
+    if (!minimum || minimum.localeCompare('12.0', undefined, { numeric: true }) > 0)
+      throw new Error(`Native binary requires a newer macOS than 12.0: ${relative} (${minimum})`)
     const identity = execute('otool', ['-D', file])
       .split('\n')
       .slice(1)
@@ -205,6 +221,8 @@ function bundleMacosRuntime(projectRoot, directory, arch = process.arch) {
         '@loader_path/' + path.basename(binary.destination),
         binary.destination
       ])
+    for (const search of new Set(rpaths(run('otool', ['-l', binary.destination]))))
+      run('install_name_tool', ['-delete_rpath', search, binary.destination])
     run('codesign', ['--force', '--sign', '-', '--timestamp=none', binary.destination])
   }
   fs.copyFileSync(
@@ -232,6 +250,7 @@ module.exports = {
   isSystemLibrary,
   resolveSdkLibrary,
   assertArchitecture,
+  minimumMacosVersion,
   verifyMacosRuntime,
   bundleMacosRuntime
 }

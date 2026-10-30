@@ -2,7 +2,11 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { verifyMacosRuntime, assertArchitecture } = require('./macos-runtime.cjs')
+const {
+  verifyMacosRuntime,
+  assertArchitecture,
+  minimumMacosVersion
+} = require('./macos-runtime.cjs')
 
 if (process.platform !== 'darwin') throw new Error('Verify the Mac package on macOS')
 const app = path.resolve(process.argv[2] || 'dist/mac-arm64/EasyPlayer.app')
@@ -26,6 +30,19 @@ const executable = path.join(
   ])
 )
 assertArchitecture(executable, arch)
+const inspectModules = (directory) => {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    const file = path.join(directory, entry.name)
+    if (entry.isDirectory()) inspectModules(file)
+    else if (/\.(node|dylib)$/.test(entry.name)) {
+      assertArchitecture(file, arch)
+      const minimum = minimumMacosVersion(execute('otool', ['-l', file]))
+      if (minimum && minimum.localeCompare('12.0', undefined, { numeric: true }) > 0)
+        throw new Error(`Native Node dependency requires macOS ${minimum}: ${file}`)
+    }
+  }
+}
+inspectModules(path.join(resources, 'app.asar.unpacked'))
 const result = verifyMacosRuntime(native, arch, path.resolve(__dirname, '..'))
 for (const file of fs.readdirSync(native))
   if (/\.(dll|exe)$/.test(file)) throw new Error(`Windows runtime in Mac package: ${file}`)

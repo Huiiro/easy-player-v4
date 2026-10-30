@@ -1,5 +1,12 @@
 # 依赖打包与平台适配审查
 
+Mac 后续适配（2026-10-31）：Apple Silicon 已改用锁定源码、音频白名单和
+`arm64-osx-audio` 构建，随包携带 FFmpeg CLI 与 7 个 dylib；已在 GitHub Actions
+通过编译、打包、9 种格式解码、标签封面以及包内 SQLite/Sharp 加载，隐藏 SDK 后
+仍可运行。输出界面已改为 CoreAudio。最低系统与依赖闭合检查、DSP/Remix 回归
+见当前 [Mac 构建说明](macos-build.md)。下文保留初次审查时的状态；Mac 可选分轨、
+独占/DoP 和发行签名/公证仍未完成。
+
 后续修复（2026-10-30）：已补齐按 PE 依赖递归收集的 VC++ DLL，同时部署到应用
 EXE 与 native 目录，并增加架构/哈希/依赖闭合验证。yt-dlp 已更新至 2026.10.26，
 使用四平台资产的官方 SHA-256 锁文件，旧缓存不再仅凭非空复用；本地 macOS/Linux

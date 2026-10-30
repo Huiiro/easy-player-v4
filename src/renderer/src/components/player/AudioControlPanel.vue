@@ -661,7 +661,7 @@ const backendLabel: Record<string, string> = {
   asio: 'ASIO',
   wasapi_shared: 'WASAPI Shared',
   wasapi_exclusive: 'WASAPI Exclusive',
-  directsound: 'DirectSound'
+  directsound: window.electron.process.platform === 'darwin' ? 'CoreAudio' : 'DirectSound'
 }
 const currentBackendLabel = computed(
   () => backendLabel[player.currentBackend] ?? player.currentBackend

@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process')
 const {
   dependencies,
   rpaths,
+  minimumMacosVersion,
   resolveSdkLibrary,
   assertArchitecture,
   verifyMacosRuntime
@@ -29,6 +30,12 @@ try {
       'cmd LC_RPATH\n cmdsize 48\n path @loader_path/../lib (offset 12)\ncmd LC_OTHER\n path ignored (offset 12)'
     ),
     ['@loader_path/../lib']
+  )
+  assert.equal(
+    minimumMacosVersion(
+      'cmd LC_ID_DYLIB\n current version 62.28.102\ncmd LC_BUILD_VERSION\n minos 12.0\n sdk 15.0\ncmd LC_VERSION_MIN_MACOSX\n version 11.0\n sdk 14.0'
+    ),
+    '12.0'
   )
   const config = path.join(directory, 'resources/lib/native-deps')
   for (const name of [
@@ -110,6 +117,7 @@ try {
     if (command === 'lipo') return 'arm64'
     if (command === 'codesign') return ''
     if (args[0] === '-D') return args[1] + ':\n'
+    if (args[0] === '-l') return 'cmd LC_BUILD_VERSION\n minos 12.0\n sdk 14.0\n'
     const file = args[1]
     const prefix =
       path.dirname(file) === path.join(runtime, 'deps') ? '@loader_path/' : '@loader_path/deps/'
@@ -122,6 +130,21 @@ try {
     )
   }
   verifyMacosRuntime(runtime, 'arm64', directory, execute)
+  for (const [loadCommands, error] of [
+    ['cmd LC_BUILD_VERSION\n minos 14.0\n', /newer macOS/],
+    [
+      'cmd LC_BUILD_VERSION\n minos 12.0\ncmd LC_RPATH\n path /opt/homebrew/lib (offset 12)\n',
+      /search path remains/
+    ]
+  ]) {
+    assert.throws(
+      () =>
+        verifyMacosRuntime(runtime, 'arm64', directory, (command, args) =>
+          command === 'otool' && args[0] === '-l' ? loadCommands : execute(command, args)
+        ),
+      error
+    )
+  }
   assert.throws(
     () =>
       verifyMacosRuntime(runtime, 'arm64', directory, (command, args) =>

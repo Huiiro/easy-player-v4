@@ -1,8 +1,8 @@
 # 原生依赖与外部工具
 
 本目录保存音频引擎的构建入口、依赖配置和外部工具版本锁。
-以下命令均从项目根目录执行。当前已验证的发行目标为 Windows x64；
-macOS 有独立构建入口，但尚未完成与 Windows 对等的依赖与功能适配。
+以下命令均从项目根目录执行。Windows x64 为当前正式发行目标；
+macOS Apple Silicon 已接入锁定依赖构建与 GitHub Actions 测试包，最低系统为 macOS 12。
 
 ## 目录用途
 
@@ -116,30 +116,41 @@ Windows 使用 x64 独立 exe，macOS 使用官方 universal 独立程序，Linu
 开发环境使用本目录下的对应平台文件；缺少工具时，应用回退到
 `EASY_PLAYER_YTDLP_PATH` 或 PATH 上的 `yt-dlp`。
 
-## macOS 与 Linux 的现状
+## macOS Apple Silicon
 
-`prepare:native` 和当前 `x64-windows-audio` 配置只支持 Windows x64，不能直接
-在 Mac 上运行或复用生成的 DLL。
+GitHub Actions 的 `macOS build` 使用 `macos-14` ARM64 runner，生成 DMG 和 ZIP
+测试产物。本地构建也必须在 Mac 上运行，并使用原生 ARM64 Node.js：
 
-现有 macOS 构建通过 Homebrew 获取 `ffmpeg`、`libsamplerate`、`sound-touch`。
-`npm run build:mac -- --publish never` 会构建 CoreAudio 音频模块，递归复制所依赖
-的 dylib 到 `resources/native/deps`，并重写库路径。它目前没有使用上述音频精简
-构建配置，FFmpeg CLI 和可选分轨组件也尚未封装。
+```sh
+brew install ninja autoconf automake libtool pkg-config
+npm ci
+npm run build:mac -- --publish never
+npm run test:audio-core
+npm run test:macos-package
+```
 
-后续 Mac 适配应优先处理：
+Homebrew 只提供构建工具。FFmpeg 8.1.2、libsamplerate、SoundTouch 和 zlib 使用
+与 Windows 相同的版本锁及音频白名单，在 Mac 重新编译；不复用 Windows DLL，
+也不链接 Homebrew 音频库。`prepare:native` 自动选择 `arm64-osx-audio` triplet，
+产物位于 `build/native-deps/installed/arm64-osx-audio`。
 
-| 依赖                                    | 适配要求                                                              |
-| --------------------------------------- | --------------------------------------------------------------------- |
-| 音频模块与 `engine-core`                | 在 Mac 重新编译，明确 arm64/x64、Electron 版本和最低 macOS 版本       |
-| FFmpeg、libsamplerate、SoundTouch、zlib | 新增 Mac 构建参数，沿用锁定版本与音频功能范围，产出对应架构的库与 CLI |
-| better-sqlite3                          | 在目标平台安装并匹配 Electron ABI，不复用 Windows `.node`             |
-| Sharp / libvips                         | 安装对应 darwin-arm64 或 darwin-x64 预编译依赖                        |
-| yt-dlp                                  | 复用锁文件里的官方 Mac universal 资产，无需自行编译                   |
-| 可选 Python 分轨组件                    | 另行制作可重定位的 Mac 运行时和对应架构的依赖；模型权重可复用         |
+- `ffmpeg-profile-macos.cmake`：继承共用音频配置，关闭 Apple 视频/采集框架，通过 SecureTransport 支持 HTTPS。
+- `triplets/arm64-osx-audio.cmake`、`macos-dependencies.cmake`：指定架构、最低系统、SDK 路径与配置指纹。
+- `resources/native/`：音频 `.node`、精简 FFmpeg CLI、许可证、`macos-runtime.json`；7 个 dylib 位于 `deps/`。
+- dylib 依赖必须来自锁定 SDK；封装后统一为 `@loader_path`，删除 SDK 搜索路径，并重新 ad-hoc 签名。
+- better-sqlite3 按 Electron ABI 在 runner 安装；Sharp/libvips 选择 darwin-arm64 依赖，包内实际加载测试覆盖两者。
+- yt-dlp 使用版本锁中的官方 Mac universal 程序；打包前验证原始 SHA-256，签名后验证架构、签名和版本。
 
-新增本地依赖目录后还需调整 dylib 封装脚本：目前它只识别 Homebrew 的绝对前缀。
-发行前应检查库架构、`@loader_path`/`@rpath`、签名，以及脱离 Homebrew 的运行情况。
+CI 检查架构、最低系统版本、依赖闭合、体积、签名、9 种音频/DSD 解码、标签封面、
+DSP、Remix 和音频引擎恢复；隐藏 SDK 后再次加载包内模块，确认运行不依赖构建目录。
 VC++ DLL 和 Windows 任务栏助手不进入 Mac 包。
+
+目前输出为 CoreAudio 默认设备共享 PCM；尚未适配独占/DoP、Mac 可选 Python 分轨
+组件及 Developer ID 签名/公证。CI 不替代真机听音和安装测试。x64 triplet 已预留，
+但未建立 Intel 验证链路；universal 还需要分别构建并校验两套原生依赖，当前入口明确拒绝。
+操作说明见 [Mac 构建与测试](../../docs/player/macos-build.md)。
+
+## Linux 的现状
 
 Linux 当前有 Electron/UI 和 yt-dlp 打包入口，但没有完整的原生音频后端与运行库封装；
 能生成 AppImage/DEB 不等同于完成播放器适配。

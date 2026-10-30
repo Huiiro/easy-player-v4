@@ -89,6 +89,41 @@ the corresponding ZIP. The release workflow runs these checks automatically
 and rejects base installers over 250 MiB. Component tests use isolated data
 directories and do not uninstall or clear the user's real component/cache.
 
+## macOS Apple Silicon build and validation
+
+The `macOS build` workflow builds ARM64 DMG/ZIP artifacts on a `macos-14`
+runner, with macOS 12.0 as the minimum deployment target. It builds the same
+pinned audio-only FFmpeg, libsamplerate and SoundTouch sources as Windows,
+using the `arm64-osx-audio` triplet. Homebrew supplies build tools only.
+Neither the old local FFmpeg SDK nor Homebrew audio libraries are selected.
+
+```sh
+brew install ninja autoconf automake libtool pkg-config
+npm ci
+npm run build:mac -- --publish never
+npm run test:audio-core
+npm run test:macos-package
+```
+
+Use native ARM64 Node.js. The build command prepares yt-dlp and native
+dependencies, checks TypeScript, builds the app and validates its packaged
+audio engine, SQLite and Sharp under Electron. CI also runs native DSP,
+Remix and backend recovery tests, then hides the SDK and repeats package
+loading and decoding checks. Artifacts are named
+`easy-player-<version>-mac-arm64.dmg` and `.zip`.
+
+The native audio runtime uses bundled `@loader_path` dylibs with no residual
+SDK search paths. Package checks reject missing/wrong-architecture libraries,
+newer deployment targets, video libraries and an audio runtime over 25 MiB.
+Official yt-dlp bytes are verified before signing; packaged execution, version
+and signature are verified afterwards.
+
+This is an Apple Silicon test build, using ad-hoc signatures. Developer ID
+signing/notarization, Intel/universal validation and the optional Mac Python
+stem component remain separate work. CoreAudio currently supports the system
+default shared PCM output. Real-device playback and installation still need
+manual checks. See [Mac build and testing](macos-build.md).
+
 ## Repository secrets
 
 The current workflow deliberately builds unsigned packages so invalid or
