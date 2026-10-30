@@ -22,6 +22,17 @@ html.mica-enabled[data-window-material='vibrancy'] .ep-footer {
   backdrop-filter: none;
 }
 
+/* Cocoa supplies Vibrancy behind the WebContents. Sampling it again with a
+ * Chromium backdrop filter can leave duplicate/stale textures while controls
+ * move (electron/electron#39529). Cover scoped cards, portals and theme rules;
+ * keep surface tints and ordinary image filters, and restore blur on exit. */
+html.mica-enabled[data-window-material='vibrancy'] *,
+html.mica-enabled[data-window-material='vibrancy'] *::before,
+html.mica-enabled[data-window-material='vibrancy'] *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
 html.mica-enabled:not(.dark)[data-window-material='mica'] .app-footer-shell {
   background-image: none;
 }
@@ -267,7 +278,7 @@ html.mica-enabled:not(.dark)[data-window-material='mica'] .ep-footer {
 html.mica-enabled .ep-dialog .ep-overlay--blur {
   backdrop-filter: none;
 }
-html.mica-enabled:has(.ep-dialog .ep-overlay--blur) #app {
+html.mica-enabled:not([data-window-material='vibrancy']):has(.ep-dialog .ep-overlay--blur) #app {
   filter: blur(var(--blur-sm, 8px));
 }
 .ep-progress-track {

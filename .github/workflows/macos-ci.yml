@@ -40,6 +40,8 @@ jobs:
         run: npm run prepare:native
       - name: Build macOS package
         run: npm run build:mac -- --publish never
+      - name: Verify native material styles and dialogs
+        run: npm run test:window-material
       - name: Verify codecs and metadata on Apple Silicon
         run: npm run test:audio-core
       - name: Verify DSP, Remix and backend recovery
