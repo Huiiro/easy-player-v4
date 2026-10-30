@@ -1,12 +1,55 @@
 <script setup lang="ts">
 import SettingRow from './SettingRow.vue'
-import { onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
+import type { AutoMixRuntimeStatus, AutoMixStemCacheInfo } from '../../../../shared/autoMixRuntime'
 
 const { t } = useI18n()
 const cacheDirectory = ref('')
 const cacheLimitGb = ref(2)
 const cacheUsed = ref(0)
+const stemCache = ref<AutoMixStemCacheInfo>()
+const stemStatus = ref<AutoMixRuntimeStatus>()
+const stemError = ref('')
+const clearStemVisible = ref(false)
+const stemClearing = ref(false)
+const stemBusy = computed(
+  () =>
+    stemClearing.value ||
+    (stemStatus.value &&
+      ['checking', 'downloading', 'installing', 'uninstalling', 'clearing-cache'].includes(
+        stemStatus.value.phase
+      ))
+)
+let unsubscribe: (() => void) | undefined
+let cacheRevision = 0
+async function loadStemCache(): Promise<void> {
+  const revision = ++cacheRevision
+  try {
+    const info = await window.api.audio.getStemCacheInfo()
+    if (revision === cacheRevision) {
+      stemCache.value = info
+      stemError.value = ''
+    }
+  } catch (error) {
+    if (revision === cacheRevision) stemError.value = String(error)
+  }
+}
+async function clearStemCache(): Promise<void> {
+  cacheRevision++
+  stemClearing.value = true
+  try {
+    const result = await window.api.audio.clearStemCache()
+    if (!result.success) throw new Error(result.error)
+    stemCache.value = result.data
+    stemError.value = ''
+  } catch (error) {
+    stemError.value = String(error)
+  } finally {
+    stemClearing.value = false
+  }
+}
 const formatBytes = (bytes: number): string =>
   bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 async function loadCache(): Promise<void> {
@@ -39,7 +82,22 @@ async function saveCacheLimit(): Promise<void> {
 }
 onMounted(() => {
   void loadCache()
+  void loadStemCache()
+  let updated = false
+  unsubscribe = window.api.audio.onEvent('stemRuntimeChanged', (value) => {
+    updated = true
+    stemStatus.value = value
+  })
+  void window.api.audio
+    .getStemRuntimeStatus()
+    .then((value) => {
+      if (!updated) stemStatus.value = value
+    })
+    .catch((error) => {
+      stemError.value = String(error)
+    })
 })
+onBeforeUnmount(() => unsubscribe?.())
 </script>
 
 <template>
@@ -74,7 +132,43 @@ onMounted(() => {
         <span>G</span>
       </div>
     </SettingRow>
+    <SettingRow :label="t('ap.stemCacheTitle')" :description="t('ap.stemCacheDescription')">
+      <div class="flex items-center gap-3">
+        <span class="text-sm text-text-l">{{
+          stemCache
+            ? t('ap.stemCacheUsage', { size: formatBytes(stemCache.bytes), count: stemCache.files })
+            : '—'
+        }}</span>
+        <button
+          type="button"
+          class="btn-hover-base px-2 py-1 text-sm"
+          :disabled="stemBusy"
+          @click="loadStemCache"
+        >
+          {{ t('ap.stemCacheRefresh') }}
+        </button>
+        <button
+          type="button"
+          class="btn-hover-base px-2 py-1 text-sm text-red-400"
+          :disabled="stemBusy || !stemCache?.files"
+          @click="clearStemVisible = true"
+        >
+          {{ t('ap.stemCacheClear') }}
+        </button>
+      </div>
+    </SettingRow>
+    <p v-if="stemError" class="text-sm text-red-400" role="alert">
+      {{ t('ap.stemCacheFailed') }} {{ stemError }}
+    </p>
   </div>
+  <BaseConfirmDialog
+    v-model="clearStemVisible"
+    :title="t('ap.stemCacheClear')"
+    :message="t('ap.stemCacheConfirm')"
+    :confirm-text="t('ap.stemCacheClear')"
+    variant="danger"
+    :confirm-action="clearStemCache"
+  />
 </template>
 
 <style scoped>

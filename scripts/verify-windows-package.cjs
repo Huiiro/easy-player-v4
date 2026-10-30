@@ -29,7 +29,7 @@ if (forbidden.length) {
 if (!entries.includes('out/main/index.js')) {
   throw new Error('Packaged application entry point is missing')
 }
-const main = asar.extractFile(archive, 'out/main/index.js').toString('utf8')
+const main = asar.extractFile(archive, path.join('out', 'main', 'index.js')).toString('utf8')
 if (
   ['DoSearchForQQMusicDesktop', 'song_wiki_summary', 'krm_audio'].some((name) =>
     main.includes(name)
@@ -43,7 +43,13 @@ const nativeFiles = nativeEntries.map((entry) => entry.name)
 const unexpectedNativeFiles = nativeEntries.filter(
   (entry) =>
     !entry.isFile() ||
-    (entry.name !== 'easy_player_native.node' && !entry.name.toLowerCase().endsWith('.dll')) ||
+    (![
+      'easy_player_native.node',
+      'easy_player_taskbar.exe',
+      'ffmpeg.exe',
+      'FFmpeg-LICENSE.txt'
+    ].includes(entry.name) &&
+      !entry.name.toLowerCase().endsWith('.dll')) ||
     entry.name.toLowerCase() === 'easy_player_native.dll'
 )
 if (unexpectedNativeFiles.length) {
@@ -51,7 +57,13 @@ if (unexpectedNativeFiles.length) {
     `Non-runtime native files were packaged: ${unexpectedNativeFiles.map((entry) => entry.name).join(', ')}`
   )
 }
-for (const name of ['easy_player_native.node', 'samplerate.dll', 'SoundTouch.dll']) {
+for (const name of [
+  'easy_player_native.node',
+  'samplerate.dll',
+  'SoundTouch.dll',
+  'ffmpeg.exe',
+  'FFmpeg-LICENSE.txt'
+]) {
   if (!nativeFiles.includes(name)) throw new Error(`Required native runtime is missing: ${name}`)
 }
 for (const prefix of ['avcodec-', 'avformat-', 'avutil-', 'swresample-']) {
@@ -67,4 +79,14 @@ const nativeBytes = nativeFiles.reduce(
   0
 )
 console.log(`Native runtime size: ${(nativeBytes / 1024 ** 2).toFixed(1)} MiB`)
+for (const relative of ['resources/auto-mix/stem_worker.py']) {
+  if (!fs.existsSync(path.join(path.dirname(archive), relative))) {
+    throw new Error(`Bundled stem runtime resource is missing: ${relative}`)
+  }
+}
+for (const relative of ['tools/auto-mix-python', 'tools/auto-mix-models']) {
+  if (fs.existsSync(path.join(path.dirname(archive), relative))) {
+    throw new Error(`Optional component must not be bundled in the base installer: ${relative}`)
+  }
+}
 console.log('Windows package content check passed')

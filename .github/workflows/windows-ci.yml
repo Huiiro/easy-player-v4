@@ -28,6 +28,9 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Install native dependencies
@@ -39,9 +42,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/vcpkg.exe" install ffmpeg libsamplerate soundtouch --triplet x64-windows
+          & "$env:VCPKG_ROOT/vcpkg.exe" install 'ffmpeg[ffmpeg]' libsamplerate soundtouch --triplet x64-windows
       - name: Build native addon
         run: npm run build:native
+      - name: Build optional CPU stem component
+        run: npm run package:auto-mix
+      - name: Prepare bundled FFmpeg
+        run: npm run prepare:ffmpeg
       - name: Build unpacked Windows application
         shell: pwsh
         run: |
@@ -52,3 +59,9 @@ jobs:
           npx electron-builder --win --dir --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-windows-package.cjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:bundled-auto-mix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:auto-mix-runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:auto-mix-component-install

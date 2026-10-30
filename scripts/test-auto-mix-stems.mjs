@@ -76,7 +76,7 @@ try {
   await delay(500)
   assert.deepEqual(calls, [2], 'Cancelled work must not be committed')
 } finally {
-  service.close()
+  await service.closeAndWait()
 }
 const timed = [],
   results = []
@@ -95,8 +95,16 @@ try {
   timeout.request(request(5))
   await until(() => results.length === 1)
   assert.equal(results[0].revision, 5, 'Worker must restart after timeout')
+  timeout.request(request(6, 'slow'))
+  await until(() => timed.filter((s) => s.startsWith('Preparing')).length >= 3)
+  await timeout.closeAndWait()
+  assert.deepEqual(
+    results.map((r) => r.revision),
+    [5],
+    'Closing must stop active work before returning'
+  )
 } finally {
-  timeout.close()
+  await timeout.closeAndWait()
 }
 await delay(100)
 assert.ok(path.resolve(temp).startsWith(path.resolve(os.tmpdir()) + path.sep))

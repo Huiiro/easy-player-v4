@@ -14,6 +14,8 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <condition_variable>
+#include <functional>
 
 enum class EngineState {
     Idle,
@@ -134,6 +136,7 @@ public:
     LimiterConfig limiter_config() const { return dsp_pipeline_.limiter_config(); }
     bool set_transition_config(const TransitionConfig& config);
     bool set_next_track(const std::string& file_path, const std::string& source_path = "");
+    bool auto_mix_preparing() const { return auto_mix_active_.load(std::memory_order_acquire) != 0; }
     AutoMixStemRequest auto_mix_stem_request() const;
     bool set_auto_mix_vocals(uint64_t revision, const std::string& out_path, const std::string& in_path, int64_t cue_frame = -1, int64_t out_start_frame = -1);
     TransitionConfig transition_config() const {
@@ -171,6 +174,7 @@ public:
         analysis_enabled_.store(enabled, std::memory_order_release);
     }
     void set_playback_only(bool enabled) {
+        if (enabled) cancel_auto_mix();
         playback_only_.store(enabled, std::memory_order_release);
         dsp_pipeline_.set_playback_only(enabled);
     }
@@ -206,6 +210,16 @@ private:
     bool reopen_output(bool resume);
     bool prepare_next_decoder_locked();
     void refresh_auto_fade_plan();
+    void compute_auto_fade_plan(const std::string& current_path, const std::string& next_path,
+        int max_ms, int sample_rate, int mix_channels, int generation, uint64_t revision, uint64_t job);
+    void cancel_auto_mix();
+    void stop_auto_mix_thread();
+    std::mutex auto_mix_mutex_;
+    std::condition_variable auto_mix_cv_;
+    std::thread auto_mix_thread_;
+    std::function<void()> auto_mix_pending_;
+    std::atomic<uint64_t> auto_mix_generation_{0}, auto_mix_active_{0};
+    bool auto_mix_stopping_ = false;
     bool switch_to_next_decoder_locked();
     void mark_track_ended_pending();
 

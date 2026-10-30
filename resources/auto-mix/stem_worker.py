@@ -20,6 +20,7 @@ RATE = 44100
 MAX_SECONDS = 12
 BUDGET = 512 * 1024 * 1024
 _model = None
+_model_repo = None
 
 
 def model():
@@ -29,7 +30,7 @@ def model():
         from demucs.pretrained import get_model
         torch.set_num_threads(max(1, min(4, (os.cpu_count() or 2) // 2)))
         torch.manual_seed(0)
-        _model = get_model(MODEL).cpu().eval()
+        _model = get_model(MODEL, repo=_model_repo).cpu().eval()
     return _model
 
 
@@ -223,12 +224,15 @@ def run(request, cache, ffmpeg):
 
 
 def main():
+    global _model_repo
     parser = argparse.ArgumentParser()
     parser.add_argument('--cache', required=True, type=Path)
     parser.add_argument('--ffmpeg', default='ffmpeg')
     parser.add_argument('--request', type=Path)
     parser.add_argument('--warmup', action='store_true')
+    parser.add_argument('--model-repo', type=Path)
     args = parser.parse_args()
+    _model_repo = args.model_repo
     args.cache.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault('TORCH_HOME', str(args.cache / 'models'))
     if sys.platform == 'win32':

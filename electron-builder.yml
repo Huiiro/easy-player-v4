@@ -1,6 +1,7 @@
 appId: com.huiiro.easyplayer
 productName: EasyPlayer
 compression: maximum
+beforePack: scripts/verify-auto-mix-package.cjs
 directories:
   buildResources: build
 files:
@@ -52,6 +53,8 @@ win:
         # addon as a DLL; development/test .node modules are not used by the app.
         - 'easy_player_native.node'
         - '*.dll'
+        - 'ffmpeg.exe'
+        - 'FFmpeg-LICENSE.txt'
         - '!easy_player_native.dll'
     - from: 'build/taskbar-controls/bin/Release/easy_player_taskbar.exe'
       to: 'native/easy_player_taskbar.exe'

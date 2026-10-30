@@ -4,6 +4,8 @@ $stemRepoRoot = Split-Path -Parent $PSScriptRoot
 $stemRuntime = Join-Path $stemRepoRoot 'build\stem-runtime'
 $stemPython = Join-Path $stemRuntime 'Scripts\python.exe'
 $stemCache = Join-Path $stemRepoRoot 'build\stem-pip-cache'
+$stemAudioCache = (& node --experimental-strip-types --input-type=module -e "import { pathToFileURL } from 'node:url'; const paths = await import(pathToFileURL(process.argv[1]).href); console.log(paths.getStemCachePath())" (Join-Path $stemRepoRoot 'src\main\utils\pathUtils.ts'))
+if ($LASTEXITCODE -ne 0 -or -not $stemAudioCache) { throw 'Could not resolve shared stem cache directory' }
 function Invoke-StemCommand([string]$Executable, [string[]]$Arguments) {
     & $Executable @Arguments
     if ($LASTEXITCODE -ne 0) { throw "Stem runtime setup failed: $Executable ($LASTEXITCODE)" }
@@ -18,5 +20,5 @@ Invoke-StemCommand $stemPython @('-m', 'pip', 'install', '--disable-pip-version-
 Invoke-StemCommand $stemPython @('-m', 'pip', 'install', '--disable-pip-version-check', '--cache-dir', $stemCache,
     'demucs==4.0.1', '--no-deps')
 Invoke-StemCommand $stemPython @((Join-Path $stemRepoRoot 'resources\auto-mix\stem_worker.py'), '--cache',
-    (Join-Path $stemRepoRoot 'build\auto-mix-stems'), '--warmup')
+    $stemAudioCache, '--warmup')
 Write-Output 'Local CPU stem runtime is ready. Restart the player to use it.'

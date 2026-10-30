@@ -64,7 +64,9 @@ namespace {
         return value.str();
     }
 
-    AutoFadePlan analyze_auto_crossfade(const std::string& path, const std::string& next_path, int max_ms, int mix_rate, int mix_channels) {
+    AutoFadePlan analyze_auto_crossfade_uncached(const std::string& path, const std::string& next_path, int max_ms, int mix_rate, int mix_channels,
+        const std::function<bool()>& cancelled) {
+        LOG_DEBUG("Auto crossfade analysis started");
         ScopedFFmpegLogContext log_context(path, "auto-crossfade-analysis");
         Decoder probe;
         if (!probe.open(path, mix_rate, mix_channels)) return fallback_plan("source could not be opened");
@@ -83,6 +85,7 @@ namespace {
         double peak = 0.0;
         int64_t cursor = start;
         while (cursor < total) {
+            if (cancelled()) return fallback_plan("superseded");
             const int frames = probe.decode(pcm.data(), static_cast<int>(std::min<int64_t>(block_frames, total - cursor)));
             if (frames < 0) return fallback_plan("tail decoding failed");
             if (frames <= 0) break;
@@ -118,6 +121,7 @@ namespace {
         // Bound work to three minutes for malformed/all-silent sources.
         const int64_t scan_floor = std::max<int64_t>(0, total - info.sample_rate * 180LL);
         while (peak < auto_mix::silence_floor && start > scan_floor) {
+            if (cancelled()) return fallback_plan("superseded");
             const int64_t stop = start;
             start = std::max<int64_t>(scan_floor, start - info.sample_rate * 30LL);
             if (!probe.seek(start)) return fallback_plan("silent tail backward seek failed");
@@ -170,6 +174,7 @@ namespace {
                 int64_t read = 0;
                 const int64_t limit = std::min<int64_t>(incoming.total_samples(), info.sample_rate * 8LL);
                 while (read < limit) {
+                    if (cancelled()) return fallback_plan("superseded");
                     const int frames = incoming.decode(pcm.data(), static_cast<int>(std::min<int64_t>(block_frames, limit - read)));
                     if (frames <= 0) break;
                     read += frames;
@@ -214,11 +219,14 @@ namespace {
         plan.vocal_end_frame = vocal_end_frame;
         plan.earlier_rms = earlier; plan.late_rms = late; plan.separation = separation;
         plan.fallback_reason = fade > 0 ? nullptr : "maximum overlap is zero";
+        if (cancelled()) return fallback_plan("superseded");
         plan.outgoing_music = auto_mix::analyze_region(path,
             std::max<int64_t>(0, last_audible - info.sample_rate * 24LL), last_audible,
             info.sample_rate, info.channels);
+        if (cancelled()) return fallback_plan("superseded");
         plan.incoming_music = auto_mix::analyze_region(next_path, incoming_start,
             std::min<int64_t>(incoming.total_samples(), incoming_start + info.sample_rate * 24LL), info.sample_rate, info.channels);
+        if (cancelled()) return fallback_plan("superseded");
         if (!auto_mix::harmonic_compatible(plan.outgoing_music.key, plan.incoming_music.key)) {
             plan.strategy = "harmonic-staged";
             plan.separation = std::max(plan.separation, 0.85);
@@ -235,6 +243,67 @@ namespace {
                     plan.strategy = "beat-matched";
                     plan.fade_frames = handoff.fade_frames; plan.incoming_tempo = handoff.tempo;
                 }
+            }
+        }
+        return plan;
+    }
+
+    // Cache the complete immutable plan, including stretched PCM. Decoder position
+    // adjustments are applied only to the returned copy, never to the cached plan.
+    AutoFadePlan analyze_auto_crossfade(const std::string& path, const std::string& next_path,
+        int max_ms, int rate, int channels, const std::function<bool()>& cancelled) {
+        struct Identity {
+            uintmax_t size = 0;
+            std::filesystem::file_time_type stamp{};
+            bool operator==(const Identity& other) const { return size == other.size && stamp == other.stamp; }
+        };
+        auto identify = [](const std::string& file, Identity& result) {
+            std::error_code error;
+            const auto name = std::filesystem::u8path(file);
+            result.size = std::filesystem::file_size(name, error);
+            if (error) return false;
+            result.stamp = std::filesystem::last_write_time(name, error);
+            return !error;
+        };
+        struct Entry {
+            std::string source, next;
+            Identity a, b;
+            int max_ms, rate, channels;
+            AutoFadePlan plan;
+            size_t bytes() const { return sizeof(Entry) + plan.prepared.pcm.size() * sizeof(float); }
+        };
+        static std::mutex mutex;
+        static std::deque<Entry> cache;
+        constexpr size_t budget = 32 * 1024 * 1024;
+        Identity a, b;
+        const bool cacheable = identify(path, a) && identify(next_path, b);
+        if (cacheable && !cancelled()) {
+            std::lock_guard<std::mutex> lock(mutex);
+            for (auto it = cache.begin(); it != cache.end(); ++it) {
+                if (it->source == path && it->next == next_path && it->a == a && it->b == b &&
+                    it->max_ms == max_ms && it->rate == rate && it->channels == channels) {
+                    auto entry = std::move(*it);
+                    cache.erase(it);
+                    cache.push_back(std::move(entry));
+                    LOG_DEBUG("Auto crossfade plan cache hit");
+                    return cache.back().plan;
+                }
+            }
+        }
+        if (cancelled()) return fallback_plan("superseded");
+        auto plan = analyze_auto_crossfade_uncached(path, next_path, max_ms, rate, channels, cancelled);
+        Identity after_a, after_b;
+        if (cacheable && !cancelled() && plan.end_frame > 0 && plan.fade_frames > 0 &&
+            identify(path, after_a) && identify(next_path, after_b) && a == after_a && b == after_b) {
+            Entry entry{path, next_path, a, b, max_ms, rate, channels, plan};
+            if (entry.bytes() <= budget) {
+                std::lock_guard<std::mutex> lock(mutex);
+                size_t bytes = entry.bytes();
+                for (const auto& item : cache) bytes += item.bytes();
+                while (!cache.empty() && (cache.size() >= 8 || bytes > budget)) {
+                    bytes -= cache.front().bytes(); cache.pop_front();
+                }
+                cache.push_back(std::move(entry));
             }
         }
         return plan;
@@ -500,6 +569,7 @@ bool AudioEngine::set_next_track(const std::string& file_path, const std::string
         if (!source_path.empty() && decoder_.track_info().file_path != source_path) return false;
         if (file_path == next_track_path_ &&
             (file_path.empty() || !next_decoder_.track_info().file_path.empty())) return true;
+        cancel_auto_mix();
         next_track_path_ = file_path;
         next_decoder_.close();
         auto_fade_end_frame_ = 0;
@@ -537,6 +607,7 @@ void AudioEngine::refresh_auto_fade_plan() {
         // Finish an audible adaptive overlap before applying transition changes.
         // Its incoming decoder may already point past the pre-rendered segment.
         if (transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0) return;
+        cancel_auto_mix();
         auto_fade_end_frame_ = 0;
         auto_fade_frames_ = 0;
         auto_fade_vocal_end_frame_ = 0;
@@ -546,7 +617,7 @@ void AudioEngine::refresh_auto_fade_plan() {
         auto_fade_intro_.clear();
         auto_fade_source_frames_ = 0;
         auto_fade_incoming_start_frame_ = 0;
-        if (!crossfade_enabled_.load(std::memory_order_acquire) ||
+        if (playback_only_.load(std::memory_order_acquire) || !crossfade_enabled_.load(std::memory_order_acquire) ||
             !crossfade_auto_.load(std::memory_order_acquire) ||
             next_decoder_.track_info().file_path.empty()) return;
         current_path = decoder_.track_info().file_path;
@@ -557,7 +628,60 @@ void AudioEngine::refresh_auto_fade_plan() {
         generation = seek_generation_.load(std::memory_order_acquire);
         revision = auto_fade_revision_;
     }
-    auto plan = analyze_auto_crossfade(current_path, next_path, max_ms, sample_rate, mix_channels);
+    std::lock_guard<std::mutex> lock(auto_mix_mutex_);
+    if (auto_mix_stopping_) return;
+    const auto job = ++auto_mix_generation_;
+    auto_mix_active_.store(job, std::memory_order_release);
+    auto_mix_pending_ = [=] {
+        compute_auto_fade_plan(current_path, next_path, max_ms, sample_rate, mix_channels, generation, revision, job);
+    };
+    if (!auto_mix_thread_.joinable()) {
+        auto_mix_thread_ = std::thread([this] {
+            for (;;) {
+                std::function<void()> work;
+                uint64_t job;
+                {
+                    std::unique_lock<std::mutex> lock(auto_mix_mutex_);
+                    auto_mix_cv_.wait(lock, [this] { return auto_mix_stopping_ || bool(auto_mix_pending_); });
+                    if (auto_mix_stopping_) return;
+                    work = std::move(auto_mix_pending_);
+                    auto_mix_pending_ = {};
+                    job = auto_mix_active_.load(std::memory_order_acquire);
+                }
+                try { work(); }
+                catch (const std::exception& error) { LOG_WARN(std::string("Auto crossfade analysis failed: ") + error.what()); }
+                catch (...) { LOG_WARN("Auto crossfade analysis failed"); }
+                auto_mix_active_.compare_exchange_strong(job, 0, std::memory_order_acq_rel);
+            }
+        });
+    }
+    auto_mix_cv_.notify_one();
+}
+
+void AudioEngine::cancel_auto_mix() {
+    std::lock_guard<std::mutex> lock(auto_mix_mutex_);
+    ++auto_mix_generation_;
+    auto_mix_pending_ = {};
+    auto_mix_active_.store(0, std::memory_order_release);
+}
+
+void AudioEngine::stop_auto_mix_thread() {
+    {
+        std::lock_guard<std::mutex> lock(auto_mix_mutex_);
+        auto_mix_stopping_ = true;
+        ++auto_mix_generation_;
+        auto_mix_pending_ = {};
+        auto_mix_active_.store(0, std::memory_order_release);
+    }
+    auto_mix_cv_.notify_one();
+    if (auto_mix_thread_.joinable()) auto_mix_thread_.join();
+}
+
+void AudioEngine::compute_auto_fade_plan(const std::string& current_path, const std::string& next_path,
+    int max_ms, int sample_rate, int mix_channels, int generation, uint64_t revision, uint64_t job) {
+    const auto cancelled = [this, job] { return auto_mix_generation_.load(std::memory_order_acquire) != job; };
+    auto plan = analyze_auto_crossfade(current_path, next_path, max_ms, sample_rate, mix_channels, cancelled);
+    if (cancelled()) return;
     if (plan.end_frame <= 0 || plan.fade_frames <= 0) {
         LOG_WARN("Auto crossfade fallback: source=" + current_path +
             ", reason=" + plan.fallback_reason +
@@ -566,7 +690,7 @@ void AudioEngine::refresh_auto_fade_plan() {
     }
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
-        if (decoder_.track_info().file_path != current_path || next_track_path_ != next_path ||
+        if (cancelled() || decoder_.track_info().file_path != current_path || next_track_path_ != next_path ||
             !crossfade_auto_.load(std::memory_order_acquire) ||
             !crossfade_enabled_.load(std::memory_order_acquire) ||
             crossfade_ms_.load(std::memory_order_acquire) != max_ms ||
@@ -643,7 +767,7 @@ AutoMixStemRequest AudioEngine::auto_mix_stem_request() const {
     std::lock_guard<std::mutex> lock(decoder_mutex_);
     const auto& current = decoder_.track_info();
     if (!crossfade_auto_.load() || !crossfade_enabled_.load() || transition_active_.load() ||
-        next_track_path_.empty() || !auto_mix_out_vocals_.empty() || auto_fade_frames_ <= 0 || current.sample_rate <= 0 ||
+        next_track_path_.empty() || !auto_fade_intro_.empty() || !auto_mix_out_vocals_.empty() || auto_fade_frames_ <= 0 || current.sample_rate <= 0 ||
         current.channels < 1 || current.channels > 2 || auto_fade_frames_ > current.sample_rate * 12LL ||
         decoder_.position() >= auto_fade_end_frame_ - auto_fade_frames_) return {};
     return {current.file_path, next_track_path_, auto_fade_revision_, current.sample_rate,
@@ -749,6 +873,7 @@ void AudioEngine::update_replay_gain_for_track() {
 }
 
 AudioEngine::~AudioEngine() {
+    stop_auto_mix_thread();
     stop();
     if (backend_) backend_->close();
 }
@@ -1144,6 +1269,7 @@ bool AudioEngine::pause() {
 }
 
 bool AudioEngine::stop() {
+    cancel_auto_mix();
     if (state_ == EngineState::Idle || state_ == EngineState::Loading) return false;
 
     close_output();
@@ -1197,6 +1323,7 @@ bool AudioEngine::stop() {
 // ──────────────────────────────────────────────────────────
 
 bool AudioEngine::seek(double position_ms) {
+    const bool replan = auto_mix_preparing();
     if (state_ != EngineState::Playing && state_ != EngineState::Paused &&
         state_ != EngineState::Ready) {
         return false;
@@ -1301,6 +1428,7 @@ bool AudioEngine::seek(double position_ms) {
         pos_cb_(position_ms, duration_ms());
     }
 
+    if (replan) refresh_auto_fade_plan();
     return true;
 }
 

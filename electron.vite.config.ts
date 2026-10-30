@@ -18,7 +18,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
-          searchWorker: resolve('src/main/search/searchWorker.ts')
+          searchWorker: resolve('src/main/search/searchWorker.ts'),
+          autoMixRuntimeWorker: resolve('src/main/service/autoMixRuntimeWorker.ts')
         },
         external: [
           'kuroshiro',

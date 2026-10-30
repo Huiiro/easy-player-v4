@@ -6,6 +6,7 @@ import { EngineState, IPC } from '../audioEngine/types'
 import { getAppSetting, setAppSetting } from '../database/repository'
 import { Logger } from '../service/loggerService'
 import { logError, logOperation, logParams } from '../service/operationLogger'
+import { createAutoMixRuntimeManager } from '../service/autoMixRuntimeManager'
 
 interface PlaybackCheckpoint {
   currentFile?: string
@@ -26,6 +27,22 @@ export function registerIpcHandlers(
   engine: AudioEngineManager,
   mainWindow: () => BrowserWindow | null
 ): () => void {
+  const stemRuntime = createAutoMixRuntimeManager(
+    (status) => {
+      if (['ready', 'error', 'not-installed'].includes(status.phase)) engine.resumeStemService()
+      sendEvent(mainWindow, 'stemRuntimeChanged', status)
+    },
+    () => engine.suspendStemService()
+  )
+  ipcMain.handle('audio:stem-runtime-status', () => stemRuntime.status())
+  ipcMain.handle('audio:stem-runtime-uninstall', () => stemRuntime.uninstall())
+  ipcMain.handle('audio:stem-cache-info', () => stemRuntime.cacheInfo())
+  ipcMain.handle('audio:stem-cache-clear', () => stemRuntime.clearCache())
+  ipcMain.handle('audio:stem-runtime-download', () => stemRuntime.start())
+  ipcMain.handle('audio:stem-runtime-cancel', () => {
+    stemRuntime.cancel()
+    return stemRuntime.status()
+  })
   let readyRendererId = 0
   const pendingEnds: Array<{ reason: string; filePath: string; nextFilePath?: string }> = []
   let reclaimTimer: ReturnType<typeof setTimeout> | undefined

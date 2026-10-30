@@ -23,6 +23,7 @@ interface Options {
   worker: string
   cache: string
   ffmpeg?: string
+  modelRepo?: string
   timeoutMs?: number
   onReady: (
     request: AutoMixStemRequest,
@@ -37,6 +38,7 @@ interface Options {
 /** One local worker, one active job, and only the newest pending queue item. */
 export class AutoMixStemService {
   private child?: ChildProcessWithoutNullStreams
+  private children = new Set<ChildProcessWithoutNullStreams>()
   private active?: Job
   private pending?: Job
   private latest = 0
@@ -70,6 +72,15 @@ export class AutoMixStemService {
     this.shutdown()
   }
 
+  async closeAndWait(): Promise<void> {
+    this.close()
+    await Promise.all(
+      [...this.children].map(
+        (child) => new Promise<void>((resolve) => child.once('close', () => resolve()))
+      )
+    )
+  }
+
   cancel(): void {
     ++this.latest
     this.pending = undefined
@@ -100,12 +111,17 @@ export class AutoMixStemService {
     const child = spawn(
       this.options.python,
       [
+        '-I',
+        '-B',
+        '-X',
+        'utf8',
         '-u',
         this.options.worker,
         '--cache',
         this.options.cache,
         '--ffmpeg',
-        this.options.ffmpeg ?? 'ffmpeg'
+        this.options.ffmpeg ?? 'ffmpeg',
+        ...(this.options.modelRepo ? ['--model-repo', this.options.modelRepo] : [])
       ],
       {
         windowsHide: true,
@@ -113,6 +129,8 @@ export class AutoMixStemService {
       }
     )
     this.child = child
+    this.children.add(child)
+    child.once('close', () => this.children.delete(child))
     this.diagnostic = ''
     const lines = createInterface({ input: child.stdout })
     lines.on('line', (line) => {

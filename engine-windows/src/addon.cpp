@@ -270,6 +270,7 @@ public:
             InstanceMethod("setTransitionConfig", &AudioEngineWrapper::SetTransitionConfig),
             InstanceMethod("setNextTrack", &AudioEngineWrapper::SetNextTrack),
             InstanceMethod("getAutoMixStemRequest", &AudioEngineWrapper::GetAutoMixStemRequest),
+            InstanceMethod("isAutoMixPreparing", &AudioEngineWrapper::IsAutoMixPreparing),
             InstanceMethod("setAutoMixVocals", &AudioEngineWrapper::SetAutoMixVocals),
             InstanceMethod("getTransitionConfig", &AudioEngineWrapper::GetTransitionConfig),
             InstanceMethod("enumerateDevices", &AudioEngineWrapper::EnumerateDevices),
@@ -324,6 +325,12 @@ public:
         Logger::instance().set_callback([this](LogLevel level, const std::string& msg) {
             NotifyLog(level, msg);
         });
+    }
+
+    ~AudioEngineWrapper() override {
+        // Join background analysis while the callback holders are still alive.
+        engine_.reset();
+        Logger::instance().set_callback({});
     }
 
 private:
@@ -1018,6 +1025,9 @@ private:
         result.Set("inStartFrame", Napi::Number::New(info.Env(), static_cast<double>(request.in_start_frame)));
         result.Set("fadeFrames", Napi::Number::New(info.Env(), static_cast<double>(request.fade_frames)));
         return result;
+    }
+    Napi::Value IsAutoMixPreparing(const Napi::CallbackInfo& info) {
+        return Napi::Boolean::New(info.Env(), engine_->auto_mix_preparing());
     }
     Napi::Value SetAutoMixVocals(const Napi::CallbackInfo& info) {
         if (info.Length() < 3 || !info[0].IsNumber() || !info[1].IsString() || !info[2].IsString())

@@ -37,7 +37,7 @@ npm run dev
 ```
 
 该变量覆盖数据根目录，**不覆盖系统临时目录、开发构建目录或只读资源目录**。
-例如开发模式的人声分离缓存仍位于项目的 `build/auto-mix-stems`。
+生成的人声分轨在开发、正式环境均使用 `getStemCachePath()`（`<base>/player_data/auto-mix-stems`）。可选 Python 运行时和模型单独安装在 `<base>/player_data/components/auto-mix`，由 `installed.json` 指向已验证的版本目录。两者均随数据根目录变量覆盖，并独立于通用 `cache`。
 
 ### 2.2 数据目录与文件 getter
 
@@ -51,6 +51,8 @@ npm run dev
 | `getPluginPath(...parts)`     | `<base>/player_plugin/...parts`           | [plugins/management.ts](./plugins/management.ts) 中的插件包管理器                           |
 | `getLogPath(...parts)`        | `<base>/player_log/...parts`              | [service/loggerService.ts](./service/loggerService.ts)，如 `log-YYYY-MM-DD.log`（UTC 日期） |
 | `getCachePath(...parts)`      | `<base>/player_data/cache/...parts`       | 远程音频默认缓存等                                                                          |
+| `getStemCachePath()`          | `<base>/player_data/auto-mix-stems`        | 开发与正式环境共享的分轨结果，独立于通用缓存清理范围                                         |
+| `getStemRuntimeRoot()`        | `<base>/player_data/components/auto-mix`  | 可选运行时和模型的版本目录及安装状态，不随普通缓存清理                                       |
 | `getCoverPath(...parts)`      | `<base>/player_data/covers/...parts`      | 本地封面、歌单封面及 `remote/` 下的远程封面                                                 |
 | `getFontPath(...parts)`       | `<base>/player_data/ttf/...parts`         | 用户字体，支持 TTF、OTF、WOFF、WOFF2                                                        |
 | `getBackgroundPath(...parts)` | `<base>/player_data/backgrounds/...parts` | 导入的 MP4 背景视频                                                                         |
@@ -136,9 +138,11 @@ player_plugin/
 | `getRendererPath(extremeView = false)`       | `<main>/../renderer/index.html`                                                        | `true` 时为 `extreme.html`；开发 HMR URL 由入口另行处理                                                                 |
 | `getSearchWorkerPath()`                      | `<main>/searchWorker.js`                                                               | 搜索 Worker 入口                                                                                                        |
 | `getNativeAddonPath(isPackaged)`             | `<project>/build/native-addon/easy_player_native.node`                                 | `<resources>/native/easy_player_native.node`                                                                            |
-| `getStemPythonPath(isPackaged)`              | `<project>/build/stem-runtime/Scripts/python.exe`（Windows），其他平台为 `bin/python3` | `<resources>/tools/auto-mix-python/python.exe`（Windows），其他平台为 `bin/python3`；`EASY_PLAYER_STEM_PYTHON` 优先覆盖 |
+| `getStemPythonPath()` | `<base>/player_data/components/auto-mix/versions/<active>/python/python.exe` | 相同；安装可选组件后可用，`EASY_PLAYER_STEM_PYTHON` 优先覆盖 |
+| `getStemFfmpegPath(isPackaged)`              | 优先 `<project>/build/native-addon/ffmpeg.exe`，其次 `resources/lib/ffmpeg/bin/ffmpeg.exe`（Windows） | `<resources>/native/ffmpeg.exe`（Windows），与播放引擎共用 DLL；`EASY_PLAYER_STEM_FFMPEG` 优先覆盖 |
+| `getStemModelPath()` | `<base>/player_data/components/auto-mix/versions/<active>/models` | 相同；模型不随基础安装包携带 |
 | `getStemWorkerPath(isPackaged)`              | `<project>/resources/auto-mix/stem_worker.py`                                          | `<resources>/resources/auto-mix/stem_worker.py`                                                                         |
-| `getStemCachePath(isPackaged)`               | `<project>/build/auto-mix-stems`                                                       | `getCachePath('auto-mix-stems')`                                                                                        |
+| `getStemCachePath()`                         | `getDataPath('auto-mix-stems')`                                                        | `getDataPath('auto-mix-stems')`                                                                                         |
 | `getYtdlpCommand(isPackaged, appPath)`       | `<appPath>/resources/lib/yt-dlp/<平台>/yt-dlp[.exe]`                                   | `<resources>/lib/yt-dlp/yt-dlp[.exe]`；优先使用存在的内置程序，其次 `EASY_PLAYER_YTDLP_PATH`，最后 `PATH` 中的 `yt-dlp` |
 | `getKuromojiDictionaryPath(packageJsonPath)` | kuromoji 的 `package.json` 同目录下的 `dict`                                           | 将路径中的 `app.asar/` 替换为 `app.asar.unpacked/`，支持两种分隔符                                                      |
 

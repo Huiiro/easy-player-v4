@@ -40,6 +40,9 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Install native dependencies
@@ -51,7 +54,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & "$env:VCPKG_ROOT/bootstrap-vcpkg.bat" -disableMetrics
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & "$env:VCPKG_ROOT/vcpkg.exe" install ffmpeg libsamplerate soundtouch --triplet x64-windows
+          & "$env:VCPKG_ROOT/vcpkg.exe" install 'ffmpeg[ffmpeg]' libsamplerate soundtouch --triplet x64-windows
       - name: Build Windows installer
         shell: pwsh
         run: |
@@ -61,10 +64,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/verify-windows-package.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run package:auto-mix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:bundled-auto-mix
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:auto-mix-runtime
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run test:auto-mix-component-install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $installer = Get-ChildItem dist\*-setup.exe | Select-Object -First 1
           if ($null -eq $installer) { throw 'Windows installer was not generated' }
           Write-Host "Windows installer size: $([math]::Round($installer.Length / 1MB, 1)) MiB"
-          if ($installer.Length -gt 250MB) { throw 'Windows installer exceeds 250 MiB; refusing to publish' }
+          if ($installer.Length -gt 250MB) { throw 'Windows base installer exceeds 250 MiB; refusing to publish' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-release
@@ -73,6 +84,8 @@ jobs:
             dist/*.exe
             dist/*.exe.blockmap
             dist/latest.yml
+            dist/easy-player-auto-mix-*.zip
+            dist/easy-player-auto-mix-*.json
 
   package-macos:
     needs: verify-version

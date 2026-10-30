@@ -5,7 +5,9 @@ import {
   getNativeAddonPath,
   getStemPythonPath,
   getStemWorkerPath,
-  getStemCachePath
+  getStemCachePath,
+  getStemFfmpegPath,
+  getStemModelPath
 } from '../utils/pathUtils'
 import { app } from 'electron'
 import { isPlaybackOnly, setPlaybackOnly } from '../service/playbackMode'
@@ -50,6 +52,9 @@ export class AudioEngineManager {
   private engine: any = null
   private isLoaded = false
   private stemService?: AutoMixStemService
+  private stemMaintenance = false
+  private stemShutdown: Promise<void> = Promise.resolve()
+  private stemRequestTimer?: ReturnType<typeof setTimeout>
   private dspSettings: DspSettings
   private dspSettingsSaveTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -63,30 +68,11 @@ export class AudioEngineManager {
         Logger.write(levels[level] ?? 'info', 'native', message)
       })
       this.restoreDspSettings()
-      const python = getStemPythonPath(app.isPackaged)
-      const worker = getStemWorkerPath(app.isPackaged)
-      if (existsSync(python) && existsSync(worker)) {
-        this.stemService = new AutoMixStemService({
-          python,
-          worker,
-          cache: getStemCachePath(app.isPackaged),
-          ffmpeg: process.env.EASY_PLAYER_STEM_FFMPEG,
-          onReady: (request, outgoing, incoming, cue, outStart) => {
-            const accepted = this.engine?.setAutoMixVocals?.(
-              request.revision,
-              outgoing,
-              incoming,
-              cue,
-              outStart
-            )
-            Logger.debug(
-              `[Auto Mix] vocal protection ${accepted ? 'enabled' : 'discarded after queue/position change'}, incoming entry=${(cue / request.sampleRate).toFixed(2)}s`
-            )
-          },
-          onStatus: (message) => Logger.info(`[Auto Mix] ${message}`)
-        })
-        app.once('before-quit', () => this.stemService?.close())
-      }
+      this.reloadStemService()
+      app.once('before-quit', () => {
+        clearTimeout(this.stemRequestTimer)
+        this.stemService?.close()
+      })
       if (process.platform === 'win32') {
         // Process driver notifications even with the renderer closed/minimized.
         const deviceEvents = setInterval(() => {
@@ -105,6 +91,56 @@ export class AudioEngineManager {
     }
   }
 
+  reloadStemService(): void {
+    if (this.stemMaintenance) return
+    clearTimeout(this.stemRequestTimer)
+    void this.stopStemService()
+    if (!this.engine) return
+    const python = getStemPythonPath()
+    const worker = getStemWorkerPath(app.isPackaged)
+    const ffmpeg = getStemFfmpegPath(app.isPackaged)
+    const modelRepo = getStemModelPath()
+    if (![python, worker, ffmpeg, modelRepo].every(existsSync)) return
+    this.stemService = new AutoMixStemService({
+      python,
+      worker,
+      ffmpeg,
+      modelRepo,
+      cache: getStemCachePath(),
+      onReady: (request, outgoing, incoming, cue, outStart) => {
+        const accepted = this.engine?.setAutoMixVocals?.(
+          request.revision,
+          outgoing,
+          incoming,
+          cue,
+          outStart
+        )
+        Logger.debug(
+          `[Auto Mix] vocal protection ${accepted ? 'enabled' : 'discarded after queue/position change'}, incoming entry=${(cue / request.sampleRate).toFixed(2)}s`
+        )
+      },
+      onStatus: (message) => Logger.info(`[Auto Mix] ${message}`)
+    })
+    this.scheduleStemRequest()
+  }
+
+  private stopStemService(): Promise<void> {
+    const service = this.stemService
+    this.stemService = undefined
+    this.stemShutdown = Promise.all([this.stemShutdown, service?.closeAndWait()]).then(() => {})
+    return this.stemShutdown
+  }
+
+  async suspendStemService(): Promise<void> {
+    this.stemMaintenance = true
+    clearTimeout(this.stemRequestTimer)
+    await this.stopStemService()
+  }
+
+  resumeStemService(): void {
+    this.stemMaintenance = false
+    this.reloadStemService()
+  }
   get loaded(): boolean {
     return this.isLoaded && this.engine !== null
   }
@@ -169,6 +205,7 @@ export class AudioEngineManager {
       '[AudioEngine] stop',
       { loaded: this.loaded },
       () => {
+        clearTimeout(this.stemRequestTimer)
         this.stemService?.cancel()
         if (!this.engine) return false
         return this.engine.stop()
@@ -182,6 +219,7 @@ export class AudioEngineManager {
       '[AudioEngine] stopAsync',
       { loaded: this.loaded },
       async () => {
+        clearTimeout(this.stemRequestTimer)
         this.stemService?.cancel()
         if (!this.engine) return false
         return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
@@ -196,7 +234,9 @@ export class AudioEngineManager {
       { positionMs, loaded: this.loaded },
       () => {
         if (!this.engine) return false
-        return this.engine.seek(positionMs)
+        const ok = this.engine.seek(positionMs)
+        if (ok) this.scheduleStemRequest()
+        return ok
       },
       { successLevel: 'debug', warnOnFalse: true }
     )
@@ -290,12 +330,24 @@ export class AudioEngineManager {
   }
   setNextTrack(filePath: string, sourceFile?: string): boolean {
     const ready = this.engine?.setNextTrack?.(filePath, sourceFile) ?? false
-    const request =
-      ready && !isPlaybackOnly()
-        ? (this.engine?.getAutoMixStemRequest?.() as AutoMixStemRequest | null)
-        : null
-    this.stemService?.request(request ?? null)
+    this.scheduleStemRequest(ready)
     return ready
+  }
+  private scheduleStemRequest(ready = true): void {
+    clearTimeout(this.stemRequestTimer)
+    this.stemService?.cancel()
+    if (!ready || isPlaybackOnly() || !this.stemService) return
+    const poll = (): void => {
+      if (isPlaybackOnly()) return
+      if (this.engine?.isAutoMixPreparing?.()) {
+        this.stemRequestTimer = setTimeout(poll, 50)
+        this.stemRequestTimer.unref()
+        return
+      }
+      const request = this.engine?.getAutoMixStemRequest?.() as AutoMixStemRequest | null
+      this.stemService?.request(request ?? null)
+    }
+    poll()
   }
   setTransitionConfig(config: {
     gaplessEnabled: boolean
@@ -310,9 +362,7 @@ export class AudioEngineManager {
     if (ok) {
       this.dspSettings.transition = config
       this.persistDspSettings()
-      this.stemService?.request(
-        isPlaybackOnly() ? null : (this.engine?.getAutoMixStemRequest?.() ?? null)
-      )
+      this.scheduleStemRequest()
     }
     return ok
   }
@@ -662,7 +712,10 @@ export class AudioEngineManager {
   setExtremePlayback(enabled: boolean): boolean {
     // An older addon must be rebuilt; do not claim that analysis was stopped.
     if (!this.engine?.setPlaybackOnly || !this.engine?.setAnalysisEnabled) return false
-    if (enabled) this.stemService?.cancel()
+    if (enabled) {
+      clearTimeout(this.stemRequestTimer)
+      this.stemService?.cancel()
+    }
     this.engine.setPlaybackOnly(enabled)
     if (enabled) this.engine.setAnalysisEnabled(false)
     setPlaybackOnly(enabled)

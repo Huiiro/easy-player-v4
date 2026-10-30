@@ -14,6 +14,17 @@
 using namespace std::chrono_literals;
 #define CHECK(x) do { if (!(x)) throw std::runtime_error(#x); } while (0)
 
+static void wait_for_mix_plan(AudioEngine& engine) {
+    const auto deadline = std::chrono::steady_clock::now() + 10s;
+    while (engine.auto_mix_preparing() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(1ms);
+    CHECK(!engine.auto_mix_preparing());
+}
+static bool prepare_next(AudioEngine& engine, const std::string& path) {
+    const bool ready = engine.set_next_track(path);
+    wait_for_mix_plan(engine);
+    return ready;
+}
 struct BackendState {
     std::atomic<unsigned> events{0};
     std::atomic<int> opens{0}, stops_in_flight{0};
@@ -163,7 +174,7 @@ static void skip_long_tail(int silence, bool late, double amplitude = 12000, int
     engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
         if (reason == "transition") ++transitions;
     });
-    CHECK(engine.set_next_track("mix-in.wav"));
+    CHECK(prepare_next(engine, "mix-in.wav"));
     CHECK(trimmed);
     CHECK(engine.play());
     const auto deadline = std::chrono::steady_clock::now() + 3s;
@@ -287,7 +298,8 @@ static void musical_engine_transition(bool disable_during_mix = false) {
         auto config = engine.transition_config(); config.crossfade_enabled = config.crossfade_auto = true;
         config.crossfade_ms = 5000; config.pause_fade_enabled = false;
         CHECK(engine.set_transition_config(config)); CHECK(engine.open("musical-out.wav"));
-        CHECK(engine.set_next_track("musical-in.wav")); CHECK(beat_matched);
+        CHECK(prepare_next(engine, "musical-in.wav")); CHECK(beat_matched);
+        CHECK(engine.auto_mix_stem_request().fade_frames == 0); // Preserve prepared beat matching.
         // Seek before overlap: prepared audio must remain usable after rewind.
         CHECK(engine.seek(10000));
         engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
@@ -350,7 +362,7 @@ static void cross_format_continuity(int from_rate, int to_rate, int to_channels,
     auto config = engine.transition_config(); config.crossfade_enabled = true;
     config.crossfade_auto = !fixed; config.crossfade_ms = 3000; config.pause_fade_enabled = false;
     CHECK(engine.set_transition_config(config)); CHECK(engine.open("format-out.wav"));
-    CHECK(engine.set_next_track("format-in.wav")); CHECK(engine.seek(4500));
+    CHECK(prepare_next(engine, "format-in.wav")); CHECK(engine.seek(4500));
     engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
         if (reason == "transition") ++transitions;
     });
@@ -386,7 +398,7 @@ static void audible_overlap_regression() {
         auto config = engine.transition_config(); config.crossfade_enabled = config.crossfade_auto = true;
         config.crossfade_ms = 5000; config.pause_fade_enabled = false;
         CHECK(engine.set_transition_config(config)); CHECK(engine.open("overlap-out.wav"));
-        CHECK(engine.set_next_track("overlap-in.wav")); CHECK(engine.seek(2000));
+        CHECK(prepare_next(engine, "overlap-in.wav")); CHECK(engine.seek(2000));
         engine.set_track_ended_callback([&](const std::string& reason, const std::string&) {
             if (reason == "transition") ++transitions;
         });
@@ -469,7 +481,7 @@ static void real_playlist_regression(const char* manifest, const char* preview =
         auto config = engine.transition_config(); config.crossfade_enabled = config.crossfade_auto = true;
         config.pause_fade_enabled = false; config.crossfade_ms = 5000;
         CHECK(engine.set_transition_config(config)); CHECK(engine.open(outgoing));
-        CHECK(engine.set_next_track(incoming));
+        CHECK(prepare_next(engine, incoming));
         if (stems) {
             std::ifstream stem_file(stems); std::string out_vocals, in_vocals;
             std::getline(stem_file, out_vocals); std::getline(stem_file, in_vocals);
@@ -506,7 +518,7 @@ static void stem_request_file(const char* manifest, const char* output) {
     AudioEngine engine(std::make_shared<FakeFactory>());
     auto config = engine.transition_config(); config.crossfade_enabled = config.crossfade_auto = true;
     config.crossfade_ms = 5000; CHECK(engine.set_transition_config(config));
-    CHECK(engine.open(outgoing)); CHECK(engine.set_next_track(incoming));
+    CHECK(engine.open(outgoing)); CHECK(prepare_next(engine, incoming));
     const auto request = engine.auto_mix_stem_request(); CHECK(request.fade_frames > 0);
     std::ofstream json(output);
     json << "{\"id\":1,\"sourcePath\":" << std::quoted(request.source_path)
@@ -557,11 +569,11 @@ static void vocal_protection_regression() {
     auto config = engine.transition_config(); config.crossfade_auto = config.crossfade_enabled = true;
     config.vocal_cue_enabled = false;
     CHECK(engine.set_transition_config(config)); CHECK(engine.open("vocal-request-out.wav"));
-    CHECK(engine.set_next_track("vocal-request-in.wav"));
+    CHECK(prepare_next(engine, "vocal-request-in.wav"));
     auto request = engine.auto_mix_stem_request(); CHECK(request.fade_frames > 0 && !request.vocal_cue);
     CHECK(!engine.set_auto_mix_vocals(request.revision, "unused", "unused", request.in_start_frame + rate));
     config.vocal_cue_enabled = true;
-    CHECK(engine.set_transition_config(config)); request = engine.auto_mix_stem_request(); CHECK(request.vocal_cue);
+    CHECK(engine.set_transition_config(config)); wait_for_mix_plan(engine); request = engine.auto_mix_stem_request(); CHECK(request.vocal_cue);
     std::vector<float> silence(static_cast<size_t>(request.fade_frames) * request.channels, 0);
     save_signal("vocal-silent-stem.wav", silence, request.sample_rate, request.channels);
     CHECK(!engine.set_auto_mix_vocals(request.revision + 1, "vocal-silent-stem.wav", "vocal-silent-stem.wav"));
@@ -579,10 +591,65 @@ static void vocal_protection_regression() {
     engine.stop();
 }
 
+static void background_plan_and_cache_regression() {
+    wave("async-out.wav", 10, 1, 440);
+    wave("async-old.wav", 12, 0, 660);
+    wave("async-middle.wav", 12, 0, 880);
+    wave("async-new.wav", 12, 0, 1100);
+    std::atomic<bool> entered{false}, release{false}, block_next{true};
+    std::atomic<int> analyses{0}, hits{0};
+    Logger::instance().set_callback([&](LogLevel, const std::string& message) {
+        if (message.find("Auto crossfade plan cache hit") != std::string::npos) ++hits;
+        if (message.find("Auto crossfade analysis started") == std::string::npos) return;
+        ++analyses;
+        if (!block_next.exchange(false)) return;
+        entered = true;
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (!release && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
+    });
+    {
+        AudioEngine engine(std::make_shared<FakeFactory>());
+        auto config = engine.transition_config();
+        config.crossfade_enabled = config.crossfade_auto = true;
+        CHECK(engine.set_transition_config(config)); CHECK(engine.open("async-out.wav"));
+        // The analysis is deliberately blocked. Control calls must still return,
+        // and only the newest pending target should be analyzed afterwards.
+        CHECK(engine.set_next_track("async-old.wav"));
+        const auto deadline = std::chrono::steady_clock::now() + 2s;
+        while (!entered && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
+        CHECK(entered && engine.auto_mix_preparing());
+        CHECK(engine.set_next_track("async-middle.wav"));
+        CHECK(engine.set_next_track("async-new.wav"));
+        release = true;
+        wait_for_mix_plan(engine);
+        CHECK(engine.auto_mix_stem_request().next_path == "async-new.wav");
+        CHECK(analyses == 2);
+        CHECK(prepare_next(engine, ""));
+        CHECK(prepare_next(engine, "async-new.wav"));
+        CHECK(hits == 1 && analyses == 2);
+        CHECK(prepare_next(engine, ""));
+        wave("async-new.wav", 13, 0, 1320);
+        CHECK(prepare_next(engine, "async-new.wav"));
+        CHECK(hits == 1 && analyses == 3); // Source identity changed: recompute.
+        CHECK(prepare_next(engine, ""));
+        wave("async-out.wav", 11, 1, 440);
+        entered = release = false; block_next = true;
+        CHECK(engine.set_next_track("async-new.wav"));
+        const auto stopping_deadline = std::chrono::steady_clock::now() + 2s;
+        while (!entered && std::chrono::steady_clock::now() < stopping_deadline) std::this_thread::sleep_for(1ms);
+        CHECK(entered);
+        CHECK(engine.stop()); CHECK(!engine.auto_mix_preparing());
+        CHECK(engine.auto_mix_stem_request().fade_frames == 0);
+        release = true; // Destruction joins the cancelled worker safely.
+    }
+    Logger::instance().set_callback({});
+}
+
 int main(int argc, char** argv) {
     try {
         if (argc == 4 && std::string(argv[1]) == "--stem-request") { stem_request_file(argv[2], argv[3]); return 0; }
         if (argc >= 2) { real_playlist_regression(argv[1], argc >= 3 ? argv[2] : nullptr, argc >= 4 ? argv[3] : nullptr); return 0; }
+        background_plan_and_cache_regression();
         vocal_protection_regression();
         preserve_voice_band();
         audible_overlap_regression();

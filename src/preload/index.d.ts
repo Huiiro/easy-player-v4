@@ -1,4 +1,9 @@
 import type { RemoteConnection } from '../shared/remoteSources'
+import type {
+  AutoMixRuntimeStatus,
+  AutoMixStemCacheInfo,
+  AutoMixStemCacheResult
+} from '../shared/autoMixRuntime'
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { LogEntry } from '../main/service/loggerService'
 import type {
@@ -85,6 +90,12 @@ declare global {
         onEntry(callback: (entry: LogEntry) => void): () => void
       }
       audio: {
+        getStemRuntimeStatus(): Promise<AutoMixRuntimeStatus>
+        downloadStemRuntime(): Promise<AutoMixRuntimeStatus>
+        cancelStemRuntimeDownload(): Promise<AutoMixRuntimeStatus>
+        uninstallStemRuntime(): Promise<AutoMixRuntimeStatus>
+        getStemCacheInfo(): Promise<AutoMixStemCacheInfo>
+        clearStemCache(): Promise<AutoMixStemCacheResult>
         getFilePath(file: File): string
         open(filePath: string): Promise<{ success: boolean; data?: unknown; error?: string }>
         play(startPosition?: number): Promise<{ success: boolean }>

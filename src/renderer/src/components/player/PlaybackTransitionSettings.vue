@@ -3,11 +3,13 @@ import { useI18n } from 'vue-i18n'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import DspKnobField from './DspKnobField.vue'
+import AutoMixRuntimeSettings from './AutoMixRuntimeSettings.vue'
 const player = usePlayerStore()
 const { t } = useI18n()
 </script>
 <template>
   <div class="space-y-4 text-xs">
+    <AutoMixRuntimeSettings />
     <p class="text-text-l">{{ t('ap.pauseFadeDesc') }}</p>
     <div class="flex items-center gap-3">
       <BaseSwitch

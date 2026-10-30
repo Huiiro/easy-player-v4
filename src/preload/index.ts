@@ -1,4 +1,9 @@
 import type { RemoteConnection } from '../shared/remoteSources'
+import type {
+  AutoMixRuntimeStatus,
+  AutoMixStemCacheInfo,
+  AutoMixStemCacheResult
+} from '../shared/autoMixRuntime'
 import type { SourceResourceRef } from '../shared/networkSources'
 import type {
   SourceTrackSummary,
@@ -13,6 +18,18 @@ import type { LyricSearchRequest } from '../shared/networkSources'
 
 // ── Audio API exposed to renderer ──
 const audioAPI = {
+  getStemRuntimeStatus: (): Promise<AutoMixRuntimeStatus> =>
+    ipcRenderer.invoke('audio:stem-runtime-status'),
+  downloadStemRuntime: (): Promise<AutoMixRuntimeStatus> =>
+    ipcRenderer.invoke('audio:stem-runtime-download'),
+  cancelStemRuntimeDownload: (): Promise<AutoMixRuntimeStatus> =>
+    ipcRenderer.invoke('audio:stem-runtime-cancel'),
+  uninstallStemRuntime: (): Promise<AutoMixRuntimeStatus> =>
+    ipcRenderer.invoke('audio:stem-runtime-uninstall'),
+  getStemCacheInfo: (): Promise<AutoMixStemCacheInfo> =>
+    ipcRenderer.invoke('audio:stem-cache-info'),
+  clearStemCache: (): Promise<AutoMixStemCacheResult> =>
+    ipcRenderer.invoke('audio:stem-cache-clear'),
   // Get the full filesystem path from a File object (drag-and-drop)
   getFilePath: (file: File): string => {
     try {

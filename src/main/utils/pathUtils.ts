@@ -142,28 +142,57 @@ export function getNativeAddonPath(isPackaged: boolean): string {
     : getProjectPath('build', 'native-addon', 'easy_player_native.node')
 }
 
-export function getStemPythonPath(isPackaged: boolean): string {
+export function getStemRuntimeRoot(): string {
+  return getDataPath('components', 'auto-mix')
+}
+
+function getInstalledStemDirectory(): string {
+  try {
+    const installed = JSON.parse(
+      fs.readFileSync(path.join(getStemRuntimeRoot(), 'installed.json'), 'utf8')
+    )
+    if (
+      typeof installed.directory === 'string' &&
+      /^v\d+\.\d+\.\d+-[a-f0-9]{12}$/.test(installed.directory)
+    ) {
+      return path.join(getStemRuntimeRoot(), 'versions', installed.directory)
+    }
+  } catch {
+    /* The optional component has not been installed yet. */
+  }
+  return path.join(getStemRuntimeRoot(), 'versions', 'not-installed')
+}
+
+export function getStemPythonPath(): string {
   if (process.env.EASY_PLAYER_STEM_PYTHON) return process.env.EASY_PLAYER_STEM_PYTHON
+  return path.join(
+    getInstalledStemDirectory(),
+    'python',
+    process.platform === 'win32' ? 'python.exe' : 'bin/python3'
+  )
+}
+
+export function getStemFfmpegPath(isPackaged: boolean): string {
+  if (process.env.EASY_PLAYER_STEM_FFMPEG) return process.env.EASY_PLAYER_STEM_FFMPEG
+  const executable = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg'
+  const prepared = getProjectPath('build', 'native-addon', executable)
+  if (!isPackaged && fs.existsSync(prepared)) return prepared
   return isPackaged
-    ? path.join(
-        process.resourcesPath,
-        'tools',
-        'auto-mix-python',
-        process.platform === 'win32' ? 'python.exe' : 'bin/python3'
-      )
-    : getProjectPath(
-        'build',
-        'stem-runtime',
-        process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python3'
-      )
+    ? path.join(process.resourcesPath, 'native', executable)
+    : getProjectPath('resources', 'lib', 'ffmpeg', 'bin', executable)
+}
+
+export function getStemModelPath(): string {
+  return path.join(getInstalledStemDirectory(), 'models')
 }
 
 export function getStemWorkerPath(isPackaged: boolean): string {
   return getResourcePath(isPackaged, 'auto-mix', 'stem_worker.py')
 }
 
-export function getStemCachePath(isPackaged: boolean): string {
-  return isPackaged ? getCachePath('auto-mix-stems') : getProjectPath('build', 'auto-mix-stems')
+export function getStemCachePath(): string {
+  // Keep generated stems outside the general cache cleanup scope.
+  return getDataPath('auto-mix-stems')
 }
 
 export function getYtdlpCommand(isPackaged: boolean, appPath: string): string {
