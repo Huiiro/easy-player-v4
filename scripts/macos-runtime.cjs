@@ -36,10 +36,17 @@ function isSystemLibrary(library) {
 }
 function minimumMacosVersion(output) {
   const versions = []
-  let active = false
+  let command = ''
   for (const line of output.split('\n')) {
-    if (/\bcmd LC_/.test(line)) active = /\bcmd LC_(BUILD_VERSION|VERSION_MIN_MACOSX)\b/.test(line)
-    const match = active && /^\s*(?:minos|version) (\d+\.\d+(?:\.\d+)?)/.exec(line)
+    const header = /\bcmd (LC_\w+)/.exec(line)
+    if (header) command = header[1]
+    const pattern =
+      command === 'LC_BUILD_VERSION'
+        ? /^\s*minos (\d+\.\d+(?:\.\d+)?)/
+        : command === 'LC_VERSION_MIN_MACOSX'
+          ? /^\s*version (\d+\.\d+(?:\.\d+)?)/
+          : null
+    const match = pattern?.exec(line)
     if (match) versions.push(match[1])
   }
   return versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0]

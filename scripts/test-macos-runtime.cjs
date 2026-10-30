@@ -33,7 +33,7 @@ try {
   )
   assert.equal(
     minimumMacosVersion(
-      'cmd LC_ID_DYLIB\n current version 62.28.102\ncmd LC_BUILD_VERSION\n minos 12.0\n sdk 15.0\ncmd LC_VERSION_MIN_MACOSX\n version 11.0\n sdk 14.0'
+      'cmd LC_ID_DYLIB\n current version 62.28.102\ncmd LC_BUILD_VERSION\n minos 12.0\n sdk 15.0\n ntools 1\n tool ld\n version 1053.12\ncmd LC_VERSION_MIN_MACOSX\n version 11.0\n sdk 14.0'
     ),
     '12.0'
   )
