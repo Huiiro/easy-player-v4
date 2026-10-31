@@ -1,5 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import AdmZip from 'adm-zip'
 
@@ -41,6 +41,9 @@ export function extractRuntimeArchive(archive: string, target: string, maxBytes:
     }
     mkdirSync(path.dirname(destination), { recursive: true })
     writeFileSync(destination, entry.getData(), { flag: 'wx' })
+    // Preserve only normal permissions; never restore setuid/setgid from an archive.
+    if (process.platform !== 'win32')
+      chmodSync(destination, (entry.header.attr >>> 16) & 0o111 ? 0o755 : 0o644)
   }
 }
 

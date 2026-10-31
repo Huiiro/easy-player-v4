@@ -7,7 +7,13 @@ Mac 原生模块；远程验证环境使用 GitHub Actions `macos-15` ARM64 runn
 
 推送分支或手动运行 `macOS build` 后，在成功任务的 Artifacts 下载
 `macos-arm64-test`，其中包含 `easy-player-<版本>-mac-arm64.dmg`、ZIP 及更新元数据。
-普通分支构建不会创建 Release；当前版本标签仍只自动发布 Windows x64。
+普通分支构建不会创建 Release。`v<版本>` 标签会同时构建 Windows x64 与 Mac ARM64，
+两端校验成功后统一发布。Mac 产物包含 DMG、ZIP、blockmap 和对应更新通道的
+`*-mac.yml`；当前仍使用 ad-hoc 签名，Developer ID/公证和自动更新真机验证尚未完成。
+
+`Release desktop apps` 支持手动选择 `desktop`（默认，Windows + Mac）、`windows`、
+`macos` 或 `all`（额外构建 Linux）。手动运行只生成 artifacts，不创建 Release。
+日常 Mac CI 与正式发布共用 `macos-package.yml` 中的构建、样式、音频和依赖校验。
 
 测试包使用 ad-hoc 签名，尚无 Developer ID/Apple 公证。Gatekeeper 可能阻止首次
 打开；核对下载来源后，可通过系统设置的“隐私与安全性”允许该应用打开。

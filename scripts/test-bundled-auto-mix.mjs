@@ -4,17 +4,21 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
 
-const resources = path.resolve(process.argv[2] || 'dist/win-unpacked/resources')
+const mac = process.platform === 'darwin'
+const resources = path.resolve(
+  process.argv[2] ||
+    (mac ? 'dist/mac-arm64/EasyPlayer.app/Contents/Resources' : 'dist/win-unpacked/resources')
+)
 const runtime = path.resolve(process.argv[3] || 'build/auto-mix-runtime')
-const python = path.join(runtime, 'python/python.exe')
-const ffmpeg = path.join(resources, 'native/ffmpeg.exe')
+const python = path.join(runtime, mac ? 'python/bin/python3' : 'python/python.exe')
+const ffmpeg = path.join(resources, mac ? 'native/ffmpeg' : 'native/ffmpeg.exe')
 const models = path.join(runtime, 'models')
 const worker = path.join(resources, 'resources/auto-mix/stem_worker.py')
 const build = path.resolve('build')
 const directory = await fs.mkdtemp(path.join(build, 'bundled stem check 音频 '))
 const environment = {
   ...process.env,
-  PATH: path.join(process.env.SystemRoot || 'C:/Windows', 'System32'),
+  PATH: mac ? '/usr/bin:/bin' : path.join(process.env.SystemRoot || 'C:/Windows', 'System32'),
   PYTHONHOME: path.join(directory, 'missing-system-python'),
   PYTHONPATH: path.join(directory, 'missing-system-packages'),
   TORCH_HOME: path.join(directory, 'empty-model-cache'),

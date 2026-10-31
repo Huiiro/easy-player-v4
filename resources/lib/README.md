@@ -1,8 +1,8 @@
 # 原生依赖与外部工具
 
 本目录保存音频引擎的构建入口、依赖配置和外部工具版本锁。
-以下命令均从项目根目录执行。Windows x64 为当前正式发行目标；
-macOS Apple Silicon 已接入锁定依赖构建与 GitHub Actions 测试包，最低系统为 macOS 12。
+以下命令均从项目根目录执行。版本标签会同时构建发布 Windows x64 与
+macOS Apple Silicon，Mac 最低系统为 macOS 12，目前仍使用 ad-hoc 签名。
 
 ## 目录用途
 

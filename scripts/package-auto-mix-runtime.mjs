@@ -9,7 +9,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const source = path.join(root, 'build/auto-mix-runtime')
 const output = path.join(root, 'dist')
 const version = '1.0.0'
-const asset = `easy-player-auto-mix-win32-x64-${version}.zip`
+if (!(
+  (process.platform === 'win32' && process.arch === 'x64') ||
+  (process.platform === 'darwin' && process.arch === 'arm64')
+))
+  throw new Error('Auto Mix packaging supports Windows x64 and Mac ARM64 only')
+const target = `${process.platform}-${process.arch}`
+const asset = `easy-player-auto-mix-${target}-${version}.zip`
 fs.mkdirSync(output, { recursive: true })
 const zip = new AdmZip()
 let unpackedSize = 0
@@ -21,6 +27,8 @@ for (const folder of ['python', 'models']) {
       const file = path.join(dir, entry.name)
       if (entry.isDirectory()) walk(file)
       else {
+        if (entry.isSymbolicLink())
+          throw new Error(`Materialize runtime symlinks before packaging: ${file}`)
         unpackedSize += fs.statSync(file).size
         zip.addLocalFile(file, path.relative(source, path.dirname(file)).replaceAll('\\', '/'))
       }
@@ -29,7 +37,7 @@ for (const folder of ['python', 'models']) {
   walk(directory)
 }
 const component = Buffer.from(
-  JSON.stringify({ formatVersion: 1, version, platform: 'win32', arch: 'x64' })
+  JSON.stringify({ formatVersion: 1, version, platform: process.platform, arch: process.arch })
 )
 unpackedSize += component.length
 zip.addFile('component.json', component)
@@ -39,15 +47,15 @@ const sha256 = createHash('sha256').update(fs.readFileSync(archive)).digest('hex
 const manifest = {
   formatVersion: 1,
   version,
-  platform: 'win32',
-  arch: 'x64',
+  platform: process.platform,
+  arch: process.arch,
   asset,
   sha256,
   size: fs.statSync(archive).size,
   unpackedSize
 }
 fs.writeFileSync(
-  path.join(output, 'easy-player-auto-mix-win32-x64.json'),
+  path.join(output, `easy-player-auto-mix-${target}.json`),
   JSON.stringify(manifest, null, 2)
 )
 console.log(

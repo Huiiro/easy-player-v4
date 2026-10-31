@@ -12,7 +12,9 @@ const directory = await fs.mkdtemp(path.join(root, 'build', 'component-install-c
 const oldDataRoot = process.env.EASY_PLAYER_DATA_DIR
 try {
   process.env.EASY_PLAYER_DATA_DIR = directory
-  const manifest = JSON.parse(await fs.readFile('dist/easy-player-auto-mix-win32-x64.json', 'utf8'))
+  const manifest = JSON.parse(
+    await fs.readFile(`dist/easy-player-auto-mix-${process.platform}-${process.arch}.json`, 'utf8')
+  )
   const archive = path.resolve('dist', manifest.asset)
   globalThis.componentTestFetch = async (url) =>
     url.endsWith('.json')
@@ -60,10 +62,13 @@ try {
     process.execPath,
     [
       'scripts/test-bundled-auto-mix.mjs',
-      process.argv[2] || 'dist/win-unpacked/resources',
+      process.argv[2] ||
+        (process.platform === 'darwin'
+          ? 'dist/mac-arm64/EasyPlayer.app/Contents/Resources'
+          : 'dist/win-unpacked/resources'),
       runtime
     ],
-    { stdio: 'inherit', windowsHide: true, timeout: 180_000 }
+    { stdio: 'inherit', windowsHide: true, timeout: 300_000 }
   )
   assert.ifError(result.error)
   assert.equal(result.status, 0)
@@ -72,7 +77,9 @@ try {
   await fs.writeFile(path.join(stemCache, 'generated.wav'), 'fixture')
   assert.equal((await manager.clearCache()).success, true)
   assert.equal(manager.status().installed, true)
-  await fs.access(path.join(runtime, 'python/python.exe'))
+  await fs.access(
+    path.join(runtime, process.platform === 'darwin' ? 'python/bin/python3' : 'python/python.exe')
+  )
   await fs.mkdir(stemCache, { recursive: true })
   await fs.writeFile(path.join(stemCache, 'generated.wav'), 'preserve')
   assert.equal((await manager.uninstall()).installed, false)

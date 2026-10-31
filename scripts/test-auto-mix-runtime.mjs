@@ -67,6 +67,8 @@ try {
     cacheDirectory,
     beforeMaintenance: () => beforeMaintenance(),
     supported: true,
+    platform: 'win32',
+    arch: 'x64',
     releaseBaseUrl,
     fetch: async (url) => {
       fetches++
@@ -232,8 +234,53 @@ try {
     () => extractRuntimeArchive(validFile, path.join(directory, 'overflow'), 1),
     /budget/
   )
-  assert.throws(() => validateRuntimeManifest({ ...manifest, asset: '../../other.zip' }), /Invalid/)
-  assert.throws(() => validateRuntimeManifest({ ...manifest, arch: 'arm64' }), /Invalid/)
+  assert.throws(
+    () => validateRuntimeManifest({ ...manifest, asset: '../../other.zip' }, 'win32', 'x64'),
+    /Invalid/
+  )
+  assert.throws(
+    () => validateRuntimeManifest({ ...manifest, arch: 'arm64' }, 'win32', 'x64'),
+    /Invalid/
+  )
+  const macZip = new AdmZip()
+  for (const name of ['python/bin/python3', 'python/lib/python3.12/os.py', ...required.slice(3)])
+    macZip.addFile(name, Buffer.from('fixture'), '', name.endsWith('python3') ? 0o100755 : 0o100644)
+  const macBytes = macZip.toBuffer()
+  const macManifest = {
+    ...manifest,
+    platform: 'darwin',
+    arch: 'arm64',
+    asset: 'easy-player-auto-mix-darwin-arm64-1.0.0.zip',
+    size: macBytes.length,
+    sha256: createHash('sha256').update(macBytes).digest('hex')
+  }
+  assert.equal(validateRuntimeManifest(macManifest, 'darwin', 'arm64').platform, 'darwin')
+  assert.throws(() => validateRuntimeManifest(manifest, 'darwin', 'arm64'), /Invalid/)
+  assert.throws(() => validateRuntimeManifest(macManifest, 'win32', 'x64'), /Invalid/)
+  assert.throws(() => validateRuntimeManifest(macManifest, 'darwin', 'x64'), /Invalid/)
+  const macUrls = []
+  const mac = new AutoMixRuntimeService({
+    ...options(path.join(directory, 'Mac 安装目录')),
+    platform: 'darwin',
+    arch: 'arm64',
+    supported: undefined,
+    fetch: async (url) => {
+      macUrls.push(url)
+      return new Response(url.endsWith('.json') ? JSON.stringify(macManifest) : macBytes)
+    },
+    verify: async (target) => {
+      const interpreter = path.join(target, 'python/bin/python3')
+      assert.equal(await fs.readFile(interpreter, 'utf8'), 'fixture')
+      if (process.platform !== 'win32')
+        assert.equal((await fs.stat(interpreter)).mode & 0o777, 0o755)
+    }
+  })
+  assert.equal(mac.status().supported, true)
+  mac.start()
+  await mac.wait()
+  assert.equal(mac.status().phase, 'ready', mac.status().error)
+  assert.ok(macUrls[0].endsWith('easy-player-auto-mix-darwin-arm64.json'))
+  assert.equal((await mac.uninstall()).installed, false)
   console.log(
     'Optional runtime: install/uninstall/reinstall, cache isolation, worker drain, linked-directory protection, cancellation and archive validation passed'
   )
