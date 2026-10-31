@@ -70,6 +70,12 @@ def sign_and_verify(runtime):
         arches = subprocess.check_output(['lipo', '-archs', str(file)], text=True).split()
         if 'arm64' not in arches:
             raise RuntimeError(f'Non ARM64 binary: {file}')
+        # otool -L includes a dylib's own install ID. Delocated torchaudio
+        # wheels use a synthetic /DLC/... ID; it is not an external dependency.
+        identifiers = subprocess.check_output(['otool', '-D', str(file)], text=True).splitlines()[1:]
+        if any(line.strip().startswith(('/', '@')) for line in identifiers):
+            run('install_name_tool', '-id', '@rpath/' + file.name, file,
+                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         loads = subprocess.check_output(['otool', '-l', str(file)], text=True)
         command = ''
         for line in loads.splitlines():
@@ -100,6 +106,8 @@ def sign_and_verify(runtime):
 def main():
     if sys.platform != 'darwin' or platform.machine() != 'arm64':
         raise RuntimeError('Prepare this component on a native Apple Silicon runner')
+    if sys.version_info < (3, 12):
+        raise RuntimeError('The component build host needs Python 3.12 or newer; end users do not')
     OUTPUT.mkdir(parents=True, exist_ok=True)
     DOWNLOADS.mkdir(parents=True, exist_ok=True)
     archive = DOWNLOADS / PYTHON_ASSET

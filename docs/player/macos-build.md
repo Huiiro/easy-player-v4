@@ -79,7 +79,8 @@ SDK 在 `build/native-deps/installed/arm64-osx-audio`；仅此目录需要头文
 PyTorch/torchaudio 2.5.1、Demucs 4.0.1，以及和 Windows 相同 SHA-256 的 htdemucs 模型。
 当前只用 CPU/FP32，未启用 MPS。用户不需要安装 Python、pip 或 Homebrew。
 
-构建机执行 `npm run package:auto-mix`，在 `dist` 生成
+制作组件的构建机需 Python 3.12 或更新版本（Actions runner 已提供）；
+使用组件的用户不需要系统 Python。构建机执行 `npm run package:auto-mix`，在 `dist` 生成
 `easy-player-auto-mix-darwin-arm64-1.0.0.zip` 和
 `easy-player-auto-mix-darwin-arm64.json`；JSON 记录大小、SHA-256 与解压预算。
 Mac CI 和标签发布都会构建、验证并上传这两个文件。官方附件发布前，应用内下载会
