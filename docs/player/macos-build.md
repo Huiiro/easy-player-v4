@@ -117,6 +117,15 @@ npm run dev
 使用 ad-hoc 签名。源码见 `scripts/prepare-auto-mix-macos.py`。
 Python 来源：[Astral 独立发行版](https://github.com/astral-sh/python-build-standalone)。
 
+2026-10-31 已通过 [GitHub Actions ARM64 验证](https://github.com/Huiiro/easy-player-v4/actions/runs/41198019383)：
+独立组件 ZIP 为 187,816,404 字节（179.1 MiB），解压 486,534,473 字节（464.0 MiB）。
+源码运行时和经过真实 ZIP 安装器搬移后的运行时，均通过离线分轨与重复请求缓存检查，
+并通过清缓存、卸载、3 个分轨决策测试及 worker 取消/超时/重启测试；8 个 C++ 回归同样通过。
+两条 3 秒合成音频、关闭人声入口扫描的固定样例中，worker 报告首次请求 31.15–34.44 秒，
+同一 worker 内缓存重复请求 0.03–0.04 秒；不包含重复启动开销，不能代表真实歌曲或
+40 秒人声入口扫描的性能。真实歌曲听感、最低系统和用户机器安装仍需真机验收。
+测试产物：[macos-release](https://github.com/Huiiro/easy-player-v4/actions/runs/41198019383/artifacts/13042130375)。
+
 Intel triplet 已预留但尚未验证。`--universal` 会明确报错；需要先分别验证 arm64/x64
 音频模块、FFmpeg、SQLite、Sharp 等原生产物，再建立合并、签名和双架构运行检查。
 正式公开发行还需要 Developer ID 签名、公证、安装与自动更新验收。
