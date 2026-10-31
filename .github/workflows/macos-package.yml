@@ -65,6 +65,8 @@ jobs:
           npm run test:bundled-auto-mix
           npm run test:auto-mix-runtime
           npm run test:auto-mix-component-install
+          build/auto-mix-runtime/python/bin/python3 -I -B scripts/test_auto_mix_stem_worker.py
+          EASY_PLAYER_STEM_PYTHON="$PWD/build/auto-mix-runtime/python/bin/python3" node scripts/test-auto-mix-stems.mjs
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}

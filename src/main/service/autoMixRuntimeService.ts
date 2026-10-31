@@ -23,7 +23,6 @@ export function autoMixTarget(
     ? `${platform}-${arch}`
     : undefined
 }
-export const AUTO_MIX_MANIFEST_ASSET = `easy-player-auto-mix-${autoMixTarget()}.json`
 function requiredFiles(platform: NodeJS.Platform): string[] {
   return [
     ...(platform === 'darwin'

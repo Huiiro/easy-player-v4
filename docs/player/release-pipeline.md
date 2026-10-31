@@ -3,7 +3,7 @@
 Pushing a tag named `v<package-version>` builds and publishes Windows x64 and
 Mac Apple Silicon (ARM64). Both package jobs must pass before a GitHub Release
 is created. Assets include the Windows installer, Mac DMG/ZIP, their update
-manifests/blockmaps and the Windows optional Auto Mix component ZIP/JSON.
+manifests/blockmaps and each platform's optional Auto Mix component ZIP/JSON.
 The tag must match `package.json`;
 keep both version fields in `package-lock.json` in sync. Commit the changes
 before tagging so the workflow builds the intended source.
@@ -132,8 +132,13 @@ Entitlements are tracked in `resources/entitlements.mac.plist`, outside the
 ignored generated `build` directory.
 For public distribution, replace the identity, enable hardened runtime and
 configure notarization and restore a trusted timestamp server. Developer ID
-signing/notarization, Intel/universal validation and the optional Mac Python
-stem component remain separate work. CoreAudio currently supports the system
+signing/notarization and Intel/universal validation remain separate work.
+The optional Mac CPU stem component is packaged separately using pinned ARM64
+standalone CPython 3.12.16, Torch/torchaudio 2.5.1, Demucs 4.0.1 and htdemucs.
+`npm run package:auto-mix` emits `easy-player-auto-mix-darwin-arm64-1.0.0.zip`
+and `easy-player-auto-mix-darwin-arm64.json`. CI tests offline inference,
+cache hits and the real ZIP installer/cache-clear/uninstall lifecycle before
+uploading them alongside DMG/ZIP. CoreAudio currently supports the system
 default shared PCM output. DMG launch, playback, artwork, editing, DSP and the
 Vibrancy fix have passed user testing; ZIP installation and automatic updates
 still need real-device validation. See [Mac build and testing](macos-build.md).

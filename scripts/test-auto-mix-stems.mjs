@@ -12,9 +12,13 @@ const js = ts.transpileModule(source, {
 const { AutoMixStemService } = await import(
   'data:text/javascript;base64,' + Buffer.from(js).toString('base64')
 )
-const python = spawnSync('python', ['-c', 'import sys;print(sys.executable)'], {
-  encoding: 'utf8'
-}).stdout?.trim()
+const python = spawnSync(
+  process.env.EASY_PLAYER_STEM_PYTHON || (process.platform === 'darwin' ? 'python3' : 'python'),
+  ['-c', 'import sys;print(sys.executable)'],
+  {
+    encoding: 'utf8'
+  }
+).stdout?.trim()
 assert.ok(python, 'Python is required for worker lifecycle tests')
 const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'auto-mix-stems-'))
 const worker = path.join(temp, 'worker.py')

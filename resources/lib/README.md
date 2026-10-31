@@ -145,8 +145,8 @@ CI 检查架构、最低系统版本、依赖闭合、体积、签名、9 种音
 DSP、Remix 和音频引擎恢复；隐藏 SDK 后再次加载包内模块，确认运行不依赖构建目录。
 VC++ DLL 和 Windows 任务栏助手不进入 Mac 包。
 
-目前输出为 CoreAudio 默认设备共享 PCM；尚未适配独占/DoP、Mac 可选 Python 分轨
-组件及 Developer ID 签名/公证。CI 不替代真机听音和安装测试。x64 triplet 已预留，
+目前输出为 CoreAudio 默认设备共享 PCM；尚未适配独占/DoP 及 Developer ID
+签名/公证。Mac 可选 Python 分轨组件独立下载，详见下节。CI 不替代真机听音和安装测试。x64 triplet 已预留，
 但未建立 Intel 验证链路；universal 还需要分别构建并校验两套原生依赖，当前入口明确拒绝。
 操作说明见 [Mac 构建与测试](../../docs/player/macos-build.md)。
 
@@ -158,8 +158,15 @@ Linux 当前有 Electron/UI 和 yt-dlp 打包入口，但没有完整的原生�
 ## 可选分轨组件与用户数据
 
 分轨专用 Python、PyTorch、torchaudio、Demucs 和离线模型通过
-`npm run package:auto-mix` 单独打包，目前仅支持 Windows x64，不进入基础安装包。
+`npm run package:auto-mix` 单独打包，支持 Windows x64 和 Mac ARM64，不进入基础安装包。
 它们与 yt-dlp 自带的 Python 运行时是两套独立组件。
+
+Windows 使用 CPython 3.12.10 embed；Mac 使用锁定 SHA-256 的 Astral 独立
+CPython 3.12.16 ARM64，不能复用系统/Homebrew Python 或 Windows 二进制。
+两端均使用 CPU Torch/torchaudio 2.5.1、Demucs 4.0.1 和同一份 htdemucs 模型。
+Mac 归档为 `easy-player-auto-mix-darwin-arm64-1.0.0.zip`，配套同平台 JSON。
+构建会精简依赖、实体化符号链接并检查/签名 Mach-O；安装器恢复执行权限、隔离验证后
+原子激活版本目录。Mac CI 覆盖离线推理、缓存命中、真实 ZIP 安装/清缓存/卸载。
 
 用户下载组件、数据库和缓存不放在 `resources/lib` 或 `build/native-deps`。
 组件使用用户数据根目录下的 `player_data/components/auto-mix`，分轨缓存使用
