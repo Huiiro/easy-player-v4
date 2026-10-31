@@ -1549,7 +1549,7 @@ export default {
     stemComponentDownload: '下载并安装',
     stemComponentCancel: '取消下载',
     stemComponentReady: '已安装',
-    stemComponentUnsupported: '目前仅提供 Windows x64 组件。',
+    stemComponentUnsupported: '目前提供 Windows x64 和 Mac Apple Silicon 组件。',
     stemComponentFailed: '组件操作未完成，可重试。',
     stemComponentUninstall: '卸载组件',
     stemComponentUninstallConfirm:

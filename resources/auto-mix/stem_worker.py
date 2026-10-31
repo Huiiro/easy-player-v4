@@ -238,6 +238,8 @@ def main():
     if sys.platform == 'win32':
         import ctypes
         ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), 0x4000)
+    elif sys.platform == 'darwin':
+        os.nice(10)
     if args.warmup:
         model()
         print(json.dumps({'ok': True, 'model': MODEL}), flush=True)

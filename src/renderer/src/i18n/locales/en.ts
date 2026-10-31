@@ -1586,7 +1586,7 @@ export default {
     stemComponentDownload: 'Download and install',
     stemComponentCancel: 'Cancel download',
     stemComponentReady: 'Installed',
-    stemComponentUnsupported: 'Currently available for Windows x64 only.',
+    stemComponentUnsupported: 'Available for Windows x64 and Mac Apple Silicon.',
     stemComponentFailed: 'The component operation failed. You can retry.',
     stemComponentUninstall: 'Uninstall component',
     stemComponentUninstallConfirm:

@@ -15,14 +15,23 @@ export function autoMixReleaseUrl(version: string): string {
     ? `https://github.com/Huiiro/easy-player-v4/releases/download/v${encodeURIComponent(version)}/`
     : AUTO_MIX_RELEASE_URL
 }
-export const AUTO_MIX_MANIFEST_ASSET = 'easy-player-auto-mix-win32-x64.json'
-const required = [
-  'python/python.exe',
-  'python/python312.dll',
-  'python/python312._pth',
-  'models/htdemucs.yaml',
-  'models/955717e8-8726e21a.th'
-]
+export function autoMixTarget(
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch
+): string | undefined {
+  return (platform === 'win32' && arch === 'x64') || (platform === 'darwin' && arch === 'arm64')
+    ? `${platform}-${arch}`
+    : undefined
+}
+function requiredFiles(platform: NodeJS.Platform): string[] {
+  return [
+    ...(platform === 'darwin'
+      ? ['python/bin/python3', 'python/lib/python3.12/os.py']
+      : ['python/python.exe', 'python/python312.dll', 'python/python312._pth']),
+    'models/htdemucs.yaml',
+    'models/955717e8-8726e21a.th'
+  ]
+}
 
 interface Options {
   root: string
@@ -34,19 +43,27 @@ interface Options {
   cacheDirectory?: string
   beforeMaintenance?: () => Promise<void>
   releaseBaseUrl?: string
+  platform?: NodeJS.Platform
+  arch?: string
 }
 
-export function validateRuntimeManifest(value: unknown): AutoMixRuntimeManifest {
+export function validateRuntimeManifest(
+  value: unknown,
+  platform: NodeJS.Platform = process.platform,
+  arch: string = process.arch
+): AutoMixRuntimeManifest {
   const m = value as AutoMixRuntimeManifest
+  const target = autoMixTarget(platform, arch)
   if (
     !m ||
     m.formatVersion !== 1 ||
-    m.platform !== 'win32' ||
-    m.arch !== 'x64' ||
+    !target ||
+    m.platform !== platform ||
+    m.arch !== arch ||
     typeof m.version !== 'string' ||
     !/^\d+\.\d+\.\d+$/.test(m.version) ||
     typeof m.asset !== 'string' ||
-    !/^easy-player-auto-mix-win32-x64-[\w.-]+\.zip$/.test(m.asset) ||
+    m.asset !== `easy-player-auto-mix-${target}-${m.version}.zip` ||
     typeof m.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(m.sha256) ||
     !Number.isSafeInteger(m.size) ||
@@ -63,6 +80,12 @@ export function validateRuntimeManifest(value: unknown): AutoMixRuntimeManifest 
 
 /** Installation is explicit; status queries never download or start inference. */
 export class AutoMixRuntimeService {
+  private get platform(): NodeJS.Platform {
+    return this.options.platform ?? process.platform
+  }
+  private get arch(): string {
+    return this.options.arch ?? process.arch
+  }
   private controller?: AbortController
   private task?: Promise<void>
   private maintenance?: Promise<void>
@@ -93,8 +116,7 @@ export class AutoMixRuntimeService {
   }
 
   private installedStatus(): AutoMixRuntimeStatus {
-    const supported =
-      this.options.supported ?? (process.platform === 'win32' && process.arch === 'x64')
+    const supported = this.options.supported ?? Boolean(autoMixTarget(this.platform, this.arch))
     let hasFiles = false
     try {
       hasFiles = readdirSync(this.options.root).length > 0
@@ -110,7 +132,7 @@ export class AutoMixRuntimeService {
         typeof installed.version === 'string' &&
         /^\d+\.\d+\.\d+$/.test(installed.version) &&
         /^v\d+\.\d+\.\d+-[a-f0-9]{12}$/.test(installed.directory) &&
-        required.every((file) =>
+        requiredFiles(this.platform).every((file) =>
           existsSync(path.join(this.options.root, 'versions', installed.directory, file))
         )
       ) {
@@ -277,7 +299,8 @@ export class AutoMixRuntimeService {
     timeout.unref()
     try {
       const response = await this.options.fetch(
-        (this.options.releaseBaseUrl ?? AUTO_MIX_RELEASE_URL) + AUTO_MIX_MANIFEST_ASSET,
+        (this.options.releaseBaseUrl ?? AUTO_MIX_RELEASE_URL) +
+          `easy-player-auto-mix-${autoMixTarget(this.platform, this.arch)}.json`,
         signal
       )
       if (!response.ok)
@@ -286,7 +309,7 @@ export class AutoMixRuntimeService {
         )
       const text = await response.text()
       if (text.length > 16_384) throw new Error('Component manifest is too large')
-      const manifest = validateRuntimeManifest(JSON.parse(text))
+      const manifest = validateRuntimeManifest(JSON.parse(text), this.platform, this.arch)
       this.update({ phase: 'downloading', totalBytes: manifest.size, version: manifest.version })
       const download = await this.options.fetch(
         (this.options.releaseBaseUrl ?? AUTO_MIX_RELEASE_URL) + manifest.asset,
@@ -324,7 +347,7 @@ export class AutoMixRuntimeService {
       const extracted = path.join(staging, 'unpacked')
       await this.options.extract(archive, extracted, manifest.unpackedSize, signal)
       signal.throwIfAborted()
-      if (!required.every((file) => existsSync(path.join(extracted, file))))
+      if (!requiredFiles(this.platform).every((file) => existsSync(path.join(extracted, file))))
         throw new Error('Component archive is incomplete')
       await this.options.verify(extracted, signal)
       signal.throwIfAborted()

@@ -1,8 +1,10 @@
 # Desktop release pipeline
 
-Pushing a tag named `v<package-version>` currently builds and publishes only
-the Windows x64 installer. The release also includes its update manifest and
-the optional Auto Mix component ZIP/JSON. The tag must match `package.json`;
+Pushing a tag named `v<package-version>` builds and publishes Windows x64 and
+Mac Apple Silicon (ARM64). Both package jobs must pass before a GitHub Release
+is created. Assets include the Windows installer, Mac DMG/ZIP, their update
+manifests/blockmaps and each platform's optional Auto Mix component ZIP/JSON.
+The tag must match `package.json`;
 keep both version fields in `package-lock.json` in sync. Commit the changes
 before tagging so the workflow builds the intended source.
 
@@ -14,9 +16,10 @@ assets; stable apps use the latest stable release.
 Pull requests and ordinary branch pushes run the Windows, macOS, and Linux CI
 workflows. They build the application but do not publish a release. Release
 tags skip these duplicate CI builds. A manual run of **Release desktop apps**
-defaults to Windows; select `all` to additionally build macOS/Linux artifacts.
-Manual runs do not create a GitHub Release. Linux native audio packaging still
-needs separate validation before publishing Linux builds.
+defaults to `desktop` (Windows x64 + Mac ARM64). Select `windows` or `macos`
+to build one platform, or `all` to additionally build Linux artifacts.
+Manual runs only upload artifacts and do not create a GitHub Release. Linux
+is excluded from tag releases until native audio adaptation is complete.
 
 ## Windows build and validation
 
@@ -91,7 +94,11 @@ directories and do not uninstall or clear the user's real component/cache.
 
 ## macOS Apple Silicon build and validation
 
-The `macOS build` workflow builds ARM64 DMG/ZIP artifacts on a `macos-15`
+The `macOS build` workflow is defined in `macos-ci.yml` and handles branch/PR
+pushes, manual runs and reusable calls from the Mac release job. Daily builds
+use `macos-arm64-test`; release calls pass `macos-release`. Separate concurrency
+groups prevent daily builds from cancelling release packaging. It builds ARM64
+DMG/ZIP artifacts on a `macos-15`
 runner, with macOS 12.0 as the minimum deployment target. It builds the same
 pinned audio-only FFmpeg, libsamplerate and SoundTouch sources as Windows,
 using the `arm64-osx-audio` triplet. Homebrew supplies build tools only.
@@ -111,6 +118,9 @@ audio engine, SQLite and Sharp under Electron. CI also runs native DSP,
 Remix and backend recovery tests, then hides the SDK and repeats package
 loading and decoding checks. Artifacts are named
 `easy-player-<version>-mac-arm64.dmg` and `.zip`.
+Before uploading, the workflow requires both installer formats and a Mac
+update manifest. It includes `*-mac.yml` so prerelease channels such as
+`beta-mac.yml` are published alongside stable `latest-mac.yml`.
 
 The native audio runtime uses bundled `@loader_path` dylibs with no residual
 SDK search paths. Package checks reject missing/wrong-architecture libraries,
@@ -118,21 +128,28 @@ newer deployment targets, video libraries and an audio runtime over 25 MiB.
 Official yt-dlp bytes are verified before signing; packaged execution, version
 and signature are verified afterwards.
 
-This is an Apple Silicon test build, using a complete ad-hoc app signature.
-The Mac test configuration sets `identity: '-'`, `hardenedRuntime: false` and
+Mac packages currently use a complete ad-hoc app signature, including tag
+release artifacts. The configuration sets `identity: '-'`, `hardenedRuntime: false` and
 `notarize: false` and `timestamp: none`; package verification checks the whole bundle signature.
 Entitlements are tracked in `resources/entitlements.mac.plist`, outside the
 ignored generated `build` directory.
 For public distribution, replace the identity, enable hardened runtime and
 configure notarization and restore a trusted timestamp server. Developer ID
-signing/notarization, Intel/universal validation and the optional Mac Python
-stem component remain separate work. CoreAudio currently supports the system
-default shared PCM output. Real-device playback and installation still need
-manual checks. See [Mac build and testing](macos-build.md).
+signing/notarization and Intel/universal validation remain separate work.
+The optional Mac CPU stem component is packaged separately using pinned ARM64
+standalone CPython 3.12.16, Torch/torchaudio 2.5.1, Demucs 4.0.1 and htdemucs.
+`npm run package:auto-mix` emits `easy-player-auto-mix-darwin-arm64-1.0.0.zip`
+and `easy-player-auto-mix-darwin-arm64.json`. CI tests offline inference,
+cache hits and the real ZIP installer/cache-clear/uninstall lifecycle before
+uploading them alongside DMG/ZIP. CoreAudio currently supports the system
+default shared PCM output. DMG launch, playback, artwork, editing, DSP, the
+Vibrancy fix and the manually installed CPU stem component have passed user
+testing; application ZIP installation and automatic updates
+still need real-device validation. See [Mac build and testing](macos-build.md).
 
 ## Repository secrets
 
-The current workflow uses unsigned Windows packages and ad-hoc signed Mac test
+The current workflow uses unsigned Windows packages and ad-hoc signed Mac
 packages. To distribute binaries signed with a publisher identity, add the
 following secrets and wire them into the matching package job. For Mac, also
 override the test identity/hardened-runtime/notarization options above:
@@ -147,9 +164,11 @@ override the test identity/hardened-runtime/notarization options above:
 | macOS notarization | `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password generated by that Apple ID.                                |
 | macOS notarization | `APPLE_TEAM_ID`               | Apple Developer Team ID.                                                         |
 
-Electron Builder imports `CSC_LINK` automatically. When the macOS certificate
-and all three Apple credentials are present, it signs the app and performs
-Apple notarization; `stapler` runs as part of the notarization flow.
+These secret names document the intended publisher-signing setup; they are
+not currently wired into the jobs. Adding secrets alone does not override the
+ad-hoc options. A future signed release must pass credentials into the reusable
+Mac workflow, configure `CSC_LINK`/`CSC_KEY_PASSWORD`, replace the identity,
+enable hardened runtime/notarization, and validate installation and updates.
 
 The macOS workflow uses `macos-15` and therefore produces an arm64 build. The
 Windows workflow installs the native FFmpeg, libsamplerate and SoundTouch

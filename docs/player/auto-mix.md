@@ -50,21 +50,21 @@ When ready before the overlap begins, the worker examines up to twelve seconds o
 
 The main process starts a hidden persistent Python worker after an 800ms queue debounce. Only the latest pending pair survives, stale results are discarded by both job ID and native plan revision, and results arriving after the overlap starts are ignored. Each task has a three-minute timeout. Stop/lightweight mode/quit cancel the worker; idle workers exit after one minute to release model memory. Errors or unavailable runtime keep the existing non-stem overlap without delaying playback. Stem estimates use file path, size, nanosecond modification time, region and model version cache keys. Audio cache is bounded to 512MiB; the model cache is separate.
 
-Windows x64 optional-component preparation (Python 3.12 on the build machine):
+Optional-component preparation on Windows x64 or Mac ARM64 (native build host):
 
 ```powershell
 npm run package:auto-mix
 ```
 
-The base Windows installer includes FFmpeg and the native beat-matching/overlap engine, but does not include Python, PyTorch or model weights. In playback transition settings, users can explicitly choose **Vocal protection component → Download and install**. No background download occurs on startup or when reading status. The interface shows progress and supports cancellation; basic Auto Mix works without this component.
+The base Windows and Mac installers include FFmpeg and the native beat-matching/overlap engine, but does not include Python, PyTorch or model weights. In playback transition settings, users can explicitly choose **Vocal protection component → Download and install**. No background download occurs on startup or when reading status. The interface shows progress and supports cancellation; basic Auto Mix works without this component.
 
 The component card is always shown at the top of playback transition settings. **Uninstall component** stops separation workers, waits for their process handles to close, and removes the optional runtime and models while keeping generated stem caches. **Settings → Cache → Vocal stem cache** shows file count and disk usage and can clear generated stems plus legacy model caches without uninstalling the component. Maintenance is serialized; clearing is unavailable during component download/installation. Linked cache roots are refused and linked child directories are not traversed. Ordinary playback and native Auto Mix remain available during these operations.
 
-`package:auto-mix` prepares a relocatable CPython 3.12.10 x64 embedded distribution, CPU PyTorch/torchaudio 2.5.1, Demucs 4.0.1 and the official htdemucs model. It excludes SciPy, pip, tests, headers, static libraries, debug symbols, bytecode and unneeded executables; it retains package metadata/licenses and validates inference. The build virtual environment is never shipped. Current local measurements are about 379MiB of dependencies, 480MiB installed including Python and the model, and a 194MiB ZIP download. These sizes can vary with build dependency versions.
+On Windows, `package:auto-mix` prepares a relocatable CPython 3.12.10 x64 embedded distribution, CPU PyTorch/torchaudio 2.5.1, Demucs 4.0.1 and the official htdemucs model. It excludes SciPy, pip, tests, headers, static libraries, debug symbols, bytecode and unneeded executables; it retains package metadata/licenses and validates inference. The build virtual environment is never shipped. Current local measurements are about 379MiB of dependencies, 480MiB installed including Python and the model, and a 194MiB ZIP download. These sizes can vary with build dependency versions.
 
-The command creates `dist/easy-player-auto-mix-win32-x64-1.0.0.zip` and `dist/easy-player-auto-mix-win32-x64.json`. The release workflow uploads both beside the base installer. The application obtains the manifest from the official GitHub release's `latest/download` endpoint, validates architecture/schema, archive byte count and SHA256, extracts in a worker thread with path and size checks, verifies offline model loading, then activates a versioned directory atomically. Failed/cancelled installation preserves the previous installation and cleans only its temporary staging directory. Before the attachments are published, the UI reports that the component is unavailable and offers retry; it never silently starts a different download.
+On Windows the command creates `dist/easy-player-auto-mix-win32-x64-1.0.0.zip` and `dist/easy-player-auto-mix-win32-x64.json`. The release workflow uploads both beside the base installer. The application obtains the manifest from the official GitHub release's `latest/download` endpoint, validates architecture/schema, archive byte count and SHA256, extracts in a worker thread with path and size checks, verifies offline model loading, then activates a versioned directory atomically. Failed/cancelled installation preserves the previous installation and cleans only its temporary staging directory. Before the attachments are published, the UI reports that the component is unavailable and offers retry; it never silently starts a different download.
 
-Installed components are shared by development and production under `<base>/player_data/components/auto-mix/versions/<version-and-hash>`, selected by `installed.json`, outside ordinary cache cleanup. Installation takes effect without restarting. Generated WAV stems remain separately in `<base>/player_data/auto-mix-stems`. FFmpeg remains app-owned at `<resources>/native/ffmpeg.exe` and shares DLLs with the playback engine. `EASY_PLAYER_STEM_PYTHON`/`EASY_PLAYER_STEM_FFMPEG` are explicit development overrides. Once installed, inference uses the local model repository without networking. The optional runtime currently targets Windows x64.
+Installed components are shared by development and production under `<base>/player_data/components/auto-mix/versions/<version-and-hash>`, selected by `installed.json`, outside ordinary cache cleanup. Installation takes effect without restarting. Generated WAV stems remain separately in `<base>/player_data/auto-mix-stems`. FFmpeg remains app-owned at `<resources>/native/ffmpeg.exe` and shares DLLs with the playback engine. `EASY_PLAYER_STEM_PYTHON`/`EASY_PLAYER_STEM_FFMPEG` are explicit development overrides. Once installed, inference uses the local model repository without networking. The optional runtime targets Windows x64 and Mac ARM64. On Mac the shared FFmpeg executable is named `ffmpeg`. The `EASY_PLAYER_STEM_MODEL_REPO` development override can select the extracted model directory together with the Python override.
 
 Validation: `node scripts/test-auto-mix-stems.mjs` checks worker cancellation, stale queue results, timeout and restart with a deterministic worker. Native checks measure that a quiet 700Hz vocal component stays forward while a loud 1800Hz incoming accompaniment yields; zero-vocal reconstruction, endpoints and stale native commits are checked too. Real regions were separated in about 14-16 seconds on this CPU; a repeat cached request returned in 1.6 seconds including Python/import startup. These are local measurements, not performance guarantees. A real `set_auto_mix_vocals` playback test preserved the longer outgoing tail and kept a single backend open without zero-sample gaps. Actual vocal clarity still requires listening.
 
@@ -79,3 +79,30 @@ For a reliable entry, keep `clamp(overlap * 0.65, 1, 3)` seconds before the dete
 The optional 40-second analysis makes initial preparation slower than the short-region-only 14-16 second measurement above. It is cached separately. On a real test the detected cue skipped 1.86 seconds, kept about 2.44 seconds before the next vocal estimate and took 21.75 seconds on first preparation. These thresholds are heuristics over a separation model, not word recognition; an uncertain or late result falls back without blocking playback. The synthetic worker tests check sustained activity, leakage/burst rejection, lead-in preservation and the disabled option; native tests check disabled-cue rejection and seek alignment.
 
 The tail-coverage regression retains a final sustained phrase plus release, removes depleted accompaniment-only fades, ignores quiet separator leakage and preserves healthy endings or late vocals. The native vocal regression also requires a barely audible tail to release the incoming bed while keeping the existing quiet-vocal protection check. Service tests verify that both incoming cue and outgoing overlap positions reach the native commit. A real Skydive → 春めく reproduction moved the full 3.92-second overlap 2.10 seconds earlier while retaining the final vocal release and using one continuous backend session. This is a measured scheduling/coverage improvement, not a guarantee of subjective seamlessness.
+
+## Apple Silicon optional component
+
+The Mac component uses pinned Astral standalone CPython 3.12.16, PyTorch/torchaudio
+2.5.1, Demucs 4.0.1 and the same SHA-256-verified htdemucs weights as Windows.
+Inference remains CPU/FP32, with one to four threads and lower process priority;
+MPS is not enabled. The standalone interpreter and its native libraries are
+materialized, slimmed and ad-hoc signed on an ARM64 runner. Every Mach-O is
+checked for ARM64, deployment target <= macOS 12.0 and external library paths.
+
+`npm run package:auto-mix` on Mac produces
+`easy-player-auto-mix-darwin-arm64-1.0.0.zip` and its platform-specific JSON.
+The downloader selects the host platform/architecture, rejects incompatible
+manifests and restores executable permission bits during safe extraction.
+Installation, cancellation, atomic activation, maintenance and uninstall use
+the same service as Windows; installed files and generated WAV caches remain
+separate and shared between development and production.
+
+Mac CI runs the real packaged worker without system Python/FFmpeg and forbids
+network model downloads. It checks a cold separation and repeat cache hit,
+then repeats inference after relocating through the actual ZIP installer,
+clears caches and uninstalls in an isolated test data directory. Deterministic
+worker tests and lifecycle tests cover vocal cue/tail decisions, cancellation,
+stale results, timeout and restart. On 2026-10-31, the user manually installed
+the ARM64 component on a Mac and confirmed the separation functionality worked.
+macOS 12 compatibility still requires separate device testing.
+See [Mac testing](macos-build.md).

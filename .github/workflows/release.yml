@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       platforms:
-        description: 'Build targets (tag releases currently publish Windows x64 only)'
+        description: 'Build targets (desktop = Windows x64 + Mac ARM64; manual runs do not publish)'
         type: choice
-        options: [windows, all]
-        default: windows
+        options: [desktop, windows, macos, all]
+        default: desktop
 
 concurrency:
   group: release-${{ github.ref }}
@@ -35,6 +35,7 @@ jobs:
           node -e "const pkg = require('./package.json'), lock = require('./package-lock.json'); if (lock.version !== pkg.version || lock.packages[''].version !== pkg.version) throw new Error('package.json and package-lock.json versions must match')"
 
   package-windows:
+    if: github.event_name == 'push' || inputs.platforms == 'desktop' || inputs.platforms == 'windows' || inputs.platforms == 'all'
     needs: verify-version
     runs-on: windows-latest
     timeout-minutes: 90
@@ -97,41 +98,11 @@ jobs:
             dist/easy-player-auto-mix-*.json
 
   package-macos:
-    if: github.event_name == 'workflow_dispatch' && inputs.platforms == 'all'
+    if: github.event_name == 'push' || inputs.platforms == 'desktop' || inputs.platforms == 'macos' || inputs.platforms == 'all'
     needs: verify-version
-    runs-on: macos-15
-    timeout-minutes: 90
-    env:
-      VCPKG_ROOT: ''
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
-      EASY_PLAYER_NATIVE_ARCH: arm64
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-      - name: Install native dependencies
-        run: brew install ninja autoconf automake libtool pkg-config
-      - name: Install JavaScript dependencies
-        run: npm ci
-      - name: Prepare yt-dlp
-        run: npm run prepare:ytdlp
-      - name: Build macOS package
-        run: npm run build:mac -- --publish never
-      - name: Verify Apple Silicon package
-        run: npm run test:macos-package
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-release
-          if-no-files-found: error
-          path: |
-            dist/*.dmg
-            dist/*.dmg.blockmap
-            dist/*-mac-arm64.zip
-            dist/*-mac-arm64.zip.blockmap
-            dist/*.yml
-            !dist/builder-debug.yml
+    uses: ./.github/workflows/macos-ci.yml
+    with:
+      artifact_name: macos-release
 
   package-linux:
     if: github.event_name == 'workflow_dispatch' && inputs.platforms == 'all'
@@ -163,7 +134,7 @@ jobs:
   publish:
     needs: [package-windows, package-macos, package-linux]
     runs-on: ubuntu-latest
-    if: always() && github.event_name == 'push' && github.ref_type == 'tag' && needs.package-windows.result == 'success' && (needs.package-macos.result == 'success' || needs.package-macos.result == 'skipped') && (needs.package-linux.result == 'success' || needs.package-linux.result == 'skipped')
+    if: always() && github.event_name == 'push' && github.ref_type == 'tag' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success' && (needs.package-linux.result == 'success' || needs.package-linux.result == 'skipped')
     steps:
       - uses: actions/download-artifact@v4
         with:

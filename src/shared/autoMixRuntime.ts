@@ -32,8 +32,8 @@ export interface AutoMixStemCacheResult {
 export interface AutoMixRuntimeManifest {
   formatVersion: 1
   version: string
-  platform: 'win32'
-  arch: 'x64'
+  platform: 'win32' | 'darwin'
+  arch: 'x64' | 'arm64'
   asset: string
   sha256: string
   size: number

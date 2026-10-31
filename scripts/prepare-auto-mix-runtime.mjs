@@ -5,8 +5,15 @@ import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-if (process.platform !== 'win32' || process.arch !== 'x64') {
-  console.log('The embedded Auto Mix runtime is currently prepared for Windows x64 only.')
+if (process.platform === 'darwin' && process.arch === 'arm64') {
+  const result = spawnSync('python3', ['scripts/prepare-auto-mix-macos.py'], {
+    cwd: root,
+    stdio: 'inherit'
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error('Mac Auto Mix preparation failed')
+} else if (process.platform !== 'win32' || process.arch !== 'x64') {
+  throw new Error('Auto Mix supports Windows x64 and Mac ARM64 only')
 } else {
   const python = path.join(root, 'build/stem-runtime/Scripts/python.exe')
   const run = (command, args) => {

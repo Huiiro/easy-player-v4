@@ -193,6 +193,7 @@ export function getStemFfmpegPath(isPackaged: boolean): string {
 }
 
 export function getStemModelPath(): string {
+  if (process.env.EASY_PLAYER_STEM_MODEL_REPO) return process.env.EASY_PLAYER_STEM_MODEL_REPO
   return path.join(getInstalledStemDirectory(), 'models')
 }
 

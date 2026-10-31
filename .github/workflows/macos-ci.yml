@@ -5,17 +5,22 @@ on:
     branches: ['**']
     tags-ignore: ['v*']
   pull_request:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      artifact_name:
+        type: string
+        default: macos-arm64-test
 
 permissions:
   contents: read
 
+# Daily CI can replace an older test build; release packaging has its own group.
 concurrency:
-  group: macos-ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: macos-ci-${{ github.ref }}-${{ inputs.artifact_name || 'macos-arm64-test' }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' && (inputs.artifact_name || 'macos-arm64-test') == 'macos-arm64-test' }}
 
 jobs:
-  verify:
+  package:
     runs-on: macos-15
     timeout-minutes: 90
     env:
@@ -34,6 +39,8 @@ jobs:
         run: brew install ninja autoconf automake libtool pkg-config
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Build optional CPU stem component
+        run: npm run package:auto-mix
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Build pinned audio dependencies
@@ -55,12 +62,29 @@ jobs:
           mv build/native-deps/installed/arm64-osx-audio build/native-deps/installed/arm64-osx-audio-hidden
           npm run test:macos-package
           node scripts/test-audio-ffmpeg.mjs dist/mac-arm64/EasyPlayer.app/Contents/Resources/native
+      - name: Verify installer and update assets
+        run: |
+          mac_name=$(node -p 'require("./package.json").name')
+          mac_version=$(node -p 'require("./package.json").version')
+          test -s "dist/${mac_name}-${mac_version}-mac-arm64.dmg"
+          test -s "dist/${mac_name}-${mac_version}-mac-arm64.zip"
+          compgen -G 'dist/*-mac.yml' > /dev/null
+      - name: Verify offline separation, cache and component lifecycle
+        run: |
+          npm run test:bundled-auto-mix
+          npm run test:auto-mix-runtime
+          npm run test:auto-mix-component-install
+          build/auto-mix-runtime/python/bin/python3 -I -B scripts/test_auto_mix_stem_worker.py
+          EASY_PLAYER_STEM_PYTHON="$PWD/build/auto-mix-runtime/python/bin/python3" node scripts/test-auto-mix-stems.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: macos-arm64-test
+          name: ${{ inputs.artifact_name || 'macos-arm64-test' }}
           if-no-files-found: error
           path: |
             dist/*-mac-arm64.dmg
+            dist/*-mac-arm64.dmg.blockmap
             dist/*-mac-arm64.zip
             dist/*-mac-arm64.zip.blockmap
-            dist/latest-mac.yml
+            dist/*-mac.yml
+            dist/easy-player-auto-mix-darwin-arm64-*.zip
+            dist/easy-player-auto-mix-darwin-arm64.json

@@ -51,7 +51,10 @@ export function createAutoMixRuntimeManager(
     verify: (directory, signal) =>
       new Promise<void>((resolve, reject) => {
         const child = spawn(
-          path.join(directory, 'python/python.exe'),
+          path.join(
+            directory,
+            process.platform === 'darwin' ? 'python/bin/python3' : 'python/python.exe'
+          ),
           [
             '-I',
             '-B',
