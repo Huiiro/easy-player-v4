@@ -1,4 +1,5 @@
 import type { RemoteConnection } from '../shared/remoteSources'
+import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
 import type {
   AutoMixRuntimeStatus,
   AutoMixStemCacheInfo,
@@ -311,6 +312,14 @@ const downloadsAPI = {
 }
 
 const libraryAPI = {
+  configureAutoImport: (enabled: boolean, ignoreShortSongs: boolean): Promise<void> =>
+    ipcRenderer.invoke('library:configure-auto-import', { enabled, ignoreShortSongs }),
+  onAutoImported: (callback: (event: LibraryAutoImportEvent) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, result: LibraryAutoImportEvent): void =>
+      callback(result)
+    ipcRenderer.on('library:auto-imported', handler)
+    return () => ipcRenderer.removeListener('library:auto-imported', handler)
+  },
   importLocalMusicFile: (ignoreShortSongs = true) =>
     ipcRenderer.invoke('library:import-local-file', ignoreShortSongs) as Promise<{
       directory: string

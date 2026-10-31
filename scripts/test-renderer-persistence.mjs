@@ -58,6 +58,8 @@ const stored = JSON.stringify({
   genreSeparator: ';，',
   normalizeMetadataSeparator: true,
   albumGroupByName: true,
+  autoImportLocalMusic: false,
+  showAutoImportNotifications: false,
   extremePlayback: true,
   playerLyricsFontFamily: 'Noto Sans SC',
   playlistHeaderCollapsed: true,
@@ -85,6 +87,17 @@ assert.equal(
 )
 
 const startup = {}
+const restoredImportPreferences = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(
+  restoredImportPreferences.autoImportLocalMusic,
+  false,
+  'Folder monitoring preference survives restart'
+)
+assert.equal(
+  restoredImportPreferences.showAutoImportNotifications,
+  false,
+  'Import notification preference survives restart'
+)
 assert.equal(
   JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1')).playerLyricsFontFamily,
   'Noto Sans SC',

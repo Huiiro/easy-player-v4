@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useI18n } from 'vue-i18n'
-import BaseMessage from '@/components/ui/BaseMessage.vue'
+import GlobalNotifications from '@/components/ui/GlobalNotifications.vue'
 import ThemePreviewDialog from '@/components/settings/ThemePreviewDialog.vue'
 import GlobalSearchHost from '@/components/search/GlobalSearchHost.vue'
 import { useMessage } from '@/components/ui/useMessage'
@@ -12,6 +12,15 @@ import { flushPlayerDataStorage } from '@/stores/persistence'
 const { t } = useI18n()
 const ui = useUIStore()
 const { success } = useMessage()
+watch(
+  () => [ui.autoImportLocalMusic, ui.ignoreShortSongs] as const,
+  ([enabled, ignoreShortSongs]) => {
+    void window.api.library.configureAutoImport(enabled, ignoreShortSongs).catch((error) => {
+      console.error('Failed to configure automatic music import', error)
+    })
+  },
+  { immediate: true }
+)
 function prepareToClose(): void {
   ui.cancelCustomThemePreview()
   flushPlayerDataStorage()
@@ -53,7 +62,7 @@ onBeforeUnmount(() => {
   <router-view v-slot="{ Component }">
     <component :is="Component" />
   </router-view>
-  <BaseMessage />
+  <GlobalNotifications />
   <ThemePreviewDialog />
   <GlobalSearchHost />
 </template>

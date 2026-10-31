@@ -3,6 +3,7 @@ import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron
 import path from 'node:path'
 import { scanMusicDirectory, SUPPORTED_EXTENSIONS, type ScanResult } from '../service/scanService'
 import { t } from '../i18n'
+import { configureLibraryAutoImport, trackMusicDirectory } from '../service/libraryAutoImport'
 
 export const SELECT_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:select-local-folder'
 export const SCAN_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:scan-local-folder'
@@ -19,6 +20,12 @@ export interface ScanProgress {
 export type ScanLocalMusicResult = { directory: string; result: ScanResult }
 
 export function registerScanIpcHandlers(): void {
+  ipcMain.handle(
+    'library:configure-auto-import',
+    (_event, settings: { enabled: boolean; ignoreShortSongs: boolean }) => {
+      configureLibraryAutoImport(settings)
+    }
+  )
   ipcMain.handle(
     IMPORT_LOCAL_MUSIC_FILE_CHANNEL,
     async (event, ignoreShortSongs = true): Promise<ScanLocalMusicResult | null> => {
@@ -61,23 +68,25 @@ export function registerScanIpcHandlers(): void {
     SCAN_LOCAL_MUSIC_FOLDER_CHANNEL,
     async (event, directory: string, ignoreShortSongs = true): Promise<ScanLocalMusicResult> => {
       return logOperation('[IPC] library:scan-local-folder', { directory }, async () => {
+        const result = await scanMusicDirectory(
+          directory,
+          (current, total, added, duplicates) => {
+            if (!event.sender.isDestroyed()) {
+              event.sender.send(SCAN_PROGRESS_EVENT, {
+                current,
+                total,
+                added,
+                duplicates
+              } satisfies ScanProgress)
+            }
+          },
+          undefined,
+          ignoreShortSongs !== false
+        )
+        trackMusicDirectory(directory)
         return {
           directory,
-          result: await scanMusicDirectory(
-            directory,
-            (current, total, added, duplicates) => {
-              if (!event.sender.isDestroyed()) {
-                event.sender.send(SCAN_PROGRESS_EVENT, {
-                  current,
-                  total,
-                  added,
-                  duplicates
-                } satisfies ScanProgress)
-              }
-            },
-            undefined,
-            ignoreShortSongs !== false
-          )
+          result
         }
       })
     }

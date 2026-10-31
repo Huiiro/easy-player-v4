@@ -102,6 +102,29 @@ onBeforeUnmount(() => offProgress?.())
 </script>
 
 <template>
+  <SettingGroup :title="t('settings.groups.folderMonitoring')">
+    <SettingRow
+      :label="t('settings.autoImportLocalMusic')"
+      :description="t('settings.autoImportLocalMusicDescription')"
+    >
+      <BaseSwitch
+        v-model="ui.autoImportLocalMusic"
+        :aria-label="t('settings.autoImportLocalMusic')"
+        size="md"
+      />
+    </SettingRow>
+    <SettingRow
+      :label="t('settings.showAutoImportNotifications')"
+      :description="t('settings.showAutoImportNotificationsDescription')"
+    >
+      <BaseSwitch
+        v-model="ui.showAutoImportNotifications"
+        :aria-label="t('settings.showAutoImportNotifications')"
+        :disabled="!ui.autoImportLocalMusic"
+        size="md"
+      />
+    </SettingRow>
+  </SettingGroup>
   <SettingGroup :title="t('settings.groups.importMusic')">
     <SettingRow
       :label="t('settings.importSongs')"

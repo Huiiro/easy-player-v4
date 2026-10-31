@@ -840,6 +840,7 @@ export default {
       backgroundChrome: 'Interface colors',
       shortcutBindings: 'Key bindings',
       importMusic: 'Import music',
+      folderMonitoring: 'Folder monitoring',
       libraryDisplay: 'Organization and display',
       libraryMaintenance: 'Backup and maintenance',
       personalization: 'Language and personalization',
@@ -1132,6 +1133,13 @@ export default {
     albumGroupByNameDescription:
       'Group songs from albums with the same name without changing file details.',
     ignoreShortSongs: 'Ignore songs shorter than 5 seconds',
+    autoImportLocalMusic: 'Automatically import new songs',
+    showAutoImportNotifications: 'New song import notifications',
+    showAutoImportNotificationsDescription:
+      'Show a global notification with the number of newly imported songs.',
+    autoImportSongsAdded: 'Automatically imported {count} new songs',
+    autoImportLocalMusicDescription:
+      'Watch imported folders and subfolders while the player is running, and check for new songs on startup.',
     ignoreShortSongsDescription:
       'Skip audio shorter than 5 seconds when importing folders or songs.',
     normalizeMetadataSeparator: 'Normalize separators',

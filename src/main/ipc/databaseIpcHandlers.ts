@@ -10,6 +10,7 @@ import {
   setSongsPreference
 } from '../database/recommendations'
 import { Logger } from '../service/loggerService'
+import { excludeMusicDirectory } from '../service/libraryAutoImport'
 import { logOperation, logParams } from '../service/operationLogger'
 import {
   canRecordStatistics,
@@ -249,8 +250,12 @@ const handlers = {
   rebuildLocalFolders: () => library.rebuildLocalFolders(),
   getLocalFolderSongs: ({ folderId, search }: { folderId: number; search?: string }) =>
     library.getLocalFolderSongs(folderId, search),
-  deleteLocalFolderSongs: ({ folderId }: { folderId: number }) =>
-    library.deleteLocalFolderSongs(folderId),
+  deleteLocalFolderSongs: ({ folderId }: { folderId: number }) => {
+    const folder = library.listLocalFolders().find((folder) => folder.id === folderId)
+    const result = library.deleteLocalFolderSongs(folderId)
+    if (folder) excludeMusicDirectory(folder.fullPath)
+    return result
+  },
   getSource: ({ id }: { id: number }) => library.getSource(id),
   createSource: (params: Parameters<typeof library.createSource>[0]) =>
     library.createSource(params),

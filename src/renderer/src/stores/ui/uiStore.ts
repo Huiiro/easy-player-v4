@@ -134,6 +134,8 @@ export const UI_PREFERENCE_KEYS = [
   'musicSourceId',
   'normalizeMetadataSeparator',
   'ignoreShortSongs',
+  'autoImportLocalMusic',
+  'showAutoImportNotifications',
   'albumGroupByName',
   'artistSeparator',
   'genreSeparator',
@@ -507,6 +509,8 @@ export const useUIStore = defineStore(
     const musicSourceId = ref(0)
     const normalizeMetadataSeparator = ref(false)
     const ignoreShortSongs = ref(true)
+    const autoImportLocalMusic = ref(true)
+    const showAutoImportNotifications = ref(true)
     const albumGroupByName = ref(false)
     const artistSeparator = ref('/；;、')
     const genreSeparator = ref(DEFAULT_GENRE_SEPARATOR)
@@ -1079,6 +1083,8 @@ export const useUIStore = defineStore(
       musicSourceId,
       normalizeMetadataSeparator,
       ignoreShortSongs,
+      autoImportLocalMusic,
+      showAutoImportNotifications,
       albumGroupByName,
       artistSeparator,
       genreSeparator,

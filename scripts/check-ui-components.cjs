@@ -33,8 +33,10 @@ app.whenReady().then(async () => {
           import AudioOutputSettings from './src/renderer/src/components/player/AudioOutputSettings.vue';
           import ImpulseResponseEditor from './src/renderer/src/components/player/ImpulseResponseEditor.vue';
           import LibrarySettings from './src/renderer/src/components/settings/LibrarySettings.vue';
+          import GlobalNotifications from './src/renderer/src/components/ui/GlobalNotifications.vue';
+          import eventBus from './src/renderer/src/utils/eventBus';
           import SongDetailsDialog from './src/renderer/src/components/songlist/SongDetailsDialog.vue';
-          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog };`,
+          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, eventBus };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -109,7 +111,7 @@ app.whenReady().then(async () => {
       `const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)}; document.head.append(style);`
     )
     const results = await window.webContents.executeJavaScript(`(async () => {
-      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog } = Checks;
+      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, eventBus } = Checks;
       const { createApp, h, reactive, nextTick, onMounted, onActivated } = Vue;
       const results = [];
       function check(value, message) { if (!value) throw new Error(message); results.push(message); }
@@ -119,7 +121,7 @@ app.whenReady().then(async () => {
         activeApp?.unmount(); document.body.innerHTML = '<div id="app"></div>';
         const state = reactive(props);
         activeApp = createApp({ render: () => h(component, state, slots) });
-        activeApp.use(createI18n({ legacy:false, locale:'en', missingWarn:false, fallbackWarn:false, messages:{ en:{ common:{close:'Close',cancel:'Cancel'}, ui:{clear:'Clear',selectPlaceholder:'Select',empty:'Empty',color:'Color',colorValue:'Color value',presets:'Presets',hue:'Hue',saturation:'Saturation',brightness:'Brightness',alpha:'Opacity'} } } }));
+        activeApp.use(createI18n({ legacy:false, locale:'en', missingWarn:false, fallbackWarn:false, messages:{ en:{ settings:{autoImportSongsAdded:'Automatically imported {count} new songs'}, common:{close:'Close',cancel:'Cancel'}, ui:{clear:'Clear',selectPlaceholder:'Select',empty:'Empty',color:'Color',colorValue:'Color value',presets:'Presets',hue:'Hue',saturation:'Saturation',brightness:'Brightness',alpha:'Opacity'} } } }));
         activeApp.mount('#app'); await wait(); return state;
       }
       window.__activationUi=reactive({songPlayTrigger:'double'});
@@ -262,7 +264,33 @@ app.whenReady().then(async () => {
       const first = messages.add({message:'Same',dedupeKey:'same',duration:0}); check(messages.add({message:'Same',dedupeKey:'same'}) === first, 'messages deduplicate by explicit key');
       let removals = 0; messages.add({message:'Second',duration:30,onClose:()=>removals++}); messages.clear(); await wait(60); check(messages.messages.value.length === 0 && removals === 1, 'message removal clears timers and invokes close once');
       let selection;
+      window.__activationUi=reactive({autoImportLocalMusic:true,showAutoImportNotifications:true});
+      let onAutoImport,autoImportUnsubscribed=0,autoImportRefreshes=0;
+      window.api={library:{onAutoImported:callback=>{onAutoImport=callback;return()=>{autoImportUnsubscribed++;onAutoImport=undefined;}}}};
+      const onAutoImportRefresh=()=>autoImportRefreshes++;
+      eventBus.on('scanFinished',onAutoImportRefresh);
+      await mount(GlobalNotifications);
+      onAutoImport({directory:'music-a',added:2});onAutoImport({directory:'music-b',added:3});
+      await wait(1100);
+      check(autoImportRefreshes===2,'automatic import refreshes the library from any page');
+      check(messages.messages.value.length===1 && messages.messages.value[0].message==='Automatically imported 5 new songs','global automatic import notification combines counts across folders');
+      check(document.querySelector('[role=status]')?.textContent.includes('Automatically imported 5 new songs'),'automatic import result is rendered by the global message component');
+      messages.clear();
+      window.__activationUi.showAutoImportNotifications=false;await wait();
+      onAutoImport({directory:'music-a',added:1});await wait(1100);
+      check(autoImportRefreshes===3 && messages.messages.value.length===0,'turning off reminders preserves automatic library refresh');
+      window.__activationUi.showAutoImportNotifications=true;await wait();
+      onAutoImport({directory:'music-a',added:0});await wait(1100);
+      check(messages.messages.value.length===0,'empty import results do not notify');
+      onAutoImport({directory:'music-a',added:4});window.__activationUi.autoImportLocalMusic=false;
+      await wait(1100);
+      check(messages.messages.value.length===0,'disabling monitoring cancels pending reminders');
+      window.__activationUi.autoImportLocalMusic=true;await wait();
+      onAutoImport({directory:'music-a',added:4});
       await mount({setup(){selection=useSongSelection(Vue.ref([{id:1,isNewest:true},{id:2}]));return()=>h('p','Selection');}});
+      await wait(1100);
+      check(autoImportUnsubscribed===1 && messages.messages.value.length===0,'global notifications clean up IPC subscriptions and pending timers on unmount');
+      eventBus.off('scanFinished',onAutoImportRefresh);
       selection.toggleSelection();selection.toggleAll();check(selection.allSelected.value && selection.selectedIds.value.size===2,'song selection selects visible collection');
       selection.selectNewest();check(selection.selectedIds.value.has(1) && !selection.selectedIds.value.has(2),'newest selection preserves filtering');
       selection.toggleSelection();check(selection.selectedIds.value.size===0,'leaving selection mode clears selected IDs');
@@ -374,11 +402,20 @@ app.whenReady().then(async () => {
       check(panelDisposals===3 && !document.querySelector('[data-player-canvas]') && hiddenAtDisposal.every(Boolean),'reduced motion closes immediately without clearing a visible canvas');
       document.documentElement.classList.remove('reduce-motion');
       const metadataFixture={id:1,title:'Metadata fixture',artist:'Singer A;Singer B',album:'Album',genre:'POP,rock',duration:10,fileSize:100,year:null,trackNo:null,diskNo:null};
-      window.__activationUi=reactive({albumGroupByName:false,normalizeMetadataSeparator:false,artistSeparator:';',genreSeparator:',',ignoreShortSongs:true});
+      window.__activationUi=reactive({albumGroupByName:false,normalizeMetadataSeparator:false,artistSeparator:';',genreSeparator:',',ignoreShortSongs:true,autoImportLocalMusic:true,showAutoImportNotifications:true});
       window.api.files={onImportProgress:()=>()=>{}};
       window.api.database={command:async()=>({success:true,data:metadataFixture})};
       const detailsState=reactive({open:false});
       await mount({render:()=>[h(LibrarySettings),h(SongDetailsDialog,{modelValue:detailsState.open,songId:1,'onUpdate:modelValue':value=>detailsState.open=value})]});
+      const monitorSwitch=document.querySelector('[aria-label="settings.autoImportLocalMusic"]');
+      const reminderSwitch=document.querySelector('[aria-label="settings.showAutoImportNotifications"]');
+      check(monitorSwitch?.getAttribute('aria-checked')==='true' && reminderSwitch?.getAttribute('aria-checked')==='true','library settings expose enabled monitoring and reminder switches');
+      monitorSwitch.click();await wait();
+      check(window.__activationUi.autoImportLocalMusic===false && reminderSwitch.disabled,'turning off monitoring disables the reminder control');
+      reminderSwitch.click();await wait();
+      check(window.__activationUi.showAutoImportNotifications===true,'disabled reminder control retains its preference');
+      monitorSwitch.click();await wait();reminderSwitch.click();await wait();
+      check(window.__activationUi.autoImportLocalMusic===true && window.__activationUi.showAutoImportNotifications===false,'import reminders can be disabled independently of monitoring');
       const albumGroupingRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent==='settings.albumGroupByName');
       check(!!albumGroupingRow && albumGroupingRow.querySelector('[role=switch]').getAttribute('aria-checked')==='false','album grouping setting starts disabled');
       albumGroupingRow.querySelector('[role=switch]').click();await wait();

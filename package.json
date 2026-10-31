@@ -51,6 +51,7 @@
     "test:theme-system": "electron scripts/check-theme-system.cjs",
     "test:card-motion": "electron scripts/check-card-motion.cjs",
     "test:genres": "node scripts/test-genres.mjs",
+    "test:library-auto-import": "node scripts/test-library-auto-import.mjs",
     "test:native-metadata": "node scripts/test-native-metadata.mjs",
     "test:playback-mode": "node scripts/test-playback-mode.mjs",
     "test:shuffle": "node scripts/test-shuffle.mjs",

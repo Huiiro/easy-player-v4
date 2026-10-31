@@ -89,7 +89,8 @@ export async function scanMusicDirectory(
   dirPath: string,
   callback?: ScanCallback,
   selectedFiles?: string[],
-  ignoreShortSongs = true
+  ignoreShortSongs = true,
+  options: { background?: boolean; shouldContinue?: () => boolean } = {}
 ): Promise<ScanResult> {
   return logOperation(
     '[Scanner] scanMusicDirectory',
@@ -112,7 +113,9 @@ export async function scanMusicDirectory(
         files.push(
           ...selectedFiles.filter(
             (file) =>
-              path.dirname(file) === rootPath &&
+              !path.isAbsolute(path.relative(rootPath, file)) &&
+              path.relative(rootPath, file) !== '..' &&
+              !path.relative(rootPath, file).startsWith(`..${path.sep}`) &&
               SUPPORTED_EXTENSIONS.includes(path.extname(file).toLowerCase())
           )
         )
@@ -121,6 +124,8 @@ export async function scanMusicDirectory(
       }
       Logger.debug('[Scanner] files collected', { directory: rootPath, fileCount: files.length })
 
+      if (options.shouldContinue?.() === false)
+        return { added: 0, duplicates: 0, skipped: 0, total: files.length }
       const db = getDatabase()
       const insertSong = db.prepare(`
       INSERT OR IGNORE INTO song (
@@ -145,7 +150,8 @@ export async function scanMusicDirectory(
       let failed = 0
       for (const [index, fullPath] of files.entries()) {
         // Explicit file opens are part of playback; only library scans wait.
-        if (!selectedFiles) await waitForBackgroundWork()
+        if (!selectedFiles || options.background) await waitForBackgroundWork()
+        if (options.shouldContinue?.() === false) break
         try {
           if (existsSong.get(fullPath)) {
             duplicates++
@@ -153,6 +159,7 @@ export async function scanMusicDirectory(
           }
 
           const metadata = await parseAudioFile(fullPath, { duration: true })
+          if (options.shouldContinue?.() === false) break
           const common = metadata.common
           const format = metadata.format
           // File selection and duration filtering are independent. Unknown durations are retained.
@@ -168,6 +175,8 @@ export async function scanMusicDirectory(
             cover = coverPath
           }
 
+          const fileSize = (await fs.promises.stat(fullPath)).size
+          if (options.shouldContinue?.() === false) break
           const folder = getOrInsertFolder(path.dirname(fullPath), rootPath)
           const result = insertSong.run({
             title: common.title || path.basename(fullPath, path.extname(fullPath)),
@@ -185,7 +194,7 @@ export async function scanMusicDirectory(
             channels: format.numberOfChannels || null,
             format: format.container || format.codec || path.extname(fullPath).slice(1) || null,
             fileName: path.basename(fullPath, path.extname(fullPath)),
-            fileSize: (await fs.promises.stat(fullPath)).size,
+            fileSize,
             trackNo: common.track.no || null,
             diskNo: common.disk.no || null,
             folderId: folder.id
@@ -217,7 +226,10 @@ export async function scanMusicDirectory(
           failed,
           total: files.length
         })
-      if (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get())
+      if (
+        options.shouldContinue?.() !== false &&
+        (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get())
+      )
         refreshNewestSongs(db)
       return { added, duplicates, skipped, total: files.length }
     },

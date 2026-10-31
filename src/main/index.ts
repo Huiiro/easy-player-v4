@@ -31,6 +31,7 @@ import { startSearchIndexService } from './search/searchIndexService'
 import { registerDatabaseIpcHandlers } from './ipc/databaseIpcHandlers'
 import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
+import { stopLibraryAutoImport } from './service/libraryAutoImport'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
 import { registerThemeIpcHandlers } from './ipc/themeIpcHandlers'
@@ -199,6 +200,7 @@ function quitApplication(): void {
   tray?.destroy()
   tray = null
   shutdownPlugins()
+  stopLibraryAutoImport()
   closeDatabase()
   // Do not let a hidden close-to-tray window intercept this explicit user
   // request. `app.exit` is intentional here; cleanup was completed above.
@@ -1340,6 +1342,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()
   searchIndexService?.stop()
+  stopLibraryAutoImport()
   shutdownPlugins()
   closeDatabase()
 })

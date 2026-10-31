@@ -1,4 +1,5 @@
 import type { RemoteConnection } from '../shared/remoteSources'
+import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
 import type {
   AutoMixRuntimeStatus,
   AutoMixStemCacheInfo,
@@ -386,6 +387,8 @@ declare global {
         ): () => void
       }
       library: {
+        configureAutoImport(enabled: boolean, ignoreShortSongs: boolean): Promise<void>
+        onAutoImported(callback: (event: LibraryAutoImportEvent) => void): () => void
         importLocalMusicFile(ignoreShortSongs?: boolean): Promise<ScanLocalMusicResult | null>
         selectLocalMusicFolder(): Promise<string | null>
         scanLocalMusicFolder(
