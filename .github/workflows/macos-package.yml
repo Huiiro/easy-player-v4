@@ -30,6 +30,8 @@ jobs:
         run: brew install ninja autoconf automake libtool pkg-config
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Build optional CPU stem component
+        run: npm run package:auto-mix
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
       - name: Build pinned audio dependencies
@@ -58,8 +60,6 @@ jobs:
           test -s "dist/${mac_name}-${mac_version}-mac-arm64.dmg"
           test -s "dist/${mac_name}-${mac_version}-mac-arm64.zip"
           compgen -G 'dist/*-mac.yml' > /dev/null
-      - name: Build optional CPU stem component
-        run: npm run package:auto-mix
       - name: Verify offline separation, cache and component lifecycle
         run: |
           npm run test:bundled-auto-mix

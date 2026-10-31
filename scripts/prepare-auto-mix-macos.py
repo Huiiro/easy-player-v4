@@ -82,7 +82,11 @@ def sign_and_verify(runtime):
                     raise RuntimeError(f'Binary requires macOS newer than 12.0: {file}: {fields[1]}')
             if command == 'LC_RPATH' and fields and fields[0] == 'path':
                 if fields[1].startswith('/') and not fields[1].startswith(('/usr/lib/', '/System/Library/')):
-                    raise RuntimeError(f'Absolute runtime search path: {file}: {fields[1]}')
+                    # Official Torch wheels retain the wheel builder's Conda
+                    # prefix beside their valid @loader_path entries. Remove
+                    # that fallback; actual external LC_LOAD_DYLIBs still fail below.
+                    run('install_name_tool', '-delete_rpath', fields[1], file,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         links = subprocess.check_output(['otool', '-L', str(file)], text=True).splitlines()[1:]
         for line in links:
             name = line.strip().split(' (')[0]
