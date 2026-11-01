@@ -333,6 +333,7 @@ async function runFixture() {
   Object.assign(window.managerUi, {
     reduceMotion: true,
     autoAdjustLyricsDisplay: false,
+    lyricsFontSize: 2.4,
     lyricsStyle: 'word',
     getPlayerLyricsFontStyle: {}
   })
@@ -426,6 +427,46 @@ async function runFixture() {
       characters.some((char) => getComputedStyle(char).backgroundImage !== 'none'),
       'leaving a lyric restores its timed word highlighting'
     )
+    if (component === PlayerLyricsV2) {
+      window.managerUi.reduceMotion = false
+      for (const animation of ['wave', 'float']) {
+        window.managerUi.karaokeAnimation = animation
+        for (const size of [1.44, 2.4, 4.8]) {
+          window.managerUi.lyricsFontSize = size
+          host.style.setProperty('--lrc-size', size + 'rem')
+          await wait(180)
+          const char = first.querySelector('.lyric-karaoke-char')
+          char.style.setProperty('--lift', '1')
+          const matrix = new DOMMatrix(getComputedStyle(char).transform)
+          const scale = size / 2.4
+          const baselineLift = animation === 'float' ? 5 : 3
+          check(
+            Math.abs(matrix.m42 + baselineLift * scale) < 0.001,
+            animation +
+              ' lyric lift follows font scale ' +
+              scale +
+              ' while preserving the 1x baseline'
+          )
+          check(
+            Math.abs(matrix.m11 - 1.03) < 0.001,
+            'relative glyph enlargement stays consistent across font sizes'
+          )
+          check(
+            second.style.filter === 'blur(' + 1.2 * scale + 'px)',
+            'lyric depth blur follows the same font scale'
+          )
+        }
+      }
+      window.managerUi.reduceMotion = true
+      await wait()
+      check(
+        getComputedStyle(first.querySelector('.lyric-karaoke-char')).transform === 'none',
+        'reduced motion still disables scaled character motion'
+      )
+      window.managerUi.lyricsFontSize = 2.4
+      window.managerUi.karaokeAnimation = 'wave'
+      host.style.setProperty('--lrc-size', '24px')
+    }
     lyricState.song = song(5)
     await wait()
     const beforeUntimed = seeks.length

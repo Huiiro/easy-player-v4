@@ -62,6 +62,8 @@ const groupTextCharacters = (text: string): string[][] =>
   groupCharacters(Array.from(text), (character) => character)
 
 const ui = useUIStore()
+// The player uses 2.4rem as 1×; scale pixel-based effects without changing their timing.
+const lyricMotionScale = computed(() => ui.lyricsFontSize / 2.4)
 const sourceRequests = createSourceRequestScope()
 const lyrics = shallowRef<LyricLine[]>([])
 const source = ref<LyricSource | null>(null)
@@ -475,9 +477,10 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
       0,
       Math.min(1, highlightProgress / 0.18, (1 - highlightProgress) / 0.18)
     )
-    const edgeWidth = Math.min(entry.width, Math.max(6, entry.width * 0.34)) * edgeEnvelope
+    const edgeWidth =
+      Math.min(entry.width, Math.max(6 * lyricMotionScale.value, entry.width * 0.34)) * edgeEnvelope
     const sweepPosition = highlightProgress * entry.width
-    const seamOverlap = edgeWidth > 0 ? 1.5 : 0
+    const seamOverlap = edgeWidth > 0 ? 1.5 * lyricMotionScale.value : 0
     entry.element.style.setProperty('--progress', String(highlightProgress))
     entry.element.style.setProperty(
       '--fill-size',
@@ -580,7 +583,7 @@ const getLineStyle = (idx: number) => {
     idx - currentIndex.value
   )
   const abs = Math.abs(distance)
-  const blur = Math.min(abs * 1.2, 6)
+  const blur = Math.min(abs * 1.2, 6) * lyricMotionScale.value
   const opacity = 1 - Math.min(abs * 0.22, 0.75)
 
   if (!visibleLineIndices.value.has(idx)) {
@@ -698,6 +701,7 @@ watch(
     () => ui.showLyricsRomanization
   ],
   () => {
+    void nextTick(refreshSweepElements)
     scheduleSnapToCurrent()
   }
 )
@@ -783,7 +787,7 @@ onUnmounted(() => {
   <div
     ref="viewportRef"
     class="lyric-viewport"
-    :style="ui.getPlayerLyricsFontStyle"
+    :style="[ui.getPlayerLyricsFontStyle, { '--lyric-motion-scale': lyricMotionScale }]"
     :class="[
       props.darkText && 'player-lyrics--dark-text',
       ui.karaokeAnimation === 'float' && 'lyric-viewport--float',
@@ -1068,9 +1072,12 @@ onUnmounted(() => {
   color: var(--lrc-highlight);
 
   text-shadow:
-    0 0 4px color-mix(in srgb, var(--lrc-highlight) 80%, transparent),
-    0 0 4px color-mix(in srgb, var(--lrc-highlight) 60%, transparent),
-    0 0 8px color-mix(in srgb, var(--lrc-highlight) 40%, transparent);
+    0 0 calc(4px * var(--lyric-motion-scale))
+      color-mix(in srgb, var(--lrc-highlight) 80%, transparent),
+    0 0 calc(4px * var(--lyric-motion-scale))
+      color-mix(in srgb, var(--lrc-highlight) 60%, transparent),
+    0 0 calc(8px * var(--lyric-motion-scale))
+      color-mix(in srgb, var(--lrc-highlight) 40%, transparent);
 }
 
 .lyric-interlude {
@@ -1129,14 +1136,16 @@ onUnmounted(() => {
 }
 .lyric-karaoke-char {
   font-size: inherit;
-  transform: translateY(calc(var(--lift, 0) * -3px)) scale(calc(1.01 + var(--lift, 0) * 0.02));
+  transform: translateY(calc(var(--lift, 0) * -3px * var(--lyric-motion-scale)))
+    scale(calc(1.01 + var(--lift, 0) * 0.02));
   opacity: clamp(0.25, calc(0.25 + var(--emphasis, 0) * 0.75), 1);
   transform-origin: center bottom;
   will-change: transform, opacity;
   scale: 1.01;
 }
 .lyric-viewport--float .lyric-karaoke-char {
-  transform: translateY(calc(var(--lift, 0) * -5px)) scale(calc(1.01 + var(--lift, 0) * 0.02));
+  transform: translateY(calc(var(--lift, 0) * -5px * var(--lyric-motion-scale)))
+    scale(calc(1.01 + var(--lift, 0) * 0.02));
 }
 .reduce-motion .lyric-karaoke-char,
 .no-transform .lyric-karaoke-char {
