@@ -222,7 +222,7 @@ const anchorRef = ref<HTMLElement | null>(null)
         :disabled="disabled"
         :aria-label="t('ui.color')"
         :class="[
-          'inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer transition-colors hover:border-primary select-none',
+          'inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer transition-colors enabled:hover:border-primary select-none',
           disabled ? 'opacity-50 cursor-not-allowed' : '',
           open ? 'border-primary ring-2 ring-primary/20' : ''
         ]"

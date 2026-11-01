@@ -134,7 +134,7 @@ onBeforeUnmount(() => unsubscribe?.())
     </SettingRow>
     <SettingRow :label="t('ap.stemCacheTitle')" :description="t('ap.stemCacheDescription')">
       <div class="flex items-center gap-3">
-        <span class="text-sm text-text-l">{{
+        <span class="text-xs text-text-l">{{
           stemCache
             ? t('ap.stemCacheUsage', { size: formatBytes(stemCache.bytes), count: stemCache.files })
             : '—'

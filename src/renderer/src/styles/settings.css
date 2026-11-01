@@ -41,12 +41,11 @@
 }
 
 .settings-page
-  :is(.setting-row, .slider-row, .custom-background-chrome):not(.pointer-events-none):is(
-    :hover,
-    :focus-within
-  ) {
+  :is(.setting-row, .slider-row, .custom-background-chrome):not(
+    .pointer-events-none,
+    .settings-card.muted *
+  ):hover {
   background-color: color-mix(in srgb, var(--color-primary) 6%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 
 .settings-page .setting-row h3 {
@@ -68,28 +67,6 @@
 
 .settings-page .lyric-source-item p {
   font-size: 0.75rem;
-}
-
-.settings-page .secondary-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  white-space: nowrap;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  padding: 0.45rem 0.7rem;
-  color: var(--color-text);
-  font-size: 0.78rem;
-  transition:
-    border-color var(--motion-duration-standard) var(--motion-ease-standard),
-    background-color var(--motion-duration-standard) var(--motion-ease-standard),
-    color var(--motion-duration-standard) var(--motion-ease-standard);
-}
-
-.settings-page .secondary-button:hover {
-  border-color: var(--color-primary);
-  background: var(--color-hover);
-  color: var(--color-primary);
 }
 
 @scope (.settings-page) {
@@ -286,45 +263,70 @@
   }
 }
 
-.settings-page .icon-button {
-  width: 31px;
-  border-radius: 7px;
-  color: var(--color-text-l);
-  font-size: 1.15rem;
-  transition:
-    background-color var(--motion-duration-standard) var(--motion-ease-standard),
-    color var(--motion-duration-standard) var(--motion-ease-standard);
-}
-
-.settings-page .icon-button:hover {
-  background: var(--color-hover);
-}
-
-.settings-page .reset-button {
+/* Match the theme plugin action across BaseButton and legacy settings actions. */
+.settings-page :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button) {
+  --settings-action-color: var(--color-text-l);
   display: inline-flex;
+  height: var(--ep-control-height-sm);
+  min-height: var(--ep-control-height-sm);
   align-items: center;
   justify-content: center;
   gap: 0.375rem;
+  white-space: nowrap;
   border: 0;
   border-radius: 7px;
   background: transparent;
   padding: 0.35rem 0.5rem;
-  color: var(--color-text-l);
+  color: var(--settings-action-color);
   font-size: 0.78rem;
   font-weight: 400;
+  line-height: 1.25;
   transition:
     background-color var(--motion-duration-standard) var(--motion-ease-standard),
-    color var(--motion-duration-standard) var(--motion-ease-standard);
+    color var(--motion-duration-standard) var(--motion-ease-standard),
+    opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
-.settings-page .reset-button:where(:enabled):hover {
+.settings-page
+  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):enabled {
+  cursor: pointer;
+}
+
+.settings-page
+  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):enabled:hover {
   background: var(--color-hover);
-  color: var(--color-text-l);
+  color: var(--settings-action-color);
 }
 
-.settings-page .reset-button[aria-pressed='true'] {
+.settings-page
+  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):focus-visible {
+  outline: 2px solid var(--ep-focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.settings-page
+  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):disabled {
+  opacity: var(--ep-disabled-opacity);
+  cursor: not-allowed;
+}
+
+.settings-page :is(.ep-button--danger, button.text-red-400) {
+  --settings-action-color: var(--color-danger);
+}
+
+.settings-page :is(.ep-button, .reset-button)[aria-pressed='true'] {
   background: var(--color-hover);
   color: var(--color-text);
+}
+
+.settings-page :is(.icon-button, .ep-button--icon) {
+  width: var(--ep-control-height-sm);
+  padding-inline: 0;
+}
+
+.settings-page .icon-button {
+  font-size: 1.15rem;
 }
 
 @media (max-width: 1100px) {
