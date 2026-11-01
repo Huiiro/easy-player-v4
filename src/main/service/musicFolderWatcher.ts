@@ -10,6 +10,7 @@ interface WatchState {
 interface WatcherOptions {
   extensions: string[]
   ignoredDirectories?: string[]
+  disabledDirectories?: string[]
   knownFiles: () => Set<string>
   importFiles: (root: string, files: string[], active: () => boolean) => Promise<boolean>
   onError: (error: unknown, root: string) => void
@@ -39,7 +40,14 @@ export class MusicFolderWatcher {
     const resolved = [...unique.values()]
     const roots = resolved.filter(
       (directory) =>
-        !resolved.some((parent) => parent !== directory && this.contains(parent, directory))
+        !resolved.some(
+          (parent) =>
+            parent !== directory &&
+            this.contains(parent, directory) &&
+            !this.options.disabledDirectories?.some(
+              (disabled) => this.contains(parent, disabled) && this.contains(disabled, directory)
+            )
+        )
     )
     for (const [root, state] of this.roots) {
       if (roots.includes(root)) continue
@@ -130,6 +138,14 @@ export class MusicFolderWatcher {
             for (const entry of entries) {
               if (!active()) return
               const file = path.join(directory, entry.name)
+              // A disabled subtree is skipped under an enabled parent; an explicitly enabled
+              // nested root can still be watched on its own when the parent is disabled.
+              if (
+                this.options.disabledDirectories?.some(
+                  (disabled) => this.contains(root, disabled) && this.contains(disabled, file)
+                )
+              )
+                continue
               if (this.options.ignoredDirectories?.some((ignored) => this.contains(ignored, file)))
                 continue
               try {

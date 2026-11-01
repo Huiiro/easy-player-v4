@@ -73,6 +73,11 @@ export const schemaV1 = `
     FOREIGN KEY(source_id) REFERENCES music_source(id) ON DELETE CASCADE
   );
 
+  CREATE TABLE IF NOT EXISTS library_import_exclusion (
+    audio TEXT PRIMARY KEY,
+    excluded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+
   CREATE TABLE IF NOT EXISTS song_list (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -186,5 +191,12 @@ export const schemaV1 = `
         cover_lyrics_dark = NULL,
         cover_analysis_version = NULL
     WHERE id = NEW.id;
+  END;
+
+  -- Reimporting a song consumes its deletion marker, regardless of the import entry point.
+  CREATE TRIGGER IF NOT EXISTS clear_library_import_exclusion
+  AFTER INSERT ON song
+  BEGIN
+    DELETE FROM library_import_exclusion WHERE audio = NEW.audio;
   END;
 `

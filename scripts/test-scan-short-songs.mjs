@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { parseBuffer } from 'music-metadata'
+import { parseBuffer, parseFile } from 'music-metadata'
 
 const require = createRequire(import.meta.url)
 const root = path.resolve('test-music')
@@ -142,6 +142,65 @@ for (const float of [false, true]) {
 }
 console.log('PCM and float WAV duration tests passed')
 
+// macOS archive sidecars have audio extensions, but contain AppleDouble metadata only.
+const parseWav = mocks['./audioMetadataService'].parseAudioFile
+const readdir = mocks['node:fs'].promises.readdir
+let parsedFiles = []
+mocks['./audioMetadataService'].parseAudioFile = async (file, options) => {
+  parsedFiles.push(file)
+  return parseWav(file, options)
+}
+const sidecar = path.join(root, '._Isla Mujeres Small Cave Quintana Roo.wav')
+const archiveDirectory = path.join(root, '__MACOSX')
+const archivedFile = path.join(archiveDirectory, 'EchoThief', 'Nature', 'cave.wav')
+mocks['node:fs'].promises.readdir = async (directory) => {
+  assert.equal(directory, root, 'Scanner must not descend into __MACOSX')
+  return [
+    ...(await readdir(directory)),
+    { name: path.basename(sidecar), isFile: () => true, isDirectory: () => false },
+    { name: '__MACOSX', isFile: () => false, isDirectory: () => true }
+  ]
+}
+for (const ignoreShortSongs of [true, false]) {
+  parsedFiles = []
+  await exports.scanMusicDirectory(root, undefined, undefined, ignoreShortSongs)
+  assert.deepEqual(parsedFiles, files, 'Directory scans must exclude macOS metadata')
+  parsedFiles = []
+  const selected = await exports.scanMusicDirectory(
+    root,
+    undefined,
+    [sidecar, archivedFile],
+    ignoreShortSongs
+  )
+  assert.equal(selected.total, 0, 'Explicit and automatic selections must exclude macOS metadata')
+  await exports.scanMusicDirectory(archiveDirectory, undefined, undefined, ignoreShortSongs)
+  assert.deepEqual(parsedFiles, [], 'Selecting __MACOSX as the root must also be excluded')
+}
+mocks['node:fs'].promises.readdir = readdir
+
+// Also reject metadata renamed to an ordinary WAV filename, with the duration filter off.
+const appleDouble = Buffer.alloc(433)
+appleDouble.writeUInt32BE(0x00051607)
+appleDouble.writeUInt32BE(0x00020000, 4)
+appleDouble.write('Mac OS X', 8)
+const noAudio = await parseBuffer(appleDouble, { mimeType: 'audio/wav' }, { duration: true })
+assert.equal(noAudio.format.hasAudio, false)
+assert.equal(noAudio.format.duration, undefined)
+if (process.argv[2]) {
+  const actual = await parseFile(process.argv[2], { duration: true })
+  assert.equal(actual.format.hasAudio, false, 'Reported file must reproduce the no-audio result')
+  assert.equal(actual.format.duration, undefined)
+}
+mocks['./audioMetadataService'].parseAudioFile = async () => noAudio
+for (const ignoreShortSongs of [true, false]) {
+  imported = []
+  const invalid = await exports.scanMusicDirectory(root, undefined, [files[0]], ignoreShortSongs)
+  assert.equal(invalid.added, 0)
+  assert.deepEqual(imported, [], 'Files explicitly identified as having no audio must never import')
+}
+mocks['./audioMetadataService'].parseAudioFile = parseWav
+console.log('macOS sidecar and no-audio scan tests passed')
+
 // Exercise the single-file picker and ensure it never starts a directory-wide scan.
 const handlers = new Map()
 let selection = { canceled: true, filePaths: [] }
@@ -152,6 +211,7 @@ const ipcExports = {}
 const ipcMocks = {
   '../i18n': mocks['../i18n'],
   '../service/operationLogger': mocks['./operationLogger'],
+  '../service/libraryAutoImport': { configureLibraryAutoImport() {}, trackMusicDirectory() {} },
   electron: {
     ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
     BrowserWindow: { fromWebContents: () => parentWindow },

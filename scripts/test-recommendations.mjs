@@ -73,7 +73,10 @@ try {
   )
   databaseApi.closeDatabase()
   const reopened = databaseApi.initDatabase(databasePath)
-  assert.deepEqual(reopened.prepare('SELECT version FROM schema_migration').all(), [{ version: 1 }])
+  assert.deepEqual(
+    reopened.prepare('SELECT version FROM schema_migration ORDER BY version').all(),
+    Array.from({ length: DATABASE_SCHEMA_VERSION }, (_, index) => ({ version: index + 1 }))
+  )
   assert.equal(
     reopened.prepare("SELECT value_json FROM app_setting WHERE key='test'").get().value_json,
     'true'

@@ -7,28 +7,17 @@ import { scanMusicDirectory, SUPPORTED_EXTENSIONS } from './scanService'
 import { isPlaybackOnly } from './playbackMode'
 import { Logger } from './loggerService'
 import { logError } from './operationLogger'
-import type { LibraryAutoImportEvent } from '../../shared/libraryAutoImport'
+import type { LibraryAutoImportEvent, LibraryWatchDirectory } from '../../shared/libraryAutoImport'
+import { listAutoImportExclusions, isAutoImportExcluded } from '../database/repository/autoImport'
 
-const DIRECTORIES_KEY = 'library.autoImportDirectories'
+export { excludeAutoImportFiles } from '../database/repository/autoImport'
+
 const EXCLUDED_KEY = 'library.autoImportExcludedDirectories'
-const EXCLUDED_FILES_KEY = 'library.autoImportExcludedFiles'
-let directories: string[] = []
+const WATCHED_KEY = 'library.watchDirectories'
+const REMOVED_KEY = 'library.removedWatchDirectories'
 let enabled = true
 let ignoreShortSongs = true
 let watcher: MusicFolderWatcher | undefined
-
-function savedDirectories(): string[] {
-  const saved = getAppSetting(DIRECTORIES_KEY)
-  return Array.isArray(saved)
-    ? saved.filter((directory): directory is string => typeof directory === 'string')
-    : (
-        getDatabase()
-          .prepare(
-            "SELECT full_path FROM folder WHERE is_root_path = 1 AND full_path NOT LIKE 'remote://%'"
-          )
-          .all() as Array<{ full_path: string }>
-      ).map((folder) => folder.full_path)
-}
 
 function containsDirectory(parent: string, child: string): boolean {
   const relative = path.relative(parent, child)
@@ -36,6 +25,93 @@ function containsDirectory(parent: string, child: string): boolean {
     relative === '' ||
     (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
   )
+}
+
+function normalizeWatchDirectories(folders: LibraryWatchDirectory[]): LibraryWatchDirectory[] {
+  const unique = new Map<string, LibraryWatchDirectory>()
+  for (const folder of folders) {
+    if (!folder || typeof folder.path !== 'string' || !path.isAbsolute(folder.path)) continue
+    const resolved = path.resolve(folder.path)
+    if (resolved === path.parse(resolved).root) continue
+    unique.set(process.platform === 'win32' ? resolved.toLowerCase() : resolved, {
+      path: resolved,
+      enabled: folder.enabled === true
+    })
+  }
+  return [...unique.values()]
+}
+
+export function getWatchedMusicDirectories(): LibraryWatchDirectory[] {
+  const saved = getAppSetting(WATCHED_KEY)
+  if (Array.isArray(saved)) return normalizeWatchDirectories(saved)
+  const existing = getDatabase()
+    .prepare(
+      `
+    SELECT f.full_path FROM folder f
+    WHERE f.full_path NOT LIKE 'remote://%'
+      AND (f.is_root_path = 1 OR EXISTS (
+        SELECT 1 FROM song s WHERE s.folder_id = f.id AND s.source_id IS NULL
+      ))
+    ORDER BY f.full_path
+  `
+    )
+    .all() as Array<{ full_path: string }>
+  const candidates = normalizeWatchDirectories(
+    existing.map((folder) => ({
+      path: folder.full_path,
+      enabled: true
+    }))
+  )
+  // Existing roots cover their subfolders; drive roots are excluded by normalization.
+  const folders = candidates.filter(
+    (folder) =>
+      !candidates.some(
+        (parent) => parent.path !== folder.path && containsDirectory(parent.path, folder.path)
+      )
+  )
+  setAppSetting(WATCHED_KEY, folders)
+  return folders
+}
+
+export function setWatchedMusicDirectories(
+  folders: LibraryWatchDirectory[]
+): LibraryWatchDirectory[] {
+  if (!Array.isArray(folders)) throw new Error('Invalid watched folders')
+  const normalized = normalizeWatchDirectories(folders)
+  const previous = getWatchedMusicDirectories()
+  const removed = (getAppSetting(REMOVED_KEY) as string[] | null) ?? []
+  setAppSetting(
+    REMOVED_KEY,
+    [
+      ...new Set([
+        ...removed,
+        ...previous
+          .filter(
+            (old) => !normalized.some((folder) => path.relative(old.path, folder.path) === '')
+          )
+          .map((folder) => folder.path)
+      ])
+    ].filter(
+      (directory) => !normalized.some((folder) => path.relative(directory, folder.path) === '')
+    )
+  )
+  const restored = normalized.filter(
+    (folder) => folder.enabled && !previous.some((old) => old.path === folder.path && old.enabled)
+  )
+  if (restored.length) {
+    const excluded = ((getAppSetting(EXCLUDED_KEY) as string[] | null) ?? []).filter(
+      (directory) =>
+        !restored.some(
+          (folder) =>
+            containsDirectory(folder.path, directory) || containsDirectory(directory, folder.path)
+        )
+    )
+    setAppSetting(EXCLUDED_KEY, excluded)
+  }
+  setAppSetting(WATCHED_KEY, normalized)
+  stopLibraryAutoImport()
+  if (enabled) configureLibraryAutoImport({ enabled, ignoreShortSongs })
+  return normalized
 }
 
 export function configureLibraryAutoImport(settings: {
@@ -50,14 +126,15 @@ export function configureLibraryAutoImport(settings: {
     return
   }
   if (!watcher) {
-    directories = savedDirectories()
-    // Folder reconstruction in old libraries can create drive roots; do not watch entire drives.
-    directories = directories.filter(
-      (directory) => path.resolve(directory) !== path.parse(path.resolve(directory)).root
-    )
+    const watched = getWatchedMusicDirectories()
+    const directories = watched.filter((folder) => folder.enabled).map((folder) => folder.path)
     watcher = new MusicFolderWatcher({
       extensions: SUPPORTED_EXTENSIONS,
       ignoredDirectories: (getAppSetting(EXCLUDED_KEY) as string[] | null) ?? [],
+      disabledDirectories: watched
+        .filter((folder) => !folder.enabled)
+        .map((folder) => folder.path)
+        .concat((getAppSetting(REMOVED_KEY) as string[] | null) ?? []),
       isPaused: isPlaybackOnly,
       knownFiles: () =>
         new Set(
@@ -67,12 +144,13 @@ export function configureLibraryAutoImport(settings: {
             }>
           )
             .map((song) => song.audio)
-            .concat((getAppSetting(EXCLUDED_FILES_KEY) as string[] | null) ?? [])
+            .concat(listAutoImportExclusions())
         ),
       importFiles: async (root, files, active) => {
         const result = await scanMusicDirectory(root, undefined, files, ignoreShortSongs, {
           background: true,
-          shouldContinue: active
+          shouldContinue: active,
+          shouldImportFile: (file) => !isAutoImportExcluded(file)
         })
         if (active() && result.added > 0) {
           for (const window of BrowserWindow.getAllWindows()) {
@@ -93,16 +171,24 @@ export function configureLibraryAutoImport(settings: {
   }
 }
 
-/** Remember explicit folder imports, including empty directories, across app restarts. */
+/** Folder imports join monitoring unless the user has removed or disabled that scope. */
 export function trackMusicDirectory(directory: string): void {
-  directories = savedDirectories()
   const resolved = path.resolve(directory)
+  const watched = getWatchedMusicDirectories()
+  const removed = (getAppSetting(REMOVED_KEY) as string[] | null) ?? []
+  const excludedByUser =
+    removed.some((folder) => containsDirectory(folder, resolved)) ||
+    watched.some((folder) => !folder.enabled && containsDirectory(folder.path, resolved))
+  if (!excludedByUser && !watched.some((folder) => path.relative(folder.path, resolved) === '')) {
+    setAppSetting(
+      WATCHED_KEY,
+      normalizeWatchDirectories([...watched, { path: resolved, enabled: true }])
+    )
+  }
   const excluded = ((getAppSetting(EXCLUDED_KEY) as string[] | null) ?? []).filter((item) => {
     return !containsDirectory(resolved, item) && !containsDirectory(item, resolved)
   })
   setAppSetting(EXCLUDED_KEY, excluded)
-  if (!directories.includes(resolved)) directories.push(resolved)
-  setAppSetting(DIRECTORIES_KEY, directories)
   if (enabled) {
     stopLibraryAutoImport()
     configureLibraryAutoImport({ enabled, ignoreShortSongs })
@@ -122,10 +208,4 @@ export function excludeMusicDirectory(directory: string): void {
 export function stopLibraryAutoImport(): void {
   watcher?.stop()
   watcher = undefined
-}
-
-/** Library-only duplicate cleanup must remain effective while folder monitoring is enabled. */
-export function excludeAutoImportFiles(files: string[]): void {
-  const excluded = (getAppSetting(EXCLUDED_FILES_KEY) as string[] | null) ?? []
-  setAppSetting(EXCLUDED_FILES_KEY, [...new Set([...excluded, ...files])])
 }

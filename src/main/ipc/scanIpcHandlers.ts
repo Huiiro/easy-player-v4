@@ -3,7 +3,13 @@ import { BrowserWindow, dialog, ipcMain, type OpenDialogOptions } from 'electron
 import path from 'node:path'
 import { scanMusicDirectory, SUPPORTED_EXTENSIONS, type ScanResult } from '../service/scanService'
 import { t } from '../i18n'
-import { configureLibraryAutoImport, trackMusicDirectory } from '../service/libraryAutoImport'
+import {
+  configureLibraryAutoImport,
+  getWatchedMusicDirectories,
+  setWatchedMusicDirectories,
+  trackMusicDirectory
+} from '../service/libraryAutoImport'
+import type { LibraryWatchDirectory } from '../../shared/libraryAutoImport'
 
 export const SELECT_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:select-local-folder'
 export const SCAN_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:scan-local-folder'
@@ -20,6 +26,10 @@ export interface ScanProgress {
 export type ScanLocalMusicResult = { directory: string; result: ScanResult }
 
 export function registerScanIpcHandlers(): void {
+  ipcMain.handle('library:get-watched-folders', () => getWatchedMusicDirectories())
+  ipcMain.handle('library:set-watched-folders', (_event, folders: LibraryWatchDirectory[]) =>
+    setWatchedMusicDirectories(folders)
+  )
   ipcMain.handle(
     'library:configure-auto-import',
     (_event, settings: { enabled: boolean; ignoreShortSongs: boolean }) => {

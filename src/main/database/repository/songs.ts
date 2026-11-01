@@ -9,6 +9,7 @@ import type { PagedResult, Song, SongQuery } from '../types'
 import { attachTags, songColumns, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 import { refreshPlaylistCover } from './playlists'
 import { normalizeLyricOffset } from '../../../shared/songLyrics'
+import { excludeAutoImportFiles } from './autoImport'
 
 export function querySongs(query: SongQuery = {}): PagedResult<Song> {
   const db = getDatabase()
@@ -216,6 +217,11 @@ export function deleteSongs(songIds: number[], deleteLocalFiles = false): Delete
   const deleted = db.transaction(() => {
     const count = db.prepare(`DELETE FROM song WHERE id IN (${placeholders})`).run(...ids).changes
     if (count) {
+      // Keep library-only removals (including failed physical deletions) out of folder imports.
+      const localFiles = songs
+        .filter((song) => song.sourceId === null && isAbsolute(song.audio))
+        .map((song) => song.audio)
+      if (localFiles.length) excludeAutoImportFiles(localFiles)
       refreshNewestSongs(db)
       invalidateDailyRecommendations()
     }

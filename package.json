@@ -53,6 +53,7 @@
     "test:card-motion": "electron scripts/check-card-motion.cjs",
     "test:genres": "node scripts/test-genres.mjs",
     "test:library-auto-import": "node scripts/test-library-auto-import.mjs",
+    "test:library-auto-import:ui": "electron scripts/check-library-settings.cjs",
     "test:fingerprint-diagnostics": "node scripts/test-fingerprint-diagnostics.mjs",
     "test:duplicate-checking": "node scripts/test-duplicate-checking.mjs",
     "test:duplicate-task": "node scripts/test-duplicate-task.mjs",

@@ -7,6 +7,7 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { DatabaseSync } from 'node:sqlite'
 
 const require = createRequire(import.meta.url)
 function load(file, mocks = {}) {
@@ -154,6 +155,29 @@ try {
   await delay(220)
   assert.ok(!known.has(excluded), 'removed library subfolders must stay excluded')
   watcher.stop()
+
+  watcher = createWatcher({ disabledDirectories: [album] })
+  watcher.setDirectories([root])
+  const outsideDisabled = path.join(root, 'outside-disabled.mp3')
+  await fs.writeFile(outsideDisabled, 'enabled')
+  await until(() => known.has(outsideDisabled), 'enabled parent catch-up')
+  assert.ok(!known.has(excluded), 'disabled child folders must be skipped under a watched parent')
+  watcher.stop()
+  const enabledNested = path.join(album, 'enabled-nested')
+  await fs.mkdir(enabledNested)
+  const nestedOverride = path.join(enabledNested, 'override.mp3')
+  await fs.writeFile(nestedOverride, 'enabled nested root')
+  watcher = createWatcher({
+    disabledDirectories: [album],
+    importFiles: async (_directory, files) => {
+      files.forEach((file) => known.add(file))
+      return true
+    }
+  })
+  watcher.setDirectories([root, enabledNested])
+  await until(() => known.has(nestedOverride), 'enabled root inside disabled subtree')
+  assert.ok(!known.has(excluded), 'enabling a nested root must keep its disabled parent excluded')
+  watcher.stop()
   assert.equal(errors.length, 0, errors.map(String).join('\n'))
 
   // A missing/removable root must recover on periodic reconciliation.
@@ -237,9 +261,143 @@ try {
   assert.equal(result.added, 0, 'stopping during metadata parsing must prevent database writes')
   assert.ok(!stored.has(copied))
 
+  active = true
+  cancelDuringParse = false
+  let importAllowed = true
+  const scanMocks = {
+    '../database': { getDatabase: () => db },
+    './audioMetadataService': {
+      parseAudioFile: async () => {
+        importAllowed = false // Simulate deleting the song while metadata is being read.
+        return { common: { track: {}, disk: {} }, format: { duration: 30 } }
+      }
+    },
+    '../i18n': { t: (key) => key },
+    './playbackMode': { waitForBackgroundWork: async () => {} },
+    './operationLogger': { logOperation: (_name, _params, task) => task(), logError: String },
+    './loggerService': { Logger: { debug() {}, warn() {} } },
+    '../utils/pathUtils': { getCoverPath: () => path.join(temporary, 'covers') },
+    '../database/newestSongs': { refreshNewestSongs() {} }
+  }
+  const raceScanner = load('src/main/service/scanService.ts', scanMocks)
+  result = await raceScanner.scanMusicDirectory(root, undefined, [copied], false, {
+    background: true,
+    shouldImportFile: () => importAllowed
+  })
+  assert.equal(result.added, 0, 'deletion during parsing must prevent reinsertion')
+  assert.equal(result.skipped, 1)
+  assert.ok(!stored.has(copied))
+  await raceScanner.scanMusicDirectory(root, undefined, [copied], false)
+  assert.ok(stored.has(copied), 'explicit reimport must still work')
+
+  // Exercise the common deletion repository with real SQL and transaction rollback.
+  const deletionDb = new DatabaseSync(':memory:')
+  const libraryRemoved = path.join(root, 'library-removed.mp3')
+  const busy = path.join(root, 'busy.mp3')
+  const physical = path.join(root, 'physical.mp3')
+  for (const file of [libraryRemoved, busy, physical]) await fs.writeFile(file, 'audio')
+  let failDeletion = false
+  const deletionHost = {
+    prepare: (sql) => deletionDb.prepare(sql),
+    transaction: (task) => () => {
+      deletionDb.exec('BEGIN')
+      try {
+        const value = task()
+        deletionDb.exec('COMMIT')
+        return value
+      } catch (error) {
+        deletionDb.exec('ROLLBACK')
+        throw error
+      }
+    }
+  }
+  const deletionMocks = {
+    '../index': { getDatabase: () => deletionHost },
+    '../recommendations': {
+      invalidateDailyRecommendations: () => {
+        if (failDeletion) throw new Error('rollback fixture')
+      }
+    },
+    '../newestSongs': { refreshNewestSongs() {} },
+    '../../search/searchQuery': {},
+    '../../utils/pathUtils': { getCoverPath: () => path.join(temporary, 'covers') },
+    './songHelpers': {},
+    './playlists': { refreshPlaylistCover() {} },
+    'node:fs': {
+      ...require('node:fs'),
+      unlinkSync: (file) => {
+        if (file === busy) throw new Error('file busy')
+        require('node:fs').unlinkSync(file)
+      }
+    }
+  }
+  let savedExclusions
+  try {
+    deletionDb.exec(load('src/main/database/schema.ts').schemaV1)
+    deletionDb.prepare('INSERT INTO music_source(id,name) VALUES(1,?)').run('remote')
+    deletionDb
+      .prepare(
+        'INSERT INTO folder(id,name,full_path,is_root_path,import_time) VALUES(1,?,?,1,CURRENT_TIMESTAMP)'
+      )
+      .run('music', root)
+    const insert = deletionDb.prepare(
+      'INSERT INTO song(id,title,audio,folder_id,source_id) VALUES(?,?,?,1,?)'
+    )
+    for (const [id, audio, source] of [
+      [1, libraryRemoved, null],
+      [2, busy, null],
+      [3, physical, null],
+      [4, 'remote://track', 1]
+    ])
+      insert.run(id, 'fixture', audio, source)
+    const repository = load('src/main/database/repository/songs.ts', deletionMocks)
+    const readExclusions = () =>
+      deletionDb
+        .prepare('SELECT audio FROM library_import_exclusion ORDER BY rowid')
+        .all()
+        .map((row) => row.audio)
+    failDeletion = true
+    assert.throws(() => repository.deleteSongs([1]), /rollback fixture/)
+    assert.ok(deletionDb.prepare('SELECT id FROM song WHERE id=1').get())
+    assert.deepEqual(readExclusions(), [], 'failed deletion must roll back exclusions too')
+    failDeletion = false
+    assert.equal(repository.deleteSongs([1, 1, -1, 999]).deleted, 1)
+    assert.ok(existsSync(libraryRemoved), 'library-only removal must preserve the local file')
+    const failedPhysical = repository.deleteSongs([2], true)
+    assert.deepEqual(Array.from(failedPhysical.failedFiles), [busy])
+    assert.ok(existsSync(busy))
+    assert.equal(repository.deleteSongs([3], true).deletedFiles, 1)
+    assert.ok(!existsSync(physical))
+    repository.deleteSongs([4])
+    assert.deepEqual(
+      readExclusions(),
+      [libraryRemoved, busy, physical],
+      'all local deletion paths must persist exclusions; remote songs must not'
+    )
+    for (let repeat = 0; repeat < 5; repeat++) {
+      insert.run(5, 'reimport', libraryRemoved, null)
+      assert.ok(
+        !readExclusions().includes(libraryRemoved),
+        'successful imports consume their deletion marker'
+      )
+      assert.equal(readExclusions().length, 2)
+      repository.deleteSongs([5])
+      assert.equal(
+        readExclusions().length,
+        3,
+        'delete/reimport cycles must not accumulate old rows'
+      )
+    }
+    savedExclusions = readExclusions()
+  } finally {
+    deletionDb.close()
+  }
+
   // Check persisted folders, exclusions, settings changes, and fresh-process restoration.
   const settings = new Map()
+  const excludedFiles = new Set(savedExclusions)
   const instances = []
+  let defaultFolderReads = 0
   class FakeWatcher {
     constructor(options) {
       this.options = options
@@ -261,11 +419,29 @@ try {
       }
     },
     '../database': {
-      getDatabase: () => ({ prepare: () => ({ all: () => [{ full_path: root }] }) })
+      getDatabase: () => ({
+        prepare: (sql) => ({
+          all: () => {
+            if (!sql.includes('FROM folder')) return []
+            defaultFolderReads++
+            return [
+              { full_path: root },
+              { full_path: album },
+              { full_path: path.parse(root).root },
+              { full_path: 'remote://source' }
+            ]
+          }
+        })
+      })
     },
     '../database/repository/settings': {
       getAppSetting: (key) => settings.get(key) ?? null,
       setAppSetting: (key, value) => settings.set(key, structuredClone(value))
+    },
+    '../database/repository/autoImport': {
+      listAutoImportExclusions: () => [...excludedFiles],
+      isAutoImportExcluded: (file) => excludedFiles.has(file),
+      excludeAutoImportFiles: (files) => files.forEach((file) => excludedFiles.add(file))
     },
     './musicFolderWatcher': { MusicFolderWatcher: FakeWatcher },
     './scanService': {
@@ -285,6 +461,35 @@ try {
   let notificationCount = 2
   let controller = load('src/main/service/libraryAutoImport.ts', controllerMocks)
   controller.configureLibraryAutoImport({ enabled: true, ignoreShortSongs: true })
+  assert.deepEqual(
+    instances.at(-1).directories,
+    [root],
+    'existing library folders seed the initial list without duplicate subfolders or drive roots'
+  )
+  assert.equal(settings.get('library.watchDirectories')[0].path, root)
+  assert.equal(defaultFolderReads, 1)
+  assert.ok(
+    instances.at(-1).options.knownFiles().has(libraryRemoved),
+    'deleted local songs must be excluded from discovery'
+  )
+  const allowFile = instances.at(-1).options
+  assert.equal(allowFile.knownFiles().has(copied), false)
+  let allowedAtScan
+  const normalScan = controllerMocks['./scanService'].scanMusicDirectory
+  controllerMocks['./scanService'].scanMusicDirectory = async (
+    _root,
+    _callback,
+    _files,
+    _short,
+    options
+  ) => {
+    excludedFiles.add(copied)
+    allowedAtScan = options.shouldImportFile(copied)
+    return { added: 0, duplicates: 0, skipped: 1, total: 1 }
+  }
+  await allowFile.importFiles(root, [copied], () => true)
+  assert.equal(allowedAtScan, false, 'in-flight scans must read exclusions added after discovery')
+  controllerMocks['./scanService'].scanMusicDirectory = normalScan
   await instances.at(-1).options.importFiles(root, [copied], () => true)
   assert.equal(notifications[0][0], 'library:auto-imported')
   assert.equal(
@@ -302,10 +507,19 @@ try {
   )
   const empty = path.join(temporary, 'empty-library-folder')
   controller.trackMusicDirectory(empty)
+  assert.ok(instances.at(-1).directories.includes(empty), 'new folder imports must join monitoring')
+  controller.setWatchedMusicDirectories([
+    { path: root, enabled: true },
+    { path: empty, enabled: true },
+    { path: album, enabled: false },
+    { path: path.parse(root).root, enabled: true }
+  ])
+  assert.ok(instances.at(-1).directories.includes(empty), 'selected empty roots must be watched')
   assert.ok(
-    settings.get('library.autoImportDirectories').includes(empty),
-    'empty roots must persist'
+    instances.at(-1).options.disabledDirectories.includes(album),
+    'disabled subtrees must be excluded'
   )
+  assert.equal(controller.getWatchedMusicDirectories().length, 3, 'drive roots must not be watched')
   controller.excludeMusicDirectory(album)
   assert.ok(instances.at(-1).options.ignoredDirectories.includes(album))
   controller.configureLibraryAutoImport({ enabled: false, ignoreShortSongs: true })
@@ -323,6 +537,62 @@ try {
   controller = load('src/main/service/libraryAutoImport.ts', controllerMocks)
   controller.configureLibraryAutoImport({ enabled: true, ignoreShortSongs: true })
   assert.ok(instances.at(-1).directories.includes(empty), 'fresh service must restore empty roots')
+  controller.setWatchedMusicDirectories([{ path: empty, enabled: false }])
+  assert.equal(instances.at(-1).directories.length, 0, 'disabled folders must stop being watched')
+  controller.setWatchedMusicDirectories([])
+  controller.stopLibraryAutoImport()
+  controller = load('src/main/service/libraryAutoImport.ts', controllerMocks)
+  controller.configureLibraryAutoImport({ enabled: true, ignoreShortSongs: true })
+  assert.equal(
+    instances.at(-1).directories.length,
+    0,
+    'empty user selections must survive restarts without fallback'
+  )
+  assert.equal(
+    defaultFolderReads,
+    1,
+    'saved selections must not be repopulated from library folders'
+  )
+  controller.trackMusicDirectory(empty)
+  assert.equal(
+    instances.at(-1).directories.length,
+    0,
+    'reimport must not restore user-removed folders'
+  )
+  controller.setWatchedMusicDirectories([{ path: empty, enabled: false }])
+  controller.trackMusicDirectory(empty)
+  assert.equal(instances.at(-1).directories.length, 0, 'reimport must not enable paused folders')
+  controller.setWatchedMusicDirectories([{ path: empty, enabled: true }])
+  assert.ok(instances.at(-1).directories.includes(empty), 'manual enable must restore monitoring')
+  assert.ok(
+    instances.at(-1).options.knownFiles().has(libraryRemoved),
+    'deleted songs must remain excluded after restarting the service'
+  )
+  controller.stopLibraryAutoImport()
+
+  // Reproduce a clean install: startup precedes the first directory import.
+  settings.clear()
+  const cleanMocks = {
+    ...controllerMocks,
+    '../database': { getDatabase: () => ({ prepare: () => ({ all: () => [] }) }) }
+  }
+  controller = load('src/main/service/libraryAutoImport.ts', cleanMocks)
+  controller.configureLibraryAutoImport({ enabled: true, ignoreShortSongs: true })
+  assert.equal(instances.at(-1).directories.length, 0)
+  const downloads = path.join(temporary, 'Downloads')
+  controller.trackMusicDirectory(downloads)
+  assert.ok(
+    instances.at(-1).directories.includes(downloads),
+    'first import after empty startup must be watched'
+  )
+  assert.equal(settings.get('library.watchDirectories')[0].path, downloads)
+  controller.stopLibraryAutoImport()
+  controller = load('src/main/service/libraryAutoImport.ts', cleanMocks)
+  controller.configureLibraryAutoImport({ enabled: true, ignoreShortSongs: true })
+  assert.ok(
+    instances.at(-1).directories.includes(downloads),
+    'first imported folder must persist after restart'
+  )
   controller.stopLibraryAutoImport()
   console.log(
     'Library auto-import tests passed: copy stability, nested folders, deduplication, pause/resume, startup catch-up, removal, exclusions, duration filtering, cancellation.'

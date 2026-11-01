@@ -1,5 +1,5 @@
 import type { RemoteConnection } from '../shared/remoteSources'
-import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
+import type { LibraryAutoImportEvent, LibraryWatchDirectory } from '../shared/libraryAutoImport'
 import type {
   DuplicateFileReport,
   DuplicateScanOptions,
@@ -423,6 +423,8 @@ declare global {
         ): Promise<DuplicateFileResponse<DuplicateCleanupResult>>
         onDuplicateProgress(callback: (progress: DuplicateFileProgress) => void): () => void
         configureAutoImport(enabled: boolean, ignoreShortSongs: boolean): Promise<void>
+        getWatchedFolders(): Promise<LibraryWatchDirectory[]>
+        setWatchedFolders(folders: LibraryWatchDirectory[]): Promise<LibraryWatchDirectory[]>
         onAutoImported(callback: (event: LibraryAutoImportEvent) => void): () => void
         importLocalMusicFile(ignoreShortSongs?: boolean): Promise<ScanLocalMusicResult | null>
         selectLocalMusicFolder(): Promise<string | null>

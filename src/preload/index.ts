@@ -1,5 +1,5 @@
 import type { RemoteConnection } from '../shared/remoteSources'
-import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
+import type { LibraryAutoImportEvent, LibraryWatchDirectory } from '../shared/libraryAutoImport'
 import type {
   DuplicateFileReport,
   DuplicateScanOptions,
@@ -369,6 +369,10 @@ const libraryAPI = {
   },
   configureAutoImport: (enabled: boolean, ignoreShortSongs: boolean): Promise<void> =>
     ipcRenderer.invoke('library:configure-auto-import', { enabled, ignoreShortSongs }),
+  getWatchedFolders: (): Promise<LibraryWatchDirectory[]> =>
+    ipcRenderer.invoke('library:get-watched-folders'),
+  setWatchedFolders: (folders: LibraryWatchDirectory[]): Promise<LibraryWatchDirectory[]> =>
+    ipcRenderer.invoke('library:set-watched-folders', folders),
   onAutoImported: (callback: (event: LibraryAutoImportEvent) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, result: LibraryAutoImportEvent): void =>
       callback(result)

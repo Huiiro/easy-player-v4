@@ -68,11 +68,20 @@ function getOrInsertFolder(importPath: string, rootPath: string): FolderRow {
   return { id: Number(result.lastInsertRowid) }
 }
 
+function isMacMetadataPath(filePath: string): boolean {
+  return (
+    path.basename(filePath).startsWith('._') ||
+    path.resolve(filePath).split(path.sep).includes('__MACOSX')
+  )
+}
+
 async function collectMusicFiles(directory: string, files: string[]): Promise<void> {
+  if (isMacMetadataPath(directory)) return
   await waitForBackgroundWork()
   const entries = await fs.promises.readdir(directory, { withFileTypes: true })
   for (const entry of entries) {
     const fullPath = path.join(directory, entry.name)
+    if (isMacMetadataPath(fullPath)) continue
     if (entry.isDirectory()) {
       await collectMusicFiles(fullPath, files)
     } else if (
@@ -90,7 +99,11 @@ export async function scanMusicDirectory(
   callback?: ScanCallback,
   selectedFiles?: string[],
   ignoreShortSongs = true,
-  options: { background?: boolean; shouldContinue?: () => boolean } = {}
+  options: {
+    background?: boolean
+    shouldContinue?: () => boolean
+    shouldImportFile?: (file: string) => boolean
+  } = {}
 ): Promise<ScanResult> {
   return logOperation(
     '[Scanner] scanMusicDirectory',
@@ -116,6 +129,7 @@ export async function scanMusicDirectory(
               !path.isAbsolute(path.relative(rootPath, file)) &&
               path.relative(rootPath, file) !== '..' &&
               !path.relative(rootPath, file).startsWith(`..${path.sep}`) &&
+              !isMacMetadataPath(file) &&
               SUPPORTED_EXTENSIONS.includes(path.extname(file).toLowerCase())
           )
         )
@@ -153,6 +167,10 @@ export async function scanMusicDirectory(
         if (!selectedFiles || options.background) await waitForBackgroundWork()
         if (options.shouldContinue?.() === false) break
         try {
+          if (options.shouldImportFile?.(fullPath) === false) {
+            skipped++
+            continue
+          }
           if (existsSong.get(fullPath)) {
             duplicates++
             continue
@@ -162,6 +180,8 @@ export async function scanMusicDirectory(
           if (options.shouldContinue?.() === false) break
           const common = metadata.common
           const format = metadata.format
+          // A supported extension can belong to metadata or a file with no audio stream.
+          if (format.hasAudio === false) throw new Error('File contains no audio stream')
           // File selection and duration filtering are independent. Unknown durations are retained.
           if (ignoreShortSongs && format.duration != null && format.duration < 5) {
             skipped++
@@ -177,6 +197,11 @@ export async function scanMusicDirectory(
 
           const fileSize = (await fs.promises.stat(fullPath)).size
           if (options.shouldContinue?.() === false) break
+          // A deletion can happen while metadata or file information is being read.
+          if (options.shouldImportFile?.(fullPath) === false) {
+            skipped++
+            continue
+          }
           const folder = getOrInsertFolder(path.dirname(fullPath), rootPath)
           const result = insertSong.run({
             title: common.title || path.basename(fullPath, path.extname(fullPath)),

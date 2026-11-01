@@ -9,6 +9,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import type { LibraryWatchDirectory } from '../../../../shared/libraryAutoImport'
 
 const { t } = useI18n()
 const ui = useUIStore()
@@ -17,7 +18,55 @@ const importingSong = ref(false)
 const importProgress = ref<{ current: number; total: number } | null>(null)
 const missingSongIds = ref<number[]>([])
 const removeMissingDialogOpen = ref(false)
+const watchedFolders = ref<LibraryWatchDirectory[]>([])
+const loadingWatchedFolders = ref(true)
+const savingWatchedFolders = ref(false)
 let offProgress: (() => void) | undefined
+
+async function loadWatchedFolders(): Promise<void> {
+  try {
+    watchedFolders.value = await window.api.library.getWatchedFolders()
+  } catch {
+    error(t('settings.watchedFoldersFailed'))
+  } finally {
+    loadingWatchedFolders.value = false
+  }
+}
+
+async function saveWatchedFolders(folders: LibraryWatchDirectory[]): Promise<void> {
+  savingWatchedFolders.value = true
+  try {
+    watchedFolders.value = await window.api.library.setWatchedFolders(
+      folders.map(({ path, enabled }) => ({ path, enabled }))
+    )
+  } catch {
+    error(t('settings.watchedFoldersFailed'))
+  } finally {
+    savingWatchedFolders.value = false
+  }
+}
+
+async function addWatchedFolder(): Promise<void> {
+  savingWatchedFolders.value = true
+  try {
+    const path = await window.api.library.selectLocalMusicFolder()
+    if (path) await saveWatchedFolders([...watchedFolders.value, { path, enabled: true }])
+  } catch {
+    error(t('settings.watchedFoldersFailed'))
+  } finally {
+    savingWatchedFolders.value = false
+  }
+}
+
+function toggleWatchedFolder(path: string, enabled: boolean): void {
+  void saveWatchedFolders(
+    watchedFolders.value.map((folder) => (folder.path === path ? { ...folder, enabled } : folder))
+  )
+}
+
+function removeWatchedFolder(path: string): void {
+  void saveWatchedFolders(watchedFolders.value.filter((folder) => folder.path !== path))
+}
 
 function openDuplicateDialog(): void {
   eventBus.emit('openDuplicateReport')
@@ -102,8 +151,13 @@ async function removeMissingSongs(): Promise<void> {
 }
 onMounted(() => {
   offProgress = window.api.files.onImportProgress((progress) => (importProgress.value = progress))
+  eventBus.on('scanFinished', loadWatchedFolders)
+  void loadWatchedFolders()
 })
-onBeforeUnmount(() => offProgress?.())
+onBeforeUnmount(() => {
+  offProgress?.()
+  eventBus.off('scanFinished', loadWatchedFolders)
+})
 </script>
 
 <template>
@@ -118,6 +172,49 @@ onBeforeUnmount(() => offProgress?.())
         size="md"
       />
     </SettingRow>
+    <SettingRow
+      :label="t('settings.watchedFolders')"
+      :description="t('settings.watchedFoldersDescription')"
+    >
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        :disabled="loadingWatchedFolders || savingWatchedFolders"
+        @click="addWatchedFolder"
+      >
+        {{ t('settings.addWatchedFolder') }}
+      </BaseButton>
+    </SettingRow>
+    <div class="watch-folders" :aria-busy="loadingWatchedFolders || savingWatchedFolders">
+      <p v-if="loadingWatchedFolders" class="text-sm text-text-l">{{ t('library.loading') }}</p>
+      <p v-else-if="!watchedFolders.length" class="text-sm text-text-l">
+        {{ t('settings.noWatchedFolders') }}
+      </p>
+      <div v-for="folder in watchedFolders" :key="folder.path" class="watch-folder">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm text-text" :title="folder.path">
+            {{ folder.path.split(/[\\/]/).pop() || folder.path }}
+          </p>
+          <p class="break-all text-xs text-text-l">{{ folder.path }}</p>
+        </div>
+        <BaseSwitch
+          :model-value="folder.enabled"
+          :aria-label="t('settings.watchFolder', { path: folder.path })"
+          :disabled="savingWatchedFolders"
+          size="md"
+          @update:model-value="toggleWatchedFolder(folder.path, $event === true)"
+        />
+        <BaseButton
+          variant="ghost"
+          size="sm"
+          :disabled="savingWatchedFolders"
+          :aria-label="t('settings.removeWatchedFolder', { path: folder.path })"
+          @click="removeWatchedFolder(folder.path)"
+        >
+          {{ t('settings.remove') }}
+        </BaseButton>
+      </div>
+    </div>
     <SettingRow
       :label="t('settings.showAutoImportNotifications')"
       :description="t('settings.showAutoImportNotificationsDescription')"
@@ -282,6 +379,16 @@ onBeforeUnmount(() => offProgress?.())
 </template>
 
 <style scoped>
+.watch-folders {
+  padding: 0 1.25rem 1rem;
+}
+.watch-folder {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
 .actions {
   display: flex;
   gap: 0.5rem;

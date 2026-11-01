@@ -1289,7 +1289,16 @@ export default {
       'Show a global notification with the number of newly imported songs.',
     autoImportSongsAdded: 'Automatically imported {count} new songs',
     autoImportLocalMusicDescription:
-      'Watch imported folders and subfolders while the player is running, and check for new songs on startup.',
+      'Watch the enabled folders below and their subfolders, and check for new songs on startup.',
+    watchedFolders: 'Watched folders',
+    watchedFoldersDescription:
+      'Existing and newly imported folders are watched. Add, enable, disable or remove folders as needed. Disabled or removed folders stay excluded from automatic watches; library songs are kept.',
+    addWatchedFolder: 'Add folder',
+    noWatchedFolders:
+      'No watched folders. Add a folder to check and automatically import its songs.',
+    watchFolder: 'Watch {path}',
+    removeWatchedFolder: 'Stop watching {path}',
+    watchedFoldersFailed: 'Unable to load or save watched folders',
     ignoreShortSongsDescription:
       'Skip audio shorter than 5 seconds when importing folders or songs.',
     normalizeMetadataSeparator: 'Normalize separators',

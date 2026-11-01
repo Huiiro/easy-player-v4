@@ -1256,7 +1256,15 @@ export default {
     showAutoImportNotificationsDescription: '自动导入完成后显示全局提醒，包含本次新增的歌曲数量。',
     autoImportSongsAdded: '已自动导入 {count} 首新歌曲',
     autoImportLocalMusicDescription:
-      '播放器运行时监听已导入的文件夹及子目录，自动导入新增歌曲；启动时补充检查。',
+      '监听下方启用的文件夹及子目录，自动导入新增歌曲；启动时补充检查。',
+    watchedFolders: '监听文件夹',
+    watchedFoldersDescription:
+      '已有和新导入的文件夹会加入监听，可额外添加、启停或移除。已停用或移除的目录不会自动恢复监听；曲库歌曲会保留。',
+    addWatchedFolder: '添加文件夹',
+    noWatchedFolders: '尚未选择监听文件夹，添加后将检查并自动导入其中的歌曲。',
+    watchFolder: '监听 {path}',
+    removeWatchedFolder: '移除对 {path} 的监听',
+    watchedFoldersFailed: '无法读取或保存监听文件夹',
     ignoreShortSongsDescription: '导入文件夹或单曲时跳过时长不足 5 秒的音频。',
     normalizeMetadataSeparator: '统一分隔符',
     normalizeMetadataSeparatorDescription: '将歌手和流派的分隔符显示为 /，不修改文件信息。',

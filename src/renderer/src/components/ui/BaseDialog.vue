@@ -104,7 +104,11 @@ const footerClass = computed(() => {
           leave-to="opacity-0 scale-95"
         >
           <DialogPanel
-            :class="['ep-dialog-panel my-auto w-full', legacyWidth ? width : '', panelClass]"
+            :class="[
+              'ep-dialog-panel my-auto min-w-0 w-full',
+              legacyWidth ? width : '',
+              panelClass
+            ]"
             :style="panelStyle"
           >
             <!-- header -->
@@ -114,7 +118,7 @@ const footerClass = computed(() => {
               :class="headerClass"
             >
               <!-- 左侧：标题 -->
-              <div class="flex items-center">
+              <div class="min-w-0 flex items-center">
                 <slot name="header">
                   <DialogTitle class="ep-dialog-title text-lg font-semibold">
                     {{ title }}
@@ -123,7 +127,7 @@ const footerClass = computed(() => {
               </div>
 
               <!-- 右侧：关闭按钮 -->
-              <div class="flex items-center select-none">
+              <div class="flex shrink-0 items-center select-none">
                 <slot name="close">
                   <button
                     v-if="showClose"
@@ -155,3 +159,12 @@ const footerClass = computed(() => {
     </Dialog>
   </TransitionRoot>
 </template>
+
+<style scoped>
+.ep-dialog-body,
+.ep-dialog-title {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+</style>
