@@ -1129,6 +1129,9 @@ export default {
     motionIntensityModerate: 'Moderate',
     motionIntensityStrong: 'Strong',
     reduceMotionDescription: 'Reduce background and interface animations.',
+    pauseAnimationsOnBlur: 'Pause animations when unfocused',
+    pauseAnimationsOnBlurDescription:
+      'Pause background animations and player rhythm effects when the window loses focus. Turn off to keep them running. Minimized or hidden windows still pause.',
     system: 'System',
     systemDescription: 'Manage language, startup, and application updates.',
     closeToTray: 'Minimize to tray on close',

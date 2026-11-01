@@ -18,6 +18,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import BackgroundLayer from './BackgroundLayer.vue'
 import { backgroundSceneKey, type BackgroundScene } from './backgroundScene'
 import { backgroundAppearanceHandoff } from '@/services/appearanceController'
+import { useAnimationActivity } from '@/hooks/useAnimationActivity'
 
 const emit = defineEmits<{ contrast: [dark: boolean] }>()
 const ui = useUIStore()
@@ -29,7 +30,7 @@ const activeTheme = computed(() =>
   getSystemBackgroundTheme(background.value.type === 'preset' ? background.value.id : 'none')
 )
 const isSystemTheme = computed(() => background.value.type === 'preset')
-const isBackgroundActive = ref(!document.hidden && document.hasFocus())
+const isBackgroundActive = useAnimationActivity(() => ui.pauseAnimationsOnBlur !== false)
 const isSolidTheme = computed(() => isSystemTheme.value && activeTheme.value.id === 'solid')
 const needsSongColor = computed(() => isSolidTheme.value || ui.accentSource === 'song')
 
@@ -303,16 +304,10 @@ watch(reducedMotion, (disabled) => {
     finishFade(pending)
   }
 })
-const syncBackgroundActivity = (): void => {
-  isBackgroundActive.value = !document.hidden && document.hasFocus()
-}
 const syncReducedMotion = (): void => {
   systemReducedMotion.value = motionQuery.matches
 }
 onMounted(() => {
-  document.addEventListener('visibilitychange', syncBackgroundActivity)
-  window.addEventListener('focus', syncBackgroundActivity)
-  window.addEventListener('blur', syncBackgroundActivity)
   motionQuery.addEventListener('change', syncReducedMotion)
 })
 onBeforeUnmount(() => {
@@ -321,9 +316,6 @@ onBeforeUnmount(() => {
   stopFade()
   handles.clear()
   ui.songThemeColor = null
-  document.removeEventListener('visibilitychange', syncBackgroundActivity)
-  window.removeEventListener('focus', syncBackgroundActivity)
-  window.removeEventListener('blur', syncBackgroundActivity)
   motionQuery.removeEventListener('change', syncReducedMotion)
 })
 </script>

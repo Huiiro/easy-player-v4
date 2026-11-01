@@ -1106,6 +1106,9 @@ export default {
     motionIntensityModerate: '适中',
     motionIntensityStrong: '强烈',
     reduceMotionDescription: '减少背景和界面动画。',
+    pauseAnimationsOnBlur: '失焦时暂停动效',
+    pauseAnimationsOnBlurDescription:
+      '窗口失去焦点时暂停背景动效和播放器律动。关闭后继续动效；最小化或隐藏时仍暂停。',
     system: '系统设置',
     systemDescription: '设置语言、启动方式和应用更新。',
     closeToTray: '关闭时最小化到托盘',

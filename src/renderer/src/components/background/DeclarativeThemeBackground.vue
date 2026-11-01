@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { reportThemeFailure } from '@/services/pluginLogs'
+import { useUIStore } from '@/stores/ui/uiStore'
+import { useAnimationActivity } from '@/hooks/useAnimationActivity'
 import type { InstalledPluginTheme } from '../../../../shared/themePlugins'
 const vertexShader =
   '#version 300 es\nin vec2 a_position;\nvoid main() { gl_Position = vec4(a_position, 0.0, 1.0); }'
@@ -14,6 +16,8 @@ const props = withDefaults(defineProps<{ theme: InstalledPluginTheme; paused?: b
   paused: false
 })
 const emit = defineEmits<{ failure: []; ready: [] }>()
+const ui = useUIStore()
+const isAnimationActive = useAnimationActivity(() => ui.pauseAnimationsOnBlur !== false)
 const loading = new AbortController()
 const textureData = new Map<string, Float32Array | ImageBitmap>()
 let failed = false
@@ -174,7 +178,7 @@ function draw(now = performance.now()): void {
 }
 
 function inactive(): boolean {
-  return props.paused || document.hidden || !document.hasFocus() || !!motion?.matches
+  return props.paused || !isAnimationActive.value || !!motion?.matches
 }
 
 function tick(now: number): void {
@@ -316,12 +320,10 @@ function contextLost(event: Event): void {
 }
 
 watch(() => props.paused, syncAnimation)
+watch(isAnimationActive, syncAnimation)
 onMounted(() => {
   motion = window.matchMedia('(prefers-reduced-motion: reduce)')
   motion.addEventListener('change', syncAnimation)
-  document.addEventListener('visibilitychange', syncAnimation)
-  window.addEventListener('focus', syncAnimation)
-  window.addEventListener('blur', syncAnimation)
   // Observe window-level movement without intercepting clicks on player controls.
   window.addEventListener('pointermove', movePointer, { passive: true })
   window.addEventListener('pointerout', pointerOut, { passive: true })
@@ -375,9 +377,6 @@ onBeforeUnmount(() => {
   loading.abort()
   observer?.disconnect()
   motion?.removeEventListener('change', syncAnimation)
-  document.removeEventListener('visibilitychange', syncAnimation)
-  window.removeEventListener('focus', syncAnimation)
-  window.removeEventListener('blur', syncAnimation)
   window.removeEventListener('pointermove', movePointer)
   window.removeEventListener('pointerout', pointerOut)
   window.removeEventListener('blur', resetPointer)

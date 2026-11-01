@@ -81,6 +81,7 @@ export const UI_PREFERENCE_KEYS = [
   'songListColumns',
   'useCustomBg',
   'reduceMotion',
+  'pauseAnimationsOnBlur',
   'useLocalFileName',
   'useFullProgress',
   'extremePlayback',
@@ -319,6 +320,7 @@ export const useUIStore = defineStore(
     })
     const useCustomBg = ref(false)
     const reduceMotion = ref(false)
+    const pauseAnimationsOnBlur = ref(true)
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const extremePlayback = ref(false)
@@ -787,6 +789,8 @@ export const useUIStore = defineStore(
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
       if (typeof saved.reduceMotion === 'boolean') reduceMotion.value = saved.reduceMotion
+      if (typeof saved.pauseAnimationsOnBlur === 'boolean')
+        pauseAnimationsOnBlur.value = saved.pauseAnimationsOnBlur
       if (isSystemBackground(saved.systemBackground)) {
         systemBackground.value = saved.systemBackground as SystemBackground
       }
@@ -1015,6 +1019,7 @@ export const useUIStore = defineStore(
       songListColumns,
       useCustomBg,
       reduceMotion,
+      pauseAnimationsOnBlur,
       extremePlayback,
       autoPlayOnRestore,
       songPlayTrigger,

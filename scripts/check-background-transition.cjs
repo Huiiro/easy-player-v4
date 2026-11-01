@@ -13,7 +13,7 @@ app.whenReady().then(async () => {
     let scope = 0
     const bundle = await esbuild.build({
       stdin: {
-        contents: `import * as Vue from 'vue';import {createI18n} from 'vue-i18n';import AppBackground from './src/renderer/src/components/background/AppBackground.vue';import {backgroundAppearanceHandoff} from './src/renderer/src/services/appearanceController';export {Vue,createI18n,AppBackground,backgroundAppearanceHandoff};`,
+        contents: `import * as Vue from 'vue';import {createI18n} from 'vue-i18n';import AppBackground from './src/renderer/src/components/background/AppBackground.vue';import {backgroundAppearanceHandoff} from './src/renderer/src/services/appearanceController';import {usePlayerRhythm} from './src/renderer/src/components/player/usePlayerRhythm';export {Vue,createI18n,AppBackground,backgroundAppearanceHandoff,usePlayerRhythm};`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -116,7 +116,8 @@ app.whenReady().then(async () => {
       const frame=()=>new Promise(resolve=>requestAnimationFrame(resolve));
       const wait=async()=>{await nextTick();await frame();await nextTick()};
       const until=async(predicate,label)=>{const end=performance.now()+4000;while(!predicate()){if(performance.now()>end)throw Error('Timed out: '+label);await wait()}};
-      document.hasFocus=()=>true;Object.defineProperty(document,'hidden',{configurable:true,get:()=>false});
+      let focused=true,hidden=false;
+      document.hasFocus=()=>focused;Object.defineProperty(document,'hidden',{configurable:true,get:()=>hidden});
       const startViewTransition=document.startViewTransition?.bind(document);document.startViewTransition=undefined;
       const root=document.documentElement;root.style.setProperty('--motion-duration-theme','240ms');root.style.setProperty('--app-header-bg','#000000');root.style.setProperty('--app-footer-bg','#000000');
       window.__errors=[];window.__themes={};window.ready={};window.fail={};const events=[];const alive=new Set();let serial=0;let maximumAlive=0;
@@ -141,6 +142,26 @@ app.whenReady().then(async () => {
       const settled=name=>roots().length===1&&target(name)?.dataset.backgroundPhase==='current';
       const paletteEvents=[];const choose=name=>{window.__ui.selected=name;document.body.dataset.theme=name;void nextTick(()=>{const key=name==='none'?'none':name==='image'?'image:'+window.__ui.customBg.url:'preset:plugin:'+name+':1';backgroundAppearanceHandoff.stage(key,animated=>{root.classList.toggle('theme-transitioning',animated);void getComputedStyle(root).transitionProperty;root.style.setProperty('--app-header-bg',name==='b'?'#ffffff':'#000000');root.style.setProperty('--app-footer-bg',name==='b'?'#ffffff':'#000000');paletteEvents.push(name)})})};
       document.body.dataset.theme='a';await until(()=>!!window.ready.a,'initial scene');await wait();
+      const rhythmHost=document.createElement('div');document.body.append(rhythmHost);let rhythm;
+      const rhythmPlayer=reactive({isPlaying:true,rhythmVisualConfig:{enabled:true,reducedMotion:false,intensity:0.6},audioAnalysis:{rms:0.5,lowEnergy:0.5,onsetStrength:0.5}});
+      const rhythmApp=createApp({setup(){rhythm=BackgroundCheck.usePlayerRhythm(rhythmPlayer,window.__ui);return()=>null}});rhythmApp.mount(rhythmHost);
+      const paused=()=>events.filter(event=>event.type==='pause'&&event.name==='a').at(-1)?.paused;
+      focused=false;window.dispatchEvent(new Event('blur'));await wait();
+      check(paused()===true&&!rhythm.isPanelVisible.value,'Default blur policy pauses application backgrounds and player visuals');
+      window.__ui.pauseAnimationsOnBlur=false;await wait();
+      check(paused()===false&&rhythm.isPanelVisible.value,'Turning off blur pausing immediately resumes visible unfocused animations');
+      hidden=true;document.dispatchEvent(new Event('visibilitychange'));await wait();
+      check(paused()===true&&!rhythm.isPanelVisible.value,'Hidden windows still pause animations when blur pausing is disabled');
+      hidden=false;document.dispatchEvent(new Event('visibilitychange'));await wait();
+      check(paused()===false&&rhythm.isPanelVisible.value,'Showing an unfocused window resumes animations under the disabled blur policy');
+      window.__ui.pauseAnimationsOnBlur=true;await wait();
+      check(paused()===true&&!rhythm.isPanelVisible.value,'Reenabling blur pausing immediately stops unfocused animations');
+      focused=true;window.dispatchEvent(new Event('focus'));await wait();
+      check(paused()===false&&rhythm.isPanelVisible.value,'Regaining focus resumes animations with the default policy');
+      rhythmApp.unmount();rhythmHost.remove();
+      focused=false;window.dispatchEvent(new Event('blur'));await wait();
+      check(rhythm.isPanelVisible.value,'Disposed animation activity stops listening to focus events');
+      focused=true;window.dispatchEvent(new Event('focus'));await wait();
       const originalA=document.querySelector('[data-renderer="a"]');const originalImage=getComputedStyle(originalA).backgroundImage;
       choose('b');await wait();await wait();
       check(roots().length===2&&Number(getComputedStyle(target('a')).opacity)===1&&Number(getComputedStyle(target('b')).opacity)===0,'Pending async modules keep the previous background opaque');

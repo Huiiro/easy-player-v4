@@ -1,6 +1,7 @@
-import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { usePlayerStore } from '@/stores/player/playerStore'
 import type { useUIStore } from '@/stores/ui/uiStore'
+import { useAnimationActivity } from '@/hooks/useAnimationActivity'
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function usePlayerRhythm(
@@ -8,12 +9,8 @@ export function usePlayerRhythm(
   ui: ReturnType<typeof useUIStore>
 ) {
   const rhythmAmount = ref(0)
-  const isPanelVisible = ref(!document.hidden && document.hasFocus())
+  const isPanelVisible = useAnimationActivity(() => ui.pauseAnimationsOnBlur !== false)
   let lastVisualUpdateAt = 0
-
-  function syncPanelVisibility(): void {
-    isPanelVisible.value = !document.hidden && document.hasFocus()
-  }
 
   const targetRhythmAmount = computed(() => {
     if (
@@ -42,15 +39,5 @@ export function usePlayerRhythm(
     },
     { immediate: true }
   )
-  onMounted(() => {
-    document.addEventListener('visibilitychange', syncPanelVisibility)
-    window.addEventListener('focus', syncPanelVisibility)
-    window.addEventListener('blur', syncPanelVisibility)
-  })
-  onBeforeUnmount(() => {
-    document.removeEventListener('visibilitychange', syncPanelVisibility)
-    window.removeEventListener('focus', syncPanelVisibility)
-    window.removeEventListener('blur', syncPanelVisibility)
-  })
   return { rhythmAmount, isPanelVisible }
 }
