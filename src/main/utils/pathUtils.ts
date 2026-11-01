@@ -192,6 +192,19 @@ export function getStemFfmpegPath(isPackaged: boolean): string {
       : getProjectPath('resources', 'lib', 'ffmpeg', 'bin', executable)
 }
 
+export function getFingerprintToolPath(isPackaged: boolean): string {
+  const executable = process.platform === 'win32' ? 'fpcalc.exe' : 'fpcalc'
+  return isPackaged
+    ? path.join(process.resourcesPath, 'lib', 'fpcalc', executable)
+    : getProjectPath(
+        'resources',
+        'lib',
+        'fpcalc',
+        `${process.platform}-${process.arch}`,
+        executable
+      )
+}
+
 export function getStemModelPath(): string {
   if (process.env.EASY_PLAYER_STEM_MODEL_REPO) return process.env.EASY_PLAYER_STEM_MODEL_REPO
   return path.join(getInstalledStemDirectory(), 'models')

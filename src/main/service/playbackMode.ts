@@ -20,8 +20,21 @@ export function onPlaybackModeChanged(listener: (enabled: boolean) => void): () 
   return () => listeners.delete(listener)
 }
 
-export function waitForBackgroundWork(): Promise<void> {
-  return playbackOnly ? new Promise((resolve) => waiters.add(resolve)) : Promise.resolve()
+export function waitForBackgroundWork(signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(signal.reason)
+  if (!playbackOnly) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    const resume = (): void => {
+      signal?.removeEventListener('abort', cancel)
+      resolve()
+    }
+    const cancel = (): void => {
+      waiters.delete(resume)
+      reject(signal?.reason)
+    }
+    waiters.add(resume)
+    signal?.addEventListener('abort', cancel, { once: true })
+  })
 }
 
 export function requireBackgroundWork(): void {

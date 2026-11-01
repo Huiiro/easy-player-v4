@@ -19,6 +19,7 @@ export default defineConfig({
         input: {
           index: resolve('src/main/index.ts'),
           searchWorker: resolve('src/main/search/searchWorker.ts'),
+          fingerprintMatchWorker: resolve('src/main/service/fingerprintMatchWorker.ts'),
           autoMixRuntimeWorker: resolve('src/main/service/autoMixRuntimeWorker.ts')
         },
         external: [

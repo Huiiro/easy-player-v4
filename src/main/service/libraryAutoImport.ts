@@ -11,6 +11,7 @@ import type { LibraryAutoImportEvent } from '../../shared/libraryAutoImport'
 
 const DIRECTORIES_KEY = 'library.autoImportDirectories'
 const EXCLUDED_KEY = 'library.autoImportExcludedDirectories'
+const EXCLUDED_FILES_KEY = 'library.autoImportExcludedFiles'
 let directories: string[] = []
 let enabled = true
 let ignoreShortSongs = true
@@ -64,7 +65,9 @@ export function configureLibraryAutoImport(settings: {
             getDatabase().prepare('SELECT audio FROM song WHERE source_id IS NULL').all() as Array<{
               audio: string
             }>
-          ).map((song) => song.audio)
+          )
+            .map((song) => song.audio)
+            .concat((getAppSetting(EXCLUDED_FILES_KEY) as string[] | null) ?? [])
         ),
       importFiles: async (root, files, active) => {
         const result = await scanMusicDirectory(root, undefined, files, ignoreShortSongs, {
@@ -119,4 +122,10 @@ export function excludeMusicDirectory(directory: string): void {
 export function stopLibraryAutoImport(): void {
   watcher?.stop()
   watcher = undefined
+}
+
+/** Library-only duplicate cleanup must remain effective while folder monitoring is enabled. */
+export function excludeAutoImportFiles(files: string[]): void {
+  const excluded = (getAppSetting(EXCLUDED_FILES_KEY) as string[] | null) ?? []
+  setAppSetting(EXCLUDED_FILES_KEY, [...new Set([...excluded, ...files])])
 }

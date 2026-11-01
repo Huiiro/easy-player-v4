@@ -18,6 +18,7 @@ type Events = {
   locateCurrentSong: void
   openAudioControls: void
   openGlobalSearch: void
+  openDuplicateReport: void
 }
 
 const eventBus = mitt<Events>()

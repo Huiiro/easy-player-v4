@@ -7,6 +7,7 @@ import eventBus from '@/utils/eventBus'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 const { t } = useI18n()
@@ -17,6 +18,10 @@ const importProgress = ref<{ current: number; total: number } | null>(null)
 const missingSongIds = ref<number[]>([])
 const removeMissingDialogOpen = ref(false)
 let offProgress: (() => void) | undefined
+
+function openDuplicateDialog(): void {
+  eventBus.emit('openDuplicateReport')
+}
 
 async function importSingleSong(): Promise<void> {
   if (importingSong.value) return
@@ -201,6 +206,11 @@ onBeforeUnmount(() => offProgress?.())
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.libraryMaintenance')">
+    <SettingRow :label="t('duplicates.title')" :description="t('duplicates.description')">
+      <BaseButton variant="secondary" size="sm" @click="openDuplicateDialog">
+        {{ t('duplicates.start') }}
+      </BaseButton>
+    </SettingRow>
     <SettingRow
       :label="t('settings.libraryBackup')"
       :description="t('settings.libraryBackupDescription')"

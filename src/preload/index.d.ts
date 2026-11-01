@@ -1,6 +1,16 @@
 import type { RemoteConnection } from '../shared/remoteSources'
 import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
 import type {
+  DuplicateFileReport,
+  DuplicateScanOptions,
+  DuplicateFileProgress,
+  DuplicateFileResponse,
+  DuplicateCleanupRequest,
+  DuplicateCleanupResult,
+  DuplicateTaskState,
+  DuplicateTaskDetails
+} from '../shared/duplicateFiles'
+import type {
   AutoMixRuntimeStatus,
   AutoMixStemCacheInfo,
   AutoMixStemCacheResult
@@ -387,6 +397,31 @@ declare global {
         ): () => void
       }
       library: {
+        getDuplicateTaskState(): Promise<DuplicateTaskState | null>
+        getDuplicateTaskDetails(): Promise<DuplicateTaskDetails>
+        startDuplicateTask(
+          options?: DuplicateScanOptions
+        ): Promise<DuplicateFileResponse<DuplicateTaskState>>
+        resumeDuplicateTask(): Promise<DuplicateFileResponse<DuplicateTaskState>>
+        pauseDuplicateTask(): Promise<DuplicateFileResponse<boolean>>
+        saveDuplicateSelection(
+          reportId: string,
+          retainedIds: number[]
+        ): Promise<DuplicateFileResponse<boolean>>
+        onDuplicateTask(callback: (state: DuplicateTaskState | null) => void): () => void
+        detectDuplicateFiles(
+          options?: DuplicateScanOptions
+        ): Promise<DuplicateFileResponse<DuplicateFileReport>>
+        clearDuplicateCache(): Promise<DuplicateFileResponse<boolean>>
+        cancelDuplicateScan(): Promise<void>
+        exportDuplicateReport(
+          reportId: string,
+          language?: 'zh' | 'en'
+        ): Promise<DuplicateFileResponse<boolean>>
+        cleanDuplicateFiles(
+          request: DuplicateCleanupRequest
+        ): Promise<DuplicateFileResponse<DuplicateCleanupResult>>
+        onDuplicateProgress(callback: (progress: DuplicateFileProgress) => void): () => void
         configureAutoImport(enabled: boolean, ignoreShortSongs: boolean): Promise<void>
         onAutoImported(callback: (event: LibraryAutoImportEvent) => void): () => void
         importLocalMusicFile(ignoreShortSongs?: boolean): Promise<ScanLocalMusicResult | null>

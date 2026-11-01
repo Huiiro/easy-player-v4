@@ -1,0 +1,25 @@
+{
+  "version": "1.6.2",
+  "targets": {
+    "win32-x64": {
+      "asset": "windows-x86_64.zip",
+      "sha256": "b74369726676670af3ab0eadff45f960cf969fdf4a87a971ba37eaf8d530e874"
+    },
+    "darwin-arm64": {
+      "asset": "macos-arm64.tar.gz",
+      "sha256": "f3bc56cb42d89a01237bb3f3629329e4ec75f7c1b0217acf6e9bf952ac47979b"
+    },
+    "darwin-x64": {
+      "asset": "macos-x86_64.tar.gz",
+      "sha256": "5f7b21964163e9e1719ca76d89e71873e2bdba87e9c01d1bcb06da67132da2bb"
+    },
+    "linux-x64": {
+      "asset": "linux-x86_64.tar.gz",
+      "sha256": "c968ad4a0821592a79b158fb2e1f46cbe0a22a0a1dbc0743c67d68e75d15d2bb"
+    },
+    "linux-arm64": {
+      "asset": "linux-arm64.tar.gz",
+      "sha256": "3aa1498126ed272d805bc9d081c77965c9e1e1a0891bb112c13b56ef2ad47bad"
+    }
+  }
+}

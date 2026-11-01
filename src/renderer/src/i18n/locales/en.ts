@@ -819,6 +819,156 @@ export default {
       download: 'Downloads'
     }
   },
+  duplicates: {
+    selectionHelp: 'About cleanup selection',
+    sidecar: 'macOS metadata sidecar, not audio',
+    fingerprintWarnings: '{count} fingerprint warnings (usable results retained)',
+
+    failureExitCode: 'Exit code {code}',
+    failureDiagnostic: 'Raw diagnostics',
+    failureLegacy: 'This older report has no detailed cause. Run a new scan.',
+
+    checkGroup: 'Check',
+    uncheckGroup: 'Uncheck',
+    groupSelectionHint:
+      'Select extra copies, keeping the first file. Click again to clear this group.',
+
+    checkingActive: 'Checking {count} files in parallel',
+    checkingPaused:
+      'File checks are paused by lightweight playback mode. Leave this mode to continue.',
+    checkingSlow: 'File state check took {seconds}s: {path}',
+
+    clearGroup: 'Clear group selection',
+    resetSelection: 'Reset selection',
+    cleanupSongs: 'Songs selected for cleanup ({count})',
+
+    dismissTask: 'Dismiss scan notification',
+    pendingCount: '{count} selected for cleanup',
+    reportKinds: 'Exact: {exact} groups · Similar: {similar} groups',
+
+    quickScan: 'Quick scan',
+    scanOptions: 'Scan settings',
+    deepHint: 'Find the same recording across encodings, quality levels and small differences.',
+    forceHint: 'Analyze files again and refresh cached results.',
+    settingsHint: 'Close the report to continue scanning in the background.',
+    deepHelp: 'About analysis length and concurrency',
+    scanStages: 'Scan stages',
+    reportDetails: 'Analysis details and cache statistics',
+    audioCount: 'Audio matches: {count} groups',
+
+    checkpoint: 'Saved checkpoint',
+    openTask: 'View duplicate scan task',
+    runInBackground: 'Run in background',
+    pause: 'Pause scan',
+    resume: 'Resume scan',
+    backgroundDescription:
+      'Scanning continues when this dialog closes. After quitting the player, it resumes on the next launch.',
+    recovering: 'Rechecking file changes before reusing completed work.',
+    resumeDescription:
+      'Resume checks file changes and reuses saved hashes, fingerprints and comparisons. Unfinished files or batches are processed again.',
+    taskStatus: {
+      running: 'Scanning',
+      interrupted: 'Interrupted; ready to resume',
+      paused: 'Scan paused',
+      completed: 'Scan complete; view report',
+      cancelled: 'Stopped; ready to resume',
+      failed: 'Scan failed; retry available'
+    },
+
+    deepScan: 'Deep audio scan',
+    deepDescription:
+      'Deep scans analyze the first 60 seconds by default; choose 120 seconds for a longer segment. Review results manually: versions sharing an opening may differ later. Lengths use separate caches; existing SHA-256 caches remain reusable.',
+    sampleLength: 'Analysis length',
+    concurrency: 'Fingerprint concurrency',
+    concurrency1: '1 task (lower load)',
+    concurrency2: '2 tasks (default)',
+    concurrency4: '4 tasks (higher load)',
+    concurrencyDescription:
+      'Analyze multiple songs at once. Defaults to 2 tasks; use 1 for hard disks or network folders. All levels share caches; lightweight playback mode pauses extraction.',
+    reportConcurrency: 'Up to {count} concurrent fingerprint tasks',
+    sample60: 'First 60 seconds (faster)',
+    sample120: 'First 120 seconds (longer segment)',
+    analyzedLength: 'This report analyzes up to the first {seconds} seconds',
+    scanTimings:
+      'Current scan: checking {checking}s · SHA-256 {hashing}s · fingerprints {fingerprint}s · matching {matching}s · total {total}s',
+    forceScan: 'Recompute without cache',
+    clearCache: 'Clear analysis cache',
+    cacheCleared: 'Analysis cache cleared; library and files unchanged',
+    cacheSummary:
+      'Cache hits: SHA-256 {sha256} · Fingerprints {fingerprint} · Matches {matches} · Full reports {report}',
+    audioSummary: '{files} fingerprints analyzed · {groups} highly similar audio groups',
+    fingerprinting: 'Extracting audio fingerprints',
+    matching: 'Matching audio fingerprints',
+    indexing: 'Indexing fingerprint candidates',
+    comparedPairs: '{count} candidate pairs processed',
+    matchingWork:
+      'Current matching: {candidatePairs} candidate pairs · {comparisons} computed · {reusedPairs} reused',
+    fingerprintSkipped:
+      '{count} files could not produce usable fingerprints (files and existing comparisons are retained)',
+    audio: 'Audio match',
+    audioEvidence:
+      'Fingerprint similarity {score}% · Analyzed segment coverage {coverage}% · Alignment offset {offset}s',
+    title: 'Duplicate file comparison report',
+    description:
+      'Scan local library files without changes, then decide which copies to keep or clean up.',
+    readOnly:
+      'Check files to clean up; unchecked files are kept. Keep at least one per group. Scanning is read-only.',
+    hashRule:
+      'Quick scans compare SHA-256 and song metadata. Deep scans additionally compare audio fingerprints. Review metadata and audio-similarity candidates manually.',
+    exact: 'Identical',
+    similar: 'Similar song',
+    similarReason: 'Matching title/artist · Duration spread {seconds}s · File contents differ',
+    retained: 'Kept',
+    pendingCleanup: 'Pending cleanup',
+    selectKeep: 'Keep',
+    similarConfirm: 'Similar files may be different versions. Review before cleanup.',
+    start: 'Find duplicate files',
+    rescan: 'Scan again',
+    scanning: 'Duplicate file scan progress',
+    checking: 'Checking local files',
+    hashing: 'Comparing file contents',
+    scanned: 'Songs checked',
+    groups: 'Duplicate groups',
+    extraCopies: 'Cleanup candidates',
+    extraSize: 'Candidate size (estimated)',
+    none: 'No identical files or similar-song candidates were found.',
+    group: 'Group {index} · {count} files to compare',
+    selectClean: 'Clean up',
+    selectFile: 'Select for cleanup: {path}',
+    file: 'Song and file path',
+    metadata: 'Artist / album / duration',
+    quality: 'Format and quality',
+    decision: 'File status',
+    keepAll: 'Keep all',
+    keepThis: 'Keep this file',
+    keepAndClose: 'Close report',
+    selection: '{count} selected for cleanup. Keep at least one copy per group.',
+    cleanSelected: 'Clean selected ({count})',
+    confirmTitle: 'Confirm duplicate cleanup',
+    confirmLibraryOnly:
+      'Remove {count} items from the library and keep their files on disk. Folder monitoring will not import them again.',
+    confirmDeleteFiles:
+      'Remove {count} items from the library and permanently delete their local files. This cannot be undone. Review the report first.',
+    confirmClean: 'Confirm cleanup',
+    cleaning: 'Cleaning up…',
+    completed: 'Duplicate scan complete: {count} groups found',
+    cleaned: 'Removed {count} duplicate library entries',
+    export: 'Export report',
+    exported: 'Comparison report exported',
+    skipped: '{count} files skipped. View details',
+    unavailable: 'Unreadable or not a regular file',
+    changed: 'Changed during scanning',
+    previous: 'Previous',
+    next: 'Next',
+    errors: {
+      fingerprintMissing:
+        'The audio fingerprint component is unavailable. Please update or reinstall the player.',
+      failed: 'Duplicate file operation failed. Check file permissions and try again.',
+      busy: 'Another scan or cleanup is running. Please try again later.',
+      stale: 'Files or library entries have changed. Scan again before continuing.',
+      invalid: 'Choose duplicate report entries and keep at least one file per group.'
+    }
+  },
   settings: {
     groups: {
       shortcutControls: 'Enable and reset',

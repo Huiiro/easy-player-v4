@@ -31,6 +31,11 @@ import { startSearchIndexService } from './search/searchIndexService'
 import { registerDatabaseIpcHandlers } from './ipc/databaseIpcHandlers'
 import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './database/repository'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
+import {
+  registerDuplicateFileIpcHandlers,
+  stopDuplicateScans,
+  restoreDuplicateScanTask
+} from './ipc/duplicateFileIpcHandlers'
 import { stopLibraryAutoImport } from './service/libraryAutoImport'
 import { registerLyricsIpcHandlers } from './ipc/lyricsIpcHandlers'
 import { registerFontIpcHandlers } from './ipc/fontIpcHandlers'
@@ -201,6 +206,7 @@ function quitApplication(): void {
   tray = null
   shutdownPlugins()
   stopLibraryAutoImport()
+  stopDuplicateScans()
   closeDatabase()
   // Do not let a hidden close-to-tray window intercept this explicit user
   // request. `app.exit` is intentional here; cleanup was completed above.
@@ -893,6 +899,7 @@ app.whenReady().then(() =>
       migrateSourceSecrets()
       registerDatabaseIpcHandlers()
       registerScanIpcHandlers()
+      registerDuplicateFileIpcHandlers()
       registerPluginIpcHandlers()
       registerNetworkSourceIpcHandlers()
       registerSourceCallIpcHandlers()
@@ -1295,6 +1302,7 @@ app.whenReady().then(() =>
         return { success: true }
       })
       createWindow()
+      restoreDuplicateScanTask()
 
       // Initialize audio engine after window is created
       audioEngine = new AudioEngineManager()
@@ -1314,6 +1322,7 @@ app.whenReady().then(() =>
         // activated; only create a replacement when no window exists at all.
         if (BrowserWindow.getAllWindows().length === 0) {
           createWindow()
+          restoreDuplicateScanTask()
           // Audio IPC uses a window getter and survives renderer replacement.
         } else {
           showMainWindow()
@@ -1342,6 +1351,7 @@ app.on('will-quit', () => {
   globalShortcut.unregisterAll()
   audioEngine?.flushDspSettings()
   searchIndexService?.stop()
+  stopDuplicateScans()
   stopLibraryAutoImport()
   shutdownPlugins()
   closeDatabase()

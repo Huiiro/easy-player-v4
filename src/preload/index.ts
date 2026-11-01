@@ -1,6 +1,16 @@
 import type { RemoteConnection } from '../shared/remoteSources'
 import type { LibraryAutoImportEvent } from '../shared/libraryAutoImport'
 import type {
+  DuplicateFileReport,
+  DuplicateScanOptions,
+  DuplicateFileProgress,
+  DuplicateFileResponse,
+  DuplicateCleanupRequest,
+  DuplicateCleanupResult,
+  DuplicateTaskState,
+  DuplicateTaskDetails
+} from '../shared/duplicateFiles'
+import type {
   AutoMixRuntimeStatus,
   AutoMixStemCacheInfo,
   AutoMixStemCacheResult
@@ -312,6 +322,51 @@ const downloadsAPI = {
 }
 
 const libraryAPI = {
+  getDuplicateTaskState: (): Promise<DuplicateTaskState | null> =>
+    ipcRenderer.invoke('library:duplicate-task-state'),
+  getDuplicateTaskDetails: (): Promise<DuplicateTaskDetails> =>
+    ipcRenderer.invoke('library:duplicate-task-details'),
+  startDuplicateTask: (
+    options?: DuplicateScanOptions
+  ): Promise<DuplicateFileResponse<DuplicateTaskState>> =>
+    ipcRenderer.invoke('library:start-duplicate-task', options),
+  resumeDuplicateTask: (): Promise<DuplicateFileResponse<DuplicateTaskState>> =>
+    ipcRenderer.invoke('library:resume-duplicate-task'),
+  pauseDuplicateTask: (): Promise<DuplicateFileResponse<boolean>> =>
+    ipcRenderer.invoke('library:pause-duplicate-task'),
+  saveDuplicateSelection: (
+    reportId: string,
+    retainedIds: number[]
+  ): Promise<DuplicateFileResponse<boolean>> =>
+    ipcRenderer.invoke('library:save-duplicate-selection', reportId, retainedIds),
+  onDuplicateTask: (callback: (state: DuplicateTaskState | null) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: DuplicateTaskState | null): void =>
+      callback(state)
+    ipcRenderer.on('library:duplicate-task', handler)
+    return () => ipcRenderer.removeListener('library:duplicate-task', handler)
+  },
+  detectDuplicateFiles: (
+    options?: DuplicateScanOptions
+  ): Promise<DuplicateFileResponse<DuplicateFileReport>> =>
+    ipcRenderer.invoke('library:detect-duplicates', options),
+  clearDuplicateCache: (): Promise<DuplicateFileResponse<boolean>> =>
+    ipcRenderer.invoke('library:clear-duplicate-cache'),
+  cancelDuplicateScan: (): Promise<void> => ipcRenderer.invoke('library:cancel-duplicate-scan'),
+  exportDuplicateReport: (
+    reportId: string,
+    language?: 'zh' | 'en'
+  ): Promise<DuplicateFileResponse<boolean>> =>
+    ipcRenderer.invoke('library:export-duplicate-report', reportId, language),
+  cleanDuplicateFiles: (
+    request: DuplicateCleanupRequest
+  ): Promise<DuplicateFileResponse<DuplicateCleanupResult>> =>
+    ipcRenderer.invoke('library:clean-duplicates', request),
+  onDuplicateProgress: (callback: (progress: DuplicateFileProgress) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: DuplicateFileProgress): void =>
+      callback(progress)
+    ipcRenderer.on('library:duplicate-progress', handler)
+    return () => ipcRenderer.removeListener('library:duplicate-progress', handler)
+  },
   configureAutoImport: (enabled: boolean, ignoreShortSongs: boolean): Promise<void> =>
     ipcRenderer.invoke('library:configure-auto-import', { enabled, ignoreShortSongs }),
   onAutoImported: (callback: (event: LibraryAutoImportEvent) => void): (() => void) => {

@@ -15,7 +15,7 @@ if (process.arch !== arch)
   )
 const require = createRequire(import.meta.url)
 const env = { ...process.env, EASY_PLAYER_NATIVE_ARCH: arch, MACOSX_DEPLOYMENT_TARGET: '12.0' }
-for (const script of ['prepare:ytdlp', 'build:native', 'build']) {
+for (const script of ['prepare:ytdlp', 'prepare:fpcalc', 'build:native', 'build']) {
   const result = spawnSync(process.execPath, [process.env.npm_execpath, 'run', script], {
     env,
     stdio: 'inherit'

@@ -33,10 +33,12 @@ app.whenReady().then(async () => {
           import AudioOutputSettings from './src/renderer/src/components/player/AudioOutputSettings.vue';
           import ImpulseResponseEditor from './src/renderer/src/components/player/ImpulseResponseEditor.vue';
           import LibrarySettings from './src/renderer/src/components/settings/LibrarySettings.vue';
+          import DuplicateTaskHost from './src/renderer/src/components/scan/DuplicateTaskHost.vue';
           import GlobalNotifications from './src/renderer/src/components/ui/GlobalNotifications.vue';
+          import zh from './src/renderer/src/i18n/locales/zh';
           import eventBus from './src/renderer/src/utils/eventBus';
           import SongDetailsDialog from './src/renderer/src/components/songlist/SongDetailsDialog.vue';
-          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, eventBus };`,
+          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus, zh };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -75,7 +77,18 @@ app.whenReady().then(async () => {
             }))
             build.onLoad({ filter: /\.vue$/ }, ({ path: filename }) => {
               const { descriptor } = parse(fs.readFileSync(filename, 'utf8'), { filename })
-              descriptor.styles.forEach((style) => sfcStyles.push(style.content))
+              descriptor.styles.forEach((style) =>
+                sfcStyles.push(
+                  style.src
+                    ? fs.readFileSync(
+                        style.src.startsWith('@/')
+                          ? path.resolve('src/renderer/src', style.src.slice(2))
+                          : path.resolve(path.dirname(filename), style.src),
+                        'utf8'
+                      )
+                    : style.content
+                )
+              )
               return {
                 contents: compileScript(descriptor, { id: filename, inlineTemplate: true }).content,
                 loader: 'ts',
@@ -111,7 +124,7 @@ app.whenReady().then(async () => {
       `const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)}; document.head.append(style);`
     )
     const results = await window.webContents.executeJavaScript(`(async () => {
-      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, eventBus } = Checks;
+      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus } = Checks;
       const { createApp, h, reactive, nextTick, onMounted, onActivated } = Vue;
       const results = [];
       function check(value, message) { if (!value) throw new Error(message); results.push(message); }
@@ -433,10 +446,366 @@ app.whenReady().then(async () => {
       detailsState.open=true;await wait();
       check(document.body.textContent.includes('Singer A;Singer B') && document.body.textContent.includes('POP,rock'),'disabling the shared switch restores both original separator styles');
       check(metadataFixture.artist==='Singer A;Singer B' && metadataFixture.genre==='POP,rock','display normalization preserves original song metadata');
+      detailsState.open=false;await wait(300);
+      let duplicateScans=0,duplicateExports=0,duplicateCleanups=[],duplicateProgressListener,duplicateCacheClears=0,duplicateScanOptions=[],duplicateDeferred=false,duplicateRelease;
+      let duplicateTask=null, duplicateReport=null, duplicateRetained=null, duplicateCancels=0, duplicateDetailReads=0, duplicateExportLanguage;
+      const duplicateListeners=new Set();
+      const publishDuplicate=()=>duplicateListeners.forEach(callback=>callback(structuredClone(duplicateTask)));
+      duplicateProgressListener=progress=>{duplicateTask.progress=progress;duplicateTask.revision++;publishDuplicate()};
+      let duplicateHostApp, duplicateVisual=false;
+      const mountDuplicateHost=async()=>{
+        duplicateHostApp?.unmount();
+        document.querySelector('#duplicate-host')?.remove();
+        const host=document.createElement('div');host.id='duplicate-host';document.body.append(host);
+        duplicateHostApp=createApp(DuplicateTaskHost);
+        duplicateHostApp.use(createI18n({legacy:false,locale:duplicateVisual?'zh':'en',missingWarn:false,fallbackWarn:false,messages:duplicateVisual?{zh:Checks.zh}:{en:{common:{close:'Close',cancel:'Cancel'}}}}));
+        duplicateHostApp.mount(host);await wait();
+      };
+      try {
+      const duplicateEntry=(id,audio)=>({id,audio,title:'Duplicate title',artist:'Artist',album:'Album',duration:120,format:'FLAC',bitrate:900,sampleRate:44100,bitDepth:16,size:2048,mtimeMs:100});
+      const duplicateFixture={id:'report-1',createdAt:'2026-10-31T01:00:00.000Z',scanned:3,hashed:2,extraFiles:1,extraBytes:2048,exactGroups:1,similarGroups:0,skipped:[{path:'missing.flac',reason:'unavailable'}],groups:[{id:'group-1',kind:'exact',durationSpread:0,hash:'a'.repeat(64),files:[duplicateEntry(101,'C:/music/original.flac'),duplicateEntry(102,'C:/music/copy.flac')]}]};
+      window.__uiPlayer={queue:[{id:101},{id:102}],removeQueueItem:async index=>window.__uiPlayer.queue.splice(index,1)};
+      window.api.library={
+        onDuplicateTask:callback=>{duplicateListeners.add(callback);return()=>duplicateListeners.delete(callback)},
+        getDuplicateTaskState:async()=>structuredClone(duplicateTask),
+        getDuplicateTaskDetails:async()=>{duplicateDetailReads++;return structuredClone({task:duplicateTask,report:duplicateReport,retainedIds:duplicateRetained})},
+        saveDuplicateSelection:async(id,ids)=>{duplicateRetained=[...ids];duplicateTask.revision++;publishDuplicate();return {success:true,data:true}},
+        startDuplicateTask:async options=>{
+          duplicateScanOptions.push(options);duplicateScans++;duplicateReport=null;duplicateRetained=null;
+          duplicateTask={id:'task-'+duplicateScans,revision:1,status:'running',options,progress:null};
+          publishDuplicate();duplicateProgressListener({phase:'hashing',current:2,total:2});
+          const finish=()=>{duplicateReport=structuredClone(duplicateFixture);duplicateTask.status='completed';duplicateTask.reportId=duplicateReport.id;duplicateTask.groupCount=1;duplicateTask.revision++;publishDuplicate()};
+          if(duplicateDeferred){duplicateDeferred=false;duplicateRelease=finish}else setTimeout(finish,0);
+          return {success:true,data:structuredClone(duplicateTask)};
+        },
+        pauseDuplicateTask:async()=>{duplicateTask.status='paused';duplicateTask.revision++;publishDuplicate();return {success:true,data:true}},
+        resumeDuplicateTask:async()=>{duplicateTask.status='running';duplicateTask.revision++;publishDuplicate();return {success:true,data:structuredClone(duplicateTask)}},
+        clearDuplicateCache:async()=>{duplicateCacheClears++;return {success:true,data:true}},
+        cancelDuplicateScan:async()=>{duplicateCancels++},
+        exportDuplicateReport:async(id,language)=>{duplicateExportLanguage=language;duplicateExports++;return {success:id==='report-1',data:true}},
+        cleanDuplicateFiles:async request=>{duplicateCleanups.push(request);duplicateTask=null;duplicateReport=null;duplicateRetained=null;publishDuplicate();return {success:true,data:{deletedIds:[...request.songIds],deletedFiles:request.deleteLocalFiles?request.songIds.length:0,failedFiles:[]}}}
+      };
+      await mountDuplicateHost();
+      const duplicateRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent==='duplicates.title');
+      check(!!duplicateRow,'library maintenance exposes duplicate detection entry');
+      duplicateRow.querySelector('button').click();await wait(350);
+      const findDuplicateButton=key=>[...document.querySelectorAll('.ep-dialog-panel button')].find(button=>button.textContent.trim()===key);
+      const chooseDuplicateCopy=async index=>{if(findDuplicateButton('duplicates.uncheckGroup'))findDuplicateButton('duplicates.uncheckGroup').click();await wait();[...document.querySelectorAll('table input[type=checkbox]')].filter((_,i)=>i!==index).forEach(input=>input.click());await wait();};
+      check(duplicateScans===1 && duplicateCleanups.length===0,'duplicate detection opens a read-only report without cleanup');
+      const reportHelp=document.querySelector('.duplicate-dialog .ep-dialog-header .ep-popover-trigger');
+      check(!!reportHelp && !document.querySelector('.duplicate-dialog .ep-dialog-body').textContent.includes('duplicates.readOnly'),'report guidance is tucked into the title instead of occupying a body row');
+      const helpRect=reportHelp.getBoundingClientRect(), helpIconRect=reportHelp.querySelector('svg').getBoundingClientRect(), reportTitleRect=document.querySelector('.duplicate-dialog .ep-dialog-title').getBoundingClientRect();
+      check(helpRect.width===24 && helpRect.height===24 && Math.abs(helpIconRect.top+helpIconRect.height/2-(reportTitleRect.top+reportTitleRect.height/2))<1,'title help icon is centered with the heading in a full 24px target');
+      for(const y of [helpRect.top+2,helpRect.top+helpRect.height/2,helpRect.bottom-2]){
+        const hit=document.elementFromPoint(helpRect.left+helpRect.width/2,y);
+        check(hit===reportHelp || reportHelp.contains(hit),'the title help target receives pointers at its top, middle and bottom');
+      }
+
+      reportHelp.dispatchEvent(new PointerEvent('pointerenter'));await wait();
+      check(document.querySelector('.ep-popover')?.textContent.includes('duplicates.readOnly'),'hovering the title info icon displays cleanup guidance');
+      check(['paddingTop','paddingRight','paddingBottom','paddingLeft'].every(side=>parseFloat(getComputedStyle(document.querySelector('.ep-popover'))[side])===8),'title guidance uses compact 8px padding');
+      reportHelp.dispatchEvent(new PointerEvent('pointerleave'));await wait(400);
+      check(!document.querySelector('.ep-popover'),'title guidance closes when the pointer leaves');
+      reportHelp.focus();reportHelp.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await wait();
+      check(document.querySelector('.ep-popover')?.textContent.includes('duplicates.readOnly'),'title guidance can also be opened from the keyboard');
+      reportHelp.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait(300);
+      check(!!document.querySelector('.duplicate-dialog') && !document.querySelector('.ep-popover'),'Escape closes title guidance without closing the report');
+
+      check(!document.querySelector('.duplicate-file-name').textContent.includes('KiB') && document.querySelector('.duplicate-file-quality').textContent.includes('KiB'),'file sizes appear with audio quality rather than the filename');
+      check(document.querySelectorAll('.duplicate-settings .ep-switch').length===2 && document.querySelectorAll('.duplicate-settings .ep-select').length===2 && document.querySelector('.duplicate-dialog .ep-dialog-footer .ep-button--danger'),'duplicate report reuses shared switches, selectors and button variants');
+      check(document.body.textContent.includes('C:/music/original.flac') && document.body.textContent.includes('C:/music/copy.flac'),'comparison report displays complete file paths');
+      check([...document.querySelectorAll('table input[type=checkbox]')].every(input=>!input.checked) && findDuplicateButton('duplicates.cleanSelected').disabled,'duplicate report defaults to no cleanup selections');
+      findDuplicateButton('duplicates.checkGroup').click();await wait();
+      check(!document.querySelectorAll('table input[type=checkbox]')[0].checked && document.querySelectorAll('table input[type=checkbox]')[0].disabled && document.querySelectorAll('table input[type=checkbox]')[1].checked && !!findDuplicateButton('duplicates.uncheckGroup'),'group check selects extra copies while protecting the first copy');
+      findDuplicateButton('duplicates.uncheckGroup').click();await wait();
+      check([...document.querySelectorAll('table input[type=checkbox]')].every(input=>!input.checked),'group uncheck clears every selected cleanup candidate');
+      const detailReadsBeforeSelection=duplicateDetailReads;
+      await chooseDuplicateCopy(0);
+      let duplicateCheckboxes=[...document.querySelectorAll('table input[type=checkbox]')];
+      check(!duplicateCheckboxes[0].checked && duplicateCheckboxes[0].disabled && duplicateCheckboxes[1].checked,'checked files are cleanup candidates and the remaining unchecked copy cannot be selected');
+      check(duplicateDetailReads===detailReadsBeforeSelection,'saving retention choices does not reload the full comparison report');
+      check(document.querySelectorAll('table tbody tr')[0].textContent.includes('duplicates.retained') && document.querySelectorAll('table tbody tr')[1].textContent.includes('duplicates.pendingCleanup'),'each file explicitly displays retained or pending cleanup state');
+      findDuplicateButton('duplicates.keepAndClose').click();await wait(300);duplicateRow.querySelector('button').click();await wait(300);
+      duplicateCheckboxes=[...document.querySelectorAll('table input[type=checkbox]')];
+      check(duplicateScans===1 && !duplicateCheckboxes[0].checked && duplicateCheckboxes[1].checked,'closing and reopening a report preserves retention choices');
+      findDuplicateButton('duplicates.keepAndClose').click();await wait(300);
+      await mountDuplicateHost();eventBus.emit('openDuplicateReport');await wait(350);
+      duplicateCheckboxes=[...document.querySelectorAll('table input[type=checkbox]')];
+      check(duplicateScans===1 && !duplicateCheckboxes[0].checked && duplicateCheckboxes[1].checked,'recreating the global report host restores the saved report and retention choices');
+      findDuplicateButton('duplicates.uncheckGroup').click();await wait();
+      check(duplicateCheckboxes.every(input=>!input.checked),'clearing the group unchecks every cleanup candidate');
+      findDuplicateButton('duplicates.export').click();await wait();
+      check(duplicateExports===1 && duplicateCleanups.length===0 && duplicateExportLanguage==='en','export sends the active UI language without cleaning files');
+      await chooseDuplicateCopy(0);findDuplicateButton('duplicates.cleanSelected').click();await wait();
+      let cleanupConfirmation=document.querySelector('[role=group][aria-label="duplicates.confirmTitle"]');
+      check(!!cleanupConfirmation && cleanupConfirmation.querySelector('[role=switch]').getAttribute('aria-checked')==='false' && duplicateCleanups.length===0,'cleanup requires confirmation and defaults to library-only removal');
+      check(cleanupConfirmation.querySelector('li')?.textContent.includes('Duplicate title') && cleanupConfirmation.querySelector('li')?.textContent.includes('C:/music/copy.flac') && !cleanupConfirmation.querySelector('ul').textContent.includes('original.flac'),'cleanup confirmation lists only the selected songs and their paths');
+      [...cleanupConfirmation.querySelectorAll('button')].find(button=>button.textContent.trim()==='Cancel').click();await wait();
+      check(duplicateCleanups.length===0,'cancelling duplicate cleanup leaves all files untouched');
+      findDuplicateButton('duplicates.cleanSelected').click();await wait();findDuplicateButton('duplicates.confirmClean').click();await wait();
+      check(duplicateCleanups.length===1 && duplicateCleanups[0].deleteLocalFiles===false && duplicateCleanups[0].songIds.join(',')==='102','default confirmed cleanup removes only the selected duplicate library entry');
+      check(window.__uiPlayer.queue.length===1 && window.__uiPlayer.queue[0].id===101,'duplicate cleanup removes selected entries from the play queue');
+      findDuplicateButton('duplicates.rescan').click();await wait();await chooseDuplicateCopy(0);findDuplicateButton('duplicates.cleanSelected').click();await wait();
+      cleanupConfirmation=document.querySelector('[role=group][aria-label="duplicates.confirmTitle"]');
+      cleanupConfirmation.querySelector('[role=switch]').click();await wait();findDuplicateButton('duplicates.confirmClean').click();await wait();
+      check(duplicateCleanups.length===2 && duplicateCleanups[1].deleteLocalFiles===true,'deleting local duplicate files requires explicit opt-in and confirmation');
+      duplicateFixture.exactGroups=0;duplicateFixture.similarGroups=1;
+      Object.assign(duplicateFixture.groups[0],{kind:'similar',hash:undefined,durationSpread:2});
+      findDuplicateButton('duplicates.rescan').click();await wait();
+      check(document.body.textContent.includes('duplicates.similar') && document.body.textContent.includes('duplicates.similarReason'),'nonidentical song candidates show their similarity basis and manual-review label');
+      await chooseDuplicateCopy(1);
+      duplicateCheckboxes=[...document.querySelectorAll('table input[type=checkbox]')];
+      check(duplicateCheckboxes[0].checked && !duplicateCheckboxes[1].checked && duplicateCheckboxes[1].disabled,'checking the first file cleans only that file and leaves the second unchecked and protected');
+      findDuplicateButton('duplicates.cleanSelected').click();await wait();
+      cleanupConfirmation=document.querySelector('[role=group][aria-label="duplicates.confirmTitle"]');
+      check(cleanupConfirmation.textContent.includes('duplicates.similarConfirm'),'cleanup confirmation identifies selections containing merely similar songs');
+      findDuplicateButton('duplicates.confirmClean').click();await wait();
+      check(duplicateCleanups.length===3 && duplicateCleanups[2].songIds.join(',')==='101' && duplicateCleanups[2].deleteLocalFiles===false,'retained IDs are never submitted for cleanup even when keeping an alternative similar version');
+      document.querySelector('.duplicate-settings').open=true;
+      const duplicateOption=key=>document.querySelector('.ep-dialog-panel [role=switch][aria-label="'+key+'"]');
+      check(duplicateOption('duplicates.deepScan').getAttribute('aria-checked')==='false' && duplicateScanOptions[0].deep===false,'audio fingerprinting is optional and quick scans remain the default');
+      const sampleLengthSelect=document.querySelector('button[aria-label="duplicates.sampleLength"]');
+      check(sampleLengthSelect?.textContent.includes('duplicates.sample60') && sampleLengthSelect.disabled,'fingerprint sample length defaults to 60 seconds and is inactive for quick scans');
+      const concurrencySelect=document.querySelector('button[aria-label="duplicates.concurrency"]');
+      check(concurrencySelect?.textContent.includes('duplicates.concurrency2') && concurrencySelect.disabled,'fingerprint concurrency defaults to two jobs and is inactive for quick scans');
+      duplicateOption('duplicates.deepScan').click();duplicateOption('duplicates.forceScan').click();await wait();
+      Object.assign(duplicateFixture,{mode:'deep',sampleSeconds:60,matchingStats:{candidatePairs:511,comparisons:500,reusedPairs:11},timings:{checkingMs:10,hashingMs:20,fingerprintMs:30,matchingMs:10,totalMs:70},fingerprinted:2,audioGroups:1,similarGroups:0,cacheHits:{sha256:2,fingerprint:2,matches:1,report:0}});
+      Object.assign(duplicateFixture.groups[0],{kind:'audio',audioMatch:{score:0.96,coverage:0.95,offsetSeconds:0.3}});
+      findDuplicateButton('duplicates.rescan').click();await wait();
+      check(duplicateScanOptions.at(-1).deep===true && duplicateScanOptions.at(-1).force===true,'deep mode and force-recompute options reach the scanning API');
+      check(duplicateScanOptions.at(-1).concurrency===2 && !concurrencySelect.disabled,'default two-job concurrency reaches the deep scanning API');
+      duplicateFixture.fingerprintWarnings=[{path:'C:/music/recovered.flac',reason:'decodeWarning',exitCode:3,stderr:'invalid frame'}];duplicateFixture.fingerprintSkipped=['C:/music/broken.flac'];duplicateFixture.fingerprintFailures=[{path:'C:/music/broken.flac',reason:'decodeFailed',exitCode:1,stderr:'Decoder failed: invalid audio'}];
+      findDuplicateButton('duplicates.rescan').click();await wait();
+      document.querySelector('.duplicate-report-details').click();await wait();
+      check(document.body.textContent.includes('Usable fingerprint retained') && document.body.textContent.includes('C:/music/recovered.flac'),'usable extraction warnings remain visible separately from failed fingerprints');
+      check(document.body.textContent.includes('Audio decoding or extraction failed') && document.body.textContent.includes('Decoder failed: invalid audio'),'report details show the fingerprint failure category and raw diagnostic');
+      check(duplicateScanOptions.at(-1).sampleSeconds===60 && document.body.textContent.includes('duplicates.scanTimings'),'60-second scans send their extraction limit and show per-stage timings');
+      check(document.body.textContent.includes('duplicates.audioEvidence') && document.body.textContent.includes('duplicates.cacheSummary'),'deep reports expose audio-match evidence and cache reuse');
+      findDuplicateButton('duplicates.clearCache').click();await wait();
+      check(duplicateCacheClears===1 && duplicateCleanups.length===3,'clearing analysis cache does not clean library entries or files');
+      document.querySelector('.duplicate-settings').open=true;
+      sampleLengthSelect.click();await wait();[...document.querySelectorAll('[role=option]')].find(option=>option.textContent.includes('duplicates.sample120')).click();await wait();
+      findDuplicateButton('duplicates.rescan').click();await wait();
+      check(duplicateScanOptions.at(-1).sampleSeconds===120,'the optional 120-second analysis limit reaches the scanning API');
+      for (const count of [1,4]) {
+        document.querySelector('.duplicate-settings').open=true;
+        concurrencySelect.click();await wait();[...document.querySelectorAll('[role=option]')].find(option=>option.textContent.includes('duplicates.concurrency'+count)).click();await wait();
+        findDuplicateButton('duplicates.rescan').click();await wait();
+        check(duplicateScanOptions.at(-1).concurrency===count,'selected '+count+'-job fingerprint concurrency reaches the scanning API');
+      }
+      duplicateDeferred=true;findDuplicateButton('duplicates.rescan').click();await wait();
+      duplicateProgressListener({phase:'checking',current:12,total:100,activeChecks:8,currentPath:'C:/music/slow-path.flac'});await wait();
+      check(document.body.textContent.includes('duplicates.checkingActive') && document.body.textContent.includes('C:/music/slow-path.flac'),'file checks display bounded parallel activity and the outstanding path');
+      duplicateProgressListener({phase:'checking',current:12,total:100,activeChecks:0,waitingForPlayback:true});await wait();
+      check(document.body.textContent.includes('duplicates.checkingPaused'),'file checks distinguish playback-mode suspension from slow I/O');
+      duplicateProgressListener({phase:'indexing',current:15,total:100});await wait();
+      check(document.body.textContent.includes('duplicates.indexing'),'deep scans display candidate-index construction progress');
+      duplicateProgressListener({phase:'matching',current:20,total:100,comparedPairs:128});await wait();
+      check(document.body.textContent.includes('duplicates.comparedPairs'),'deep scans display candidate-pair processing while comparisons run');
+      findDuplicateButton('duplicates.runInBackground').click();await wait(300);
+      check(duplicateTask.status==='running' && duplicateCancels===0 && !!document.querySelector('[aria-label="duplicates.openTask"]'),'closing the report keeps scanning and exposes a global task entry');
+      await mountDuplicateHost();eventBus.emit('openDuplicateReport');await wait(350);
+      check(duplicateScans>1 && document.body.textContent.includes('duplicates.comparedPairs'),'reopening from a recreated host recovers the in-flight progress');
+      const scansBeforeResume=duplicateScans;
+      findDuplicateButton('duplicates.pause').click();await wait();
+      check(duplicateTask.status==='paused' && !!findDuplicateButton('duplicates.resume'),'a running scan can be paused without discarding the task');
+      findDuplicateButton('duplicates.resume').click();await wait();
+      check(duplicateTask.status==='running' && duplicateScans===scansBeforeResume,'resume continues the same scan task');
+      duplicateRelease();await wait();
+      document.querySelector('.duplicate-report-details').click();await wait();
+      check(document.body.textContent.includes('duplicates.matchingWork'),'reports distinguish candidate count, new comparisons and reused results');
+      findDuplicateButton('duplicates.keepAndClose').click();await wait(300);
+      await mountDuplicateHost();eventBus.emit('openDuplicateReport');await wait(350);
+      check(duplicateOption('duplicates.deepScan').getAttribute('aria-checked')==='true' && document.querySelector('button[aria-label="duplicates.sampleLength"]').textContent.includes('duplicates.sample120') && document.querySelector('button[aria-label="duplicates.concurrency"]').textContent.includes('duplicates.concurrency4'),'reopening a completed task restores its saved deep-scan options');
+      findDuplicateButton('duplicates.keepAndClose').click();await wait(300);
+      check(!document.querySelector('.duplicate-task-entry'),'closing an already viewed completed report does not restore its notice');
+      await mountDuplicateHost();
+      check(!document.querySelector('.duplicate-task-entry') && !document.querySelector('.duplicate-dialog'),'startup restores an old completed report silently');
+      const emitNewCompletion=async()=>{duplicateTask.status='running';duplicateTask.revision++;publishDuplicate();await wait();duplicateTask.status='completed';duplicateTask.revision++;publishDuplicate();await wait();};
+      await emitNewCompletion();
+      check(!!document.querySelector('.duplicate-task-entry'),'a scan completing in this session still shows a notification');
+      document.querySelector('.duplicate-task-entry [title="duplicates.openTask"]').click();await wait(350);
+      check(!!document.querySelector('.duplicate-dialog') && !document.querySelector('.duplicate-task-entry'),'the view arrow opens the completed report and acknowledges its notice');
+      findDuplicateButton('duplicates.keepAndClose').click();await wait(300);
+      duplicateTask.revision++;publishDuplicate();await wait();
+      check(!document.querySelector('.duplicate-task-entry'),'an acknowledged completion notice stays closed after leaving the report and receiving task updates');
+      await mountDuplicateHost();
+      check(!document.querySelector('.duplicate-task-entry'),'restarting after viewing completion does not restore the notice');
+      await emitNewCompletion();
+      check(!!document.querySelector('.duplicate-task-entry'),'completed scans expose a reopenable report notice');
+      const completedReportId=duplicateReport.id;
+      document.querySelector('[aria-label="duplicates.dismissTask"]').click();await wait();
+      check(!document.querySelector('.duplicate-task-entry') && duplicateReport.id===completedReportId && duplicateTask.status==='completed' && duplicateCancels===0 && !document.querySelector('.duplicate-dialog'),'dismissing a completed notice hides only the notice and never opens, cancels or removes its report');
+      duplicateTask.revision++;publishDuplicate();await wait();
+      check(!document.querySelector('.duplicate-task-entry'),'updates to the same completed task do not resurrect a dismissed notice');
+      eventBus.emit('openDuplicateReport');await wait(350);
+      check(!!document.querySelector('.duplicate-dialog') && duplicateReport.id===completedReportId,'settings can reopen the saved report after its notice is dismissed');
+      check(!findDuplicateButton('duplicates.keepThis'),'file rows use retention checkboxes without a redundant keep-this button');
+      const detailsToggle=document.querySelector('.duplicate-report-details'), detailsRect=detailsToggle.getBoundingClientRect(), detailsToolbarTop=detailsToggle.closest('.duplicate-report-meta').getBoundingClientRect().top;
+      detailsToggle.click();await wait();
+      const expandedRect=detailsToggle.getBoundingClientRect();
+      check(Math.abs(expandedRect.right-detailsRect.right)<1 && Math.abs((expandedRect.top-detailsToggle.closest('.duplicate-report-meta').getBoundingClientRect().top)-(detailsRect.top-detailsToolbarTop))<1,'expanding cache details keeps its trigger on the same row and position');
+      check(detailsToggle.getAttribute('aria-expanded')==='true' && !!document.getElementById(detailsToggle.getAttribute('aria-controls')),'cache details expose an accessible full-width panel below the toolbar');
+      detailsToggle.click();await wait();
+      const paginationGroups=structuredClone(duplicateFixture.groups);
+      duplicateFixture.groups=Array.from({length:25},(_,index)=>({...structuredClone(paginationGroups[0]),id:'paged-'+index,files:paginationGroups[0].files.map(file=>({...file,id:file.id+index*1000}))}));
+      findDuplicateButton('duplicates.rescan').click();await wait();
+      const reportBody=document.querySelector('.duplicate-dialog .ep-dialog-body');reportBody.scrollTop=reportBody.scrollHeight;
+      findDuplicateButton('duplicates.next').click();await wait();
+      check(reportBody.scrollTop===0 && document.querySelectorAll('.duplicate-group').length===5,'next page resets the report body to the top');
+      reportBody.scrollTop=reportBody.scrollHeight;findDuplicateButton('duplicates.previous').click();await wait();
+      check(reportBody.scrollTop===0 && document.querySelectorAll('.duplicate-group').length===20,'previous page also resets the report body to the top');
+      document.querySelectorAll('table input[type=checkbox]')[1].click();await wait();
+      findDuplicateButton('duplicates.next').click();await wait();
+      document.querySelectorAll('table input[type=checkbox]')[1].click();await wait();
+      findDuplicateButton('duplicates.cleanSelected').click();await wait();
+      findDuplicateButton('duplicates.resetSelection').click();await wait();
+      check(duplicateRetained.length===50 && [...document.querySelectorAll('table input[type=checkbox]')].every(input=>!input.checked) && findDuplicateButton('duplicates.cleanSelected').disabled && !document.querySelector('[aria-label="duplicates.confirmTitle"]'),'reset clears cleanup choices across all pages, persists all retained files and cancels confirmation');
+      findDuplicateButton('duplicates.previous').click();await wait();
+      check([...document.querySelectorAll('table input[type=checkbox]')].every(input=>!input.checked),'reset also leaves every file unchecked on the previous page');
+      duplicateFixture.groups=paginationGroups;
+      window.__duplicateUiPreview=async(kind='report')=>{
+        duplicateVisual=true;
+        const files=duplicateFixture.groups[0].files;
+        files[0].title='夜空中最亮的星';files[0].artist='逃跑计划';files[0].album='世界';files[0].audio='D:/Music/逃跑计划/世界/夜空中最亮的星.flac';
+        files[1].title='夜空中最亮的星';files[1].artist='逃跑计划';files[1].album='世界';files[1].format='MP3';files[1].bitrate=320;files[1].audio='D:/Music/导入备份/夜空中最亮的星.mp3';
+        duplicateFixture.scanned=1248;duplicateFixture.extraFiles=2;duplicateFixture.extraBytes=48926720;
+        duplicateFixture.groups=[duplicateFixture.groups[0],{id:'group-2',kind:'exact',hash:'a'.repeat(64),durationSpread:0,files:files.map((file,index)=>({...file,id:201+index,title:'平凡之路',artist:'朴树',album:'猎户星座',audio:'D:/Music/'+(index?'备份/':'')+'朴树/平凡之路.flac'}))}];
+        duplicateFixture.exactGroups=1;
+        duplicateTask={id:'preview',revision:1,status:'completed',reportId:duplicateFixture.id,groupCount:2,options:{deep:true,sampleSeconds:60,concurrency:2},progress:{phase:'matching',current:828,total:1248,comparedPairs:15360}};
+        duplicateReport=structuredClone(duplicateFixture);duplicateRetained=null;
+        if(kind==='running'||kind==='background'){duplicateTask.status='running';duplicateReport=null;}
+        await mountDuplicateHost();if(kind!=='completedNotice')eventBus.emit('openDuplicateReport');else {duplicateTask.status='running';publishDuplicate();duplicateTask.status='completed';publishDuplicate();}await wait(350);
+        if(kind==='settings')document.querySelector('.duplicate-settings').open=true;
+        if(kind==='details')document.querySelector('.duplicate-report-details').click();
+        if(kind==='help')document.querySelector('.duplicate-report-help .ep-popover-trigger').dispatchEvent(new PointerEvent('pointerenter'));
+        if(kind==='cleanup'){
+          document.querySelectorAll('table input[type=checkbox]')[1].click();await wait();
+          [...document.querySelectorAll('.ep-dialog-footer button')].find(button=>button.textContent.includes('清理')).click();await wait();
+        }
+        if(kind==='background'){[...document.querySelectorAll('.ep-dialog-footer button')].find(button=>button.textContent.trim()===Checks.zh.duplicates.runInBackground).click();await wait(300);}
+        await wait();
+      };
+      duplicateHostApp.unmount();
+      } catch (error) { throw new Error('Duplicate UI check after '+results.at(-1)+': '+error.message); }
       activeApp.unmount(); messages.clear(); return results;
     })()`)
     assert.ok(results.length >= 20)
     console.log(JSON.stringify({ passed: results.length, checks: results }, null, 2))
+    await window.webContents.executeJavaScript('window.__duplicateUiPreview("completedNotice")')
+    const noticeBefore = await window.webContents.executeJavaScript(
+      `getComputedStyle(document.querySelector('.duplicate-task-entry')).backgroundColor`
+    )
+    // Hidden windows cannot reliably receive OS pointer input. Apply Chromium's
+    // actual CSS hover state, including shared ghost-button styles.
+    window.webContents.debugger.attach('1.3')
+    try {
+      await window.webContents.debugger.sendCommand('DOM.enable')
+      await window.webContents.debugger.sendCommand('CSS.enable')
+      const { root } = await window.webContents.debugger.sendCommand('DOM.getDocument')
+      for (const selector of ['.duplicate-task-entry', '.duplicate-task-open']) {
+        const { nodeId } = await window.webContents.debugger.sendCommand('DOM.querySelector', {
+          nodeId: root.nodeId,
+          selector
+        })
+        await window.webContents.debugger.sendCommand('CSS.forcePseudoState', {
+          nodeId,
+          forcedPseudoClasses: ['hover']
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      const noticeHover = await window.webContents.executeJavaScript(`(()=>{
+        const entry=document.querySelector('.duplicate-task-entry');
+        return {background:getComputedStyle(entry).backgroundColor,buttonBackground:getComputedStyle(entry.querySelector('.duplicate-task-open')).backgroundColor};
+      })()`)
+      assert.equal(noticeHover.background, noticeBefore, 'hover preserves the notice surface')
+      assert.notEqual(
+        noticeHover.background,
+        'rgba(0, 0, 0, 0)',
+        'completed report notice has a visible background'
+      )
+      assert.equal(
+        noticeHover.buttonBackground,
+        'rgba(0, 0, 0, 0)',
+        'hover leaves the permanent card surface visible'
+      )
+      console.log(
+        'Completed notice hover check passed: stable background with Chromium hover state.'
+      )
+    } finally {
+      window.webContents.debugger.detach()
+    }
+    if (process.argv.includes('--duplicate-preview')) {
+      const symbols = [
+        'common/info',
+        'common/check',
+        'common/time',
+        'common/warning',
+        'arrow/arrow-down',
+        'arrow/arrow-right-light'
+      ]
+        .map((name) => {
+          const svg = fs.readFileSync(
+            path.join('src/renderer/src/assets/svg', name + '.svg'),
+            'utf8'
+          )
+          const viewBox = svg.match(/viewBox="([^"]+)"/)?.[1] || '0 0 24 24'
+          const content = svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>[\s\S]*$/, '')
+          return (
+            '<symbol id="icon-' +
+            name.replace('/', '-') +
+            '" viewBox="' +
+            viewBox +
+            '" fill="none">' +
+            content +
+            '</symbol>'
+          )
+        })
+        .join('')
+      for (const [name, width, height, dark, kind] of [
+        ['light', 1100, 840, false, 'report'],
+        ['dark', 1100, 840, true, 'report'],
+        ['details', 1100, 840, false, 'details'],
+        ['help', 1100, 840, false, 'help'],
+        ['narrow', 390, 844, false, 'report'],
+        ['settings', 390, 844, true, 'settings'],
+        ['running', 1100, 840, true, 'running'],
+        ['cleanup', 1100, 840, false, 'cleanup'],
+        ['background', 1100, 840, false, 'background']
+      ]) {
+        window.setContentSize(width, height)
+        await window.webContents.executeJavaScript(
+          'document.documentElement.classList.toggle("dark",' +
+            dark +
+            ');window.__duplicateUiPreview(' +
+            JSON.stringify(kind) +
+            ')'
+        )
+        await window.webContents.executeJavaScript(
+          'document.body.insertAdjacentHTML("afterbegin",' +
+            JSON.stringify('<svg style="display:none">' + symbols + '</svg>') +
+            ')'
+        )
+        const geometry = await window.webContents.executeJavaScript(`(()=>{
+          const panel=document.querySelector('.duplicate-dialog'), footer=panel?.querySelector('.ep-dialog-footer');
+          if(!panel)return {background:true};
+          const tables=[...panel.querySelectorAll('.duplicate-table')];if(innerWidth>=640 && tables.length>1){const widths=tables.map(table=>[...table.querySelectorAll('th')].map(cell=>cell.getBoundingClientRect().width));if(widths[0].some((width,index)=>Math.abs(width-widths[1][index])>1))throw Error('report column widths differ across groups');}
+          const rect=panel.getBoundingClientRect(), foot=footer.getBoundingClientRect(), body=panel.querySelector('.ep-dialog-body');
+          return {width:rect.width,height:rect.height,footerBottom:foot.bottom,overflow:body.scrollWidth-body.clientWidth,viewportHeight:innerHeight,outerScroll:panel.parentElement.scrollHeight-panel.parentElement.clientHeight};
+        })()`)
+        assert.ok(
+          geometry.background ||
+            (geometry.height <= height &&
+              geometry.footerBottom <= height &&
+              geometry.overflow <= 1 &&
+              geometry.outerScroll <= 1),
+          name + ' report fits viewport: ' + JSON.stringify(geometry)
+        )
+        const target = path.resolve('build/duplicate-ui-' + name + '.png')
+        fs.writeFileSync(target, (await window.webContents.capturePage()).toPNG())
+        console.log('Duplicate preview: ' + target + ' ' + JSON.stringify(geometry))
+      }
+    }
     await window.webContents.executeJavaScript(`(async()=>{
       const {Vue,UI,createI18n}=Checks;const {h,createApp}=Vue;
       document.body.innerHTML='<div id="showcase"></div>';

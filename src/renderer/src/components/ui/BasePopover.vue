@@ -19,6 +19,7 @@ const props = withDefaults(
     trigger?: 'click' | 'hover'
     placement?: FloatingSide
     width?: string
+    padding?: 'sm' | 'md'
     disabled?: boolean
     showArrow?: boolean
     offset?: number
@@ -28,6 +29,7 @@ const props = withDefaults(
     trigger: 'click',
     placement: 'bottom',
     width: 'w-64',
+    padding: 'md',
     disabled: false,
     showArrow: false,
     offset: 8,
@@ -154,8 +156,8 @@ defineExpose({ show, hide })
           v-if="open"
           :id="panelId"
           ref="contentElement"
-          class="ep-popover relative rounded-xl border shadow-xl p-4"
-          :class="width"
+          class="ep-popover relative rounded-xl border shadow-xl"
+          :class="[width, padding === 'sm' ? 'p-2' : 'p-4']"
           @pointerenter="cancelHide"
           @pointerleave="onPointerLeave"
           @keydown.esc="onEscape"

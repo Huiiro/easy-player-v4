@@ -64,6 +64,8 @@ win:
       to: 'native/easy_player_taskbar.exe'
     - from: 'resources/lib/yt-dlp/win/yt-dlp.exe'
       to: 'lib/yt-dlp/yt-dlp.exe'
+    - from: 'resources/lib/fpcalc/win32-x64/'
+      to: 'lib/fpcalc/'
     - from: 'resources/lib/yt-dlp/win/yt-dlp.exe.manifest.json'
       to: 'lib/yt-dlp/yt-dlp.manifest.json'
   # extraFiles targets the application directory, while extraResources targets resources/.
@@ -110,6 +112,8 @@ mac:
   extraResources:
     - from: 'build/native-addon/easy_player_native.node'
       to: 'native/easy_player_native.node'
+    - from: 'resources/lib/fpcalc/darwin-${arch}/'
+      to: 'lib/fpcalc/'
     - from: 'build/native-addon/deps/'
       to: 'native/deps/'
       filter:
@@ -134,6 +138,8 @@ dmg:
 linux:
   icon: resources/icons/easy-player.png
   extraResources:
+    - from: 'resources/lib/fpcalc/linux-${arch}/'
+      to: 'lib/fpcalc/'
     - from: 'resources/lib/yt-dlp/linux/${arch}/yt-dlp'
       to: 'lib/yt-dlp/yt-dlp'
     - from: 'resources/lib/yt-dlp/linux/${arch}/yt-dlp.manifest.json'
