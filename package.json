@@ -82,6 +82,7 @@
     "test:source-metadata:ui": "electron scripts/check-source-metadata.cjs",
     "test:song-lyrics": "node scripts/test-song-lyrics.mjs",
     "test:lyrics-manager": "electron scripts/check-lyrics-manager.cjs",
+    "test:desktop-lyrics-settings": "electron scripts/check-desktop-lyrics-settings.cjs",
     "test:lyrics-editor": "node scripts/test-lyric-editor.mjs && electron scripts/check-lyrics-editor.cjs",
     "test:builtin-plugins": "node scripts/test-builtin-plugins.mjs",
     "test:qqmusic-source": "node scripts/test-qqmusic-source.mjs",

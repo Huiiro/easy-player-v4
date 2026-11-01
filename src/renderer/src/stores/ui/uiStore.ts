@@ -511,8 +511,8 @@ export const useUIStore = defineStore(
     const musicSourceId = ref(0)
     const normalizeMetadataSeparator = ref(false)
     const ignoreShortSongs = ref(true)
-    const autoImportLocalMusic = ref(true)
-    const showAutoImportNotifications = ref(true)
+    const autoImportLocalMusic = ref(false)
+    const showAutoImportNotifications = ref(false)
     const albumGroupByName = ref(false)
     const artistSeparator = ref('/；;、')
     const genreSeparator = ref(DEFAULT_GENRE_SEPARATOR)
@@ -532,11 +532,11 @@ export const useUIStore = defineStore(
       fontSize: 34,
       activeColor: '#ffffff',
       inactiveColor: 'rgba(255, 255, 255, 0.58)',
-      fontBold: true,
-      glow: true,
+      fontBold: false,
+      glow: false,
       sweep: false,
-      showTranslation: true,
-      autoHideBackground: true,
+      showTranslation: false,
+      autoHideBackground: false,
       fontFamily: ''
     })
     // ========== 快捷键 ==========

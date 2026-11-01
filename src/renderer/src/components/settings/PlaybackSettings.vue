@@ -109,12 +109,6 @@ function setSmartShuffle(value: boolean | string | number): void {
         />
       </SettingRow>
       <SettingRow
-        :label="t('settings.reduceMotion')"
-        :description="t('settings.reduceMotionDescription')"
-      >
-        <BaseSwitch v-model="ui.reduceMotion" size="md" />
-      </SettingRow>
-      <SettingRow
         :label="t('settings.pauseAnimationsOnBlur')"
         :description="t('settings.pauseAnimationsOnBlurDescription')"
       >
@@ -123,6 +117,12 @@ function setSmartShuffle(value: boolean | string | number): void {
           :aria-label="t('settings.pauseAnimationsOnBlur')"
           size="md"
         />
+      </SettingRow>
+      <SettingRow
+        :label="t('settings.reduceMotion')"
+        :description="t('settings.reduceMotionDescription')"
+      >
+        <BaseSwitch v-model="ui.reduceMotion" size="md" />
       </SettingRow>
       <SettingRow
         :label="t('settings.extremePlayback')"

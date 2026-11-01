@@ -15,7 +15,7 @@ export { excludeAutoImportFiles } from '../database/repository/autoImport'
 const EXCLUDED_KEY = 'library.autoImportExcludedDirectories'
 const WATCHED_KEY = 'library.watchDirectories'
 const REMOVED_KEY = 'library.removedWatchDirectories'
-let enabled = true
+let enabled = false
 let ignoreShortSongs = true
 let watcher: MusicFolderWatcher | undefined
 

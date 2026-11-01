@@ -48,11 +48,17 @@ function reset(): void {
         <span>-</span>
         <span>{{ t('settings.localShortcuts') }}</span>
         <span>{{ t('settings.globalShortcuts') }}</span>
-        <template v-for="item in actions" :key="item.key">
+        <div
+          v-for="item in actions"
+          :key="item.key"
+          class="shortcut-binding-row setting-row-group"
+          role="group"
+          :aria-label="t(item.label)"
+        >
           <span class="action">{{ t(item.label) }}</span>
           <ShortcutInput :action="item.key" scope="local" />
           <ShortcutInput :action="item.key" scope="global" :disabled="!ui.useGlobalShortcutKeys" />
-        </template>
+        </div>
       </div>
     </SettingGroup>
     <!--    <p class="hint">{{ t('settings.shortcutSpecialKeys') }}</p>-->
@@ -85,12 +91,21 @@ function reset(): void {
   font-size: 0.75rem;
   text-align: center;
 }
-.shortcut-grid > .action {
+.shortcut-binding-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+.shortcut-binding-row > .action {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
   text-align: left;
   color: var(--color-text);
   font-size: 0.9rem;
 }
-.shortcut-grid > :nth-child(n + 4) {
+.shortcut-binding-row > * {
   min-height: 54px;
   padding: 0.65rem 1.25rem;
 }

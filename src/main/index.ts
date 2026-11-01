@@ -932,7 +932,7 @@ app.whenReady().then(() =>
       registerDownloadIpcHandlers()
       createTray()
       if (taskbarPlayback.state().available)
-        taskbarPlayback.setEnabled(getAppSetting('system.taskbar-controls') !== false)
+        taskbarPlayback.setEnabled(getAppSetting('system.taskbar-controls') === true)
       ipcMain.handle('system:get-taskbar-controls', () => ({
         success: true,
         data: taskbarPlayback.state()

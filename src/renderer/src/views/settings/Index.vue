@@ -223,16 +223,6 @@ onBeforeUnmount(() => {
                   <p>{{ t('settings.interfaceFontDescription') }}</p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <BaseSelect
-                    v-model="ui.customFontFamily"
-                    :options="fontOptions"
-                    :placeholder="t('settings.fontSystemDefault')"
-                    teleport
-                    class="w-64"
-                  />
-                  <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
-                    {{ t('settings.refreshFonts') }}
-                  </button>
                   <button
                     class="secondary-button text-nowrap"
                     type="button"
@@ -240,6 +230,16 @@ onBeforeUnmount(() => {
                   >
                     {{ t('settings.openFontDirectory') }}
                   </button>
+                  <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
+                    {{ t('settings.refreshFonts') }}
+                  </button>
+                  <BaseSelect
+                    v-model="ui.customFontFamily"
+                    :options="fontOptions"
+                    :placeholder="t('settings.fontSystemDefault')"
+                    teleport
+                    class="w-64"
+                  />
                 </div>
               </div>
               <div class="setting-row">

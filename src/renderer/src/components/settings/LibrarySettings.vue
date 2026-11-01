@@ -173,6 +173,17 @@ onBeforeUnmount(() => {
       />
     </SettingRow>
     <SettingRow
+      :label="t('settings.showAutoImportNotifications')"
+      :description="t('settings.showAutoImportNotificationsDescription')"
+    >
+      <BaseSwitch
+        v-model="ui.showAutoImportNotifications"
+        :aria-label="t('settings.showAutoImportNotifications')"
+        :disabled="!ui.autoImportLocalMusic"
+        size="md"
+      />
+    </SettingRow>
+    <SettingRow
       :label="t('settings.watchedFolders')"
       :description="t('settings.watchedFoldersDescription')"
     >
@@ -215,17 +226,6 @@ onBeforeUnmount(() => {
         </BaseButton>
       </div>
     </div>
-    <SettingRow
-      :label="t('settings.showAutoImportNotifications')"
-      :description="t('settings.showAutoImportNotificationsDescription')"
-    >
-      <BaseSwitch
-        v-model="ui.showAutoImportNotifications"
-        :aria-label="t('settings.showAutoImportNotifications')"
-        :disabled="!ui.autoImportLocalMusic"
-        size="md"
-      />
-    </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.importMusic')">
     <SettingRow

@@ -65,11 +65,11 @@ const state = ref<DesktopState>({
     fontSize: 34,
     activeColor: '#ffffff',
     inactiveColor: 'rgba(255, 255, 255, 0.58)',
-    fontBold: true,
-    glow: true,
+    fontBold: false,
+    glow: false,
     sweep: false,
-    showTranslation: true,
-    autoHideBackground: true,
+    showTranslation: false,
+    autoHideBackground: false,
     fontFamily: ''
   }
 })

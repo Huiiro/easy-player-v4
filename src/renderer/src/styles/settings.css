@@ -36,14 +36,15 @@
   padding: 1.1rem 1.25rem;
 }
 
-.settings-page :is(.setting-row, .slider-row, .custom-background-chrome) {
+.settings-page :is(.setting-row, .setting-row-group, .slider-row, .custom-background-chrome) {
   border-radius: 12px;
 }
 
 .settings-page
-  :is(.setting-row, .slider-row, .custom-background-chrome):not(
+  :is(.setting-row, .setting-row-group, .slider-row, .custom-background-chrome):not(
     .pointer-events-none,
-    .settings-card.muted *
+    .settings-card.muted *,
+    .setting-row-group .setting-row
   ):hover {
   background-color: color-mix(in srgb, var(--color-primary) 6%, transparent);
 }
