@@ -10,6 +10,7 @@
 
 namespace {
 constexpr UINT UpdateState = WM_APP + 1;
+constexpr UINT ProbeState = WM_APP + 2;
 struct State {
   bool playing = false, available = false, dark = true;
   std::wstring title = L"EasyPlayer", artist, album;
@@ -23,8 +24,12 @@ std::wstring informationTip;
 bool vertical = false;
 bool receivedState = false;
 bool probe = false;
+bool layingOut = false;
+int layoutUnit = 0;
+unsigned renderCount = 0, layoutCount = 0;
 int unit = 32;
 int informationWidth = 160;
+void renderStrip();
 
 std::wstring decode(const std::string& hex) {
   if (hex.size() % 2 || hex.size() > 4096) return L"";
@@ -63,12 +68,12 @@ void updateButtons() {
   infoTool.uId = reinterpret_cast<UINT_PTR>(information); infoTool.lpszText = informationTip.data();
   SendMessageW(tooltip, TTM_UPDATETIPTEXTW, 0, reinterpret_cast<LPARAM>(&infoTool));
   InvalidateRect(information, nullptr, TRUE);
-  InvalidateRect(strip, nullptr, TRUE);
+  renderStrip();
 }
 void paintButton(const DRAWITEMSTRUCT& item) {
   HDC dc = item.hDC;
   const RECT rect = item.rcItem;
-  const COLORREF background = state.dark ? RGB(32,32,32) : RGB(243,243,243);
+  const COLORREF background = state.dark ? RGB(0,0,0) : RGB(255,255,255);
   HBRUSH brush = CreateSolidBrush(background);
   FillRect(dc, &rect, brush);
   DeleteObject(brush);
@@ -108,7 +113,7 @@ void paintButton(const DRAWITEMSTRUCT& item) {
 void paintInformation(const DRAWITEMSTRUCT& item) {
   HDC dc = item.hDC;
   RECT rect = item.rcItem;
-  HBRUSH background = CreateSolidBrush(state.dark ? RGB(32,32,32) : RGB(243,243,243));
+  HBRUSH background = CreateSolidBrush(state.dark ? RGB(0,0,0) : RGB(255,255,255));
   FillRect(dc, &rect, background); DeleteObject(background);
   SetBkMode(dc, TRANSPARENT);
   const int padding = MulDiv(6, unit, 32);
@@ -119,12 +124,12 @@ void paintInformation(const DRAWITEMSTRUCT& item) {
     titleRect.bottom = rect.top + (rect.bottom-rect.top)*9/16;
     artistRect.top = titleRect.bottom;
   }
-  HFONT titleFont = CreateFontW(-MulDiv(11, unit, 32),0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+  HFONT titleFont = CreateFontW(-MulDiv(12, unit, 32),0,0,0,FW_MEDIUM,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,ANTIALIASED_QUALITY,DEFAULT_PITCH,L"Segoe UI");
   auto old = SelectObject(dc, titleFont);
   SetTextColor(dc, state.dark ? RGB(242,242,242) : RGB(32,32,32));
   DrawTextW(dc, state.title.c_str(), static_cast<int>(state.title.size()), &titleRect, DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
   if (!secondary.empty()) {
-    HFONT artistFont = CreateFontW(-MulDiv(10, unit, 32),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
+    HFONT artistFont = CreateFontW(-MulDiv(11, unit, 32),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
     SelectObject(dc, artistFont);
     SetTextColor(dc, state.dark ? RGB(175,175,175) : RGB(95,95,95));
     DrawTextW(dc, secondary.c_str(), static_cast<int>(secondary.size()), &artistRect, DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS|DT_NOPREFIX);
@@ -132,19 +137,72 @@ void paintInformation(const DRAWITEMSTRUCT& item) {
   }
   SelectObject(dc, old); DeleteObject(titleFont);
 }
+// Composite text and controls onto one alpha surface. A nearly invisible background
+// keeps the entire button rectangles clickable while showing the taskbar underneath.
+void renderStrip() {
+  if (!IsWindow(strip) || layingOut) return;
+  RECT client{}; GetClientRect(strip, &client);
+  const int width = client.right, height = client.bottom;
+  if (width <= 1 || height <= 1 || !IsWindow(information)) return;
+  HDC screen = GetDC(nullptr);
+  HDC dc = CreateCompatibleDC(screen);
+  BITMAPINFO bitmap{};
+  bitmap.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bitmap.bmiHeader.biWidth = width; bitmap.bmiHeader.biHeight = -height;
+  bitmap.bmiHeader.biPlanes = 1; bitmap.bmiHeader.biBitCount = 32;
+  bitmap.bmiHeader.biCompression = BI_RGB;
+  void* pixels = nullptr;
+  HBITMAP surface = CreateDIBSection(screen, &bitmap, DIB_RGB_COLORS, &pixels, nullptr, 0);
+  if (!dc || !surface) {
+    if (surface) DeleteObject(surface);
+    if (dc) DeleteDC(dc);
+    ReleaseDC(nullptr, screen); return;
+  }
+  auto oldBitmap = SelectObject(dc, surface);
+  HBRUSH background = CreateSolidBrush(state.dark ? RGB(0,0,0) : RGB(255,255,255));
+  FillRect(dc, &client, background); DeleteObject(background);
+  for (int i = 0; i < 4; ++i) {
+    HWND control = i == 3 ? information : buttons[i];
+    RECT bounds{}; GetWindowRect(control, &bounds);
+    MapWindowPoints(nullptr, strip, reinterpret_cast<POINT*>(&bounds), 2);
+    SetViewportOrgEx(dc, bounds.left, bounds.top, nullptr);
+    DRAWITEMSTRUCT item{}; item.hDC = dc; item.hwndItem = control;
+    item.CtlID = i == 3 ? 103 : 100+i;
+    item.rcItem = {0, 0, bounds.right-bounds.left, bounds.bottom-bounds.top};
+    if (i == 3) paintInformation(item);
+    else {
+      if (SendMessageW(control, BM_GETSTATE, 0, 0) & BST_PUSHED) item.itemState |= ODS_SELECTED;
+      paintButton(item);
+    }
+  }
+  SetViewportOrgEx(dc, 0, 0, nullptr);
+  GdiFlush(); // Complete batched drawing before reading the DIB pixels.
+  auto bytes = static_cast<unsigned char*>(pixels);
+  for (int i = 0; i < width*height; ++i) {
+    auto pixel = bytes + i*4;
+    const int coverage = state.dark ? std::max({pixel[0],pixel[1],pixel[2]}) :
+      255-std::min({pixel[0],pixel[1],pixel[2]});
+    // Grayscale coverage produces clean antialiased edges on transparent pixels.
+    pixel[0] = pixel[1] = pixel[2] = state.dark ? static_cast<unsigned char>(coverage) : 0;
+    pixel[3] = static_cast<unsigned char>(std::max(1, coverage));
+  }
+  SIZE size{width, height}; POINT source{};
+  BLENDFUNCTION blend{AC_SRC_OVER, 0, 255, AC_SRC_ALPHA};
+  const BOOL rendered = UpdateLayeredWindow(strip, screen, nullptr, &size, dc, &source, 0, &blend, ULW_ALPHA);
+  if (rendered) ++renderCount;
+  if (probe && !rendered) std::cerr << "render failed " << GetLastError() << std::endl;
+  SelectObject(dc, oldBitmap); DeleteObject(surface); DeleteDC(dc); ReleaseDC(nullptr, screen);
+}
 LRESULT CALLBACK stripProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
   switch (message) {
     case WM_MOUSEACTIVATE: return MA_NOACTIVATE;
-    case WM_ERASEBKGND: {
-      RECT rect; GetClientRect(window, &rect);
-      HBRUSH brush = CreateSolidBrush(state.dark ? RGB(32,32,32) : RGB(243,243,243));
-      FillRect(reinterpret_cast<HDC>(wp), &rect, brush); DeleteObject(brush);
-      return 1;
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+      PAINTSTRUCT paint{}; BeginPaint(window, &paint); EndPaint(window, &paint);
+      renderStrip(); return 0;
     }
     case WM_DRAWITEM:
-      if (wp == 103) paintInformation(*reinterpret_cast<DRAWITEMSTRUCT*>(lp));
-      else paintButton(*reinterpret_cast<DRAWITEMSTRUCT*>(lp));
-      return TRUE;
+      renderStrip(); return TRUE;
     case WM_COMMAND:
       if (HIWORD(wp) == BN_CLICKED && state.available) {
         int index = LOWORD(wp) - 100;
@@ -167,7 +225,8 @@ void positionStrip() {
   if (shell != taskbar || !IsWindow(strip)) {
     if (IsWindow(strip)) DestroyWindow(strip);
     taskbar = shell;
-    strip = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST, L"EasyPlayerTaskbarStrip", L"EasyPlayer", WS_POPUP | WS_CLIPCHILDREN, 0,0,1,1, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+    strip = CreateWindowExW(WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_LAYERED, L"EasyPlayerTaskbarStrip", L"EasyPlayer", WS_POPUP | WS_CLIPCHILDREN, 0,0,1,1, shell, nullptr, GetModuleHandleW(nullptr), nullptr);
+    layoutUnit = 0;
     if (!strip) return;
     tooltip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, nullptr, WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX, CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT,CW_USEDEFAULT, strip, nullptr, GetModuleHandleW(nullptr), nullptr);
     for (int i = 0; i < 3; ++i) {
@@ -195,8 +254,8 @@ void positionStrip() {
   const UINT dpi = GetDpiForWindow(shell);
   unit = MulDiv(32, dpi ? dpi : 96, 96);
   const int padding = MulDiv(4, dpi ? dpi : 96, 96);
-  int width = vertical ? std::min<int>(unit, bounds.right) : unit*3+MulDiv(160, dpi ? dpi : 96, 96);
-  int height = vertical ? unit*5 : std::min<int>(unit, bounds.bottom);
+  int width = vertical ? bounds.right : unit*3+MulDiv(160, dpi ? dpi : 96, 96);
+  int height = vertical ? unit*5 : bounds.bottom;
   HWND notify = FindWindowExW(shell, nullptr, L"TrayNotifyWnd", nullptr);
   RECT tray{};
   if (notify && GetWindowRect(notify, &tray)) MapWindowPoints(nullptr, shell, reinterpret_cast<POINT*>(&tray), 2);
@@ -207,8 +266,8 @@ void positionStrip() {
   }
   if (!vertical) width = std::max(unit*3, std::min<int>(width, tray.left-padding));
   informationWidth = vertical ? width : width-unit*3;
-  int x = vertical ? (bounds.right-width)/2 : tray.left-width-padding;
-  int y = vertical ? tray.top-height-padding : (bounds.bottom-height)/2;
+  int x = vertical ? 0 : tray.left-width-padding;
+  int y = vertical ? tray.top-height-padding : 0;
   if (x < 0 || y < 0) { ShowWindow(strip, SW_HIDE); return; }
   // A child of Shell_TrayWnd is occluded by Windows 11's composited taskbar.
   // Keep our independent tool window aligned with the tray in screen coordinates.
@@ -230,18 +289,28 @@ void positionStrip() {
       foregroundBounds.right >= monitor.rcMonitor.right && foregroundBounds.bottom >= monitor.rcMonitor.bottom)
     show = false;
   if (!show) { ShowWindow(strip, SW_HIDE); return; }
-  SetWindowPos(strip, HWND_TOPMOST, origin.x,origin.y,width,height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
-  MoveWindow(information, 0,0,informationWidth,vertical ? unit*2 : height, TRUE);
-  for (int i = 0; i < 3; ++i)
-    MoveWindow(buttons[i], vertical ? 0 : informationWidth+i*unit, vertical ? (i+2)*unit : 0, vertical ? width : unit, vertical ? unit : height, TRUE);
+  RECT current{}; GetWindowRect(strip, &current);
+  const bool changed = current.left != origin.x || current.top != origin.y ||
+    current.right-current.left != width || current.bottom-current.top != height || layoutUnit != unit;
+  if (changed) {
+    // Keep the existing composed frame until all child hit areas have moved.
+    layingOut = true;
+    SetWindowPos(strip, nullptr, origin.x,origin.y,width,height,
+      SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOREDRAW);
+    MoveWindow(information, 0,0,informationWidth,vertical ? unit*2 : height, FALSE);
+    for (int i = 0; i < 3; ++i)
+      MoveWindow(buttons[i], vertical ? 0 : informationWidth+i*unit, vertical ? (i+2)*unit : 0,
+        vertical ? width : unit, vertical ? unit : height, FALSE);
+    layoutUnit = unit;
+    layingOut = false;
+    ++layoutCount;
+    renderStrip();
+  }
+  // An owned popup remains above its taskbar owner when Explorer is activated.
+  // Do not repeatedly raise/redraw an unchanged transparent window on each timer.
+  if (!IsWindowVisible(strip)) ShowWindow(strip, SW_SHOWNOACTIVATE);
 }
-LRESULT CALLBACK supervisorProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
-  if (message == UpdateState) {
-    std::unique_ptr<State> next(reinterpret_cast<State*>(lp));
-    // Tooltip strings refer to the state storage; replace and refresh on the UI thread.
-    state = std::move(*next);
-    receivedState = true;
-    positionStrip(); updateButtons();
+void printProbe() {
     if (probe && IsWindowVisible(strip)) {
       RECT panel{}, parent{}, notify{};
       GetWindowRect(strip, &panel); GetWindowRect(taskbar, &parent);
@@ -251,8 +320,20 @@ LRESULT CALLBACK supervisorProc(HWND window, UINT message, WPARAM wp, LPARAM lp)
         << '|' << parent.left << '|' << parent.top << '|' << parent.right << '|' << parent.bottom
         << '|' << notify.left << '|' << notify.top << '|' << IsWindowEnabled(buttons[1]) << '|' << state.playing
         << '|' << (GetAncestor(strip, GA_ROOT) == strip) << '|' << GetWindowTextLengthW(information)
-        << '|' << informationWidth << std::endl;
+        << '|' << informationWidth << '|' << vertical
+        << '|' << ((GetWindowLongPtrW(strip, GWL_EXSTYLE) & WS_EX_LAYERED) != 0)
+        << '|' << (GetWindow(strip, GW_OWNER) == taskbar) << '|' << renderCount << '|' << layoutCount << std::endl;
     }
+}
+LRESULT CALLBACK supervisorProc(HWND window, UINT message, WPARAM wp, LPARAM lp) {
+  if (message == ProbeState) { printProbe(); return 0; }
+  if (message == UpdateState) {
+    std::unique_ptr<State> next(reinterpret_cast<State*>(lp));
+    // Tooltip strings refer to the state storage; replace and refresh on the UI thread.
+    state = std::move(*next);
+    receivedState = true;
+    positionStrip(); updateButtons();
+    printProbe();
     return 0;
   }
   if (message == WM_TIMER) { positionStrip(); return 0; }
@@ -277,6 +358,7 @@ int main(int argc, char** argv) {
   std::thread([] {
     std::string line;
     while (std::getline(std::cin, line)) {
+      if (probe && line == "P") { PostMessageW(supervisor, ProbeState, 0, 0); continue; }
       if (line.size() > 16384) continue;
       std::vector<std::string> fields; std::stringstream input(line); std::string field;
       while (std::getline(input, field, '|')) fields.push_back(field);

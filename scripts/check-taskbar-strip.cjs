@@ -4,12 +4,16 @@ const cp = require('node:child_process')
 const path = require('node:path')
 const assert = require('node:assert/strict')
 const child = cp.spawn(
-  path.resolve('build/taskbar-controls/bin/Release/easy_player_taskbar.exe'),
+  path.resolve(
+    process.env.EASY_PLAYER_TASKBAR_TEST_HELPER ||
+      'build/taskbar-controls/bin/Release/easy_player_taskbar.exe'
+  ),
   ['--probe'],
   { windowsHide: true, stdio: 'pipe' }
 )
 let output = '',
-  count = 0
+  count = 0,
+  settled
 const timer = setTimeout(() => {
   console.error('Native taskbar probe timeout:', output)
   child.kill()
@@ -47,6 +51,15 @@ child.stdout.on('data', (chunk) => {
         'strip is inside actual Windows taskbar'
       )
       assert.ok(p[2] > p[0] && p[3] > p[1])
+      assert.equal(p[17], 1, 'popup belongs to the taskbar and stays above it on activation')
+      assert.equal(p[16], 1, 'strip uses per-pixel transparency')
+      if (p[15]) {
+        assert.equal(p[0], p[4], 'vertical strip starts at the taskbar left edge')
+        assert.equal(p[2], p[6], 'vertical strip fills taskbar width')
+      } else {
+        assert.equal(p[1], p[5], 'strip starts at the taskbar top edge')
+        assert.equal(p[3], p[7], 'strip fills taskbar height')
+      }
       assert.equal(p[12], 1, 'strip must be an independent window above the composited taskbar')
       if (p[8]) assert.ok(p[2] <= p[8] || p[3] <= p[9], 'strip stays beside notification area')
       if (count === 0) {
@@ -60,12 +73,24 @@ child.stdout.on('data', (chunk) => {
         assert.ok(p[14] > 0, 'horizontal taskbar reserves space for song information')
         count++
         send(false, false)
-      } else {
+      } else if (count === 1) {
         assert.equal(p[10], 0)
         assert.equal(p[11], 0)
         assert.equal(p[13], '暂未播放'.length, 'metadata clears when playback is empty')
+        count++
+        setTimeout(() => child.stdin.write('P\n'), 250)
+      } else if (count === 2) {
+        settled = p.slice(18, 20)
+        count++
+        setTimeout(() => child.stdin.write('P\n'), 1700)
+      } else {
+        assert.deepEqual(
+          p.slice(18, 20),
+          settled,
+          'idle timers must not repaint or reposition the strip'
+        )
         console.log(
-          'Native taskbar probe passed: independent strip aligned with Windows taskbar beside tray; Chinese labels accepted; state enables/disables controls'
+          'Native taskbar probe passed: full-height transparent owned popup, metadata, playback controls and stable idle composition'
         )
         clearTimeout(timer)
         child.stdin.end()

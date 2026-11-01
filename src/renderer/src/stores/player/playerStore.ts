@@ -2167,6 +2167,7 @@ export const usePlayerStore = defineStore('player', () => {
       }
     })
     window.api.system.updateTray({
+      cover: song?.cover || undefined,
       title: metadata?.title || song?.title || '',
       artist: metadata?.artist || song?.artist || '',
       album: metadata?.album || song?.album || '',

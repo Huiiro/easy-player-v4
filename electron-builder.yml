@@ -54,6 +54,7 @@ win:
         # Package the runtime at the root only. Release/ contains the same
         # addon as a DLL; development/test .node modules are not used by the app.
         - 'easy_player_native.node'
+        - 'easy_player_window.node'
         - '*.dll'
         - 'ffmpeg.exe'
         - 'FFmpeg-LICENSE.txt'

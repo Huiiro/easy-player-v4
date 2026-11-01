@@ -68,12 +68,15 @@ import {
   getIconPath,
   getTrayIconPath,
   getTaskbarHelperPath,
+  getResourcePath,
   getDockIconPath,
   getPreloadPath,
   getRendererPath,
   getLyricTimelinePath
 } from './utils/pathUtils'
 import { createTaskbarPlaybackControls } from './service/taskbarPlaybackService'
+import { createThumbnailPlaybackControls } from './service/thumbnailPlaybackService'
+import { createTaskbarCoverPreview } from './service/taskbarCoverPreview'
 import { createWindowMaterialManager } from './service/windowMaterialService'
 import { createWindowPresentation } from './service/windowPresentation'
 import { Logger } from './service/loggerService'
@@ -132,6 +135,18 @@ const taskbarPlayback = createTaskbarPlaybackControls({
   platform: process.platform,
   command: getTaskbarHelperPath(app.isPackaged),
   onAction: sendTrayAction
+})
+
+const thumbnailPlayback = createThumbnailPlaybackControls({
+  platform: process.platform,
+  window: () => mainWindow,
+  iconsDirectory: getResourcePath(app.isPackaged, 'icons', 'thumbnail'),
+  onAction: sendTrayAction
+})
+
+const taskbarCover = createTaskbarCoverPreview({
+  platform: process.platform,
+  fallback: getResourcePath(app.isPackaged, 'icons', 'easy-player.png')
 })
 
 const TRAFFIC_LIGHT_POSITION = { x: 16, y: 14 }
@@ -202,6 +217,8 @@ function quitApplication(): void {
   saveDesktopLyricsWindowState()
   globalShortcut.unregisterAll()
   taskbarPlayback.dispose()
+  thumbnailPlayback.dispose()
+  taskbarCover.dispose()
   tray?.destroy()
   tray = null
   shutdownPlugins()
@@ -633,6 +650,8 @@ function createWindow(
     }
   })
   const createdWindow = mainWindow
+  thumbnailPlayback.attach(createdWindow)
+  taskbarCover.attach(createdWindow)
   observeWindow(mainWindow, 'main')
   mainWindow.webContents.on('did-start-navigation', (details) => {
     resetAudioFileDelivery(details.isSameDocument, details.isMainFrame)
@@ -887,6 +906,7 @@ app.whenReady().then(() =>
         setMainLocale(locale)
         updateTrayMenu()
         taskbarPlayback.update()
+        thumbnailPlayback.update()
       })
       Logger.registerIpc()
       Logger.info('[Main] starting application', {
@@ -981,6 +1001,7 @@ app.whenReady().then(() =>
             album?: string
             isPlaying?: boolean
             hasTrack?: boolean
+            cover?: string
           }
         ) => {
           if (event.sender !== mainWindow?.webContents) return
@@ -992,6 +1013,13 @@ app.whenReady().then(() =>
           }
           updateTrayMenu()
           taskbarPlayback.update({ ...trayTrack, hasTrack: data.hasTrack === true })
+          taskbarCover.update(
+            data.hasTrack === true && typeof data.cover === 'string' ? data.cover : undefined
+          )
+          thumbnailPlayback.update({
+            isPlaying: trayTrack.isPlaying,
+            hasTrack: data.hasTrack === true
+          })
         }
       )
       ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
@@ -1293,6 +1321,7 @@ app.whenReady().then(() =>
             if (previous && !previous.isDestroyed()) {
               mainWindow = previous
               taskbarPlayback.update()
+              thumbnailPlayback.update()
               previous.show()
             }
             replacement.destroy()
@@ -1345,6 +1374,8 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   taskbarPlayback.dispose()
+  thumbnailPlayback.dispose()
+  taskbarCover.dispose()
   Logger.debug('[Main] will quit; flushing settings and closing database')
   isQuitting = true
   flushPlaybackCheckpoint?.()

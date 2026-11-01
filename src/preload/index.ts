@@ -737,6 +737,7 @@ const systemAPI = {
     ipcRenderer.invoke('system:set-window-material', material),
   setMicaEnabled: (enabled: boolean) => ipcRenderer.invoke('system:set-mica-enabled', enabled),
   updateTray: (data: {
+    cover?: string
     title: string
     artist: string
     album?: string

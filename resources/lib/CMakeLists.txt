@@ -212,3 +212,13 @@ install(DIRECTORY "${FFMPEG_ROOT}/bin/" DESTINATION bin
         FILES_MATCHING PATTERN "*.dll")
 install(FILES "${SAMPLERATE_DLL}" DESTINATION bin)
 install(FILES "${SOUNDTOUCH_DLL}" DESTINATION bin)
+
+# Small Node-API module for Windows taskbar artwork; independent of the audio engine.
+if(WIN32)
+add_library(easy_player_window SHARED "${CMAKE_CURRENT_LIST_DIR}/../../engine-windows/src/window_preview.cpp" ${CMAKE_JS_SRC})
+target_include_directories(easy_player_window PRIVATE ${CMAKE_JS_INC} "${NODE_ADDON_API_DIR}")
+target_link_libraries(easy_player_window PRIVATE ${CMAKE_JS_LIB} dwmapi user32 gdi32)
+set_target_properties(easy_player_window PROPERTIES PREFIX "" SUFFIX ".node" MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+add_custom_command(TARGET easy_player_window POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:easy_player_window>" "${CMAKE_BINARY_DIR}/easy_player_window.node")
+endif()

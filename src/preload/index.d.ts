@@ -628,6 +628,7 @@ declare global {
           data?: { available: boolean; enabled: boolean }
         }>
         updateTray(data: {
+          cover?: string
           title: string
           artist: string
           isPlaying: boolean

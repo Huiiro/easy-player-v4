@@ -95,7 +95,8 @@
     "test:theme-plugins": "node scripts/test-theme-plugins.mjs",
     "sync:theme-contract": "node scripts/sync-theme-contract.mjs",
     "test:theme-contract": "node scripts/sync-theme-contract.mjs --check && node scripts/test-theme-contract.mjs",
-    "test:taskbar": "npm run build:taskbar && node scripts/test-taskbar-playback.mjs && node scripts/check-taskbar-strip.cjs",
+    "test:taskbar": "npm run build:taskbar && node scripts/test-taskbar-playback.mjs && node scripts/test-thumbnail-playback.mjs && node scripts/check-taskbar-strip.cjs",
+    "test:taskbar-cover": "node scripts/check-taskbar-cover.cjs",
     "test:plugin-logs": "node scripts/test-plugin-logs.mjs"
   },
   "dependencies": {
