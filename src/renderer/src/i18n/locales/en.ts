@@ -340,7 +340,7 @@ export default {
     cancelLike: 'Remove like',
     cancelDislike: 'Remove dislike',
     copyName: 'Copy name',
-    nameCopied: 'Song name copied',
+    nameCopied: 'Song, artist and album names copied',
     copyNameFailed: 'Unable to copy song name',
     addToQueue: 'Add to queue',
     removeFromQueue: 'Remove from queue',

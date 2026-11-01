@@ -14,6 +14,7 @@ import { useMessage } from '@/components/ui/useMessage'
 import eventBus from '@/utils/eventBus'
 import type { LibrarySong } from '@/types/library'
 import type { SongListSource } from '@/services/songListQuery'
+import { useSongDialogs } from './useSongDialogs'
 export interface SongActionContext {
   source: SongListSource
   songs: LibrarySong[]
@@ -35,7 +36,18 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   const menuPosition = ref({ left: '0px', top: '0px' })
   const playlistDialogOpen = ref(false)
   const playlistSongIds = ref<number[]>([])
-  const songTagDialogOpen = ref(false)
+  const {
+    songTagDialogOpen,
+    tagSongId,
+    songDetailsOpen,
+    songDetailsId,
+    lyricsEditorOpen,
+    lyricsEditorSongId,
+    openSongDetails: showSongDetails,
+    openLyricsEditor: showLyricsEditor,
+    openSongTags: showSongTags,
+    copySongName
+  } = useSongDialogs()
   const batchTagDialogOpen = ref(false)
   const batchTagSongIds = ref<number[]>([])
   const pending = ref(false)
@@ -112,15 +124,10 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     closeMenu()
     void setLyricFlag(flag, enabled, ids)
   }
-  const tagSongId = ref<number | null>(null)
   const songsPendingDelete = ref<LibrarySong[]>([])
-  const songDetailsOpen = ref(false)
-  const songDetailsId = ref<number | null>(null)
   const metadataEditOpen = ref(false)
   const metadataEditSongId = ref<number | null>(null)
   const metadataEditCoverUrl = ref<string | null>(null)
-  const lyricsEditorOpen = ref(false)
-  const lyricsEditorSongId = ref<number | null>(null)
   const lyricsSearchOpen = ref(false)
   const lyricsSearchSong = shallowRef<Pick<
     LibrarySong,
@@ -185,25 +192,7 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
   async function copyActiveMenuSongName(): Promise<void> {
     const song = activeMenuSong.value
     closeMenu()
-    const name = song?.title.trim() || (song?.fileName ?? '').trim()
-    if (!name) return
-    try {
-      await navigator.clipboard.writeText(name)
-    } catch {
-      const input = document.createElement('textarea')
-      input.value = name
-      input.style.position = 'fixed'
-      input.style.opacity = '0'
-      document.body.appendChild(input)
-      input.select()
-      const copied = document.execCommand('copy')
-      input.remove()
-      if (!copied) {
-        showError(t('songList.copyNameFailed'))
-        return
-      }
-    }
-    success(t('songList.nameCopied'))
+    if (song) await copySongName(song)
   }
 
   function openPlaylistPicker(songIds: number[]): void {
@@ -276,17 +265,14 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
       batchTagSongIds.value = targets
       batchTagDialogOpen.value = true
     } else {
-      tagSongId.value = targets[0]
-      songTagDialogOpen.value = true
+      showSongTags(menuSongs.value[0])
     }
     closeMenu()
   }
   async function openSongDetails(): Promise<void> {
-    const songId = activeMenuSong.value?.id
+    const song = activeMenuSong.value
     closeMenu()
-    if (!songId) return
-    songDetailsId.value = songId
-    songDetailsOpen.value = true
+    if (song) showSongDetails(song)
   }
   function openMetadataEdit(): void {
     const song = activeMenuSong.value
@@ -306,11 +292,9 @@ export function useSongActions(props: SongActionContext, clearSelection: () => v
     void props.refresh()
   }
   function openLyricsEditor(): void {
-    const id = activeMenuSong.value?.id
+    const song = activeMenuSong.value
     closeMenu()
-    if (id == null) return
-    lyricsEditorSongId.value = id
-    lyricsEditorOpen.value = true
+    if (song) showLyricsEditor(song)
   }
   function openLyricsSearch(): void {
     const song = activeMenuSong.value

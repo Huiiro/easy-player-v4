@@ -26,6 +26,11 @@ import { formatArtists, splitArtists } from '@/utils/artists'
 import type { SongDetails } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 import { writeSongLyricSettings } from '@/services/songLyricSettings'
+import { useSongDialogs } from '@/components/songlist/useSongDialogs'
+import SongDetailsDialog from '@/components/songlist/SongDetailsDialog.vue'
+import LyricsEditorDialog from '@/components/lyrics/LyricsEditorDialog.vue'
+import SongTagDialog from '@/components/tag/SongTagDialog.vue'
+import type { LibrarySong } from '@/types/library'
 
 const ui = useUIStore()
 const player = usePlayerStore()
@@ -35,6 +40,22 @@ const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, ca
 const { t } = useI18n()
 const router = useRouter()
 const { error: showError, success } = useMessage()
+const {
+  songDetailsOpen,
+  songDetailsId,
+  lyricsEditorOpen,
+  lyricsEditorSongId,
+  songTagDialogOpen,
+  tagSongId,
+  openSongDetails,
+  openLyricsEditor,
+  openSongTags,
+  copySongName
+} = useSongDialogs()
+function actOnCurrentSong(action: (song: LibrarySong) => void | Promise<void>): void {
+  const song = player.currentQueueSong
+  if (song) void action(song)
+}
 const savingOffset = ref(false)
 async function saveOffset(clear = false): Promise<void> {
   if (!player.currentQueueSong || savingOffset.value) return
@@ -169,6 +190,17 @@ const moreOptions = computed(() => [
     disabled: !player.currentQueueSong?.album,
     onClick: openAlbum
   },
+  ...[
+    { label: t('songList.details'), icon: 'common-detail', action: openSongDetails },
+    { label: t('lyricEditor.title'), icon: 'common-edit-lrc', action: openLyricsEditor },
+    { label: t('songList.editTags'), icon: 'common-tag', action: openSongTags },
+    { label: t('songList.copyName'), icon: 'common-text-case', action: copySongName }
+  ].map(({ label, icon, action }) => ({
+    label,
+    icon,
+    disabled: !player.currentQueueSong,
+    onClick: () => actOnCurrentSong(action)
+  })),
   { type: 'divider' as const },
   ...(['disableNetwork', 'instrumental'] as const).map((flag) => {
     const enabled = player.songLyricSettings[flag] === true
@@ -966,6 +998,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             <!-- more song actions -->
             <BaseMenu
               :items="moreOptions"
+              max-height="calc(100vh - 32px)"
               appearance="glass"
               side="top"
               align="end"
@@ -1017,6 +1050,9 @@ function changeLyricsOffset(event: WheelEvent): void {
       <PlayQueueDrawer v-model="showQueue" />
       <LyricsSearchDialog v-model="showLyricsSearch" />
       <LyricsColorDialog v-model="showLyricsColorDialog" />
+      <SongDetailsDialog v-model="songDetailsOpen" :song-id="songDetailsId" />
+      <LyricsEditorDialog v-model="lyricsEditorOpen" :song-id="lyricsEditorSongId" />
+      <SongTagDialog v-model="songTagDialogOpen" :song-id="tagSongId" />
       <AddSongsToPlaylistDialog v-model="showPlaylistPicker" :song-ids="playlistSongIds" />
       <!-- play spectrum-->
       <div
@@ -1034,6 +1070,13 @@ function changeLyricsOffset(event: WheelEvent): void {
 </template>
 
 <style scoped>
+.ep-playback-progress {
+  --ep-progress-track: rgb(255 255 255 / 20%);
+  --ep-progress-fill: var(--color-primary);
+  --ep-range-thumb-bg: var(--color-primary);
+  --ep-range-unplayed-color: var(--ep-progress-track);
+  --ep-range-fill-background: linear-gradient(var(--ep-progress-fill), var(--ep-progress-fill));
+}
 .liquid-background-soften {
   background: rgb(8 11 20 / 48%);
   backdrop-filter: blur(6px) brightness(0.9) saturate(1.62) contrast(1.14);

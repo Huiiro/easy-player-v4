@@ -338,7 +338,7 @@ export default {
     cancelLike: '取消喜欢',
     cancelDislike: '取消不喜欢',
     copyName: '复制名称',
-    nameCopied: '已复制歌曲名称',
+    nameCopied: '已复制歌曲、歌手及专辑名称',
     copyNameFailed: '无法复制歌曲名称',
     addToQueue: '加入播放队列',
     removeFromQueue: '从播放队列移除',

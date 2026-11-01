@@ -137,8 +137,11 @@ app.whenReady().then(async () => {
    window.panelAnalysis=[];const analyze=CoverAnalyzer.analyze;CoverAnalyzer.analyze=function(...args){const start=performance.now();const result=analyze.apply(this,args);window.panelAnalysis.push(performance.now()-start);return result};
    const lyric=Array.from({length:100},(_,index)=>'['+String(Math.floor(index*2/60)).padStart(2,'0')+':'+String(index*2%60).padStart(2,'0')+'.000]第'+index+'行切歌测试歌词 Beautiful music').join('\\n');
    window.panelPlayer=Vue.reactive({lyricsOffsetMs:0,lyricsSettingsReady:true,songLyricSettings:{songId:0,offsetMs:null,disableNetwork:false,instrumental:false},currentQueueSong:{id:0,title:'Initial',artist:'Artist',audio:'0.flac',cover:'0'},trackInfo:null,positionMs:0,durationMs:180000,durationFormatted:'3:00',playbackSpeedConfig:{enabled:false,speed:1},volume:0.5,isPlaying:true,playMode:0,queue:[],getSongPreference:()=>0,setAudioAnalysisPollingRate(){},rhythmVisualConfig:{enabled:false,reducedMotion:false,intensity:1},audioAnalysis:{rms:0,lowEnergy:0,onsetStrength:0,beatSequence:0}});
-   const policies=new Map();
+   const policies=new Map(),songRequests=[];
    window.api={database:{command:async(action,params)=>{
+    songRequests.push({action,params});
+    if(action==='listTags')return {success:true,data:[{id:1,name:'Fixture tag',color:null,isIncluded:false}]};
+    if(action==='toggleSongTag')return {success:true,data:true};
     if(action==='setSongLyricSettings'){
      const settings={songId:params.songId,offsetMs:null,disableNetwork:false,instrumental:false,...policies.get(params.songId),...params.patch};
      policies.set(params.songId,settings);
@@ -146,7 +149,7 @@ app.whenReady().then(async () => {
      return {success:true,data:settings};
     }
     if(action==='getSongLyricSettings')return {success:true,data:policies.get(params.songId)||{songId:params.songId,offsetMs:null,disableNetwork:false,instrumental:false}};
-    return {success:true,data:action==='getSong'?{id:params.id,lrc:lyric,lyricFormat:'lrc'}:[]};
+    return {success:true,data:action==='getSong'?{...window.panelPlayer.currentQueueSong,id:params.id,duration:180,fileSize:1000,sourceId:null,lrc:lyric,lyricFormat:'lrc'}:[]};
    }},fonts:{list:async()=>({success:true,data:[]})}};
    const app=Vue.createApp({render:()=>Vue.h(Panel)});app.use(createPinia());app.use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));
    const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
@@ -156,6 +159,10 @@ app.whenReady().then(async () => {
     const trigger=[...document.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label').startsWith(prefix));
     if(!trigger)throw Error('Missing lyric option trigger: '+prefix);
     trigger.click();await Vue.nextTick();await window.panelWait(80);
+    if(prefix==='更多'){
+      const menu=document.querySelector('.ep-menu');
+      if(menu.scrollHeight>menu.clientHeight+1)throw Error('More menu must show all actions without scrolling when space is available');
+    }
     const option=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===label);
     if(!option)throw Error('Missing lyric option: '+label);
     option.click();await Vue.nextTick();await window.panelWait(220);
@@ -177,6 +184,29 @@ app.whenReady().then(async () => {
    await chooseLyricOption('更多','查看专辑',()=>router.currentRoute.value.path==='/album/detail'&&router.currentRoute.value.query.name==='Album'&&router.currentRoute.value.query.artist==='Artist A;Artist B'&&router.currentRoute.value.query.cover==='0'&&!ui.showPlayer);
    ui.showPlayer=true;
    ui.lyricsAlignment='center';ui.lyricsStyle='none';
+   const actionSong={...window.panelPlayer.currentQueueSong,id:21,title:'Action song',artist:'Artist',album:'Album'};
+   window.panelPlayer.currentQueueSong=actionSong;await Vue.nextTick();
+   const dialogTitle=()=>document.querySelector('.ep-dialog-title')?.textContent.trim();
+   async function closeActionDialog(){document.querySelector('.ep-dialog button[aria-label="关闭"]').click();await window.panelWait(300);if(document.querySelector('.ep-dialog'))throw Error('Song action dialog did not close');}
+   await chooseLyricOption('更多','歌曲详情',()=>dialogTitle()==='歌曲详情'&&document.querySelector('[data-song-summary]')?.textContent.includes('Action song'));
+   window.panelPlayer.currentQueueSong={...actionSong,id:22,title:'Next song'};await Vue.nextTick();
+   if(!document.querySelector('[data-song-summary]')?.textContent.includes('Action song'))throw Error('Details target changed with playback');
+   await closeActionDialog();
+   window.panelPlayer.currentQueueSong=actionSong;await Vue.nextTick();
+   await chooseLyricOption('更多','编辑歌词',()=>dialogTitle()?.startsWith('编辑歌词')&&songRequests.some(request=>request.action==='getSong'&&request.params.id===21));
+   await closeActionDialog();
+   await chooseLyricOption('更多','编辑标签',()=>dialogTitle()==='编辑歌曲标签');
+   window.panelPlayer.currentQueueSong={...actionSong,id:22,title:'Next song'};await Vue.nextTick();
+   [...document.querySelectorAll('.ep-dialog button')].find(button=>button.textContent.trim()==='Fixture tag').click();await Vue.nextTick();
+   if(!songRequests.some(request=>request.action==='toggleSongTag'&&request.params.songId===21))throw Error('Tag editor must retain the action target after playback switches');
+   await closeActionDialog();
+   window.panelPlayer.currentQueueSong=actionSong;await Vue.nextTick();
+   let copiedName;
+   Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{copiedName=text}}});
+   await chooseLyricOption('更多','复制名称',()=>copiedName==='Action song - Artist - Album');
+   window.panelPlayer.currentQueueSong=null;await Vue.nextTick();
+   if(!document.querySelector('button[aria-label="更多"]').disabled)throw Error('Song actions require a current song');
+   window.panelPlayer.currentQueueSong=actionSong;await Vue.nextTick();
 
   })()`)
     const result = await window.webContents.executeJavaScript(`(async()=>{
