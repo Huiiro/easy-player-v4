@@ -1004,6 +1004,10 @@ export default {
       links: '工具与链接'
     },
     taskbarControls: '任务栏播控条',
+    smtc: 'Windows 系统媒体控制',
+    smtcDescription: '在系统媒体控件中显示曲目信息。',
+    smtcFailed: '无法更新系统媒体控制，请重试。',
+    smtcUnavailable: '当前无法使用 Windows 系统媒体控制。',
     taskbarControlsDescription: '在任务栏右侧显示歌曲信息和播控按钮。',
     taskbarControlsFailed: '无法更新任务栏播控条，请重试。',
     extremePlaybackActive: '处于轻量模式',

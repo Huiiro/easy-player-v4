@@ -146,6 +146,10 @@ export function getWindowPreviewAddonPath(isPackaged: boolean): string {
   return path.join(path.dirname(getNativeAddonPath(isPackaged)), 'easy_player_window.node')
 }
 
+export function getSystemMediaAddonPath(isPackaged: boolean): string {
+  return path.join(path.dirname(getNativeAddonPath(isPackaged)), 'easy_player_smtc.node')
+}
+
 export function getStemRuntimeRoot(): string {
   return getDataPath('components', 'auto-mix')
 }

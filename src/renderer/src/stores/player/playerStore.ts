@@ -2108,6 +2108,16 @@ export const usePlayerStore = defineStore('player', () => {
     )
     unsubs.push(window.api.miniPlayer.onAction(handleMiniPlayerAction))
     unsubs.push(window.api.system.onTrayAction(handleMiniPlayerAction))
+    unsubs.push(
+      window.api.system.onSystemMediaAction(async (action) => {
+        if (action === 'previous') return playPrevious()
+        if (action === 'next') return playNext()
+        if (action === 'play')
+          return isPlaying.value || Boolean(currentFile.value && (await play()))
+        if (action === 'pause') return !isPlaying.value || (await pause())
+        return false
+      })
+    )
     unsubs.push(window.api.miniPlayer.onRequestState(publishMiniPlayerState))
 
     unsubs.push(
@@ -2150,7 +2160,8 @@ export const usePlayerStore = defineStore('player', () => {
 
   function publishMiniPlayerState(): void {
     const song = currentQueueSong.value
-    const metadata = trackInfo.value?.metadata
+    const metadata =
+      trackInfo.value?.filePath === currentFile.value ? trackInfo.value?.metadata : undefined
     window.api.miniPlayer.update({
       cover: song?.cover || null,
       title: metadata?.title || song?.title || '',
@@ -2167,6 +2178,10 @@ export const usePlayerStore = defineStore('player', () => {
       }
     })
     window.api.system.updateTray({
+      canPrevious: queue.value.length > 0,
+      canNext: queue.value.length > 0,
+      filePath: currentFile.value || undefined,
+      playbackState: state.value,
       cover: song?.cover || undefined,
       title: metadata?.title || song?.title || '',
       artist: metadata?.artist || song?.artist || '',
@@ -2189,7 +2204,7 @@ export const usePlayerStore = defineStore('player', () => {
     else if (currentFile.value) void play()
   }
 
-  watch([currentQueueSong, trackInfo, currentFile, isPlaying], publishMiniPlayerState, {
+  watch([currentQueueSong, trackInfo, currentFile, state], publishMiniPlayerState, {
     deep: true
   })
   watch([queueTransitionEntries, currentQueueIndex, playMode], () => {

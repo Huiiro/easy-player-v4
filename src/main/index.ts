@@ -77,6 +77,9 @@ import {
 } from './utils/pathUtils'
 import { createTaskbarPlaybackControls } from './service/taskbarPlaybackService'
 import { createThumbnailPlaybackControls } from './service/thumbnailPlaybackService'
+import { createSystemMediaControls } from './service/systemMediaControlsService'
+import { createPlaybackCommandService } from './service/playbackCommandService'
+import type { SystemMediaPlaybackState } from '../shared/systemMediaControls'
 import { createTaskbarCoverPreview } from './service/taskbarCoverPreview'
 import { createWindowMaterialManager } from './service/windowMaterialService'
 import { createWindowPresentation } from './service/windowPresentation'
@@ -130,6 +133,7 @@ let tray: Tray | null = null
 let trayMenu: Menu | null = null
 let trayTrack = { title: '', artist: '', album: '', isPlaying: false }
 let isQuitting = false
+let configuredGlobalShortcuts: Partial<Record<ShortcutAction, string>> = {}
 let trafficLightPositionTimer: ReturnType<typeof setTimeout> | undefined
 
 const taskbarPlayback = createTaskbarPlaybackControls({
@@ -143,6 +147,19 @@ const thumbnailPlayback = createThumbnailPlaybackControls({
   window: () => mainWindow,
   iconsDirectory: getResourcePath(app.isPackaged, 'icons', 'thumbnail'),
   onAction: sendTrayAction
+})
+
+const systemMediaCommands = createPlaybackCommandService(() => mainWindow)
+const systemMedia = createSystemMediaControls({
+  platform: process.platform,
+  fallbackCover: getResourcePath(app.isPackaged, 'icons', 'easy-player.png'),
+  readEnabled: () => getAppSetting('system.smtc-enabled'),
+  writeEnabled: (value) => setAppSetting('system.smtc-enabled', value),
+  onAction: (action) => {
+    void systemMediaCommands.execute(action).then((success) => {
+      if (!success) Logger.debug('[SMTC] Playback command was not applied', { action })
+    })
+  }
 })
 
 const taskbarCover = createTaskbarCoverPreview({
@@ -209,7 +226,7 @@ function showMainWindow(): void {
   windowPresentations.get(mainWindow)?.show()
 }
 
-function quitApplication(): void {
+async function quitApplication(): Promise<void> {
   Logger.info('[Main] quit requested', { audioLoaded: audioEngine?.loaded === true })
   isQuitting = true
   flushPlaybackCheckpoint?.()
@@ -220,6 +237,8 @@ function quitApplication(): void {
   taskbarPlayback.dispose()
   thumbnailPlayback.dispose()
   taskbarCover.dispose()
+  await systemMedia.dispose().catch((reason) => Logger.warn('[SMTC] Cleanup failed', reason))
+  systemMediaCommands.dispose()
   tray?.destroy()
   tray = null
   shutdownPlugins()
@@ -304,12 +323,25 @@ function createTray(): void {
 }
 
 function registerGlobalShortcuts(shortcuts: Partial<Record<ShortcutAction, string>>): string[] {
+  configuredGlobalShortcuts = { ...shortcuts }
   globalShortcut.unregisterAll()
   const failed: string[] = []
   const registeredAccelerators = new Set<string>()
   for (const action of SHORTCUT_ACTIONS) {
     const accelerator = shortcuts[action]?.trim()
     if (!accelerator) continue
+    const media = /^(MediaPlayPause|MediaNextTrack|MediaPreviousTrack|MediaStop)$/i.test(
+      accelerator
+    )
+    if (
+      process.platform === 'win32' &&
+      media &&
+      systemMedia.state().available &&
+      systemMedia.state().enabled
+    ) {
+      failed.push(accelerator)
+      continue
+    }
     const electronAccelerator = accelerator.replace(
       /(^|\+)meta(?=\+|$)/i,
       `$1${process.platform === 'darwin' ? 'Command' : 'Super'}`
@@ -653,6 +685,9 @@ function createWindow(
   const createdWindow = mainWindow
   thumbnailPlayback.attach(createdWindow)
   taskbarCover.attach(createdWindow)
+  void systemMedia
+    .attach(createdWindow)
+    .then(() => registerGlobalShortcuts(configuredGlobalShortcuts))
   observeWindow(mainWindow, 'main')
   mainWindow.webContents.on('did-start-navigation', (details) => {
     resetAudioFileDelivery(details.isSameDocument, details.isMainFrame)
@@ -939,6 +974,22 @@ app.whenReady().then(() =>
         success: true,
         data: taskbarPlayback.state()
       }))
+      ipcMain.handle('system:get-media-controls', async () => {
+        // A settings page can mount while the native apartment is still initializing.
+        if (mainWindow) await systemMedia.attach(mainWindow)
+        return { success: true, data: systemMedia.state() }
+      })
+      ipcMain.handle('system:set-media-controls', async (event, enabled: unknown) => {
+        if (event.sender !== mainWindow?.webContents || typeof enabled !== 'boolean')
+          return { success: false }
+        try {
+          const data = await systemMedia.setEnabled(enabled)
+          registerGlobalShortcuts(configuredGlobalShortcuts)
+          return { success: true, data }
+        } catch {
+          return { success: false, error: t('smtcUnavailable') }
+        }
+      })
       ipcMain.handle('system:set-taskbar-controls', (event, enabled: unknown) => {
         if (event.sender !== mainWindow?.webContents || typeof enabled !== 'boolean')
           return { success: false }
@@ -1004,6 +1055,10 @@ app.whenReady().then(() =>
             isPlaying?: boolean
             hasTrack?: boolean
             cover?: string
+            filePath?: string
+            playbackState?: SystemMediaPlaybackState
+            canPrevious?: boolean
+            canNext?: boolean
           }
         ) => {
           if (event.sender !== mainWindow?.webContents) return
@@ -1022,6 +1077,27 @@ app.whenReady().then(() =>
             isPlaying: trayTrack.isPlaying,
             hasTrack: data.hasTrack === true
           })
+          const playback = ['idle', 'loading', 'ready', 'playing', 'paused', 'stopped'].includes(
+            data.playbackState || ''
+          )
+            ? data.playbackState!
+            : data.isPlaying === true
+              ? 'playing'
+              : 'paused'
+          systemMedia.updateTrack(
+            data.hasTrack === true && typeof data.filePath === 'string' && data.filePath
+              ? {
+                  filePath: data.filePath,
+                  canPrevious: data.canPrevious === true,
+                  canNext: data.canNext === true,
+                  title: String(data.title || ''),
+                  artist: String(data.artist || ''),
+                  album: String(data.album || ''),
+                  cover: typeof data.cover === 'string' ? data.cover : undefined
+                }
+              : null,
+            playback
+          )
         }
       )
       ipcMain.handle('shortcuts:register-global', (_event, shortcuts) => {
@@ -1324,6 +1400,7 @@ app.whenReady().then(() =>
               mainWindow = previous
               taskbarPlayback.update()
               thumbnailPlayback.update()
+              void systemMedia.attach(previous)
               previous.show()
             }
             replacement.destroy()
@@ -1338,7 +1415,11 @@ app.whenReady().then(() =>
       // Initialize audio engine after window is created
       audioEngine = new AudioEngineManager()
       if (mainWindow && audioEngine.loaded) {
-        flushPlaybackCheckpoint = registerIpcHandlers(audioEngine, () => mainWindow)
+        flushPlaybackCheckpoint = registerIpcHandlers(
+          audioEngine,
+          () => mainWindow,
+          systemMedia.updatePlayback
+        )
         Logger.debug('[Main] audio IPC handlers registered')
       } else if (mainWindow) {
         Logger.warn('[Main] Audio engine failed to load — running without audio')
@@ -1378,6 +1459,8 @@ app.on('will-quit', () => {
   taskbarPlayback.dispose()
   thumbnailPlayback.dispose()
   taskbarCover.dispose()
+  void systemMedia.dispose().catch((reason) => Logger.warn('[SMTC] Cleanup failed', reason))
+  systemMediaCommands.dispose()
   Logger.debug('[Main] will quit; flushing settings and closing database')
   isQuitting = true
   flushPlaybackCheckpoint?.()

@@ -270,6 +270,8 @@ vm.runInNewContext(
   {
     exports: registration,
     SHORTCUT_ACTIONS: shared.SHORTCUT_ACTIONS,
+    configuredGlobalShortcuts: {},
+    systemMedia: { state: () => ({ available: true, enabled: true }) },
     process,
     Logger: { debug: () => undefined, warn: () => undefined },
     showMainWindow: () => delivered.push(['show']),
@@ -293,4 +295,10 @@ for (const action of shared.SHORTCUT_ACTIONS) {
 }
 registration.register(shared.DEFAULT_GLOBAL_SHORTCUTS)
 assert.equal(accelerators.size, 0, 'Cleared global bindings must be unregistered')
+if (process.platform === 'win32') {
+  assert.deepEqual(Array.from(registration.register({ toggle: 'MediaPlayPause' })), [
+    'MediaPlayPause'
+  ])
+  assert.equal(accelerators.size, 0, 'SMTC must own media keys without duplicate global bindings')
+}
 console.log('Main-process registration and dispatch passed for every shortcut action')

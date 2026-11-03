@@ -7,6 +7,7 @@ import { getAppSetting, setAppSetting } from '../database/repository'
 import { Logger } from '../service/loggerService'
 import { logError, logOperation, logParams } from '../service/operationLogger'
 import { createAutoMixRuntimeManager } from '../service/autoMixRuntimeManager'
+import type { SystemMediaPlaybackState } from '../../shared/systemMediaControls'
 
 interface PlaybackCheckpoint {
   currentFile?: string
@@ -25,7 +26,8 @@ const playbackStateNames: Record<EngineState, string> = {
 
 export function registerIpcHandlers(
   engine: AudioEngineManager,
-  mainWindow: () => BrowserWindow | null
+  mainWindow: () => BrowserWindow | null,
+  onPlaybackState?: (state: SystemMediaPlaybackState) => void
 ): () => void {
   const stemRuntime = createAutoMixRuntimeManager(
     (status) => {
@@ -404,6 +406,9 @@ export function registerIpcHandlers(
 
   // ── State change events ──
   engine.onStateChanged((state: number) => {
+    onPlaybackState?.(
+      (playbackStateNames[state as EngineState] ?? 'idle') as SystemMediaPlaybackState
+    )
     // `open` and `stop` now run on a N-API worker. Do not synchronously read
     // engine-owned data from this state callback: a Loading/Ready event can
     // otherwise race the worker that is updating the decoder and output path.

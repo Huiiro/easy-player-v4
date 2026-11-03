@@ -1,4 +1,5 @@
 export default {
+  smtcUnavailable: 'Unable to update Windows system media controls. Please retry.',
   pluginProxyInvalid:
     'Enter an HTTP, HTTPS or SOCKS5 proxy address without credentials, path or query.',
   trayUnknownTrack: 'Unknown track',

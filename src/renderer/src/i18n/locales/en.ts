@@ -1026,6 +1026,10 @@ export default {
       links: 'Tools and links'
     },
     taskbarControls: 'Taskbar playback bar',
+    smtc: 'Windows system media controls',
+    smtcDescription: 'Show track information in system media controls.',
+    smtcFailed: 'Unable to update system media controls. Please retry.',
+    smtcUnavailable: 'Windows system media controls are currently unavailable.',
     taskbarControlsDescription:
       'Show song information and playback controls beside the system tray.',
     taskbarControlsFailed: 'Unable to update the taskbar playback bar. Please retry.',

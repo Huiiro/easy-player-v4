@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
+import SystemMediaControlsSettings from './SystemMediaControlsSettings.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -183,6 +184,7 @@ watch(
         {{ t('settings.configureFileAssociation') }}
       </button>
     </div>
+    <SystemMediaControlsSettings v-if="ui.platform === 'win'" />
     <SettingRow
       :label="t('settings.closeToTray')"
       :description="t('settings.closeToTrayDescription')"

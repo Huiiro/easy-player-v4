@@ -731,6 +731,38 @@ const systemAPI = {
   },
   setLocale: (locale: 'zh' | 'en'): void => ipcRenderer.send('system:set-locale', locale),
   getTaskbarControls: () => ipcRenderer.invoke('system:get-taskbar-controls'),
+  getSystemMediaControls: () => ipcRenderer.invoke('system:get-media-controls'),
+  setSystemMediaControls: (enabled: boolean) =>
+    ipcRenderer.invoke('system:set-media-controls', enabled),
+  onSystemMediaAction: (
+    callback: (
+      action: import('../shared/systemMediaControls').SystemMediaAction
+    ) => boolean | Promise<boolean>
+  ): (() => void) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      request: { id: string; action: import('../shared/systemMediaControls').SystemMediaAction }
+    ): void => {
+      if (
+        !request ||
+        typeof request.id !== 'string' ||
+        !['play', 'pause', 'previous', 'next'].includes(request.action)
+      )
+        return
+      void Promise.resolve()
+        .then(() => callback(request.action))
+        .then(
+          (success) =>
+            ipcRenderer.send('system:media-action-result', {
+              id: request.id,
+              success: success === true
+            }),
+          () => ipcRenderer.send('system:media-action-result', { id: request.id, success: false })
+        )
+    }
+    ipcRenderer.on('system:media-action', listener)
+    return () => ipcRenderer.removeListener('system:media-action', listener)
+  },
   setTaskbarControls: (enabled: boolean) =>
     ipcRenderer.invoke('system:set-taskbar-controls', enabled),
   setCloseToTray: (enabled: boolean) => ipcRenderer.invoke('system:set-close-to-tray', enabled),
@@ -741,6 +773,10 @@ const systemAPI = {
     ipcRenderer.invoke('system:set-window-material', material),
   setMicaEnabled: (enabled: boolean) => ipcRenderer.invoke('system:set-mica-enabled', enabled),
   updateTray: (data: {
+    canPrevious?: boolean
+    canNext?: boolean
+    filePath?: string
+    playbackState?: import('../shared/systemMediaControls').SystemMediaPlaybackState
     cover?: string
     title: string
     artist: string

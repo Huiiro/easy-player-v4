@@ -121,13 +121,15 @@ const api = {
     command: async () => ({ success: true, data: [] })
   },
   miniPlayer: { update() {}, onAction: () => () => {}, onRequestState: () => () => {} },
-  system: { updateTray() {}, onTrayAction: () => () => {} }
+  system: { updateTray() {}, onTrayAction: () => () => {}, onSystemMediaAction: () => () => {} }
 }
 const module = load(
   'src/renderer/src/stores/player/playerStore.ts',
   {
     vue: Vue,
     pinia: Pinia,
+    '@/services/songLyricController': { createSongLyricController: () => ({}) },
+    '@/utils/rhythmVisual': load('src/renderer/src/utils/rhythmVisual.ts'),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
     '@/services/audioBridge': { audioBridge: bridge },
     './smartShuffle': smart,

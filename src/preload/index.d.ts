@@ -610,6 +610,21 @@ declare global {
         ): () => void
         onOpenFilesError(callback: () => void): () => void
         setLocale(locale: 'zh' | 'en'): void
+        getSystemMediaControls(): Promise<{
+          success: boolean
+          data?: import('../shared/systemMediaControls').SystemMediaControlsState
+          error?: string
+        }>
+        setSystemMediaControls(enabled: boolean): Promise<{
+          success: boolean
+          data?: import('../shared/systemMediaControls').SystemMediaControlsState
+          error?: string
+        }>
+        onSystemMediaAction(
+          callback: (
+            action: import('../shared/systemMediaControls').SystemMediaAction
+          ) => boolean | Promise<boolean>
+        ): () => void
         getTaskbarControls(): Promise<{
           success: boolean
           data?: { available: boolean; enabled: boolean }
@@ -639,6 +654,10 @@ declare global {
           data?: { available: boolean; enabled: boolean }
         }>
         updateTray(data: {
+          canPrevious?: boolean
+          canNext?: boolean
+          filePath?: string
+          playbackState?: import('../shared/systemMediaControls').SystemMediaPlaybackState
           cover?: string
           title: string
           artist: string

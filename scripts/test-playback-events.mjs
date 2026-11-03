@@ -77,7 +77,11 @@ const globals = {
         onAction: subscribe('mini'),
         onRequestState: subscribe('request')
       },
-      system: { updateTray() {}, onTrayAction: subscribe('tray') }
+      system: {
+        updateTray() {},
+        onTrayAction: subscribe('tray'),
+        onSystemMediaAction: subscribe('system-media')
+      }
     }
   },
   document: {
@@ -102,11 +106,19 @@ const module = run(
   {
     vue: Vue,
     pinia: Pinia,
+    '@/services/songLyricController': { createSongLyricController: () => ({}) },
+    '@/utils/rhythmVisual': run(readFileSync('src/renderer/src/utils/rhythmVisual.ts', 'utf8'), {}),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
     '@/services/audioBridge': { audioBridge: bridge },
     './smartShuffle': {},
     '@/stores/log/logStore': { useLogStore: () => logs },
-    '@/stores/ui/uiStore': { useUIStore: () => ({ extremePlayback: false, customBg: {} }) },
+    '@/stores/ui/uiStore': {
+      useUIStore: () => ({
+        extremePlayback: false,
+        customBg: {},
+        resolvedAppearance: { chrome: {} }
+      })
+    },
     '@/stores/statistics/statisticsStore': {
       useStatisticsStore: () => ({ enabled: false, ready: true })
     },
@@ -119,6 +131,7 @@ const module = run(
 )
 Pinia.setActivePinia(Pinia.createPinia())
 const player = module.usePlayerStore()
+player.currentFile = 'first.wav'
 const devScript = parse(readFileSync('src/renderer/src/views/dev/Index.vue', 'utf8')).descriptor
   .scriptSetup.content
 player.subscribeToEvents() // Owned by the outer playback lifecycle, which outlives routes.
@@ -149,7 +162,16 @@ for (let visit = 0; visit < 3; visit++) {
   for (const callback of unmounted) callback()
   scope.stop()
 
-  for (const type of ['state', 'position', 'chain', 'ended', 'mini', 'request', 'tray'])
+  for (const type of [
+    'state',
+    'position',
+    'chain',
+    'ended',
+    'mini',
+    'request',
+    'tray',
+    'system-media'
+  ])
     assert.equal(listeners.get(type).size, 1, `Leaving the debug route must preserve ${type}`)
   assert.ok(documentListeners.has('visibilitychange'))
   const positionMs = 1000 + visit * 1000
@@ -176,6 +198,16 @@ emit('position', { positionMs: 700, durationMs: 90000 })
 assert.equal(player.isPlaying, true)
 assert.equal(player.positionMs, 700)
 assert.equal(player.trackInfo.filePath, 'next.wav')
+
+const systemAction = [...listeners.get('system-media')][0]
+assert.equal(await systemAction('pause'), true)
+assert.equal(player.isPaused, true)
+assert.equal(await systemAction('pause'), true, 'repeated pause must not toggle playback')
+assert.equal(player.isPaused, true)
+assert.equal(await systemAction('play'), true)
+assert.equal(player.isPlaying, true)
+assert.equal(await systemAction('play'), true, 'repeated play must not pause playback')
+assert.equal(player.isPlaying, true)
 
 player.unsubscribe() // Only teardown of the outer lifecycle releases shared listeners.
 for (const callbacks of listeners.values()) assert.equal(callbacks.size, 0)
