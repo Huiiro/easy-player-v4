@@ -215,6 +215,14 @@ export class AutoMixStemService {
     this.active = undefined
     const child = this.child
     this.child = undefined
-    child?.kill()
+    if (!child) return
+    if (process.platform === 'win32' && child.pid) {
+      // Stem workers may own ffmpeg. End only this worker's tree, and keep
+      // closeAndWait waiting for the Python handle's close notification.
+      const killer = spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], {
+        windowsHide: true
+      })
+      killer.once('error', () => child.kill())
+    } else child.kill()
   }
 }

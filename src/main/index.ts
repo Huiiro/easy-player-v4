@@ -79,6 +79,7 @@ import { createTaskbarPlaybackControls } from './service/taskbarPlaybackService'
 import { createThumbnailPlaybackControls } from './service/thumbnailPlaybackService'
 import { createSystemMediaControls } from './service/systemMediaControlsService'
 import { createPlaybackCommandService } from './service/playbackCommandService'
+import { beginApplicationShutdown, onApplicationShutdown } from './service/applicationShutdown'
 import type { SystemMediaPlaybackState } from '../shared/systemMediaControls'
 import { createTaskbarCoverPreview } from './service/taskbarCoverPreview'
 import { createWindowMaterialManager } from './service/windowMaterialService'
@@ -227,23 +228,34 @@ function showMainWindow(): void {
 }
 
 async function quitApplication(): Promise<void> {
+  if (isQuitting) return
   Logger.info('[Main] quit requested', { audioLoaded: audioEngine?.loaded === true })
   isQuitting = true
+  beginApplicationShutdown()
   flushPlaybackCheckpoint?.()
+  // Explicit app.exit bypasses will-quit. Stop DB users before async native cleanup
+  // can yield to a pending search worker result or a library watcher callback.
+  searchIndexService?.stop()
+  stopLibraryAutoImport()
+  stopDuplicateScans()
+  shutdownPlugins()
   audioEngine?.stop()
   audioEngine?.flushDspSettings()
   saveDesktopLyricsWindowState()
+  if (mainWindow && !mainWindow.isDestroyed()) saveWindowState(mainWindow)
+  clearTimeout(desktopLyricsBoundsTimer)
+  desktopLyricsBoundsTimer = undefined
   globalShortcut.unregisterAll()
   taskbarPlayback.dispose()
   thumbnailPlayback.dispose()
   taskbarCover.dispose()
-  await systemMedia.dispose().catch((reason) => Logger.warn('[SMTC] Cleanup failed', reason))
   systemMediaCommands.dispose()
+  await Promise.all([
+    systemMedia.dispose().catch((reason) => Logger.warn('[SMTC] Cleanup failed', reason)),
+    audioEngine?.shutdown().catch((reason) => Logger.warn('[Audio] Cleanup failed', reason))
+  ])
   tray?.destroy()
   tray = null
-  shutdownPlugins()
-  stopLibraryAutoImport()
-  stopDuplicateScans()
   closeDatabase()
   // Do not let a hidden close-to-tray window intercept this explicit user
   // request. `app.exit` is intentional here; cleanup was completed above.
@@ -470,9 +482,10 @@ function saveDesktopLyricsWindowState(): void {
 }
 
 function scheduleDesktopLyricsWindowStateSave(): void {
+  if (isQuitting) return
   if (desktopLyricsBoundsTimer) clearTimeout(desktopLyricsBoundsTimer)
   desktopLyricsBoundsTimer = setTimeout(() => {
-    saveDesktopLyricsWindowState()
+    if (!isQuitting) saveDesktopLyricsWindowState()
     desktopLyricsBoundsTimer = undefined
   }, 200)
 }
@@ -712,19 +725,23 @@ function createWindow(
   presentation.show()
 
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined
+  const offWindowShutdown = onApplicationShutdown(() => clearTimeout(saveWindowStateTimer))
   const scheduleWindowStateSave = (): void => {
+    if (isQuitting) return
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
     saveWindowStateTimer = setTimeout(() => {
       saveWindowStateTimer = undefined
-      if (!createdWindow.isDestroyed()) saveWindowState(createdWindow)
+      if (!isQuitting && !createdWindow.isDestroyed()) saveWindowState(createdWindow)
     }, 300)
   }
   mainWindow.on('resize', scheduleWindowStateSave)
   mainWindow.on('move', scheduleWindowStateSave)
   mainWindow.on('closed', () => {
+    offWindowShutdown()
     if (saveWindowStateTimer) clearTimeout(saveWindowStateTimer)
   })
   mainWindow.on('close', (event) => {
+    if (isQuitting) return
     if (!isQuitting && getAppSetting('system.close-to-tray') === true) {
       event.preventDefault()
       mainWindow?.hide()
@@ -820,7 +837,7 @@ function createMiniPlayerWindow(): BrowserWindow {
   })
   miniWindow.on('closed', () => {
     miniWindow = null
-    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+    if (!isQuitting && mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
       showMainWindow()
     }
   })
@@ -870,11 +887,18 @@ function createDesktopLyricsWindow(): BrowserWindow {
       clearTimeout(desktopLyricsBoundsTimer)
       desktopLyricsBoundsTimer = undefined
     }
-    saveDesktopLyricsWindowState()
+    if (!isQuitting) saveDesktopLyricsWindowState()
   })
   desktopLyricsWindow.on('closed', () => {
     desktopLyricsWindow = null
-    if (!isPlaybackOnly()) mainWindow?.webContents.send('desktop-lyrics:closed')
+    if (
+      !isQuitting &&
+      !isPlaybackOnly() &&
+      mainWindow &&
+      !mainWindow.isDestroyed() &&
+      !mainWindow.webContents.isDestroyed()
+    )
+      mainWindow.webContents.send('desktop-lyrics:closed')
   })
   desktopLyricsWindow.on('resize', () => {
     const bounds = desktopLyricsWindow?.getBounds()
@@ -1448,6 +1472,7 @@ app.whenReady().then(() =>
 // If it is disabled, closing the final window must terminate the app on every
 // platform; otherwise macOS would leave a background/tray process behind.
 app.on('window-all-closed', () => {
+  if (isQuitting) return
   flushPlaybackCheckpoint?.()
   if (audioEngine) {
     audioEngine.stop()
@@ -1455,20 +1480,12 @@ app.on('window-all-closed', () => {
   app.quit()
 })
 
-app.on('will-quit', () => {
-  taskbarPlayback.dispose()
-  thumbnailPlayback.dispose()
-  taskbarCover.dispose()
-  void systemMedia.dispose().catch((reason) => Logger.warn('[SMTC] Cleanup failed', reason))
-  systemMediaCommands.dispose()
-  Logger.debug('[Main] will quit; flushing settings and closing database')
-  isQuitting = true
-  flushPlaybackCheckpoint?.()
-  globalShortcut.unregisterAll()
-  audioEngine?.flushDspSettings()
-  searchIndexService?.stop()
-  stopDuplicateScans()
-  stopLibraryAutoImport()
-  shutdownPlugins()
-  closeDatabase()
+app.on('before-quit', (event) => {
+  // Electron does not await event handlers; route normal exits through the
+  // same awaited cleanup as tray exits. app.exit follows completed cleanup.
+  event.preventDefault()
+  void quitApplication().catch((reason) => {
+    Logger.error('[Main] Shutdown failed', reason)
+    app.exit(1)
+  })
 })

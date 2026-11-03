@@ -16,6 +16,8 @@ function session(stored, initialStatus) {
   const commands = new Map()
   let status = initialStatus
   let timerId = 0
+  let stopping = false
+  let onShutdown
   const engine = {
     onStateChanged: (handler) => (callbacks.state = handler),
     onPositionChanged: (handler) => (callbacks.position = handler),
@@ -27,6 +29,14 @@ function session(stored, initialStatus) {
   const modules = {
     '../i18n': { t: (key) => key },
     '../service/playbackMode': { isPlaybackOnly: () => false },
+    '../service/applicationShutdown': {
+      isApplicationShuttingDown: () => stopping,
+      onApplicationShutdown: (listener) => {
+        onShutdown = listener
+        return () => {}
+      }
+    },
+    '../service/autoMixRuntimeManager': { createAutoMixRuntimeManager: () => ({}) },
     electron: { ipcMain: { handle: (key, handler) => commands.set(key, handler) } },
     '../audioEngine/types': { EngineState, IPC: { COMMAND: 'command', EVENT: 'event' } },
     '../database/repository': {
@@ -58,7 +68,17 @@ function session(stored, initialStatus) {
     }
   )
   const flush = exports.registerIpcHandlers(engine, () => null)
-  return { flush, settings, timers, callbacks, setStatus: (value) => (status = value) }
+  return {
+    flush,
+    settings,
+    timers,
+    callbacks,
+    setStatus: (value) => (status = value),
+    shutdown: () => {
+      stopping = true
+      onShutdown()
+    }
+  }
 }
 
 const saved = { currentFile: 'track.flac', positionMs: 10000, wasPlaying: true }
@@ -113,18 +133,22 @@ assert.equal(
 // and therefore cannot rely on will-quit to persist its checkpoint.
 const main = readFileSync('src/main/index.ts', 'utf8')
 const quitSource = main.slice(
-  main.indexOf('function quitApplication(): void'),
+  main.indexOf('async function quitApplication('),
   main.indexOf('function sendTrayAction(')
 )
 const quitting = session(saved, status(EngineState.Playing, 43000))
 const order = []
-vm.runInNewContext(
+await vm.runInNewContext(
   ts.transpileModule(`${quitSource}\nquitApplication()`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022 }
   }).outputText,
   {
     Logger: { info() {} },
     isQuitting: false,
+    mainWindow: null,
+    desktopLyricsBoundsTimer: undefined,
+    clearTimeout,
+    beginApplicationShutdown: () => quitting.shutdown(),
     flushPlaybackCheckpoint: () => {
       quitting.flush()
       order.push('save')
@@ -134,10 +158,20 @@ vm.runInNewContext(
         quitting.setStatus(status(EngineState.Idle, 0))
         order.push('stop')
       },
-      flushDspSettings() {}
+      flushDspSettings() {},
+      shutdown: async () => {}
     },
     saveDesktopLyricsWindowState() {},
     globalShortcut: { unregisterAll() {} },
+    searchIndexService: { stop() {} },
+    stopLibraryAutoImport() {},
+    stopDuplicateScans() {},
+    shutdownPlugins() {},
+    taskbarPlayback: { dispose() {} },
+    thumbnailPlayback: { dispose() {} },
+    taskbarCover: { dispose() {} },
+    systemMedia: { dispose: async () => {} },
+    systemMediaCommands: { dispose() {} },
     tray: null,
     closeDatabase: () => order.push('close-database'),
     app: { exit: () => order.push('exit') }
@@ -145,6 +179,18 @@ vm.runInNewContext(
 )
 assert.deepEqual(order, ['save', 'stop', 'close-database', 'exit'])
 assert.equal(quitting.settings.get(checkpointKey).positionMs, 43000)
+quitting.callbacks.position(44000, 60000)
+quitting.callbacks.ended('transition', 'track.flac')
+assert.equal(
+  quitting.timers.size,
+  0,
+  'late native events cannot restart checkpoint timers after shutdown'
+)
+assert.equal(
+  quitting.settings.get(checkpointKey).positionMs,
+  43000,
+  'late native events cannot write after final flush'
+)
 
 console.log(
   'Playback checkpoint exit flush, restart, deferred restore, pause and ready seek passed'

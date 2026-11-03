@@ -23,10 +23,12 @@ const execute = promisify(execFile)
 const tick = () => new Promise((resolve) => setImmediate(resolve))
 const deferred = () => {
   let resolve
-  const promise = new Promise((done) => {
+  let reject
+  const promise = new Promise((done, fail) => {
     resolve = done
+    reject = fail
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 const probePath = path.resolve('build/native-addon/Release/easy_player_smtc_probe.exe')
 async function probe(action = 'inspect') {
@@ -150,8 +152,23 @@ async function serviceTests(createSystemMediaControls) {
   await service.setEnabled(false)
   sessions[1].callback('play')
   assert.deepEqual(actions, ['pause', 'next'])
+  const failedPublish = deferred()
+  sessions[1].update = () => failedPublish.promise
+  service.updatePlayback('playing')
+  await tick()
+  const replacementAttach = service.attach(makeWindow())
+  failedPublish.reject(new Error('outgoing window closed during update'))
+  await replacementAttach
+  await tick()
+  assert.equal(
+    service.state().available,
+    true,
+    'old publication failure must not cancel replacement attach'
+  )
+  assert.equal(sessions[2].closed, false, 'late cleanup cannot close the replacement session')
   await service.dispose()
   assert.equal(sessions[1].closed, true)
+  assert.equal(sessions[2].closed, true)
   const portable = createSystemMediaControls({
     ...options,
     platform: 'darwin',

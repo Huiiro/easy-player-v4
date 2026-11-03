@@ -1,5 +1,6 @@
 import { t } from '../i18n'
 import { waitForBackgroundWork } from './playbackMode'
+import { assertApplicationActive, applicationShutdownSignal } from './applicationShutdown'
 import { logError, logOperation, logUrl } from './operationLogger'
 import { Logger } from './loggerService'
 import { createHash, randomBytes } from 'node:crypto'
@@ -68,7 +69,11 @@ function remoteFetch(input: string, options: RequestInit = {}): Promise<Response
       return fetch(input, {
         ...options,
         redirect: 'error',
-        signal: AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS)
+        signal: AbortSignal.any([
+          applicationShutdownSignal(),
+          AbortSignal.timeout(REMOTE_REQUEST_TIMEOUT_MS),
+          ...(options.signal ? [options.signal] : [])
+        ])
       })
     },
     { successLevel: 'debug', warnOnFalse: false }
@@ -453,6 +458,7 @@ async function upsertSong(
   song: RemoteTrack
 ): Promise<void> {
   const cover = await cacheCover(source, song.coverId)
+  assertApplicationActive()
   const db = getDatabase()
   db.prepare(
     `INSERT INTO song (title, artist, album, duration, cover, audio, folder_id, year, genre, bitrate, sample_rate, bit_depth, channels, format, file_name, file_size, track_no, disk_no, source_id, remote_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(audio) DO UPDATE SET title = excluded.title, artist = excluded.artist, album = excluded.album, duration = excluded.duration, cover = excluded.cover, year = excluded.year, genre = excluded.genre, bitrate = excluded.bitrate, sample_rate = excluded.sample_rate, bit_depth = excluded.bit_depth, channels = excluded.channels, format = excluded.format, file_name = excluded.file_name, file_size = excluded.file_size, track_no = excluded.track_no, disk_no = excluded.disk_no`
@@ -492,6 +498,7 @@ export async function syncRemoteSource(
       const source = getSource(sourceId)
       validateSource(source)
       const tracks = await providerFor(source.type).listTracks(source)
+      assertApplicationActive()
       Logger.debug('[Remote] library fetched', {
         sourceId,
         type: source.type,
@@ -508,6 +515,7 @@ export async function syncRemoteSource(
           throw error
         })
       )
+      assertApplicationActive()
       touchSource(sourceId)
       updateSourceStats(sourceId, tracks.length, tracks.length)
       if (tracks.length) refreshNewestSongs(getDatabase())
@@ -611,6 +619,7 @@ async function downloadRemoteSong(songId: number): Promise<string> {
         filePath,
         bytes: statSync(filePath).size
       })
+      assertApplicationActive()
       cleanupCache(directory, filePath)
       return filePath
     },

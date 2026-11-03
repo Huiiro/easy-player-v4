@@ -263,6 +263,28 @@ try {
 
   active = true
   cancelDuringParse = false
+  const shutdownScanner = load('src/main/service/scanService.ts', {
+    '../database': { getDatabase: () => db },
+    './applicationShutdown': { isApplicationShuttingDown: () => !active },
+    './audioMetadataService': {
+      parseAudioFile: async () => {
+        active = false
+        return { common: { track: {}, disk: {} }, format: { duration: 30 } }
+      }
+    },
+    '../i18n': { t: (key) => key },
+    './playbackMode': { waitForBackgroundWork: async () => {} },
+    './operationLogger': { logOperation: (_name, _params, task) => task(), logError: String },
+    './loggerService': { Logger: { debug() {}, warn() {} } },
+    '../utils/pathUtils': { getCoverPath: () => path.join(temporary, 'covers') },
+    '../database/newestSongs': {
+      refreshNewestSongs: () => assert.fail('cannot refresh after shutdown')
+    }
+  })
+  result = await shutdownScanner.scanMusicDirectory(root, undefined, [copied], false)
+  assert.equal(result.added, 0, 'manual imports must also stop after application shutdown')
+  assert.ok(!stored.has(copied))
+  active = true
   let importAllowed = true
   const scanMocks = {
     '../database': { getDatabase: () => db },

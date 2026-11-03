@@ -18,6 +18,7 @@ import {
 } from './mediaDownloadRuntime'
 import { resolveSourceMedia } from '../sources/download'
 import { getNetworkSources } from '../sources'
+import { isApplicationShuttingDown } from './applicationShutdown'
 import type {
   DownloadType,
   DownloadQuality,
@@ -33,6 +34,15 @@ export interface DownloadRequest {
   downloadType: DownloadType
   quality: DownloadQuality
   locale?: string
+}
+
+function sendProgress(sender: Electron.WebContents, data: object): void {
+  if (isApplicationShuttingDown() || sender.isDestroyed?.()) return
+  try {
+    sender.send('media-download:progress', data)
+  } catch {
+    /* A replaced window may close during delivery. */
+  }
 }
 
 function downloadNotificationTitle(locale?: string): string {
@@ -101,7 +111,7 @@ function registerProgress(
   const onLine = (line: string): void => {
     const progress = line.match(/\[download\]\s+([\d.]+)%/)
     if (progress)
-      sender.send('media-download:progress', {
+      sendProgress(sender, {
         taskId,
         status: 'downloading',
         progress: Number(progress[1])
@@ -115,10 +125,12 @@ function registerProgress(
     chunk.toString().split(/\r?\n/).forEach(onLine)
   })
   process.once('error', (error) => {
+    if (isApplicationShuttingDown()) return
     Logger.error('[Download] process error', { taskId, pid: process.pid }, logError(error))
-    sender.send('media-download:progress', { taskId, status: 'error', progress: 0 })
+    sendProgress(sender, { taskId, status: 'error', progress: 0 })
   })
   process.once('close', (code, signal) => {
+    if (isApplicationShuttingDown()) return
     const done = code === 0
     Logger[done ? 'info' : 'error'](
       '[Download] process finished',
@@ -142,14 +154,14 @@ function registerProgress(
       progress: done ? 100 : 0,
       extra: { url: request.url, downloadType: request.downloadType }
     })
-    sender.send('media-download:progress', {
+    sendProgress(sender, {
       taskId,
       status: done ? 'done' : 'error',
       progress: done ? 100 : 0,
       filePath: savedFilePath,
       title: request.title
     })
-    const window = BrowserWindow.fromWebContents(sender)
+    const window = sender.isDestroyed?.() ? null : BrowserWindow.fromWebContents(sender)
     if (
       done &&
       window &&
@@ -170,8 +182,9 @@ function senderError(
   title: string,
   reason: unknown
 ): void {
+  if (isApplicationShuttingDown()) return
   Logger.error('[Download] task failed', { taskId }, logError(reason))
-  sender.send('media-download:progress', {
+  sendProgress(sender, {
     taskId,
     status: 'error',
     progress: 0,
@@ -261,7 +274,7 @@ async function startHttpDownload(
       const stagedPath = join(stagingDirectory, `audio.${extension}`)
       try {
         await downloadHttpMedia(plan, stagedPath, (progress) => {
-          sender.send('media-download:progress', { taskId, status: 'downloading', progress })
+          sendProgress(sender, { taskId, status: 'downloading', progress })
         })
         requireBackgroundWork()
         if (plan.finalizeAudio) {
@@ -287,6 +300,7 @@ async function startHttpDownload(
           Logger.warn('[Download] staging cleanup failed', { stagingDirectory }, logError(error))
         })
       }
+      requireBackgroundWork()
       saveDownloadTask({
         platform: request.platform,
         resourceId: resource.resourceId,
@@ -298,7 +312,7 @@ async function startHttpDownload(
         progress: 100,
         extra: { url: request.url, downloadType: request.downloadType }
       })
-      sender.send('media-download:progress', {
+      sendProgress(sender, {
         taskId,
         status: 'done',
         progress: 100,

@@ -8,6 +8,7 @@ import seedCatalog from '../../../resources/plugins/catalog.json'
 import { OfficialPluginPackages } from './packages'
 import { officialPluginBridge } from './bridge'
 import { pluginFetch } from './proxy'
+import { assertApplicationActive } from '../service/applicationShutdown'
 import { extractMediaInfo } from '../service/mediaDownloadRuntime'
 import { initializeSourceSettings } from '../sources/management'
 import type { OfficialPluginCatalog } from '../../shared/plugins'
@@ -68,13 +69,17 @@ export function initializePlugins(): void {
   }
 }
 export async function installManagedPlugin(id: string): Promise<void> {
+  assertApplicationActive()
   if (typeof id !== 'string') throw new Error('pluginInvalid')
   await getOfficialPluginPackages().install(id, !disabledPlugins().has(id))
+  assertApplicationActive()
   initializeSourceSettings()
 }
 export async function importManagedPlugin(filename: string): Promise<void> {
+  assertApplicationActive()
   const disabled = disabledPlugins()
   await getOfficialPluginPackages().installFile(filename, (id) => !disabled.has(id))
+  assertApplicationActive()
   initializeSourceSettings()
 }
 export function uninstallManagedPlugin(id: string): void {

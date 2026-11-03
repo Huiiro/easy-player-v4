@@ -8,6 +8,7 @@ import { Logger } from '../service/loggerService'
 import { logError, logOperation, logParams } from '../service/operationLogger'
 import { createAutoMixRuntimeManager } from '../service/autoMixRuntimeManager'
 import type { SystemMediaPlaybackState } from '../../shared/systemMediaControls'
+import { isApplicationShuttingDown, onApplicationShutdown } from '../service/applicationShutdown'
 
 interface PlaybackCheckpoint {
   currentFile?: string
@@ -61,6 +62,11 @@ export function registerIpcHandlers(
     wasPlaying: stored.wasPlaying
   }
   let checkpointTimer: ReturnType<typeof setTimeout> | undefined
+  onApplicationShutdown(() => {
+    clearTimeout(reclaimTimer)
+    clearTimeout(checkpointTimer)
+    checkpointTimer = undefined
+  })
   const saveCheckpoint = (changes: Partial<PlaybackCheckpoint>, delayed = false): void => {
     checkpoint = { ...checkpoint, ...changes }
     const write = (): void => {
@@ -96,6 +102,7 @@ export function registerIpcHandlers(
   // ── Commands ──
 
   ipcMain.handle(IPC.COMMAND, async (event, request) => {
+    if (isApplicationShuttingDown()) return { success: false }
     if (!request || typeof request.action !== 'string') {
       Logger.warn('[Audio IPC] invalid command request')
       return { success: false, error: t('invalidAudioCommand') }
@@ -116,6 +123,7 @@ export function registerIpcHandlers(
           }
           case 'open': {
             const ok = await engine.openAsync(params.filePath)
+            if (isApplicationShuttingDown()) return { success: false }
             if (ok)
               saveCheckpoint({ currentFile: params.filePath, positionMs: 0, wasPlaying: false })
             return { success: ok }
@@ -406,6 +414,7 @@ export function registerIpcHandlers(
 
   // ── State change events ──
   engine.onStateChanged((state: number) => {
+    if (isApplicationShuttingDown()) return
     onPlaybackState?.(
       (playbackStateNames[state as EngineState] ?? 'idle') as SystemMediaPlaybackState
     )
@@ -425,6 +434,7 @@ export function registerIpcHandlers(
   let lastPositionSentAt = 0
   let lastPositionMs = -1
   engine.onPositionChanged((posMs: number, durMs: number) => {
+    if (isApplicationShuttingDown()) return
     const now = Date.now()
     const discontinuity = Math.abs(posMs - lastPositionMs) > 1500 || posMs < lastPositionMs
     if (isPlaybackOnly() && !discontinuity && now - lastPositionSentAt < 1000) return
@@ -437,6 +447,7 @@ export function registerIpcHandlers(
     })
   })
   engine.onTrackEnded((reason: string, filePath: string) => {
+    if (isApplicationShuttingDown()) return
     let nextFilePath: string | undefined
     if (reason === 'transition') {
       const status = engine.getStatus()

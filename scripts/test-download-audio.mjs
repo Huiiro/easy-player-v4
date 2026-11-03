@@ -285,11 +285,12 @@ try {
   )
 
   // Run the yt-dlp transport through the same source registry and IPC entry point.
-  for (const scenario of ['done', 'exit-failure', 'spawn-failure']) {
+  for (const scenario of ['done', 'exit-failure', 'spawn-failure', 'closed-window', 'shutdown']) {
     const handlers = new Map()
     const events = []
     const spawnCalls = []
     let saved
+    let shuttingDown = false
     let complete
     const completed = new Promise((resolve) => {
       complete = resolve
@@ -307,17 +308,24 @@ try {
         spawn: (command, args, options) => {
           spawnCalls.push({ command, args, options })
           setImmediate(() => {
+            if (scenario === 'shutdown') shuttingDown = true
             if (scenario === 'spawn-failure') child.emit('error', new Error('missing executable'))
             else {
               child.stdout.emit('data', Buffer.from('[download] 25.0%\n'))
               child.stderr.emit('data', Buffer.from('diagnostic'))
-              child.emit('close', scenario === 'done' ? 0 : 1)
+              child.emit('close', ['done', 'closed-window', 'shutdown'].includes(scenario) ? 0 : 1)
+              if (scenario === 'closed-window' || scenario === 'shutdown')
+                complete({ status: 'suppressed' })
             }
           })
           return child
         }
       },
       '../i18n': { t: (key) => key },
+      '../service/applicationShutdown': {
+        isApplicationShuttingDown: () => shuttingDown,
+        onApplicationShutdown: () => () => {}
+      },
       '../database/repository': {
         listDownloadTasks: () => [],
         saveDownloadTask: (task) => {
@@ -327,6 +335,7 @@ try {
     })
     handler.registerDownloadIpcHandlers()
     const sender = {
+      isDestroyed: () => scenario === 'closed-window',
       send: (_channel, event) => {
         events.push(event)
         if (event.status === 'done' || event.status === 'error') complete(event)
@@ -379,6 +388,23 @@ try {
     const timer = setTimeout(() => complete({ status: 'timeout' }), 5000)
     const result = await completed
     clearTimeout(timer)
+    if (scenario === 'closed-window' || scenario === 'shutdown') {
+      assert.equal(result.status, 'suppressed')
+      assert.equal(
+        events.length,
+        0,
+        'destroyed windows and shutdown cannot receive download progress'
+      )
+      if (scenario === 'shutdown')
+        assert.equal(saved, undefined, 'late process close must not write to a closed database')
+      else
+        assert.equal(
+          saved.status,
+          'done',
+          'closing the renderer must not lose a completed host-owned download'
+        )
+      continue
+    }
     assert.equal(result.status, scenario === 'done' ? 'done' : 'error')
     assert.equal(spawnCalls.length, 1)
     assert.equal(spawnCalls[0].options.windowsHide, true)

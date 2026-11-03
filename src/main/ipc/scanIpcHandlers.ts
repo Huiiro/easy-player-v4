@@ -10,6 +10,7 @@ import {
   trackMusicDirectory
 } from '../service/libraryAutoImport'
 import type { LibraryWatchDirectory } from '../../shared/libraryAutoImport'
+import { isApplicationShuttingDown } from '../service/applicationShutdown'
 
 export const SELECT_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:select-local-folder'
 export const SCAN_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:scan-local-folder'
@@ -93,7 +94,7 @@ export function registerScanIpcHandlers(): void {
           undefined,
           ignoreShortSongs !== false
         )
-        trackMusicDirectory(directory)
+        if (!isApplicationShuttingDown()) trackMusicDirectory(directory)
         return {
           directory,
           result

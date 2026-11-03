@@ -129,14 +129,16 @@ export function createSystemMediaControls(options: {
       .catch(warn)
   }
   function schedulePublish(): void {
+    const current = session
+    const token = generation
     void serialize(publish).catch((reason) => {
+      if (token !== generation || session !== current) return
       available = false
       boundWindow = undefined
       ++generation
       void serialize(async () => {
-        const failed = session
-        session = undefined
-        await failed?.close()
+        if (session === current) session = undefined
+        await current?.close()
       }).catch(warn)
       warn(reason)
     })

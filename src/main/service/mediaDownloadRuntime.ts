@@ -7,6 +7,7 @@ import { logOperation } from './operationLogger'
 import type { MediaInfoRequest } from '../../../packages/plugin-sdk/src/host'
 import { SourceCallError } from '../sources/errors'
 import { getPluginSession, pluginProxyArguments } from '../plugins/proxy'
+import { onApplicationShutdown } from './applicationShutdown'
 
 /** Public SDK capability: only metadata extraction, no plugin-supplied flags or paths. */
 export async function extractMediaInfo(
@@ -73,9 +74,11 @@ export function trackProcess(
   const cleanup = onPlaybackModeChanged((enabled) => {
     if (enabled) terminate()
   })
+  const offShutdown = onApplicationShutdown(terminate)
   signal?.addEventListener('abort', terminate, { once: true })
   if (signal?.aborted) terminate()
   child.once('close', () => {
+    offShutdown()
     cleanup()
     signal?.removeEventListener('abort', terminate)
   })
@@ -90,8 +93,10 @@ export function backgroundRequest(url: string, signal?: AbortSignal): Electron.C
     if (enabled) request.abort()
   })
   const abort = (): void => request.abort()
+  const offShutdown = onApplicationShutdown(abort)
   signal?.addEventListener('abort', abort, { once: true })
   request.once('close', () => {
+    offShutdown()
     cleanup()
     signal?.removeEventListener('abort', abort)
   })

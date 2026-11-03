@@ -1,4 +1,5 @@
 import { app, net } from 'electron'
+import { onApplicationShutdown } from './applicationShutdown'
 import { Worker } from 'node:worker_threads'
 import { spawn } from 'node:child_process'
 import path from 'node:path'
@@ -84,6 +85,6 @@ export function createAutoMixRuntimeManager(
         )
       })
   })
-  app.once('before-quit', () => service.cancel())
+  onApplicationShutdown(() => service.cancel())
   return service
 }

@@ -102,7 +102,8 @@
     "test:taskbar-cover": "node scripts/check-taskbar-cover.cjs",
     "test:plugin-logs": "node scripts/test-plugin-logs.mjs",
     "test:plugin-proxy": "electron scripts/test-plugin-proxy.cjs && electron scripts/check-plugin-proxy-settings.cjs",
-    "test:smtc": "cmake --build build/native-addon --target easy_player_smtc easy_player_smtc_probe --config Release && electron scripts/test-system-media-controls.cjs"
+    "test:smtc": "cmake --build build/native-addon --target easy_player_smtc easy_player_smtc_probe --config Release && electron scripts/test-system-media-controls.cjs",
+    "test:shutdown": "node scripts/test-application-shutdown.mjs && node scripts/test-playback-checkpoint.mjs && node scripts/test-resource-lifecycle.mjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

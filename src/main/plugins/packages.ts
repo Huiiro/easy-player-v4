@@ -1,5 +1,6 @@
 import { officialThemeFrame } from './themeFrame'
 import { createHash, randomUUID } from 'node:crypto'
+import { assertApplicationActive } from '../service/applicationShutdown'
 import {
   existsSync,
   mkdirSync,
@@ -338,6 +339,7 @@ export class OfficialPluginPackages {
           await this.fetcher(entry.url, { signal: AbortSignal.timeout(60000) }),
           maxPackageSize
         ))
+      assertApplicationActive()
       const next = this.loadDefinition(bytes, entry)
       const previous = this.installed.get(id)
       const previousEnabled = this.manager.get(id)?.enabled ?? false

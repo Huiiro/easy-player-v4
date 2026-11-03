@@ -57,6 +57,8 @@ export class AudioEngineManager {
   private stemRequestTimer?: ReturnType<typeof setTimeout>
   private dspSettings: DspSettings
   private dspSettingsSaveTimer: ReturnType<typeof setTimeout> | undefined
+  private shuttingDown = false
+  private deviceEvents?: ReturnType<typeof setInterval>
 
   constructor() {
     this.dspSettings = loadDspSettings()
@@ -69,21 +71,16 @@ export class AudioEngineManager {
       })
       this.restoreDspSettings()
       this.reloadStemService()
-      app.once('before-quit', () => {
-        clearTimeout(this.stemRequestTimer)
-        this.stemService?.close()
-      })
       if (process.platform === 'win32') {
         // Process driver notifications even with the renderer closed/minimized.
-        const deviceEvents = setInterval(() => {
+        this.deviceEvents = setInterval(() => {
           try {
             this.engine?.serviceBackendEvents?.()
           } catch (error) {
             Logger.error('[AudioEngineManager] device event recovery failed', error)
           }
         }, 100)
-        deviceEvents.unref()
-        app.once('before-quit', () => clearInterval(deviceEvents))
+        this.deviceEvents.unref()
       }
       Logger.info(
         `[AudioEngineManager] EasyPlayer Audio Engine v${this.engine.getVersion?.() ?? 'unknown'} initialized`
@@ -92,7 +89,7 @@ export class AudioEngineManager {
   }
 
   reloadStemService(): void {
-    if (this.stemMaintenance) return
+    if (this.stemMaintenance || this.shuttingDown) return
     clearTimeout(this.stemRequestTimer)
     void this.stopStemService()
     if (!this.engine) return
@@ -336,9 +333,9 @@ export class AudioEngineManager {
   private scheduleStemRequest(ready = true): void {
     clearTimeout(this.stemRequestTimer)
     this.stemService?.cancel()
-    if (!ready || isPlaybackOnly() || !this.stemService) return
+    if (this.shuttingDown || !ready || isPlaybackOnly() || !this.stemService) return
     const poll = (): void => {
-      if (isPlaybackOnly()) return
+      if (this.shuttingDown || isPlaybackOnly()) return
       if (this.engine?.isAutoMixPreparing?.()) {
         this.stemRequestTimer = setTimeout(poll, 50)
         this.stemRequestTimer.unref()
@@ -796,8 +793,17 @@ export class AudioEngineManager {
   }
 
   private persistDspSettings(): void {
+    if (this.shuttingDown) return
     if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
     this.dspSettingsSaveTimer = setTimeout(() => this.flushDspSettings(), 400)
+  }
+
+  async shutdown(): Promise<void> {
+    this.shuttingDown = true
+    clearInterval(this.deviceEvents)
+    clearTimeout(this.stemRequestTimer)
+    this.flushDspSettings()
+    await this.stopStemService()
   }
 
   flushDspSettings(): void {

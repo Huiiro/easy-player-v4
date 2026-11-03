@@ -10,6 +10,7 @@ import { getCoverPath } from '../utils/pathUtils'
 import { Logger } from './loggerService'
 import { refreshNewestSongs } from '../database/newestSongs'
 import { joinMetadataValues } from '../../shared/metadataValues'
+import { isApplicationShuttingDown } from './applicationShutdown'
 
 export interface ScanCallback {
   (current: number, total: number, added: number, duplicates: number): void
@@ -138,8 +139,9 @@ export async function scanMusicDirectory(
       }
       Logger.debug('[Scanner] files collected', { directory: rootPath, fileCount: files.length })
 
-      if (options.shouldContinue?.() === false)
-        return { added: 0, duplicates: 0, skipped: 0, total: files.length }
+      const active = (): boolean =>
+        !isApplicationShuttingDown() && options.shouldContinue?.() !== false
+      if (!active()) return { added: 0, duplicates: 0, skipped: 0, total: files.length }
       const db = getDatabase()
       const insertSong = db.prepare(`
       INSERT OR IGNORE INTO song (
@@ -156,7 +158,7 @@ export async function scanMusicDirectory(
       const coverDir = getCoverPath()
       await fs.promises.mkdir(coverDir, { recursive: true })
 
-      callback?.(0, files.length, 0, 0)
+      if (active()) callback?.(0, files.length, 0, 0)
 
       let added = 0
       let duplicates = 0
@@ -165,7 +167,7 @@ export async function scanMusicDirectory(
       for (const [index, fullPath] of files.entries()) {
         // Explicit file opens are part of playback; only library scans wait.
         if (!selectedFiles || options.background) await waitForBackgroundWork()
-        if (options.shouldContinue?.() === false) break
+        if (!active()) break
         try {
           if (options.shouldImportFile?.(fullPath) === false) {
             skipped++
@@ -177,7 +179,7 @@ export async function scanMusicDirectory(
           }
 
           const metadata = await parseAudioFile(fullPath, { duration: true })
-          if (options.shouldContinue?.() === false) break
+          if (!active()) break
           const common = metadata.common
           const format = metadata.format
           // A supported extension can belong to metadata or a file with no audio stream.
@@ -196,7 +198,7 @@ export async function scanMusicDirectory(
           }
 
           const fileSize = (await fs.promises.stat(fullPath)).size
-          if (options.shouldContinue?.() === false) break
+          if (!active()) break
           // A deletion can happen while metadata or file information is being read.
           if (options.shouldImportFile?.(fullPath) === false) {
             skipped++
@@ -227,6 +229,7 @@ export async function scanMusicDirectory(
           if (result.changes > 0) added++
           else duplicates++
         } catch (error) {
+          if (!active()) break
           failed++
           Logger.warn(
             '[Scanner] skipped file after import failure',
@@ -239,7 +242,7 @@ export async function scanMusicDirectory(
             logError(error)
           )
         } finally {
-          callback?.(index + 1, files.length, added, duplicates)
+          if (active()) callback?.(index + 1, files.length, added, duplicates)
         }
       }
 
@@ -251,10 +254,7 @@ export async function scanMusicDirectory(
           failed,
           total: files.length
         })
-      if (
-        options.shouldContinue?.() !== false &&
-        (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get())
-      )
+      if (active() && (added || !db.prepare('SELECT 1 FROM song WHERE is_newest = 1').get()))
         refreshNewestSongs(db)
       return { added, duplicates, skipped, total: files.length }
     },
