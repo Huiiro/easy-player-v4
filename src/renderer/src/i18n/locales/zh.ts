@@ -1,4 +1,17 @@
 export default {
+  pluginProxy: {
+    title: '代理设置',
+    enabled: '启用代理',
+    description: '用于插件请求、目录和安装包下载，以及媒体解析与下载。保存后对新请求生效。',
+    address: '代理地址',
+    addressHint: '支持 HTTP、HTTPS 和 SOCKS5。',
+    invalid: '请输入有效的 HTTP、HTTPS 或 SOCKS5 地址，不支持账号密码、路径和查询参数。',
+    save: '保存代理设置',
+    saved: '代理设置已保存',
+    saveFailed: '保存代理设置失败',
+    loadFailed: '加载代理设置失败',
+    retry: '重试'
+  },
   ui: {
     selectPlaceholder: '请选择',
     empty: '暂无数据',

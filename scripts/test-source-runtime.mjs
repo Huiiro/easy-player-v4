@@ -329,6 +329,10 @@ let child,
   aborted = 0
 const spawned = []
 const transport = loader({
+  [path.resolve('src/main/plugins/proxy.ts')]: {
+    getPluginSession: () => ({}),
+    pluginProxyArguments: () => ['--proxy', 'http://127.0.0.1:7890']
+  },
   ...mocks,
   [path.resolve('src/main/utils/pathUtils.ts')]: {
     getYtdlpCommand: () => 'yt-dlp-fixture'
@@ -387,6 +391,8 @@ const extracting = transport.extractMediaInfo(
   extractionSignal
 )
 assert.deepEqual(Array.from(spawned.at(-1).args), [
+  '--proxy',
+  'http://127.0.0.1:7890',
   '--dump-single-json',
   '--flat-playlist',
   '--skip-download',

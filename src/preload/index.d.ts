@@ -39,6 +39,15 @@ declare global {
     electron: ElectronAPI
     api: {
       plugins: {
+        getProxy(): Promise<
+          import('../shared/networkSources').NetworkSourceResult<
+            import('../shared/pluginProxy').PluginProxySettings
+          >
+        >
+        setProxy(settings: import('../shared/pluginProxy').PluginProxySettings): Promise<{
+          success: boolean
+          error?: string
+        }>
         logs(): Promise<
           import('../shared/networkSources').NetworkSourceResult<
             import('../shared/pluginLogs').PluginLogEntry[]

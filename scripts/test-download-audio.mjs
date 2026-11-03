@@ -15,6 +15,10 @@ import { parseFile } from 'music-metadata'
 const require = createRequire(import.meta.url)
 const logger = { debug() {}, info() {}, warn() {}, error() {} }
 const common = {
+  '../plugins/proxy': {
+    getPluginSession: () => ({}),
+    pluginProxyArguments: () => ['--proxy', '']
+  },
   '../service/playbackMode': {
     requireBackgroundWork() {},
     isPlaybackOnly: () => false,

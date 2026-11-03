@@ -1,6 +1,7 @@
 import { Logger } from '../service/loggerService'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { t } from '../i18n'
+import { getPluginProxySettings, savePluginProxySettings } from '../plugins/proxy'
 import {
   initializePlugins,
   listManagedPlugins,
@@ -25,6 +26,22 @@ function changed(): void {
 }
 export function registerPluginIpcHandlers(): void {
   initializePlugins()
+  ipcMain.handle('plugins:proxy:get', () => ({ success: true, data: getPluginProxySettings() }))
+  ipcMain.handle('plugins:proxy:set', async (_event, value: unknown) => {
+    try {
+      await savePluginProxySettings(value)
+      return { success: true }
+    } catch (reason) {
+      return {
+        success: false,
+        error: t(
+          reason instanceof Error && reason.message === 'pluginProxyInvalid'
+            ? 'pluginProxyInvalid'
+            : 'pluginsSaveFailed'
+        )
+      }
+    }
+  })
   ipcMain.handle('plugins:logs', () => ({ success: true, data: Logger.recentPlugins() }))
   ipcMain.on('plugins:theme-failure', (_event, request: unknown) => {
     if (!request || typeof request !== 'object') return

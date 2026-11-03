@@ -44,6 +44,7 @@ import { resolveThemeResource } from './service/themePackageService'
 import { themeResourceResponse } from './plugins/themeProtocol'
 import { registerSourceCallIpcHandlers } from './ipc/sourceCallIpcHandlers'
 import { registerPluginIpcHandlers } from './ipc/pluginIpcHandlers'
+import { initializePluginProxy } from './plugins/proxy'
 import { shutdownPlugins } from './plugins/runtime'
 import { registerNetworkSourceIpcHandlers } from './ipc/networkSourceIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
@@ -871,7 +872,7 @@ app.whenReady().then(() =>
   logOperation(
     '[Main] initialize',
     { platform: process.platform, packaged: app.isPackaged },
-    () => {
+    async () => {
       const startupStarted = performance.now()
       // Keep Windows notifications and taskbar identity aligned with the packaged app.
       app.setAppUserModelId('com.huiiro.easyplayer')
@@ -920,6 +921,7 @@ app.whenReady().then(() =>
       registerDatabaseIpcHandlers()
       registerScanIpcHandlers()
       registerDuplicateFileIpcHandlers()
+      await initializePluginProxy()
       registerPluginIpcHandlers()
       registerNetworkSourceIpcHandlers()
       registerSourceCallIpcHandlers()

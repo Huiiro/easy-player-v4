@@ -1,4 +1,5 @@
 export default {
+  pluginProxyInvalid: '请输入 HTTP、HTTPS 或 SOCKS5 代理地址，不支持账号密码、路径和查询参数。',
   trayUnknownTrack: '未知歌曲',
   taskbarControlsUnavailable: '任务栏播控条不可用，请重新安装播放器。',
   trayNoTrack: '暂未播放',

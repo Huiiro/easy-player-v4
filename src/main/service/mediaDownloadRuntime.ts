@@ -6,6 +6,7 @@ import { onPlaybackModeChanged, requireBackgroundWork } from './playbackMode'
 import { logOperation } from './operationLogger'
 import type { MediaInfoRequest } from '../../../packages/plugin-sdk/src/host'
 import { SourceCallError } from '../sources/errors'
+import { getPluginSession, pluginProxyArguments } from '../plugins/proxy'
 
 /** Public SDK capability: only metadata extraction, no plugin-supplied flags or paths. */
 export async function extractMediaInfo(
@@ -84,7 +85,7 @@ export function trackProcess(
 export function backgroundRequest(url: string, signal?: AbortSignal): Electron.ClientRequest {
   signal?.throwIfAborted()
   requireBackgroundWork()
-  const request = net.request({ method: 'GET', url })
+  const request = net.request({ method: 'GET', url, session: getPluginSession() })
   const cleanup = onPlaybackModeChanged((enabled) => {
     if (enabled) request.abort()
   })
@@ -109,7 +110,10 @@ export function runYtDlp(args: string[], signal?: AbortSignal): Promise<string> 
     { executable: ytdlpCommand(), argumentCount: args.length },
     () => {
       return new Promise((resolve, reject) => {
-        const process = trackProcess(spawn(ytdlpCommand(), args, { windowsHide: true }), signal)
+        const process = trackProcess(
+          spawn(ytdlpCommand(), [...pluginProxyArguments(), ...args], { windowsHide: true }),
+          signal
+        )
         const abort = (): void => reject(signal?.reason)
         signal?.addEventListener('abort', abort, { once: true })
         if (signal?.aborted) abort()

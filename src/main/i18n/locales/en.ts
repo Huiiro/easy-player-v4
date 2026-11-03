@@ -1,4 +1,6 @@
 export default {
+  pluginProxyInvalid:
+    'Enter an HTTP, HTTPS or SOCKS5 proxy address without credentials, path or query.',
   trayUnknownTrack: 'Unknown track',
   taskbarControlsUnavailable:
     'The taskbar playback bar is unavailable. Please reinstall the player.',

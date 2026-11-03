@@ -16,6 +16,7 @@ import ThemeSettings from '@/components/settings/ThemeSettings.vue'
 import CustomBackgroundSettings from '@/components/settings/CustomBackgroundSettings.vue'
 import ShortcutSettings from '@/components/settings/ShortcutSettings.vue'
 import OfficialPluginSettings from '@/components/settings/OfficialPluginSettings.vue'
+import PluginProxySettings from '@/components/settings/PluginProxySettings.vue'
 import NetworkSourceSettings from '@/components/settings/NetworkSourceSettings.vue'
 import SystemSettings from '@/components/settings/SystemSettings.vue'
 import CacheSettings from '@/components/settings/CacheSettings.vue'
@@ -385,6 +386,9 @@ onBeforeUnmount(() => {
           <div class="settings-card">
             <SettingGroup :title="t('settings.groups.plugins')">
               <OfficialPluginSettings />
+            </SettingGroup>
+            <SettingGroup :title="t('pluginProxy.title')">
+              <PluginProxySettings />
             </SettingGroup>
           </div>
         </section>

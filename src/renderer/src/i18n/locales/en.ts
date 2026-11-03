@@ -1,4 +1,18 @@
 export default {
+  pluginProxy: {
+    title: 'Proxy settings',
+    enabled: 'Enable proxy',
+    description:
+      'Applies to plugin requests, catalog and package downloads, media extraction and downloads. Saved changes apply to new requests.',
+    address: 'Proxy address',
+    addressHint: 'Supports HTTP, HTTPS and SOCKS5.',
+    invalid: 'Enter a valid HTTP, HTTPS or SOCKS5 address without credentials, path or query.',
+    save: 'Save proxy settings',
+    saved: 'Proxy settings saved',
+    saveFailed: 'Could not save proxy settings',
+    loadFailed: 'Could not load proxy settings',
+    retry: 'Retry'
+  },
   ui: {
     selectPlaceholder: 'Select an option',
     empty: 'No options',

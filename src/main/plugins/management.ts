@@ -7,6 +7,7 @@ import { getPluginPath } from '../utils/pathUtils'
 import seedCatalog from '../../../resources/plugins/catalog.json'
 import { OfficialPluginPackages } from './packages'
 import { officialPluginBridge } from './bridge'
+import { pluginFetch } from './proxy'
 import { extractMediaInfo } from '../service/mediaDownloadRuntime'
 import { initializeSourceSettings } from '../sources/management'
 import type { OfficialPluginCatalog } from '../../shared/plugins'
@@ -19,7 +20,7 @@ export function getOfficialPluginPackages(): OfficialPluginPackages {
       getPluginManager(),
       officialPluginBridge,
       seedCatalog as OfficialPluginCatalog,
-      fetch,
+      pluginFetch,
       (id, reason) =>
         Logger.plugin(
           'error',
@@ -49,7 +50,7 @@ export function initializePlugins(): void {
     writeSetting: setAppSetting,
     log: (pluginId, level, message, version, operation) =>
       Logger.plugin(level, { pluginId, version, operation: operation ?? 'plugin' }, message),
-    fetch: (url, init) => fetch(url, init),
+    fetch: (url, init) => pluginFetch(url, init),
     mediaInfo: extractMediaInfo
   })
   const disabled = disabledPlugins()

@@ -761,6 +761,9 @@ const systemAPI = {
 // Custom APIs for renderer
 const api = {
   plugins: {
+    getProxy: () => ipcRenderer.invoke('plugins:proxy:get'),
+    setProxy: (settings: import('../shared/pluginProxy').PluginProxySettings) =>
+      ipcRenderer.invoke('plugins:proxy:set', settings),
     logs: () => ipcRenderer.invoke('plugins:logs'),
     reportThemeFailure: (pluginId: string, revision: string, code: string, detail: string) =>
       ipcRenderer.send('plugins:theme-failure', { pluginId, revision, code, detail }),
