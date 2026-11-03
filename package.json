@@ -101,7 +101,7 @@
     "test:taskbar": "npm run build:taskbar && node scripts/test-taskbar-playback.mjs && node scripts/test-thumbnail-playback.mjs && node scripts/check-taskbar-strip.cjs",
     "test:taskbar-cover": "node scripts/check-taskbar-cover.cjs",
     "test:plugin-logs": "node scripts/test-plugin-logs.mjs",
-    "test:plugin-proxy": "electron scripts/test-plugin-proxy.cjs"
+    "test:plugin-proxy": "electron scripts/test-plugin-proxy.cjs && electron scripts/check-plugin-proxy-settings.cjs"
   },
   "dependencies": {
     "@electron-toolkit/preload": "^3.0.2",

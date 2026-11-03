@@ -387,9 +387,6 @@ onBeforeUnmount(() => {
             <SettingGroup :title="t('settings.groups.plugins')">
               <OfficialPluginSettings />
             </SettingGroup>
-            <SettingGroup :title="t('pluginProxy.title')">
-              <PluginProxySettings />
-            </SettingGroup>
           </div>
         </section>
         <section id="network-sources" class="settings-section">
@@ -408,6 +405,9 @@ onBeforeUnmount(() => {
           <div class="settings-card">
             <SettingGroup :title="t('settings.groups.networkSources')">
               <NetworkSourceSettings />
+            </SettingGroup>
+            <SettingGroup :title="t('pluginProxy.title')">
+              <PluginProxySettings />
             </SettingGroup>
           </div>
         </section>

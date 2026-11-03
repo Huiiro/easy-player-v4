@@ -1,11 +1,14 @@
 export default {
   pluginProxy: {
     title: 'Proxy settings',
-    enabled: 'Enable proxy',
+    mode: 'Proxy Mode',
+    direct: 'Off',
+    system: 'Use system proxy',
+    custom: 'Custom proxy',
     description:
-      'Applies to plugin requests, catalog and package downloads, media extraction and downloads. Saved changes apply to new requests.',
+      'Applies to network source requests, plugin catalog and package downloads, and media extraction and downloads.',
     address: 'Proxy address',
-    addressHint: 'Supports HTTP, HTTPS and SOCKS5.',
+    addressHint: 'Supports HTTP, HTTPS and SOCKS5. Save after entering or changing the address.',
     invalid: 'Enter a valid HTTP, HTTPS or SOCKS5 address without credentials, path or query.',
     save: 'Save proxy settings',
     saved: 'Proxy settings saved',
@@ -803,9 +806,11 @@ export default {
     enableSuccess: 'Source “{name}” enabled.',
     disableSuccess: 'Source “{name}” disabled.',
     refreshSuccess: 'Network sources reloaded.',
-    title: 'Network sources',
-    description: 'Choose sources for lyrics, artwork, metadata, and downloads.',
-    changeHint: 'Disabling stops using this source. Downloads already started will continue.',
+    title: 'Network',
+    description:
+      'Configure a network proxy and manage sources for lyrics, artwork, metadata, and downloads.',
+    changeHint:
+      'Sources are provided by installed plugins and can be enabled individually. Disabling stops using that source; downloads already started will continue.',
     builtin: 'Built-in',
     enabled: 'Enabled',
     disabled: 'Disabled',

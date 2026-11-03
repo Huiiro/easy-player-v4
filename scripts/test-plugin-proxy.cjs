@@ -1,23 +1,49 @@
 /* eslint-disable @typescript-eslint/explicit-function-return-type, @typescript-eslint/no-require-imports */
 const assert = require('node:assert/strict')
 const { createServer } = require('node:http')
-const { readFileSync, existsSync } = require('node:fs')
+const { readFileSync, existsSync, mkdirSync, mkdtempSync } = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const ts = require('typescript')
-const { app } = require('electron')
+const { app, session } = require('electron')
+const Database = require('better-sqlite3')
+mkdirSync('build', { recursive: true })
+const storage = mkdtempSync(path.resolve('build/plugin-proxy-storage-'))
+app.setPath('userData', storage)
+app.commandLine.appendSwitch('disable-background-networking')
+const databasePath = path.join(storage, 'settings.sqlite')
+let database = new Database(databasePath)
+database.exec(`CREATE TABLE app_setting (
+  key TEXT PRIMARY KEY, value_json TEXT NOT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+)`)
+const configurations = []
+let systemRule
+const testElectron = {
+  session: {
+    fromPartition(...args) {
+      const real = session.fromPartition(...args)
+      return {
+        setProxy(config) {
+          configurations.push(config)
+          return real.setProxy(config)
+        },
+        fetch: (...args) => real.fetch(...args),
+        resolveProxy: (...args) =>
+          systemRule === undefined ? real.resolveProxy(...args) : Promise.resolve(systemRule)
+      }
+    }
+  }
+}
 
-const saved = new Map()
 let failSave = false
 const cache = new Map()
 function load(filename) {
   filename = path.resolve(filename)
-  if (filename.endsWith(path.join('repository', 'settings.ts')))
+  if (filename === path.resolve('src/main/database/index.ts'))
     return {
-      getAppSetting: (key) => saved.get(key) ?? null,
-      setAppSetting: (key, value) => {
+      getDatabase: () => {
         if (failSave) throw new Error('Disk full')
-        saved.set(key, value)
+        return database
       }
     }
   if (cache.has(filename)) return cache.get(filename)
@@ -32,6 +58,7 @@ function load(filename) {
       URL,
       Error,
       require(name) {
+        if (name === 'electron') return testElectron
         if (!name.startsWith('.')) return require(name)
         const target = path.resolve(path.dirname(filename), name)
         return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
@@ -40,6 +67,14 @@ function load(filename) {
     { filename }
   )
   return exports
+}
+async function restartProxy() {
+  database.close()
+  database = new Database(databasePath)
+  cache.delete(path.resolve('src/main/plugins/proxy.ts'))
+  const fresh = load('src/main/plugins/proxy.ts')
+  await fresh.initializePluginProxy()
+  return fresh
 }
 const plain = (value) => JSON.parse(JSON.stringify(value))
 const listen = (server) => new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
@@ -83,8 +118,21 @@ app.whenReady().then(async () => {
       normalizePluginProxy({ enabled: true, url: 'socks5://[::1]:1080' }).url,
       'socks5://[::1]:1080'
     )
+    assert.deepEqual(plain(normalizePluginProxy({ enabled: true, url: 'http://localhost:7890' })), {
+      mode: 'custom',
+      url: 'http://localhost:7890'
+    })
+    assert.deepEqual(plain(normalizePluginProxy({ enabled: false, url: '' })), {
+      mode: 'direct',
+      url: ''
+    })
+    assert.throws(() => normalizePluginProxy({ mode: 'invalid', url: '' }))
+    assert.deepEqual(plain(normalizePluginProxy({ mode: 'system', url: '' })), {
+      mode: 'system',
+      url: ''
+    })
     await Promise.all([listen(target), listen(proxy)])
-    const api = load('src/main/plugins/proxy.ts')
+    let api = load('src/main/plugins/proxy.ts')
     await api.initializePluginProxy()
     const directUrl = `http://127.0.0.1:${target.address().port}/`
     assert.equal(await (await api.pluginFetch(directUrl)).text(), 'direct')
@@ -92,10 +140,10 @@ app.whenReady().then(async () => {
     await api.savePluginProxySettings({ enabled: true, url })
     // Loopback must also pass through the proxy when explicitly enabled.
     assert.equal(await (await api.pluginFetch(directUrl)).text(), 'proxied')
-    assert.equal(received.at(-1), directUrl)
+    assert(received.includes(directUrl))
     const remoteUrl = 'http://plugin-proxy-test.invalid/catalog'
     assert.equal(await (await api.pluginFetch(remoteUrl)).text(), 'proxied')
-    assert.equal(received.at(-1), remoteUrl)
+    assert(received.includes(remoteUrl))
     await assert.rejects(
       api.pluginFetch('https://plugin-proxy-test.invalid/catalog', {
         signal: AbortSignal.timeout(5000)
@@ -111,22 +159,51 @@ app.whenReady().then(async () => {
     await assert.rejects(request)
     failSave = true
     await assert.rejects(api.savePluginProxySettings({ enabled: false, url }))
-    assert.equal(api.getPluginProxySettings().enabled, true)
+    assert.equal(api.getPluginProxySettings().mode, 'custom')
     assert.equal(await (await api.pluginFetch(remoteUrl)).text(), 'proxied')
     failSave = false
-    await api.initializePluginProxy()
-    assert.deepEqual(plain(api.getPluginProxySettings()), { enabled: true, url })
+    api = await restartProxy()
+    assert.deepEqual(plain(api.getPluginProxySettings()), { mode: 'custom', url })
     assert.equal(await (await api.pluginFetch(remoteUrl)).text(), 'proxied')
     await api.savePluginProxySettings({ enabled: true, url: 'socks5://127.0.0.1:1080' })
     assert.match(await api.getPluginSession().resolveProxy(remoteUrl), /SOCKS5 127\.0\.0\.1:1080/)
     await api.savePluginProxySettings({ enabled: false, url })
     assert.equal(await (await api.pluginFetch(directUrl)).text(), 'direct')
     assert.deepEqual(plain(api.pluginProxyArguments()), ['--proxy', ''])
-    await api.initializePluginProxy()
-    assert.deepEqual(plain(api.getPluginProxySettings()), { enabled: false, url })
+    api = await restartProxy()
+    assert.deepEqual(plain(api.getPluginProxySettings()), { mode: 'direct', url })
     assert.equal(await (await api.pluginFetch(directUrl)).text(), 'direct')
+    await api.savePluginProxySettings({ mode: 'system', url: '' })
+    assert.deepEqual(plain(configurations.at(-1)), { mode: 'system' })
+    api = await restartProxy()
+    assert.equal(api.getPluginProxySettings().mode, 'system')
+    const realResolveProxy = api.getPluginSession().resolveProxy
+    const resolvedUrls = []
+    api.getPluginSession().resolveProxy = (url) => {
+      resolvedUrls.push(url)
+      return realResolveProxy(url)
+    }
+    for (const [rule, expected] of [
+      ['PROXY localhost:7890', 'http://localhost:7890'],
+      ['HTTPS localhost:7890; DIRECT', 'https://localhost:7890'],
+      ['SOCKS5 [::1]:1080', 'socks5://[::1]:1080'],
+      ['SOCKS localhost:1080', 'socks4://localhost:1080'],
+      ['DIRECT', '']
+    ]) {
+      systemRule = rule
+      assert.deepEqual(plain(await api.pluginProxyArguments('https://media.example/video')), [
+        '--proxy',
+        expected
+      ])
+      assert.equal(resolvedUrls.at(-1), 'https://media.example/video')
+    }
+    await api.pluginProxyArguments('ytsearch3:test')
+    assert.equal(resolvedUrls.at(-1), 'https://www.youtube.com/')
+    systemRule = 'INVALID'
+    await assert.rejects(api.pluginProxyArguments())
+    systemRule = undefined
     console.log(
-      'Plugin proxy tests passed: validation, forwarding, cancellation, persistence, SOCKS5 and direct mode'
+      'Plugin proxy tests passed: validation, forwarding, cancellation, migration, persistence and system/custom/direct modes'
     )
     clearTimeout(timeout)
     app.exit(0)

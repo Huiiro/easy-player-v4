@@ -102,7 +102,11 @@ export function ytdlpCommand(): string {
   return getYtdlpCommand(app.isPackaged, app.getAppPath())
 }
 
-export function runYtDlp(args: string[], signal?: AbortSignal): Promise<string> {
+export async function runYtDlp(args: string[], signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted()
+  requireBackgroundWork()
+  const proxy = pluginProxyArguments(args.at(-1))
+  const proxyArgs = Array.isArray(proxy) ? proxy : await proxy
   signal?.throwIfAborted()
   requireBackgroundWork()
   return logOperation(
@@ -111,7 +115,7 @@ export function runYtDlp(args: string[], signal?: AbortSignal): Promise<string> 
     () => {
       return new Promise((resolve, reject) => {
         const process = trackProcess(
-          spawn(ytdlpCommand(), [...pluginProxyArguments(), ...args], { windowsHide: true }),
+          spawn(ytdlpCommand(), [...proxyArgs, ...args], { windowsHide: true }),
           signal
         )
         const abort = (): void => reject(signal?.reason)

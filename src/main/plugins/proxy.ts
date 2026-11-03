@@ -4,7 +4,7 @@ import { getAppSetting, setAppSetting } from '../database/repository/settings'
 import { normalizePluginProxy, type PluginProxySettings } from '../../shared/pluginProxy'
 
 const key = 'plugins.proxy'
-let settings: PluginProxySettings = { enabled: false, url: '' }
+let settings: PluginProxySettings = { mode: 'direct', url: '' }
 let activeSession: Session | undefined
 let pending: Promise<void> = Promise.resolve()
 
@@ -12,9 +12,9 @@ async function createSession(value: PluginProxySettings): Promise<Session> {
   // Separate sessions keep application traffic and requests already in progress unaffected.
   const result = session.fromPartition(`plugin-proxy-${randomUUID()}`, { cache: false })
   await result.setProxy(
-    value.enabled
+    value.mode === 'custom'
       ? { mode: 'fixed_servers', proxyRules: value.url, proxyBypassRules: '<-loopback>' }
-      : { mode: 'direct' }
+      : { mode: value.mode }
   )
   return result
 }
@@ -48,7 +48,20 @@ export function savePluginProxySettings(value: unknown): Promise<void> {
 
 export const pluginFetch: typeof fetch = (input, init) => getPluginSession().fetch(input, init)
 
-export function pluginProxyArguments(): string[] {
-  // Explicitly clear environment proxies when disabled, matching the HTTP session.
-  return ['--proxy', settings.enabled ? settings.url : '']
+export function pluginProxyArguments(target?: string): string[] | Promise<string[]> {
+  if (settings.mode !== 'system') return ['--proxy', settings.mode === 'custom' ? settings.url : '']
+  // Resolve via Chromium so media extraction also honors OS proxy/PAC rules.
+  const url = target && /^https?:\/\//i.test(target) ? target : 'https://www.youtube.com/'
+  return getPluginSession()
+    .resolveProxy(url)
+    .then((rules) => {
+      const first = rules.split(';')[0].trim()
+      if (first === 'DIRECT') return ['--proxy', '']
+      const match = /^(PROXY|HTTPS|SOCKS|SOCKS5) ([a-z\d._-]+|\[[a-f\d:.]+\]):(\d+)$/i.exec(first)
+      if (!match) throw new Error('Unsupported system proxy rule')
+      const scheme = { PROXY: 'http', HTTPS: 'https', SOCKS: 'socks4', SOCKS5: 'socks5' }[
+        match[1].toUpperCase()
+      ]
+      return ['--proxy', `${scheme}://${match[2]}:${match[3]}`]
+    })
 }

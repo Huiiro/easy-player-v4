@@ -1,15 +1,26 @@
+export type PluginProxyMode = 'direct' | 'system' | 'custom'
+
 export interface PluginProxySettings {
-  enabled: boolean
+  mode: PluginProxyMode
   url: string
 }
 
 export function normalizePluginProxy(value: unknown): PluginProxySettings {
   if (!value || typeof value !== 'object') throw new Error('pluginProxyInvalid')
-  const { enabled, url } = value as Partial<PluginProxySettings>
-  if (typeof enabled !== 'boolean' || typeof url !== 'string' || url.length > 2048)
+  const legacy = value as { mode?: unknown; enabled?: unknown; url?: unknown }
+  // Migrate the original switch without changing the user's connection choice.
+  const mode =
+    legacy.mode ??
+    (typeof legacy.enabled === 'boolean' ? (legacy.enabled ? 'custom' : 'direct') : undefined)
+  const { url } = legacy
+  if (
+    !['direct', 'system', 'custom'].includes(mode as string) ||
+    typeof url !== 'string' ||
+    url.length > 2048
+  )
     throw new Error('pluginProxyInvalid')
   const text = url.trim()
-  if (!text && !enabled) return { enabled, url: '' }
+  if (mode !== 'custom') return { mode: mode as PluginProxyMode, url: text }
   let parsed: URL
   try {
     parsed = new URL(text)
@@ -28,5 +39,5 @@ export function normalizePluginProxy(value: unknown): PluginProxySettings {
     parsed.hash
   )
     throw new Error('pluginProxyInvalid')
-  return { enabled, url: `${parsed.protocol}//${parsed.host}` }
+  return { mode, url: `${parsed.protocol}//${parsed.host}` } as PluginProxySettings
 }
