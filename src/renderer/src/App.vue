@@ -9,6 +9,9 @@ import GlobalSearchHost from '@/components/search/GlobalSearchHost.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import router from '@/router'
 import { flushPlayerDataStorage } from '@/stores/persistence'
+import { useFileDropImport } from '@/hooks/useFileDropImport'
+
+useFileDropImport()
 
 const { t } = useI18n()
 const ui = useUIStore()

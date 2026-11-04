@@ -27,6 +27,44 @@ export interface ScanProgress {
 export type ScanLocalMusicResult = { directory: string; result: ScanResult }
 
 export function registerScanIpcHandlers(): void {
+  ipcMain.handle(
+    'library:import-local-files',
+    async (_event, files: unknown, ignoreShortSongs = true): Promise<ScanResult> => {
+      if (
+        !Array.isArray(files) ||
+        !files.length ||
+        files.some(
+          (file) =>
+            typeof file !== 'string' ||
+            !path.isAbsolute(file) ||
+            !SUPPORTED_EXTENSIONS.includes(path.extname(file).toLowerCase())
+        )
+      )
+        throw new Error('Invalid audio file paths')
+      const groups = new Map<string, string[]>()
+      for (const file of new Set<string>(files.map((file) => path.resolve(file)))) {
+        const directory = path.dirname(file)
+        groups.set(directory, [...(groups.get(directory) ?? []), file])
+      }
+      const result: ScanResult = { added: 0, duplicates: 0, skipped: 0, total: 0 }
+      for (const [directory, selected] of groups) {
+        try {
+          const scanned = await scanMusicDirectory(
+            directory,
+            undefined,
+            selected,
+            ignoreShortSongs !== false
+          )
+          for (const key of ['added', 'duplicates', 'skipped', 'total'] as const)
+            result[key] += scanned[key]
+        } catch {
+          // An inaccessible directory must not discard the rest of a multi-folder drop.
+          result.total += selected.length
+        }
+      }
+      return result
+    }
+  )
   ipcMain.handle('library:get-watched-folders', () => getWatchedMusicDirectories())
   ipcMain.handle('library:set-watched-folders', (_event, folders: LibraryWatchDirectory[]) =>
     setWatchedMusicDirectories(folders)

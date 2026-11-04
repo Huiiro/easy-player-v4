@@ -1,4 +1,15 @@
 export default {
+  dropImport: {
+    success: '成功导入 {count} 项',
+    duplicates: '重复 {count} 项',
+    shortAudio: '跳过 {count} 项（不足 5 秒）',
+    unsupported: '导入失败 {count} 项（格式不支持）',
+    unresolved: '导入失败 {count} 项（无法读取文件路径）',
+    failed: '导入失败 {count} 项',
+    failedReason: '导入失败 {count} 项（{reason}）',
+    empty: '未找到可导入的音频',
+    separator: '，'
+  },
   pluginProxy: {
     title: '代理设置',
     mode: '代理模式',

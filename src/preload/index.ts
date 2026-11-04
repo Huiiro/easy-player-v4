@@ -384,6 +384,13 @@ const libraryAPI = {
       directory: string
       result: { added: number; duplicates: number; skipped: number; total: number }
     } | null>,
+  importLocalMusicFiles: (files: string[], ignoreShortSongs = true) =>
+    ipcRenderer.invoke('library:import-local-files', files, ignoreShortSongs) as Promise<{
+      added: number
+      duplicates: number
+      skipped: number
+      total: number
+    }>,
   selectLocalMusicFolder: () =>
     ipcRenderer.invoke('library:select-local-folder') as Promise<string | null>,
   scanLocalMusicFolder: (directory: string, ignoreShortSongs = true) =>
@@ -421,7 +428,7 @@ const filesAPI = {
     ipcRenderer.invoke('files:import-background-video', path),
   exportLibrary: (parts: Array<'songs' | 'playlists' | 'tags' | 'settings'>) =>
     ipcRenderer.invoke('files:export-library', parts),
-  importLibrary: () => ipcRenderer.invoke('files:import-library'),
+  importLibrary: (filePath?: string) => ipcRenderer.invoke('files:import-library', filePath),
   recoverMovedSongs: () => ipcRenderer.invoke('files:recover-moved-songs'),
   onImportProgress: (
     callback: (progress: { current: number; total: number }) => void
@@ -825,8 +832,8 @@ const api = {
         success: boolean
         error?: string
       }>,
-    importPackage: () =>
-      ipcRenderer.invoke('plugins:import') as Promise<{
+    importPackage: (filePath?: string) =>
+      ipcRenderer.invoke('plugins:import', filePath) as Promise<{
         success: boolean
         cancelled?: boolean
         error?: string

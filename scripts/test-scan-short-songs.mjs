@@ -14,7 +14,16 @@ const files = durations.map((_, index) => path.join(root, `${index}.mp3`))
 let imported = []
 const importedGenres = []
 let covers = 0
+const audioFormats = {}
+vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/shared/audioFormats.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS }
+  }).outputText,
+  { exports: audioFormats }
+)
 const mocks = {
+  '../../shared/audioFormats': audioFormats,
+  './applicationShutdown': { isApplicationShuttingDown: () => false },
   '../../shared/metadataValues': {
     joinMetadataValues: (values) => values?.join(', ')
   },
@@ -209,6 +218,7 @@ let dialogArgs
 const scanCalls = []
 const ipcExports = {}
 const ipcMocks = {
+  '../service/applicationShutdown': { isApplicationShuttingDown: () => false },
   '../i18n': mocks['../i18n'],
   '../service/operationLogger': mocks['./operationLogger'],
   '../service/libraryAutoImport': { configureLibraryAutoImport() {}, trackMusicDirectory() {} },

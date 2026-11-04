@@ -11,6 +11,8 @@ import { Logger } from './loggerService'
 import { refreshNewestSongs } from '../database/newestSongs'
 import { joinMetadataValues } from '../../shared/metadataValues'
 import { isApplicationShuttingDown } from './applicationShutdown'
+import { SUPPORTED_AUDIO_EXTENSIONS as SUPPORTED_EXTENSIONS } from '../../shared/audioFormats'
+export { SUPPORTED_EXTENSIONS }
 
 export interface ScanCallback {
   (current: number, total: number, added: number, duplicates: number): void
@@ -26,20 +28,6 @@ export interface ScanResult {
 interface FolderRow {
   id: number
 }
-
-export const SUPPORTED_EXTENSIONS = [
-  '.mp3',
-  '.aac',
-  '.m4a',
-  '.ogg',
-  '.opus',
-  '.flac',
-  '.wav',
-  '.aiff',
-  '.ape',
-  '.dff',
-  '.dsf'
-]
 
 function getOrInsertFolder(importPath: string, rootPath: string): FolderRow {
   const db = getDatabase()

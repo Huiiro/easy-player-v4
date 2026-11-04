@@ -1,4 +1,15 @@
 export default {
+  dropImport: {
+    success: 'Successfully imported {count} items',
+    duplicates: '{count} duplicate items',
+    shortAudio: 'Skipped {count} items (shorter than 5 seconds)',
+    unsupported: 'Failed to import {count} items (unsupported format)',
+    unresolved: 'Failed to import {count} items (file path unavailable)',
+    failed: 'Failed to import {count} items',
+    failedReason: 'Failed to import {count} items ({reason})',
+    empty: 'No importable audio found',
+    separator: ', '
+  },
   pluginProxy: {
     title: 'Proxy settings',
     mode: 'Proxy Mode',

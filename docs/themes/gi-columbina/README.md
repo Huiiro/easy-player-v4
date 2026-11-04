@@ -31,6 +31,8 @@ npm run pack:theme -- ../easy-player/docs/themes/gi-columbina ../easy-player/bui
 
 包只包含声明的图片与许可记录。修改后重新打包即可；正式发布新内容时提升 `manifest.json` 中的插件版本。
 
+在本应用仓库也可运行 `npm run pack:themes`，同时打包此主题和 Nyan Cat；或运行 `npm run pack:theme -- docs/themes/gi-columbina build/themes/columbina` 单独打包。命令复用同级 `easy-player-plugin` 仓库的标准打包器，其他位置可通过 `EASY_PLAYER_PLUGIN_DIR` 指定。
+
 主机侧验证入口：
 
 ```sh

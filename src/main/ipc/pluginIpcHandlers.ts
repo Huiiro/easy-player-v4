@@ -1,6 +1,7 @@
 import { Logger } from '../service/loggerService'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { t } from '../i18n'
+import { extname, isAbsolute } from 'node:path'
 import { getPluginProxySettings, savePluginProxySettings } from '../plugins/proxy'
 import {
   initializePlugins,
@@ -111,18 +112,27 @@ export function registerPluginIpcHandlers(): void {
       changed()
     }
   })
-  ipcMain.handle('plugins:import', async (event) => {
+  ipcMain.handle('plugins:import', async (event, filePath?: unknown) => {
     try {
-      const window = BrowserWindow.fromWebContents(event.sender)
-      const options = {
-        properties: ['openFile'] as ['openFile'],
-        filters: [{ name: 'EasyPlayer Plugin', extensions: ['epp'] }]
+      if (filePath === undefined) {
+        const window = BrowserWindow.fromWebContents(event.sender)
+        const options = {
+          properties: ['openFile'] as ['openFile'],
+          filters: [{ name: 'EasyPlayer Plugin', extensions: ['epp'] }]
+        }
+        const selected = window
+          ? await dialog.showOpenDialog(window, options)
+          : await dialog.showOpenDialog(options)
+        if (selected.canceled || !selected.filePaths[0]) return { success: true, cancelled: true }
+        filePath = selected.filePaths[0]
       }
-      const selected = window
-        ? await dialog.showOpenDialog(window, options)
-        : await dialog.showOpenDialog(options)
-      if (selected.canceled || !selected.filePaths[0]) return { success: true, cancelled: true }
-      await importManagedPlugin(selected.filePaths[0])
+      if (
+        typeof filePath !== 'string' ||
+        !isAbsolute(filePath) ||
+        extname(filePath).toLowerCase() !== '.epp'
+      )
+        throw new Error('pluginPackageInvalid')
+      await importManagedPlugin(filePath)
       return { success: true }
     } catch (reason) {
       return failure(reason)

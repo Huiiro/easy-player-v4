@@ -68,7 +68,9 @@ declare global {
         >
         install(pluginId: string): Promise<{ success: boolean; error?: string }>
         uninstall(pluginId: string): Promise<{ success: boolean; error?: string }>
-        importPackage(): Promise<{ success: boolean; cancelled?: boolean; error?: string }>
+        importPackage(
+          filePath?: string
+        ): Promise<{ success: boolean; cancelled?: boolean; error?: string }>
         list(): Promise<
           import('../shared/networkSources').NetworkSourceResult<
             import('../shared/plugins').PluginInfo[]
@@ -436,6 +438,15 @@ declare global {
         setWatchedFolders(folders: LibraryWatchDirectory[]): Promise<LibraryWatchDirectory[]>
         onAutoImported(callback: (event: LibraryAutoImportEvent) => void): () => void
         importLocalMusicFile(ignoreShortSongs?: boolean): Promise<ScanLocalMusicResult | null>
+        importLocalMusicFiles(
+          files: string[],
+          ignoreShortSongs?: boolean
+        ): Promise<{
+          added: number
+          duplicates: number
+          skipped: number
+          total: number
+        }>
         selectLocalMusicFolder(): Promise<string | null>
         scanLocalMusicFolder(
           directory: string,
@@ -457,7 +468,7 @@ declare global {
           data?: { filePath: string }
           error?: string
         }>
-        importLibrary(): Promise<{
+        importLibrary(filePath?: string): Promise<{
           success: boolean
           cancelled?: boolean
           data?: { added: number; skipped: number }

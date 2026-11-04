@@ -82,16 +82,25 @@ export function registerFileIpcHandlers(): void {
       })
     }
   )
-  ipcMain.handle('files:import-library', async (event) => {
+  ipcMain.handle('files:import-library', async (event, filePath?: unknown) => {
     return logOperation('[IPC] files:import-library', {}, async () => {
-      const result = await showOpenDialogFor(event, {
-        properties: ['openFile'],
-        filters: [{ name: 'EasyPlayer Backup', extensions: ['epb'] }]
-      })
-      if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
+      if (filePath === undefined) {
+        const result = await showOpenDialogFor(event, {
+          properties: ['openFile'],
+          filters: [{ name: 'EasyPlayer Backup', extensions: ['epb'] }]
+        })
+        if (result.canceled || !result.filePaths[0]) return { success: false, cancelled: true }
+        filePath = result.filePaths[0]
+      }
+      if (
+        typeof filePath !== 'string' ||
+        !isAbsolute(filePath) ||
+        extname(filePath).toLowerCase() !== '.epb'
+      )
+        return { success: false }
       return {
         success: true,
-        data: await importLibrary(result.filePaths[0], (current, total) => {
+        data: await importLibrary(filePath, (current, total) => {
           if (!event.sender.isDestroyed())
             event.sender.send('files:import-progress', { current, total })
         })

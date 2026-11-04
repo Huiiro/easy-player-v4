@@ -157,21 +157,6 @@ onUnmounted(() => {
 })
 
 // ── Event handlers ──
-async function handleFileDrop(event: DragEvent) {
-  event.preventDefault()
-  const files = event.dataTransfer?.files
-  if (files && files.length > 0) {
-    const filePath = window.api.audio.getFilePath(files[0])
-    console.log('[App] Opening file:', filePath)
-    await player.openFile(filePath)
-    await player.play()
-  }
-}
-
-function handleDragOver(event: DragEvent) {
-  event.preventDefault()
-}
-
 function getSeekPositionMs(event: PointerEvent): number {
   const bar = event.currentTarget as HTMLElement
   const rect = bar.getBoundingClientRect()
@@ -330,7 +315,7 @@ async function copyLog(entry: {
 </script>
 
 <template>
-  <div class="app-container" @drop="handleFileDrop" @dragover="handleDragOver">
+  <div class="app-container">
     <!-- Title Bar -->
     <header class="title-bar">
       <h1>Easy Player</h1>
