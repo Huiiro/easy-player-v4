@@ -36,7 +36,7 @@ function loader(mocks, globals = {}) {
           if (mocks[name]) return mocks[name]
           if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
-          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
+          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
       },
       { filename }
@@ -221,7 +221,7 @@ const policy = {
 }
 const mocks = {
   kugoumusicapi: sdk,
-  [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key },
+  [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
   [path.resolve('src/main/service/playbackMode.ts')]: policy,
   [path.resolve(pluginPath('official/netease/lyrics.ts'))]: {
     searchNeteaseLyrics: async () => []
@@ -241,9 +241,9 @@ const load = loader(mocks)
 const shared = load(pluginPath('official/kugou/shared.ts'))
 assert.equal(shared.trackTitle({ OriSongName: 'Olive', Suffix: '(Live)' }), 'Olive (Live)')
 assert.equal(shared.trackTitle({ SongName: 'Song Live', Suffix: 'Live' }), 'Song Live')
-const registry = load('src/main/sources/colors.ts').getNetworkSources()
+const registry = load('src/main/sources/index.ts').getNetworkSources()
 // Explicit fixture activation: production startup contributes no sources.
-for (const plugin of load(pluginPath('official/colors.ts')).officialPlugins) {
+for (const plugin of load(pluginPath('official/index.ts')).officialPlugins) {
   plugin.activate({ registerSource: (source) => registry.register(source) })
 }
 const metadata = load('src/main/sources/metadata.ts')

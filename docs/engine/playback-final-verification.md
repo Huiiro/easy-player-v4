@@ -16,8 +16,8 @@
 | `engine-windows/src/asio_control_thread.h` | STA 消息泵、任务唤醒、退出及线程内重入 |
 | `engine-windows/src/wasapi_backend.h`、`wasapi_backend.cpp` | 实际启动结果握手、渲染失败、停止和 seek 刷新错误 |
 | `engine-windows/src/dsound_backend.h`、`dsound_backend.cpp` | 实际启动结果握手、渲染失败、seek 各步骤错误及线程退出 |
-| `src/main/audioEngine/colors.ts` | 后台设备事件轮询、退出时清理轮询 |
-| `src/main/ipc/audioIpcHandlers.ts`、`src/main/colors.ts` | 退出前保存最新进度、保存先于 stop/关闭数据库、重复清理不写入零进度 |
+| `src/main/audioEngine/index.ts` | 后台设备事件轮询、退出时清理轮询 |
+| `src/main/ipc/audioIpcHandlers.ts`、`src/main/index.ts` | 退出前保存最新进度、保存先于 stop/关闭数据库、重复清理不写入零进度 |
 | `scripts/test-playback-checkpoint.mjs` | 退出顺序、重启、延后恢复、暂停和 Ready seek；通过 ESLint |
 | `scripts/test-preference-defaults.mjs` | 补齐已有主题预览模块 mock；业务逻辑未调整 |
 | `tests/native/CMakeLists.txt` | 原生回归测试依赖和目标；实机诊断不自动加入 CTest |

@@ -258,7 +258,7 @@ app.whenReady().then(async () => {
       check(ui.resolvedAppearance.dark&&document.documentElement.classList.contains('dark')&&ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','System color-mode changes update the DOM while retaining the selected scene');
       ui.setColorMode('light');await wait();
       check(!document.documentElement.classList.contains('dark'),'Explicit light mode is applied independently of the dark scene');
-      ui.customThemes.push({version:1,name:'Fixture theme',background:'replace',tokens:{'--color-primary':'#123456'},rules:{}});
+      ui.customThemes.push({version:1,name:'Fixture theme',background:'replace',tokens:{'--color-primary':'#123456','--color-border':'#334455','--color-border-l':'#556677'},rules:{}});
       ui.selectCustomTheme('Fixture theme');await wait();
       check(document.body.textContent.includes('已导入的旧主题')&&!document.querySelector('input[type=file]')&&!document.body.textContent.includes('下载示例'),'Existing theme management has no legacy import or example action');
       check(document.querySelector('.ep-app-background')&&ui.resolvedAppearance.accentSource==='theme','Selected theme applies its background and palette');
@@ -269,7 +269,18 @@ app.whenReady().then(async () => {
       ui.setCustomBackground({kind:'image',url:'',path:'fixture.png'});await wait();
       check(ui.resolvedAppearance.background.type==='image'&&!ui.themeBackgroundEnabled&&ui.effectiveCustomThemeName==='Fixture theme','Media import follows the same background-selection rule');
       ui.customBg.chromeBorder='#abcdef';await wait();
-      check(document.documentElement.style.getPropertyValue('--app-chrome-border')==='#abcdef'&&!document.documentElement.style.getPropertyValue('--color-border'),'Background chrome does not overwrite component borders');
+      const borderProbe=document.createElement('div');borderProbe.style.cssText='border:1px solid var(--color-border)';document.body.append(borderProbe);
+      const lightBorderProbe=document.createElement('div');lightBorderProbe.style.cssText='border:1px solid var(--color-border-l)';document.body.append(lightBorderProbe);
+      check(document.documentElement.style.getPropertyValue('--app-chrome-border')==='#abcdef'&&getComputedStyle(borderProbe).borderTopColor==='rgb(171, 205, 239)'&&getComputedStyle(lightBorderProbe).borderTopColor==='rgb(171, 205, 239)','Custom background global border updates chrome and both component border tokens over imported theme colors');
+      ui.customBg.chromeBorder='#12345680';await wait();
+      check(getComputedStyle(borderProbe).borderTopColor==='rgba(18, 52, 86, 0.5)','Global border opacity changes apply immediately');
+      ui.customBg.kind='video';ui.customBg.chromeBorder='transparent';await wait();
+      check(ui.resolvedAppearance.background.type==='video'&&getComputedStyle(borderProbe).borderTopColor==='rgba(0, 0, 0, 0)','Video backgrounds also support fully transparent global borders');
+      ui.selectThemeBackground('plugin:builtin.theme.aurora');await wait();
+      check(!document.documentElement.style.getPropertyValue('--color-border')&&!document.documentElement.style.getPropertyValue('--color-border-l')&&getComputedStyle(borderProbe).borderTopColor==='rgb(51, 68, 85)'&&getComputedStyle(lightBorderProbe).borderTopColor==='rgb(85, 102, 119)','Leaving a custom background restores the selected theme component borders');
+      ui.setCustomBackground({kind:'image',url:'',path:'fixture.png'});ui.customBg.chromeBorder='#abcdef';await wait();
+      check(getComputedStyle(borderProbe).borderTopColor==='rgb(171, 205, 239)','Returning to a custom background restores its saved global border');
+      borderProbe.remove();lightBorderProbe.remove();
       ui.importCustomTheme(JSON.stringify({version:1,name:'Preview',tokens:{'--color-primary':'#ff00ff'}}));await wait();
       check(ui.customThemePreviewActive&&ui.resolvedAppearance.background.type==='theme','Import preview uses the staged theme background');
       ui.cancelCustomThemePreview();await wait();

@@ -36,7 +36,7 @@ db.pragma('foreign_keys = ON')
 const { schemaV1, DATABASE_SCHEMA_VERSION } = loadTypeScript(
   path.join(__dirname, '../src/main/database/schema.ts')
 )
-const databaseApi = loadTypeScript(path.join(__dirname, '../src/main/database/colors.ts'), {
+const databaseApi = loadTypeScript(path.join(__dirname, '../src/main/database/index.ts'), {
   '../i18n': { t: (key) => key },
   '../service/operationLogger': { logOperation: (_label, _context, operation) => operation() },
   'better-sqlite3': { default: Database },

@@ -51,7 +51,7 @@ function load(file, mocks = {}) {
           if (name in mocks) return mocks[name]
           if (!name.startsWith('.')) return require(name)
           const target = path.resolve(path.dirname(filename), name)
-          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
+          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
       },
       { filename }

@@ -157,6 +157,7 @@ app.whenReady().then(async () => {
    const ui=useUIStore();ui.showPlayer=true;ui.playerBgType=${JSON.stringify(mesh ? 'mesh' : 'album')};ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
    if(${mesh} && (ui.playerBgType!=='mesh'||!document.querySelector('.mesh-flow-background')))throw Error('Mesh background must remain selected and render inside the player');
+   let moreMenuMotionChecked=false;
    async function chooseLyricOption(prefix,label,verify){
     const trigger=[...document.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label').startsWith(prefix));
     if(!trigger)throw Error('Missing lyric option trigger: '+prefix);
@@ -164,6 +165,19 @@ app.whenReady().then(async () => {
     if(prefix==='更多'){
       const menu=document.querySelector('.ep-menu');
       if(menu.scrollHeight>menu.clientHeight+1)throw Error('More menu must show all actions without scrolling when space is available');
+      if(!moreMenuMotionChecked){
+        const icons=[...menu.querySelectorAll('svg')];
+        if(!icons.length)throw Error('More menu motion check requires real option icons');
+        const initial=icons.map(icon=>icon.getBoundingClientRect());
+        for(let frame=0;frame<16;frame++){
+          await window.panelWait(16);
+          icons.forEach((icon,index)=>{
+            const rect=icon.getBoundingClientRect();
+            for(const key of ['x','y','width','height'])if(Math.abs(rect[key]-initial[index][key])>0.1)throw Error('More menu option icons must stay fixed throughout the opening fade');
+          });
+        }
+        moreMenuMotionChecked=true;
+      }
     }
     const option=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===label);
     if(!option)throw Error('Missing lyric option: '+label);

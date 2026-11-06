@@ -255,7 +255,7 @@ console.log(
 )
 
 // Exercise the main-process registration path with Electron's native boundary mocked.
-const mainSource = readFileSync('src/main/colors.ts', 'utf8')
+const mainSource = readFileSync('src/main/index.ts', 'utf8')
 const registrationSource = mainSource.slice(
   mainSource.indexOf('function registerGlobalShortcuts('),
   mainSource.indexOf('\ninterface WindowState')

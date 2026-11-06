@@ -131,7 +131,7 @@ assert.equal(
 
 // Exercise the application's actual explicit-quit function, which uses app.exit
 // and therefore cannot rely on will-quit to persist its checkpoint.
-const main = readFileSync('src/main/colors.ts', 'utf8')
+const main = readFileSync('src/main/index.ts', 'utf8')
 const quitSource = main.slice(
   main.indexOf('async function quitApplication('),
   main.indexOf('function sendTrayAction(')

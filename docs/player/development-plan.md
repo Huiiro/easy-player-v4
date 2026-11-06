@@ -284,7 +284,7 @@ IDLE → open(path) → LOADING → READY → play() → PLAYING ⇄ pause() ⇄
 | 0.4 | Ring Buffer #1 (无锁 SPSC + CV) | `ring_buffer.h` |
 | 0.5 | N-API 包装: `open/play/pause/stop/getPosition` | `addon.cpp`, `audio_engine.cpp/h` |
 | 0.6 | electron-vite externals + electron-builder extraResources | 配置 |
-| 0.7 | Preload `window.audioAPI` + IPC | `preload/colors.ts` |
+| 0.7 | Preload `window.audioAPI` + IPC | `preload/index.ts` |
 | 0.8 | spdlog → JS → logStore | `logger.cpp/h` |
 
 **验证**: `npm run dev` → 听到 WAV 正弦波 (DirectSound)。
@@ -415,11 +415,11 @@ resources/lib/
     └── logger.cpp/h               # spdlog
 
 src/main/audio-engine/
-├── colors.ts                       # AudioEngineManager
+├── index.ts                       # AudioEngineManager
 ├── ipc-handlers.ts                # IPC handler 注册
 └── types.ts                       # 共享类型
 
-src/preload/colors.ts               # window.audioAPI
+src/preload/index.ts               # window.audioAPI
 src/renderer/src/
 ├── App.vue                        # 播放器布局
 ├── services/audioBridge.ts        # 类型化 IPC

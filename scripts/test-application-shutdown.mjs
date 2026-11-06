@@ -9,12 +9,12 @@ const compile = (source) =>
   ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS }
   }).outputText
-const main = readFileSync('src/main/colors.ts', 'utf8')
+const main = readFileSync('src/main/index.ts', 'utf8')
 const quitSource = main.slice(
   main.indexOf('async function quitApplication('),
   main.indexOf('function sendTrayAction(')
 )
-const ast = ts.createSourceFile('colors.ts', main, ts.ScriptTarget.Latest, true)
+const ast = ts.createSourceFile('index.ts', main, ts.ScriptTarget.Latest, true)
 let beforeQuit
 const lateWindowCallbacks = []
 function visit(node) {

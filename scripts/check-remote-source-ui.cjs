@@ -55,7 +55,7 @@ app.whenReady().then(async () => {
       return { success: true, data: { version: 'fixture' } }
     })
     await esbuild.build({
-      entryPoints: ['src/preload/colors.ts'],
+      entryPoints: ['src/preload/index.ts'],
       outfile: path.join(temporary, 'preload.cjs'),
       bundle: true,
       platform: 'node',

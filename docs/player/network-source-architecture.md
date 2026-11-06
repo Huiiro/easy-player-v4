@@ -7,7 +7,7 @@
 - src/shared/networkSources.ts：可序列化的数据契约，统一服务商资源引用、歌词、封面、媒体搜索结果与下载计划。
 - src/main/sources/types.ts：NetworkSource 按能力提供 lyrics、artwork、metadata、download；没有实现的能力不注册。
 - src/main/sources/registry.ts：注册、注销、能力查询和 URL 来源匹配。注册重复 ID 会失败，旧注销回调不会删除新注册实例。
-- src/main/sources/colors.ts：保留 getNetworkSources 兼容入口，实际注册由 plugins/runtime.ts 和官方插件管理器持有。网易云、酷狗、QQ 音乐提供歌词、封面和元数据；B 站和 YouTube 提供媒体搜索、解析与下载资源解析。
+- src/main/sources/index.ts：保留 getNetworkSources 兼容入口，实际注册由 plugins/runtime.ts 和官方插件管理器持有。网易云、酷狗、QQ 音乐提供歌词、封面和元数据；B 站和 YouTube 提供媒体搜索、解析与下载资源解析。
 - 独立插件仓库 official/：各平台插件入口、歌词、封面、元数据和媒体资源解析。
 - 独立插件仓库 shared/：来源流派归一化及平台字典。
 - src/main/plugins/packages.ts：官方目录、包完整性与兼容性校验、安装/更新事务、重启恢复及卸载。

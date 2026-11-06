@@ -39,10 +39,10 @@ Windows 桌面接入使用 `ISystemMediaTransportControlsInterop::GetForWindow`�
 
 ## 当前项目基础
 
-- `src/main/colors.ts` 已维护主窗口、托盘状态和系统控制接入点；轻量播放模式会创建替代主窗口。
+- `src/main/index.ts` 已维护主窗口、托盘状态和系统控制接入点；轻量播放模式会创建替代主窗口。
 - `src/main/service/thumbnailPlaybackService.ts` 已提供与窗口绑定、重建和退出释放的服务模式。
 - `src/main/service/taskbarCoverPreview.ts` 已有封面处理及异步版本校验逻辑，可复用处理思路。
-- `src/main/audioEngine/colors.ts` 提供 `getStatus()` 和状态回调；真实播放状态可直接从主进程取得，无需订阅进度回调。
+- `src/main/audioEngine/index.ts` 提供 `getStatus()` 和状态回调；真实播放状态可直接从主进程取得，无需订阅进度回调。
 - `src/renderer/src/stores/player/playerStore.ts` 持有队列、上一首、下一首及播放操作，并通过 `tray:update` 发布曲目信息。
 - `resources/lib/CMakeLists.txt` 已构建独立的 `easy_player_window.node`，可增加同级 SMTC target。
 

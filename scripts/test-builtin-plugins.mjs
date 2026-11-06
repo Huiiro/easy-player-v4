@@ -54,7 +54,7 @@ function loader(mocks = {}, globals = {}) {
           if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
           if (name.endsWith('.json')) return require(target)
-          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
+          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
       },
       { filename }
@@ -73,13 +73,13 @@ const deferred = () => {
 }
 const policy = { isPlaybackOnly: () => false, onPlaybackModeChanged: () => () => undefined }
 const common = {
-  [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key },
+  [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
   [path.resolve('src/main/service/playbackMode.ts')]: policy
 }
 let registry
 const load = loader({
   ...common,
-  [path.resolve('src/main/sources/colors.ts')]: { getNetworkSources: () => registry }
+  [path.resolve('src/main/sources/index.ts')]: { getNetworkSources: () => registry }
 })
 const { SourceRegistry } = load('src/main/sources/registry.ts')
 const { PluginManager } = load('src/main/plugins/manager.ts')
@@ -416,7 +416,7 @@ const dependencies = {
       }
     }
   },
-  [path.resolve('src/main/database/colors.ts')]: { getDatabase: () => db },
+  [path.resolve('src/main/database/index.ts')]: { getDatabase: () => db },
   [path.resolve('src/main/service/loggerService.ts')]: {
     Logger: Object.fromEntries(
       ['debug', 'info', 'warn', 'error', 'plugin', 'recentPlugins'].map((level) => [
@@ -433,7 +433,7 @@ const appManager = appRuntime.getPluginManager(),
 assert.equal(appManager.list().length, 0, 'application startup has no preinstalled plugins')
 function installFixture(loadRuntime, runtime) {
   const manager = runtime.getPluginManager()
-  for (const plugin of loadRuntime(pluginPath('official/colors.ts')).officialPlugins) {
+  for (const plugin of loadRuntime(pluginPath('official/index.ts')).officialPlugins) {
     manager.load(plugin)
     manager.activate(plugin.manifest.id)
   }
@@ -546,7 +546,7 @@ loader(
     '@electron-toolkit/preload': { electronAPI: {} }
   },
   { window: preloadWindow }
-)('src/preload/colors.ts')
+)('src/preload/index.ts')
 assert.equal((await preloadWindow.api.plugins.list()).data.length, 5)
 assert.equal((await preloadWindow.api.plugins.setEnabled('builtin.qqmusic', true)).success, true)
 appRuntime.shutdownPlugins()

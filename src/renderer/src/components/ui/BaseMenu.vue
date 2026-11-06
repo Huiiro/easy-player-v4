@@ -60,6 +60,21 @@ const emit = defineEmits<{
 
 const triggerRef = ref<HTMLElement | null>(null)
 const sizeClass = computed(() => controlSizeClasses[props.size])
+const menuTransition = computed(() => {
+  // Keep small glass-menu icons at their final pixel size throughout the fade.
+  const glass = props.appearance === 'glass'
+  const transition = glass ? 'transition-opacity' : 'transition'
+  const hidden = glass ? 'opacity-0' : 'opacity-0 scale-95'
+  const visible = glass ? 'opacity-100' : 'opacity-100 scale-100'
+  return {
+    enterActiveClass: `${transition} duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]`,
+    enterFromClass: hidden,
+    enterToClass: visible,
+    leaveActiveClass: `${transition} duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]`,
+    leaveFromClass: visible,
+    leaveToClass: hidden
+  }
+})
 const maxHeightStyle = computed(() => {
   const value = props.maxHeight ?? '60vh'
 
@@ -107,14 +122,7 @@ function handleClick(item: MenuItemType): void {
       :side="side === 'auto' ? 'bottom' : side"
       :align="align"
     >
-      <transition
-        enter-active-class="transition duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]"
-        enter-from-class="opacity-0 scale-95"
-        enter-to-class="opacity-100 scale-100"
-        leave-active-class="transition duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
-        leave-from-class="opacity-100 scale-100"
-        leave-to-class="opacity-0 scale-95"
-      >
+      <transition v-bind="menuTransition">
         <MenuItems
           class="ep-menu rounded-xl border shadow-lg p-1 no-scrollbar"
           :class="[width, `ep-control--${size}`, { 'ep-menu--glass': appearance === 'glass' }]"

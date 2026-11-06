@@ -23,7 +23,7 @@ function harness(platform = 'win32', visible = true) {
   })
   const zh = load('src/main/i18n/locales/zh.ts', {})
   const en = load('src/main/i18n/locales/en.ts', {})
-  const i18n = load('src/main/i18n/colors.ts', { './locales/zh': zh, './locales/en': en })
+  const i18n = load('src/main/i18n/index.ts', { './locales/zh': zh, './locales/en': en })
   const { createThumbnailPlaybackControls } = load('src/main/service/thumbnailPlaybackService.ts', {
     electron: {
       nativeTheme: theme,

@@ -39,7 +39,7 @@ let failSave = false
 const cache = new Map()
 function load(filename) {
   filename = path.resolve(filename)
-  if (filename === path.resolve('src/main/database/colors.ts'))
+  if (filename === path.resolve('src/main/database/index.ts'))
     return {
       getDatabase: () => {
         if (failSave) throw new Error('Disk full')
@@ -61,7 +61,7 @@ function load(filename) {
         if (name === 'electron') return testElectron
         if (!name.startsWith('.')) return require(name)
         const target = path.resolve(path.dirname(filename), name)
-        return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
+        return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
       }
     },
     { filename }

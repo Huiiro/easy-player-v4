@@ -20,7 +20,7 @@ const zh = load('src/main/i18n/locales/zh.ts')
 const en = load('src/main/i18n/locales/en.ts')
 function harness(platform = 'win32', exists = true) {
   const nativeTheme = Object.assign(new EventEmitter(), { shouldUseDarkColors: false })
-  const i18n = load('src/main/i18n/colors.ts', { './locales/zh': zh, './locales/en': en })
+  const i18n = load('src/main/i18n/index.ts', { './locales/zh': zh, './locales/en': en })
   const actions = [],
     children = [],
     timers = new Set()

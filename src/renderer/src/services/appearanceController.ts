@@ -93,14 +93,22 @@ export function applyAppearance(appearance: ResolvedAppearance, root: HTMLElemen
   root.dataset.chromeRaised = String(appearance.chrome.raised)
   root.style.setProperty('--app-header-bg', appearance.chrome.header)
   root.style.setProperty('--app-footer-bg', appearance.chrome.footer)
-  root.style.setProperty('--app-chrome-border', appearance.chrome.border)
+  const customBorder = appearance.systemTheme === 'custom'
+  root.style.setProperty(
+    '--app-chrome-border',
+    appearance.chrome.border,
+    customBorder ? 'important' : ''
+  )
   root.style.setProperty('--app-chrome-accent', appearance.chrome.accentColor)
   const chromePrimary = primarySurfaceColors(appearance.chrome.accentColor)
   root.style.setProperty('--app-chrome-on-accent', chromePrimary.text)
   root.style.setProperty('--app-chrome-accent-hover', chromePrimary.hover)
-  // Borders belong to the component palette; background chrome has its own token.
-  root.style.removeProperty('--color-border')
-  root.style.removeProperty('--color-border-l')
+  // The media background's global border control also covers component borders.
+  // Remove the override on exit so the selected palette regains its own borders.
+  for (const token of ['--color-border', '--color-border-l']) {
+    if (customBorder) root.style.setProperty(token, appearance.chrome.border, 'important')
+    else root.style.removeProperty(token)
+  }
 }
 
 /** Coalesce a burst of changes, always reading the latest state when it is applied. */

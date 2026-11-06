@@ -49,7 +49,7 @@ function load(file, mocks = {}) {
           if (mocks[name]) return mocks[name]
           if (!name.startsWith('.')) return require(name)
           const target = path.resolve(path.dirname(filename), name)
-          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
+          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
         }
       },
       { filename }
@@ -59,7 +59,7 @@ function load(file, mocks = {}) {
   return visit(file)
 }
 const plain = (value) => JSON.parse(JSON.stringify(value))
-const mocks = { [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key } }
+const mocks = { [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key } }
 const { SourceRegistry } = load('src/main/sources/registry.ts', mocks)
 const db = new (require('better-sqlite3'))(':memory:')
 db.exec(load('src/main/database/schema.ts').schemaV1)
@@ -139,8 +139,8 @@ const restartRegistry = () => {
 restartRegistry()
 const dependencies = {
   ...mocks,
-  [path.resolve('src/main/database/colors.ts')]: { getDatabase: () => db },
-  [path.resolve('src/main/sources/colors.ts')]: { getNetworkSources: () => registry },
+  [path.resolve('src/main/database/index.ts')]: { getDatabase: () => db },
+  [path.resolve('src/main/sources/index.ts')]: { getNetworkSources: () => registry },
   [path.resolve('src/main/service/playbackMode.ts')]: {
     requireBackgroundWork() {},
     isPlaybackOnly: () => false,
