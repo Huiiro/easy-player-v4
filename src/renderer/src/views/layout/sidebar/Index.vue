@@ -68,7 +68,7 @@ const utilityItems: NavigationItem[] = [
 
 const activePath = computed(() => route.path)
 const navItemClass =
-  'ep-sidebar-item flex h-9 w-full items-center gap-2.5 px-2 text-left text-sm transition-colors'
+  'ep-sidebar-item mb-1 flex h-9 w-full items-center gap-2.5 px-2 text-left text-sm transition-colors'
 
 function isActive(path: string): boolean {
   return activePath.value === path || activePath.value.startsWith(`${path}/`)
@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
           >
             <SvgIcon name="common-plus" class-name="size-5 shrink-0" />
           </button>
-          <div v-if="playlists.length" class="mt-1 space-y-0.5">
+          <div v-if="playlists.length" class="mt-1 space-y-1">
             <button
               v-for="playlist in playlists"
               :key="playlist.id"
@@ -325,7 +325,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </template>
-        <div v-if="expanded && playlistsExpanded && playlists.length" class="space-y-0.5">
+        <div v-if="expanded && playlistsExpanded && playlists.length" class="space-y-1">
           <button
             v-for="playlist in playlists"
             :key="playlist.id"
