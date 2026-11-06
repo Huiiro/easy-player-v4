@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import ts from 'typescript'
 
-const mainSource = readFileSync('src/main/index.ts', 'utf8')
+const mainSource = readFileSync('src/main/colors.ts', 'utf8')
 const handlers = new Map()
 const settings = new Map()
 const local = new Map()

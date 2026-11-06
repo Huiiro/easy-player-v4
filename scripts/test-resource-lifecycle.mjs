@@ -43,7 +43,7 @@ assert.equal(late, 1, 'shutdown registration after cancellation runs once')
 const cleared = []
 let saves = 0
 const { AudioEngineManager } = load(
-  'src/main/audioEngine/index.ts',
+  'src/main/audioEngine/colors.ts',
   {
     electron: { app: {} },
     'node:fs': { existsSync: () => false },

@@ -95,8 +95,9 @@ async function change(sourceId: string, enabled: boolean | string | number): Pro
         <span
           v-if="source.pluginState && source.pluginState !== 'active'"
           class="mt-0.5 block text-text-l"
-          >{{ t('plugins.sourceInactive') }}</span
         >
+          {{ t('plugins.sourceInactive') }}
+        </span>
       </template>
       <template #default="{ labelId, descriptionId }">
         <div class="flex shrink-0 items-center gap-2">

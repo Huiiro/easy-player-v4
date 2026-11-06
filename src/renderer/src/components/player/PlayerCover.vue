@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { PlayerCoverStyle } from '@/consts'
+import { PlayerCoverStyle } from '@/constants'
 import CoverAuraCanvas from '@/components/background/CoverAuraCanvas.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 

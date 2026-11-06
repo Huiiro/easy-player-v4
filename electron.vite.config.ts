@@ -17,7 +17,7 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve('src/main/index.ts'),
+          index: resolve('src/main/colors.ts'),
           searchWorker: resolve('src/main/search/searchWorker.ts'),
           fingerprintMatchWorker: resolve('src/main/service/fingerprintMatchWorker.ts'),
           autoMixRuntimeWorker: resolve('src/main/service/autoMixRuntimeWorker.ts')

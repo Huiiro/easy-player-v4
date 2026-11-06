@@ -88,7 +88,7 @@ async function load(file, mocks) {
           if (name.startsWith('.')) {
             const target = path.resolve(path.dirname(filename), name)
             return visit(
-              existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts')
+              existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts')
             )
           }
           return common[name] ?? projectRequire(filename, name)

@@ -58,9 +58,9 @@ async function confirm(): Promise<void> {
       >
         {{ t('common.cancel') }}
       </BaseButton>
-      <BaseButton :variant="variant" :loading="pending || loading" @click="confirm">{{
-        confirmText
-      }}</BaseButton>
+      <BaseButton :variant="variant" :loading="pending || loading" @click="confirm">
+        {{ confirmText }}
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

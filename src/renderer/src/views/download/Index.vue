@@ -296,14 +296,12 @@ onBeforeUnmount(() => {
         role="alert"
         class="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-danger/30 bg-danger/5 p-3 text-sm text-danger"
       >
-        <span>{{ sourcesError }}</span
-        ><BaseButton
-          size="sm"
-          variant="secondary"
-          :loading="sourcesLoading"
-          @click="reloadSources"
-          >{{ t('networkSources.retry') }}</BaseButton
-        >
+        <span>
+          {{ sourcesError }}
+        </span>
+        <BaseButton size="sm" variant="secondary" :loading="sourcesLoading" @click="reloadSources">
+          {{ t('networkSources.retry') }}
+        </BaseButton>
       </div>
       <p v-else-if="!sourcesLoading && !downloadSources.length" class="mb-3 text-sm text-text-l">
         {{ t('networkSources.noDownloads') }}
@@ -337,9 +335,9 @@ onBeforeUnmount(() => {
           }}
         </button>
       </div>
-      <BaseButton v-if="loading" class="mt-2" variant="secondary" @click="cancelRequest">{{
-        t('common.cancelRequest')
-      }}</BaseButton>
+      <BaseButton v-if="loading" class="mt-2" variant="secondary" @click="cancelRequest">
+        {{ t('common.cancelRequest') }}
+      </BaseButton>
       <div class="relative z-20 mt-3 flex flex-wrap gap-2">
         <BaseSelect
           v-model="downloadType"
@@ -349,9 +347,9 @@ onBeforeUnmount(() => {
         <BaseSelect v-model="quality" :options="qualityOptions" class="selection-control w-1/3" />
       </div>
       <div class="mt-4 flex items-center gap-3 text-sm">
-        <span class="min-w-0 flex-1 truncate text-text-l">{{
-          directory || t('download.noDirectory')
-        }}</span>
+        <span class="min-w-0 flex-1 truncate text-text-l">
+          {{ directory || t('download.noDirectory') }}
+        </span>
         <button class="secondary-button" type="button" @click="chooseDirectory">
           {{ t('download.chooseDirectory') }}
         </button>

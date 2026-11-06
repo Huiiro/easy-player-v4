@@ -32,7 +32,7 @@ function load(file, mocks = {}) {
           if (name === '@easy-player/plugin-sdk') return pluginRequire(name)
           if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
-          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
+          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
         }
       },
       { filename }
@@ -61,7 +61,7 @@ const mocked = Object.fromEntries(
     [pluginPath('official/kugou/lyrics.ts'), { searchKugouLyrics: async () => [] }],
     [pluginPath('official/qqmusic/lyrics.ts'), { searchQQMusicLyrics: async () => [] }],
     [pluginPath('official/netease/artwork.ts'), { searchNeteaseArtwork: async () => [] }],
-    ['src/main/i18n/index.ts', { t: (key) => key }],
+    ['src/main/i18n/colors.ts', { t: (key) => key }],
     [
       'src/main/service/mediaDownloadRuntime.ts',
       {
@@ -77,9 +77,9 @@ const mocked = Object.fromEntries(
     ]
   ].map(([file, value]) => [path.resolve(file), value])
 )
-const sources = load('src/main/sources/index.ts', mocked).getNetworkSources()
+const sources = load('src/main/sources/colors.ts', mocked).getNetworkSources()
 // Explicit fixture activation: production startup contributes no sources.
-for (const plugin of load(pluginPath('official/index.ts'), mocked).officialPlugins) {
+for (const plugin of load(pluginPath('official/colors.ts'), mocked).officialPlugins) {
   plugin.activate({ registerSource: (source) => sources.register(source) })
 }
 assert.equal(sources.list().length, 5)
@@ -146,7 +146,7 @@ const removeGood = custom.register({
   }
 })
 const artwork = load('src/main/sources/artwork.ts', {
-  [path.resolve('src/main/sources/index.ts')]: { getNetworkSources: () => custom },
+  [path.resolve('src/main/sources/colors.ts')]: { getNetworkSources: () => custom },
   [path.resolve('src/main/service/playbackMode.ts')]: {
     isPlaybackOnly: () => playbackOnly,
     onPlaybackModeChanged: () => () => {},

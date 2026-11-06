@@ -8,7 +8,7 @@ import { useSeekProgress } from '@/components/player/useSeekProgress'
 import { loadLyricSourceOptions } from '@/services/lyricSourceOptions'
 import { footerLayoutStyle, updateFooterSideWidths } from '@/utils/footerLayout'
 import { useRouter } from 'vue-router'
-import { PlayMode } from '@/consts'
+import { PlayMode } from '@/constants'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -452,8 +452,8 @@ onBeforeUnmount(() => {
               class="ep-footer-top-time text-[11px] tabular-nums text-text-l"
               :title="player.positionFormatted + ' / ' + player.durationFormatted"
             >
-              <span>{{ player.positionFormatted }}</span
-              ><span class="ep-footer-total-time"> / {{ player.durationFormatted }}</span>
+              <span>{{ player.positionFormatted }}</span>
+              <span class="ep-footer-total-time"> / {{ player.durationFormatted }}</span>
             </div>
           </div>
         </div>

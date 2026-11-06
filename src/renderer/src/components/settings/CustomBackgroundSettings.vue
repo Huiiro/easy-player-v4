@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
-import { presetColors } from '@/consts/color'
+import { presetColors } from '@/constants/colors'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 

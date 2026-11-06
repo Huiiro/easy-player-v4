@@ -45,12 +45,10 @@ const sizeMap = {
     track: 4,
     thumb: 12
   },
-
   sm: {
     track: 6,
     thumb: 14
   },
-
   md: { track: 8, thumb: 18 },
   lg: { track: 10, thumb: 22 }
 }
@@ -115,7 +113,6 @@ const containerStyle = computed(() => {
       height: '100%'
     }
   }
-
   return {
     height: `${cur.value.thumb}px`,
     width: '100%'
@@ -126,18 +123,13 @@ const trackStyle = computed(() => {
   if (props.vertical) {
     return {
       width: `${cur.value.track}px`,
-
       height: '100%',
-
       left: `calc(50% - ${cur.value.track / 2}px)`
     }
   }
-
   return {
     height: `${cur.value.track}px`,
-
     width: '100%',
-
     top: `calc(50% - ${cur.value.track / 2}px)`
   }
 })
@@ -146,16 +138,12 @@ const fillStyle = computed(() => {
   if (props.vertical) {
     return {
       height: `${percent.value}%`,
-
       width: '100%',
-
       bottom: '0'
     }
   }
-
   return {
     width: `${percent.value}%`,
-
     height: '100%'
   }
 })
@@ -170,7 +158,6 @@ const thumbStyle = computed(() => {
       left: `calc(50% - ${t / 2}px)`
     }
   }
-
   return {
     left: `calc(${r} * (100% - ${t}px))`,
     top: `calc(50% - ${t / 2}px)`
@@ -183,27 +170,19 @@ const thumbStyle = computed(() => {
 
 function pointToValue(x: number, y: number): number {
   const el = sliderRef.value
-
   if (!el) return props.min
-
   const rect = el.getBoundingClientRect()
-
   const thumb = cur.value.thumb
-
   let ratio: number
-
   if (props.vertical) {
     const usable = Math.max(1, rect.height - thumb)
-
     ratio = (rect.bottom - y - thumb / 2) / usable
   } else {
     const usable = Math.max(1, rect.width - thumb)
-
     ratio = (x - rect.left - thumb / 2) / usable
   }
 
   ratio = Math.max(0, Math.min(1, ratio))
-
   return props.min + ratio * range.value
 }
 

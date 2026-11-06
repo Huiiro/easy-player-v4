@@ -8,7 +8,7 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
-import { presetColors } from '@/consts/color'
+import { presetColors } from '@/constants/colors'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useAnimationActivity } from '@/hooks/useAnimationActivity'
 

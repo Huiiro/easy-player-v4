@@ -70,21 +70,23 @@ function toggle(plugin: PluginInfo, enabled: boolean | string | number): void {
     >
       <template #description>
         <span class="plugin-meta">
-          <span class="plugin-kind">{{
-            t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider')
-          }}</span>
+          <span class="plugin-kind">
+            {{ t(plugin.kind === 'theme' ? 'plugins.theme' : 'plugins.provider') }}
+          </span>
           <span class="tabular-nums">v{{ plugin.version }}</span>
           <span v-if="'size' in plugin">{{ Math.ceil(plugin.size / 1024) }} KB</span>
-          <span>{{
-            t(
-              mode === 'installed' && isInstalled(plugin) && plugin.origin === 'third-party'
-                ? 'plugins.thirdParty'
-                : 'plugins.builtin'
-            )
-          }}</span>
-          <span
-            >{{ t('plugins.author') }}{{ plugin.author?.name || t('plugins.authorUnknown') }}</span
-          >
+          <span>
+            {{
+              t(
+                mode === 'installed' && isInstalled(plugin) && plugin.origin === 'third-party'
+                  ? 'plugins.thirdParty'
+                  : 'plugins.builtin'
+              )
+            }}
+          </span>
+          <span>
+            {{ t('plugins.author') }}{{ plugin.author?.name || t('plugins.authorUnknown') }}
+          </span>
         </span>
         <span class="plugin-meta">
           <span class="plugin-id" :title="plugin.id">{{ plugin.id }}</span>
@@ -94,8 +96,9 @@ function toggle(plugin: PluginInfo, enabled: boolean | string | number): void {
           v-if="mode === 'installed' && isInstalled(plugin) && plugin.error"
           role="alert"
           class="mt-1 block text-danger"
-          >{{ t('plugins.errors.' + plugin.error) }}</span
         >
+          {{ t('plugins.errors.' + plugin.error) }}
+        </span>
       </template>
       <template #default="{ labelId, descriptionId }">
         <div
@@ -108,15 +111,17 @@ function toggle(plugin: PluginInfo, enabled: boolean | string | number): void {
             variant="ghost"
             :disabled="loading || Boolean(busy)"
             @click="emit('uninstall', plugin)"
-            >{{ t('plugins.uninstall') }}</BaseButton
           >
+            {{ t('plugins.uninstall') }}
+          </BaseButton>
           <BaseButton
             class="reset-button"
             size="sm"
             variant="ghost"
             @click="emit('logs', plugin.id)"
-            >{{ t('plugins.logs') }}</BaseButton
           >
+            {{ t('plugins.logs') }}
+          </BaseButton>
           <BaseButton
             v-if="plugin.state === 'failed'"
             class="reset-button"
@@ -124,8 +129,9 @@ function toggle(plugin: PluginInfo, enabled: boolean | string | number): void {
             size="sm"
             :disabled="loading || Boolean(busy)"
             @click="emit('toggle', plugin.id, true)"
-            >{{ t('plugins.retry') }}</BaseButton
           >
+            {{ t('plugins.retry') }}
+          </BaseButton>
           <span
             v-if="busy === plugin.id"
             class="ep-spinner inline-block"
@@ -164,24 +170,26 @@ function toggle(plugin: PluginInfo, enabled: boolean | string | number): void {
       class="flex flex-wrap items-center justify-between gap-3 border-t border-border px-5 py-3"
       :aria-label="t('plugins.pagination')"
     >
-      <span class="text-xs text-text-l" aria-live="polite">{{
-        t('plugins.pageSummary', { total: items.length, page, pages: pageCount })
-      }}</span>
+      <span class="text-xs text-text-l" aria-live="polite">
+        {{ t('plugins.pageSummary', { total: items.length, page, pages: pageCount }) }}
+      </span>
       <div class="flex items-center gap-2">
         <BaseButton
           size="sm"
           variant="ghost"
           :disabled="loading || Boolean(busy) || page === 1"
           @click="page--"
-          >{{ t('plugins.previousPage') }}</BaseButton
         >
+          {{ t('plugins.previousPage') }}
+        </BaseButton>
         <BaseButton
           size="sm"
           variant="ghost"
           :disabled="loading || Boolean(busy) || page === pageCount"
           @click="page++"
-          >{{ t('plugins.nextPage') }}</BaseButton
         >
+          {{ t('plugins.nextPage') }}
+        </BaseButton>
       </div>
     </nav>
   </div>

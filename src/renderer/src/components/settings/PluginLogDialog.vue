@@ -139,9 +139,9 @@ onBeforeUnmount(stop)
         :aria-label="t('plugins.logsSearch')"
         size="sm"
       />
-      <BaseButton size="sm" variant="ghost" :loading="loading" @click="load">{{
-        t('networkSources.retry')
-      }}</BaseButton>
+      <BaseButton size="sm" variant="ghost" :loading="loading" @click="load">
+        {{ t('networkSources.retry') }}
+      </BaseButton>
     </div>
     <p v-if="failed" role="alert" class="mb-2 text-sm text-danger">
       {{ t('plugins.logsLoadFailed') }}
@@ -165,30 +165,31 @@ onBeforeUnmount(stop)
             :class="
               entry.level === 'error' ? 'text-danger' : entry.level === 'warn' ? 'text-warning' : ''
             "
-            >{{ entry.level.toUpperCase() }}</span
           >
-          · {{ entry.plugin.pluginId
-          }}<template v-if="entry.plugin.version">@{{ entry.plugin.version }}</template>
+            {{ entry.level.toUpperCase() }}
+          </span>
+          · {{ entry.plugin.pluginId }}
+          <template v-if="entry.plugin.version">@{{ entry.plugin.version }}</template>
           <template v-if="entry.plugin.operation"> · {{ entry.plugin.operation }}</template>
           <template v-if="entry.plugin.sourceId"> · {{ entry.plugin.sourceId }}</template>
           <template v-if="entry.plugin.callId !== undefined">
-            · #{{ entry.plugin.callId }}</template
-          >
+            · #{{ entry.plugin.callId }}
+          </template>
           <template v-if="entry.plugin.elapsedMs !== undefined">
-            · {{ entry.plugin.elapsedMs }}ms</template
-          >
+            · {{ entry.plugin.elapsedMs }}ms
+          </template>
           <template v-if="entry.plugin.code"> · {{ entry.plugin.code }}</template>
         </div>
         <div class="text-text">{{ entry.message }}</div>
       </div>
     </div>
     <template #footer>
-      <BaseButton size="sm" variant="ghost" @click="directory">{{
-        t('plugins.logsDirectory')
-      }}</BaseButton>
-      <BaseButton size="sm" variant="ghost" :disabled="!filtered.length" @click="copy">{{
-        t('plugins.logsCopy')
-      }}</BaseButton>
+      <BaseButton size="sm" variant="ghost" @click="directory">
+        {{ t('plugins.logsDirectory') }}
+      </BaseButton>
+      <BaseButton size="sm" variant="ghost" :disabled="!filtered.length" @click="copy">
+        {{ t('plugins.logsCopy') }}
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

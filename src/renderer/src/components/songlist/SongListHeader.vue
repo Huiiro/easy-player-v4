@@ -240,8 +240,8 @@ const batchMenuItems = computed(() => [
           @click="emit('toggleSelection')"
         >
           <SvgIcon :name="selectionMode ? 'common-back-left' : 'common-task'" class-name="size-4" />
-          <span class="sr-only"
-            >{{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
+          <span class="sr-only">
+            {{ selectionMode ? t('songList.cancelSelection') : t('songList.select') }}
           </span>
         </button>
         <!-- search -->
@@ -423,9 +423,9 @@ const batchMenuItems = computed(() => [
         <template #left><SvgIcon name="common-delete" class-name="size-4" /></template>
         {{ t('songList.delete') }}
       </BaseButton>
-      <span class="header-control px-2 text-text-l cursor-default">{{
-        t('songList.selected', { count: selectedCount })
-      }}</span>
+      <span class="header-control px-2 text-text-l cursor-default">
+        {{ t('songList.selected', { count: selectedCount }) }}
+      </span>
     </div>
 
     <div class="overflow-hidden">

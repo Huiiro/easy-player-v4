@@ -5,7 +5,7 @@ import Draggable from 'vuedraggable'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import eventBus from '@/utils/eventBus'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import { presetColors } from '@/consts/color'
+import { presetColors } from '@/constants/colors'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 import { useMessage } from '@/components/ui/useMessage'
 

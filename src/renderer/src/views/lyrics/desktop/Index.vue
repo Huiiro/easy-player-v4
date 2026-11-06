@@ -393,17 +393,17 @@ onUnmounted(() => {
         <button ref="lockButton" class="desktop-action" @click="toggleLock">
           <SvgIcon :name="locked ? 'play-lock-w' : 'play-unlock-w'" class-name="size-4" />
         </button>
-        <template v-if="!locked"
-          ><button class="desktop-action" @click="action('previous')">
-            <SvgIcon name="play-prev" class-name="size-3.5" /></button
-          ><button class="desktop-action" @click="action('toggle')">
-            <SvgIcon
-              :name="state.isPlaying ? 'play-pause' : 'play-play'"
-              class-name="size-4"
-            /></button
-          ><button class="desktop-action" @click="action('next')">
-            <SvgIcon name="play-next" class-name="size-3.5" /></button
-        ></template>
+        <template v-if="!locked">
+          <button class="desktop-action" @click="action('previous')">
+            <SvgIcon name="play-prev" class-name="size-3.5" />
+          </button>
+          <button class="desktop-action" @click="action('toggle')">
+            <SvgIcon :name="state.isPlaying ? 'play-pause' : 'play-play'" class-name="size-4" />
+          </button>
+          <button class="desktop-action" @click="action('next')">
+            <SvgIcon name="play-next" class-name="size-3.5" />
+          </button>
+        </template>
         <button v-if="!locked" class="desktop-action" @click="closeWindow">
           <SvgIcon name="common-close" class-name="size-3.5" />
         </button>

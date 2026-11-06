@@ -149,9 +149,9 @@ function openAlbum(): void {
               :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
             >
               <template v-for="(part, partIndex) in highlightedTitle" :key="partIndex">
-                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{
-                  part.text
-                }}</mark>
+                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">
+                  {{ part.text }}
+                </mark>
                 <template v-else>{{ part.text }}</template>
               </template>
             </span>
@@ -196,9 +196,9 @@ function openAlbum(): void {
                 v-for="(part, partIndex) in getHighlightParts(token.text, keyword)"
                 :key="partIndex"
               >
-                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">{{
-                  part.text
-                }}</mark>
+                <mark v-if="part.highlighted" class="bg-yellow-400 text-black">
+                  {{ part.text }}
+                </mark>
                 <template v-else>{{ part.text }}</template>
               </template>
             </button>

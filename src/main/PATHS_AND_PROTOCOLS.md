@@ -47,7 +47,7 @@ npm run dev
 | ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `getBaseDir()`                | `<base>`                                  | Electron `userData`，入口初始化                                                             |
 | `getDataPath(...parts)`       | `<base>/player_data/...parts`             | 通用应用数据目录；有专用 getter 时优先使用专用 getter                                       |
-| `getDatabasePath()`           | `<base>/player_data/player.db`            | [database/index.ts](./database/index.ts)；歌曲、歌单、设置和来源等 SQLite 数据              |
+| `getDatabasePath()`           | `<base>/player_data/player.db`            | [database/colors.ts](./database/index.ts)；歌曲、歌单、设置和来源等 SQLite 数据              |
 | `getPluginPath(...parts)`     | `<base>/player_plugin/...parts`           | [plugins/management.ts](./plugins/management.ts) 中的插件包管理器                           |
 | `getLogPath(...parts)`        | `<base>/player_log/...parts`              | [service/loggerService.ts](./service/loggerService.ts)，如 `log-YYYY-MM-DD.log`（UTC 日期） |
 | `getCachePath(...parts)`      | `<base>/player_data/cache/...parts`       | 远程音频默认缓存等                                                                          |
@@ -221,7 +221,7 @@ easy-player-media://plugin-theme/<pluginId>/<sha256>/__frame.html
 
 | 协议或机制                | 用途                                                                         | 定义或调用位置                                                                |
 | ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `file:`                   | 主进程通过 `pathToFileURL()` 与 `net.fetch()` 获取已验证的本地资源           | [index.ts](./index.ts) 中的媒体协议处理器                                     |
+| `file:`                   | 主进程通过 `pathToFileURL()` 与 `net.fetch()` 获取已验证的本地资源           | [colors.ts](./index.ts) 中的媒体协议处理器                                     |
 | HTTP / HTTPS              | 开发渲染器 HMR、网络来源请求与下载；不映射应用本地数据目录                   | 入口、[service/mediaDownloadRuntime.ts](./service/mediaDownloadRuntime.ts) 等 |
 | `ms-settings:defaultapps` | Windows 默认应用选择页，配合注册表中的 `EasyPlayer` 应用标识                 | [service/fileAssociationService.ts](./service/fileAssociationService.ts)      |
 | Electron IPC              | 渲染器与主进程间的业务调用，如 `fonts:list`、`files:import-background-video` | [ipc](./ipc) 与 [preload](../preload)；频道名不是文件路径或 URL scheme        |

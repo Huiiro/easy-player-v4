@@ -12,7 +12,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import type { ColorMode } from '@/services/appearance'
 import type { WindowMaterial } from '../../../../shared/windowMaterial'
-import { presetColors } from '@/consts/color'
+import { presetColors } from '@/constants/colors'
 import {
   availableBackgroundThemes,
   getSystemBackgroundTheme,

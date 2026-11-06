@@ -18,8 +18,8 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
       [resolve('src/main/database/repository/songLyrics.ts')]: {
         songAllowsNetworkLyrics: () => true
       },
-      [resolve('src/main/i18n/index.ts')]: { t: (key) => key },
-      [resolve('src/main/sources/index.ts')]: {
+      [resolve('src/main/i18n/colors.ts')]: { t: (key) => key },
+      [resolve('src/main/sources/colors.ts')]: {
         getNetworkSources: () => ({
           ownerOf: () => undefined,
           isEnabled: () => true,
@@ -68,7 +68,7 @@ function load(file, mocks = {}, globals = {}, cache = new Map()) {
         if (name.startsWith('.')) {
           const target = resolve(dirname(filename), name)
           return load(
-            existsSync(target + '.ts') ? target + '.ts' : resolve(target, 'index.ts'),
+            existsSync(target + '.ts') ? target + '.ts' : resolve(target, 'colors.ts'),
             mocks,
             globals,
             cache

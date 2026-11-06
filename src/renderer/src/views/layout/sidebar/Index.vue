@@ -310,9 +310,9 @@ onBeforeUnmount(() => {
                 class="size-7 shrink-0 rounded object-cover"
                 :alt="playlist.name"
               />
-              <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l"
-                ><SvgIcon name="common-music" class-name="size-4"
-              /></span>
+              <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l">
+                <SvgIcon name="common-music" class-name="size-4" />
+              </span>
               <span
                 v-if="isPlayingPlaylist(playlist.id)"
                 class="absolute bottom-1 right-1 size-1.5 rounded-full bg-primary"
@@ -346,9 +346,9 @@ onBeforeUnmount(() => {
               class="size-7 shrink-0 rounded object-cover"
               :alt="playlist.name"
             />
-            <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l"
-              ><SvgIcon name="common-music" class-name="size-4"
-            /></span>
+            <span v-else class="grid size-7 shrink-0 place-items-center rounded bg-bg-l">
+              <SvgIcon name="common-music" class-name="size-4" />
+            </span>
             <span class="min-w-0 flex-1 truncate">{{ playlist.name }}</span>
             <span
               v-if="isPlayingPlaylist(playlist.id)"

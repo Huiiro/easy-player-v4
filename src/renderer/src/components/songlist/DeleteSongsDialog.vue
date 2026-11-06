@@ -53,9 +53,8 @@ async function confirm(): Promise<void> {
       <template v-else>{{ t('songList.confirmDeleteBatch', { count: songs.length }) }} </template>
     </p>
     <label v-if="canDeleteLocalFiles" class="mt-4 flex cursor-pointer items-center gap-2 text-sm">
-      <input v-model="deleteLocalFiles" type="checkbox" class="accent-[var(--color-primary)]" />{{
-        t('songList.deleteLocalFile')
-      }}
+      <input v-model="deleteLocalFiles" type="checkbox" class="accent-[var(--color-primary)]" />
+      {{ t('songList.deleteLocalFile') }}
     </label>
     <template #footer>
       <button

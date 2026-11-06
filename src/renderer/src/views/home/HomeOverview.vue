@@ -468,9 +468,9 @@ watch(
               class="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
             >
               <strong class="text-2xl">{{ detailDonutSummary.percentage }}%</strong>
-              <span class="max-w-20 truncate text-xs text-text-l">{{
-                detailDonutSummary.label
-              }}</span>
+              <span class="max-w-20 truncate text-xs text-text-l">
+                {{ detailDonutSummary.label }}
+              </span>
             </div>
           </div>
           <div class="min-w-0">
@@ -483,13 +483,13 @@ watch(
                       :style="{ backgroundColor: periodColors[index] }"
                     />
                     <span class="font-medium">{{ t(`home.periods.${period.id}`) }}</span>
-                    <span class="text-xs text-text-l">{{
-                      t(`home.periodRanges.${period.id}`)
-                    }}</span>
+                    <span class="text-xs text-text-l">
+                      {{ t(`home.periodRanges.${period.id}`) }}
+                    </span>
                   </div>
-                  <span class="shrink-0"
-                    >{{ percentage(period.playedSeconds, totalPeriodSeconds) }}%</span
-                  >
+                  <span class="shrink-0">
+                    {{ percentage(period.playedSeconds, totalPeriodSeconds) }}%
+                  </span>
                 </div>
                 <div class="mt-1.5 h-1.5 overflow-hidden rounded-full bg-hover">
                   <div

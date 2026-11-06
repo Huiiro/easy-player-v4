@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
-import { VERSION } from '@/consts'
+import { VERSION } from '@/constants'
 import { parseChangelog } from '@/utils/changelog'
 import changelogZh from '../../../../../docs/changelog.zh.md?raw'
 import changelogEn from '../../../../../docs/changelog.en.md?raw'

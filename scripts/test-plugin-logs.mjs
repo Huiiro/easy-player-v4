@@ -96,7 +96,7 @@ function load(file) {
         if (!name.startsWith('.')) return require(name)
         const resolved = path.resolve(path.dirname(target), name)
         return load(
-          realFs.existsSync(resolved + '.ts') ? resolved + '.ts' : path.join(resolved, 'index.ts')
+          realFs.existsSync(resolved + '.ts') ? resolved + '.ts' : path.join(resolved, 'colors.ts')
         )
       }
     }

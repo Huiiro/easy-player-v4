@@ -57,9 +57,9 @@ async function uninstall(): Promise<void> {
     <div class="flex items-center justify-between gap-3">
       <span class="font-medium">{{ t('ap.stemComponentTitle') }}</span>
       <div class="flex items-center gap-3">
-        <span v-if="status?.installed && !busy" class="text-text-l">{{
-          t('ap.stemComponentReady')
-        }}</span>
+        <span v-if="status?.installed && !busy" class="text-text-l">
+          {{ t('ap.stemComponentReady') }}
+        </span>
         <button
           v-if="!busy && (status?.installed || status?.hasFiles)"
           type="button"
@@ -94,10 +94,10 @@ async function uninstall(): Promise<void> {
     <template v-if="busy">
       <p class="text-text-l">
         {{ t(`ap.stemComponent_${status?.phase}`) }}
-        <span v-if="status?.phase === 'downloading'"
-          >{{ progress }}% · {{ (status.receivedBytes / 1024 ** 2).toFixed(1) }} /
-          {{ (status.totalBytes / 1024 ** 2).toFixed(1) }} MiB</span
-        >
+        <span v-if="status?.phase === 'downloading'">
+          {{ progress }}% · {{ (status.receivedBytes / 1024 ** 2).toFixed(1) }} /
+          {{ (status.totalBytes / 1024 ** 2).toFixed(1) }} MiB
+        </span>
       </p>
       <progress
         v-if="downloading && status?.totalBytes"

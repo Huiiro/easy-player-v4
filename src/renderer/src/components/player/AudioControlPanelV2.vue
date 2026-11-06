@@ -488,8 +488,8 @@ onBeforeUnmount(() => {
             @dragstart="startDrag(node.id, $event)"
             @dragend="draggingId = null"
             @click.stop
-            >⠿</span
-          >
+            >⠿
+          </span>
           <button
             class="min-w-0 flex-1 truncate text-left text-xs"
             type="button"
@@ -583,8 +583,9 @@ onBeforeUnmount(() => {
                   v-for="(node, index) in player.audioChain.bypassedNodes"
                   :key="`bypassed-${index}`"
                   class="rounded bg-bg-l px-1.5 py-0.5 text-[11px] text-text-l"
-                  >{{ pipelineLabel(node) }}</span
                 >
+                  {{ pipelineLabel(node) }}
+                </span>
               </div>
             </div>
             <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] tabular-nums text-text-l">

@@ -165,9 +165,9 @@ defineExpose({ focusSearch })
         @compositionstart="composing = true"
         @compositionend="finishComposition"
       >
-        <template #prefix
-          ><SvgIcon name="common-search" class-name="size-4 text-text-l"
-        /></template>
+        <template #prefix>
+          <SvgIcon name="common-search" class-name="size-4 text-text-l" />
+        </template>
       </BaseInput>
     </div>
     <div v-if="hasQuery" class="global-search-results" :aria-busy="loading">
@@ -215,9 +215,9 @@ defineExpose({ focusSearch })
                 <template v-if="song.album"> · {{ song.album }}</template>
               </span>
             </span>
-            <span class="shrink-0 text-xs tabular-nums text-text-l">{{
-              duration(song.duration)
-            }}</span>
+            <span class="shrink-0 text-xs tabular-nums text-text-l">
+              {{ duration(song.duration) }}
+            </span>
           </button>
         </template>
       </RecycleScroller>

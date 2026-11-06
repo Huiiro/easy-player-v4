@@ -14,7 +14,7 @@
 
 ## P1：新增数据库列未提供版本迁移
 
-位置：`src/main/database/schema.ts:1`、`:67`、`:133`；`src/main/database/index.ts:28`。
+位置：`src/main/database/schema.ts:1`、`:67`、`:133`；`src/main/database/colors.ts:28`。
 
 当前版本在建表 SQL 中新增 `song.offset_ms`、`disable_network_lyrics`、`instrumental` 和 `play_history.skip_feedback`，但 `DATABASE_SCHEMA_VERSION` 仍为 1，已有 V1 库会直接跳过迁移。歌曲通用查询已无条件读取新字段，推荐评分也读取 `skip_feedback`。因此复用旧库、设置数据目录覆盖或手动搬回旧库后，会发生 `no such column`，影响曲库查询、歌词和推荐。单纯修复上一个目录问题仍会触发本问题。
 

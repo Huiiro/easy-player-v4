@@ -201,8 +201,9 @@ onBeforeUnmount(() => {
         variant="ghost"
         :aria-pressed="tab === 'installed'"
         @click="tab = 'installed'"
-        >{{ t('plugins.installed') }}</BaseButton
       >
+        {{ t('plugins.installed') }}
+      </BaseButton>
       <BaseButton
         class="reset-button"
         size="sm"
@@ -210,11 +211,12 @@ onBeforeUnmount(() => {
         :aria-pressed="tab === 'official'"
         :disabled="catalogLoading"
         @click="browse()"
-        >{{ t('plugins.officialSource') }}</BaseButton
       >
-      <BaseButton class="reset-button" size="sm" variant="ghost" @click="viewLogs()">{{
-        t('plugins.logs')
-      }}</BaseButton>
+        {{ t('plugins.officialSource') }}
+      </BaseButton>
+      <BaseButton class="reset-button" size="sm" variant="ghost" @click="viewLogs()">
+        {{ t('plugins.logs') }}
+      </BaseButton>
       <BaseSelect
         v-model="kindFilter"
         class="ml-auto w-40"
@@ -229,8 +231,9 @@ onBeforeUnmount(() => {
         variant="ghost"
         :disabled="Boolean(busy)"
         @click="manage('import')"
-        >{{ t('plugins.import') }}</BaseButton
       >
+        {{ t('plugins.import') }}
+      </BaseButton>
       <BaseButton
         v-if="tab === 'official'"
         class="reset-button"
@@ -239,8 +242,9 @@ onBeforeUnmount(() => {
         :loading="catalogLoading"
         :disabled="Boolean(busy)"
         @click="browse(true)"
-        >{{ t('plugins.refresh') }}</BaseButton
       >
+        {{ t('plugins.refresh') }}
+      </BaseButton>
     </div>
     <p class="px-5 pb-2 text-xs leading-relaxed text-text-l">
       {{ t(tab === 'official' ? 'plugins.catalogHint' : 'plugins.hint') }}
@@ -258,24 +262,26 @@ onBeforeUnmount(() => {
         size="sm"
         :loading="loading"
         @click="reload"
-        >{{ t('networkSources.retry') }}</BaseButton
       >
+        {{ t('networkSources.retry') }}
+      </BaseButton>
     </div>
     <p
       v-if="loading && !plugins.length"
       role="status"
       class="flex items-center gap-2 px-5 py-4 text-sm text-text-l"
     >
-      <span class="ep-spinner" />{{ t('plugins.loading') }}
+      <span class="ep-spinner" />
+      {{ t('plugins.loading') }}
     </p>
     <div
       v-if="tab === 'installed' && !loading && !plugins.length && !loadError"
       class="px-5 py-6 text-sm text-text-l"
     >
       <p>{{ t('plugins.empty') }}</p>
-      <BaseButton class="reset-button mt-3" size="sm" variant="ghost" @click="browse()">{{
-        t('plugins.browse')
-      }}</BaseButton>
+      <BaseButton class="reset-button mt-3" size="sm" variant="ghost" @click="browse()">
+        {{ t('plugins.browse') }}
+      </BaseButton>
     </div>
     <p
       v-if="tab === 'installed' && !loading && plugins.length && !filteredPlugins.length"
@@ -290,7 +296,8 @@ onBeforeUnmount(() => {
         role="status"
         class="flex items-center gap-2 px-5 py-4 text-sm text-text-l"
       >
-        <span class="ep-spinner" />{{ t('plugins.loading') }}
+        <span class="ep-spinner" />
+        {{ t('plugins.loading') }}
       </p>
       <p
         v-else-if="!catalogLoading && !error && !filteredCatalog.length"

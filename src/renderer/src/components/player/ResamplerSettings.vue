@@ -34,7 +34,8 @@ const qualityOptions = computed(() => [
         :options="sampleRateOptions"
         class="w-44"
         @change="player.setResamplerConfig(player.resamplerConfig)"
-      /><BaseSelect
+      />
+      <BaseSelect
         v-model="player.resamplerConfig.quality"
         teleport
         :options="qualityOptions"

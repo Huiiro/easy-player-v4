@@ -39,7 +39,7 @@ function loader(mocks = {}, globals = {}) {
           if (mocks[name]) return mocks[name]
           if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
-          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
+          return load(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
         }
       },
       { filename }
@@ -75,7 +75,7 @@ const mocks = {
     songAllowsNetworkLyrics: () => true
   },
   [path.resolve('src/main/service/playbackMode.ts')]: policy,
-  [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key }
+  [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key }
 }
 const { SourceRegistry } = loader(mocks)('src/main/sources/registry.ts')
 const registry = new SourceRegistry()
@@ -88,7 +88,7 @@ registry.register({
   lyrics: { search: (...args) => provider(...args) },
   download: { search: async () => [], resolve: (...args) => provider(...args) }
 })
-mocks[path.resolve('src/main/sources/index.ts')] = { getNetworkSources: () => registry }
+mocks[path.resolve('src/main/sources/colors.ts')] = { getNetworkSources: () => registry }
 const handlers = new Map()
 mocks.electron = { ipcMain: { handle: (name, handler) => handlers.set(name, handler) } }
 mocks[path.resolve('src/main/service/loggerService.ts')] = {
@@ -485,7 +485,7 @@ loader(
     '@electron-toolkit/preload': { electronAPI: {} }
   },
   { window: preloadWindow }
-)('src/preload/index.ts')
+)('src/preload/colors.ts')
 const api = preloadWindow.api
 assert.equal(
   (await api.metadata.searchTracks('test', 'Title', { requestId: 'bridge-search' })).success,

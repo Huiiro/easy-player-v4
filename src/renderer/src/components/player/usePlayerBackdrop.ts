@@ -2,7 +2,7 @@ import { computed, nextTick, ref, watch, type Ref } from 'vue'
 import type { usePlayerStore } from '@/stores/player/playerStore'
 import type { useUIStore } from '@/stores/ui/uiStore'
 import { CoverAnalyzer } from '@/hooks/useImageColors'
-import { PlayerBgType, resolvePlayerBgType } from '@/consts'
+import { PlayerBgType, resolvePlayerBgType } from '@/constants'
 import { chooseSpectrumColor } from './spectrumColor'
 const COVER_ANALYSIS_VERSION = 11
 

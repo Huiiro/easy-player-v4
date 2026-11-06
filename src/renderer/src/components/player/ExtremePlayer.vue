@@ -57,8 +57,8 @@ function time(ms: number): string {
           @blur="cancelSeek"
         />
         <div class="time">
-          <span>{{ time(displayPositionMs) }}</span
-          ><span>{{ time(player.durationMs) }}</span>
+          <span>{{ time(displayPositionMs) }}</span>
+          <span>{{ time(player.durationMs) }}</span>
         </div>
       </div>
       <div class="controls">
@@ -127,7 +127,8 @@ function time(ms: number): string {
         :disabled="player.playbackModeChanging"
         @click="player.setExtremePlayback(false)"
       >
-        {{ t('settings.returnFullPlayer') }} <span aria-hidden="true">↗</span>
+        {{ t('settings.returnFullPlayer') }}
+        <span aria-hidden="true">↗</span>
       </button>
     </div>
     <p class="mode-status">{{ t('settings.extremePlaybackActive') }}</p>

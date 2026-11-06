@@ -34,7 +34,7 @@ import {
   resolvePlayerBgType,
   resolvePlayerCoverStyle,
   TagStyle
-} from '@/consts'
+} from '@/constants'
 import type { LyricSource } from '@/services/lyrics'
 import { hasPersistedStore, playerDataStorage } from '@/stores/persistence'
 import {

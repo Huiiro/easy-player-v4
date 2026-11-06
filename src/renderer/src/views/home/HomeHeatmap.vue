@@ -81,8 +81,9 @@ function heatClass(seconds: number): string {
             :key="marker.date"
             class="absolute whitespace-nowrap"
             :style="{ left: `${(marker.week / Math.ceil(heatmapDays.length / 7)) * 100}%` }"
-            >{{ marker.label }}</span
           >
+            {{ marker.label }}
+          </span>
         </div>
         <div class="home-heatmap-grid">
           <span

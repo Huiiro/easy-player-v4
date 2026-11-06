@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import FooterLayoutSettings from './FooterLayoutSettings.vue'
-import { PlayerBgType, PlayerCoverStyle } from '@/consts'
+import { PlayerBgType, PlayerCoverStyle } from '@/constants'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 const ui = useUIStore()

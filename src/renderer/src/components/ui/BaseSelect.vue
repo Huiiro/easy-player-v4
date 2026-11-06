@@ -197,9 +197,9 @@ function onClear(): void {
                 </svg>
                 <span v-else class="size-[1em] shrink-0" />
 
-                <slot name="option" :option="opt" :selected="isSelected" :active="active"
-                  ><span class="min-w-0 flex-1 truncate">{{ opt.label }}</span></slot
-                >
+                <slot name="option" :option="opt" :selected="isSelected" :active="active">
+                  <span class="min-w-0 flex-1 truncate">{{ opt.label }}</span>
+                </slot>
               </li>
             </ListboxOption>
           </template>

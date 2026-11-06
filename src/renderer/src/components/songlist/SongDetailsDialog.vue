@@ -253,8 +253,9 @@ watch(
             :key="tag.id"
             class="rounded-full px-2 py-0.5 text-xs text-white"
             :style="{ backgroundColor: tag.color || '#7c3aed' }"
-            >{{ tag.name }}</span
           >
+            {{ tag.name }}
+          </span>
         </div>
       </section>
     </div>

@@ -108,14 +108,16 @@ function toggleAll(event: Event): void {
           :loading="searching"
           :disabled="loading || saving || !sourceId || !query.trim()"
           @click="search"
-          >{{ t('metadataEdit.networkSearch') }}</BaseButton
         >
+          {{ t('metadataEdit.networkSearch') }}
+        </BaseButton>
         <BaseButton
           v-if="searching || fetching || fetchingLyrics || fetchingCover"
           variant="secondary"
           @click="cancelPending"
-          >{{ t('common.cancelRequest') }}</BaseButton
         >
+          {{ t('common.cancelRequest') }}
+        </BaseButton>
       </div>
 
       <div
@@ -147,13 +149,13 @@ function toggleAll(event: Event): void {
           >
             <span class="min-w-0">
               <span class="block truncate font-medium">{{ item.title }}</span>
-              <span class="mt-0.5 block truncate text-xs text-text-l"
-                >{{ item.artist }} · {{ item.album }}</span
-              >
+              <span class="mt-0.5 block truncate text-xs text-text-l">
+                {{ item.artist }} · {{ item.album }}
+              </span>
             </span>
-            <span class="shrink-0 text-xs tabular-nums text-text-l">{{
-              duration(item.durationMs)
-            }}</span>
+            <span class="shrink-0 text-xs tabular-nums text-text-l">
+              {{ duration(item.durationMs) }}
+            </span>
           </button>
         </div>
         <p
@@ -163,9 +165,8 @@ function toggleAll(event: Event): void {
           {{ t('metadataEdit.networkEmpty') }}
         </p>
         <p v-if="fetching" role="status" class="flex items-center gap-2 py-4 text-sm text-text-l">
-          <span class="ep-spinner" aria-hidden="true" />{{
-            t('metadataEdit.networkDetailsLoading')
-          }}
+          <span class="ep-spinner" aria-hidden="true" />
+          {{ t('metadataEdit.networkDetailsLoading') }}
         </p>
 
         <div v-if="detail" class="space-y-3">
@@ -217,9 +218,14 @@ function toggleAll(event: Event): void {
           </p>
           <template v-else-if="rows.length">
             <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="text-xs text-text-l">{{
-                t('metadataEdit.networkSelectedCount', { count: selectedCount, total: rows.length })
-              }}</span>
+              <span class="text-xs text-text-l">
+                {{
+                  t('metadataEdit.networkSelectedCount', {
+                    count: selectedCount,
+                    total: rows.length
+                  })
+                }}
+              </span>
               <BaseButton
                 size="sm"
                 variant="ghost"
@@ -280,17 +286,21 @@ function toggleAll(event: Event): void {
                       </label>
                     </th>
                     <td class="break-words p-3 text-text-l">
-                      <span v-if="row.field === 'coverDataUrl'">{{
-                        t(
-                          snapshot.hasCover
-                            ? 'metadataEdit.networkExistingCover'
-                            : 'metadataEdit.networkBlank'
-                        )
-                      }}</span>
+                      <span v-if="row.field === 'coverDataUrl'">
+                        {{
+                          t(
+                            snapshot.hasCover
+                              ? 'metadataEdit.networkExistingCover'
+                              : 'metadataEdit.networkBlank'
+                          )
+                        }}
+                      </span>
                       <pre
                         v-else-if="row.field === 'lyrics'"
                         class="custom-scrollbar max-h-28 overflow-auto whitespace-pre-wrap font-sans text-xs"
-                        >{{ row.current || t('metadataEdit.networkBlank') }}</pre>
+                      >
+                        {{ row.current || t('metadataEdit.networkBlank') }}
+                      </pre>
                       <span v-else>{{ row.current ?? t('metadataEdit.networkBlank') }}</span>
                     </td>
                     <td class="break-words p-3">
@@ -303,7 +313,9 @@ function toggleAll(event: Event): void {
                       <pre
                         v-else-if="row.field === 'lyrics'"
                         class="custom-scrollbar max-h-28 overflow-auto whitespace-pre-wrap font-sans text-xs"
-                        >{{ row.incoming }}</pre>
+                      >
+                        {{ row.incoming }}
+                      </pre>
                       <span v-else>{{ row.incoming }}</span>
                     </td>
                   </tr>
@@ -325,11 +337,12 @@ function toggleAll(event: Event): void {
             variant="secondary"
             :disabled="saving"
             @click="emit('update:modelValue', false)"
-            >{{ t('metadataEdit.cancel') }}</BaseButton
           >
-          <BaseButton :disabled="!canSave" :loading="saving" @click="save">{{
-            t('metadataEdit.networkSaveSelected')
-          }}</BaseButton>
+            {{ t('metadataEdit.cancel') }}
+          </BaseButton>
+          <BaseButton :disabled="!canSave" :loading="saving" @click="save">
+            {{ t('metadataEdit.networkSaveSelected') }}
+          </BaseButton>
         </div>
       </div>
     </template>

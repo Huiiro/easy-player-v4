@@ -322,9 +322,9 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
               </button>
             </div>
             <div class="mt-3 flex flex-col gap-2">
-              <BaseButton class="w-full" @click="chooseCover">{{
-                t('metadataEdit.chooseCover')
-              }}</BaseButton>
+              <BaseButton class="w-full" @click="chooseCover">
+                {{ t('metadataEdit.chooseCover') }}
+              </BaseButton>
               <BaseButton
                 variant="secondary"
                 class="w-full"
@@ -468,9 +468,9 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
               :alt="result.title"
             />
             <span class="block truncate px-2 py-1 text-xs">{{ result.title }}</span>
-            <span class="block truncate px-2 pb-2 text-[11px] text-text-l">{{
-              result.artist
-            }}</span>
+            <span class="block truncate px-2 pb-2 text-[11px] text-text-l">
+              {{ result.artist }}
+            </span>
           </button>
         </div>
         <p v-else-if="!searchingCovers" class="mt-4 text-center text-sm text-text-l">

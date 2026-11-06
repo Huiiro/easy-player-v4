@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import ExtremePlayer from './components/player/ExtremePlayer.vue'
 import { usePlaybackLifecycle } from './hooks/usePlaybackLifecycle'
-import { useMessage } from './components/ui/useMessage'
+import { useMessage } from '@/components/ui'
 const { messages, remove } = useMessage()
 usePlaybackLifecycle()
 </script>

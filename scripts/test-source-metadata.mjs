@@ -55,7 +55,7 @@ function load(file, mocks = {}, globals = {}) {
             return visit(path.resolve('src/renderer/src', name.slice(2)) + '.ts')
           if (!name.startsWith('.')) return projectRequire(filename, name)
           const target = path.resolve(path.dirname(filename), name)
-          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'index.ts'))
+          return visit(existsSync(target + '.ts') ? target + '.ts' : path.join(target, 'colors.ts'))
         }
       },
       { filename }
@@ -321,16 +321,16 @@ try {
   }
   let playbackStatus = null
   const guard = load('src/main/service/metadataWriteGuard.ts', {
-    [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key }
+    [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key }
   })
   guard.setMetadataPlaybackStatusProvider(() => playbackStatus)
   const writes = []
   let failWrite = false
   const service = load('src/main/service/metadataWriteService.ts', {
     [path.resolve('src/main/service/metadataWriteGuard.ts')]: guard,
-    [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
+    [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key },
     [path.resolve('src/main/database/repository.ts')]: { getSong },
-    [path.resolve('src/main/database/index.ts')]: { getDatabase: () => db },
+    [path.resolve('src/main/database/colors.ts')]: { getDatabase: () => db },
     [path.resolve('src/main/utils/pathUtils.ts')]: {
       getCoverPath: (...parts) => path.join(root, 'covers', ...parts)
     },
@@ -467,8 +467,8 @@ try {
     old.exec('CREATE TABLE schema_migration(version INTEGER PRIMARY KEY)')
     old.prepare('INSERT INTO schema_migration VALUES(?)').run(version)
     old.close()
-    const migrated = load('src/main/database/index.ts', {
-      [path.resolve('src/main/i18n/index.ts')]: { t: (key) => key },
+    const migrated = load('src/main/database/colors.ts', {
+      [path.resolve('src/main/i18n/colors.ts')]: { t: (key) => key },
       [path.resolve('src/main/service/operationLogger.ts')]: {
         logOperation: (_name, _context, action) => action()
       },

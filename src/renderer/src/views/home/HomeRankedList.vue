@@ -53,19 +53,23 @@ function formatDuration(seconds: number): string {
           </span>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm">{{ song.title }}</span>
-            <span class="block truncate text-xs text-text-l">{{
-              formatArtists(
-                song.artist,
-                uiStore.artistSeparator,
-                uiStore.normalizeMetadataSeparator
-              ) || t('songList.unknownArtist')
-            }}</span>
+            <span class="block truncate text-xs text-text-l">
+              {{
+                formatArtists(
+                  song.artist,
+                  uiStore.artistSeparator,
+                  uiStore.normalizeMetadataSeparator
+                ) || t('songList.unknownArtist')
+              }}
+            </span>
           </span>
-          <span class="home-rank-value text-xs text-text-l">{{
-            props.kind === 'played'
-              ? t('home.playCount', { count: song.value })
-              : formatDuration(song.value)
-          }}</span>
+          <span class="home-rank-value text-xs text-text-l">
+            {{
+              props.kind === 'played'
+                ? t('home.playCount', { count: song.value })
+                : formatDuration(song.value)
+            }}
+          </span>
         </button>
       </li>
     </ol>

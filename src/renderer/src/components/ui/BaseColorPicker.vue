@@ -323,51 +323,55 @@ const anchorRef = ref<HTMLElement | null>(null)
                     :style="{ left: alphaLeft }"
                   />
                 </div>
-                <span class="text-xs text-text-l w-9 text-right tabular-nums shrink-0"
-                  >{{ alphaPct }}%</span
-                >
+                <span class="text-xs text-text-l w-9 text-right tabular-nums shrink-0">
+                  {{ alphaPct }}%
+                </span>
               </div>
 
               <div class="sr-only focus-within:not-sr-only">
-                <label
-                  >{{ t('ui.hue')
-                  }}<input
+                <label>
+                  {{ t('ui.hue') }}
+                  <input
                     v-model.number="hsva.h"
                     type="range"
                     min="0"
                     max="360"
                     @input="emitColor"
-                /></label>
-                <label
-                  >{{ t('ui.saturation')
-                  }}<input
+                  />
+                </label>
+                <label>
+                  {{ t('ui.saturation') }}
+                  <input
                     v-model.number="hsva.s"
                     type="range"
                     min="0"
                     max="1"
                     step="0.01"
                     @input="emitColor"
-                /></label>
-                <label
-                  >{{ t('ui.brightness')
-                  }}<input
+                  />
+                </label>
+                <label>
+                  {{ t('ui.brightness') }}
+                  <input
                     v-model.number="hsva.v"
                     type="range"
                     min="0"
                     max="1"
                     step="0.01"
                     @input="emitColor"
-                /></label>
-                <label v-if="showAlpha"
-                  >{{ t('ui.alpha')
-                  }}<input
+                  />
+                </label>
+                <label v-if="showAlpha">
+                  {{ t('ui.alpha') }}
+                  <input
                     v-model.number="hsva.a"
                     type="range"
                     min="0"
                     max="1"
                     step="0.01"
                     @input="emitColor"
-                /></label>
+                  />
+                </label>
               </div>
               <!-- 预览 + Hex -->
               <div class="flex items-center gap-2">
