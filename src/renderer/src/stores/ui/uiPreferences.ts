@@ -10,6 +10,13 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    autoCheckUpdates:
+      typeof preferences.autoCheckUpdates === 'boolean' ? preferences.autoCheckUpdates : true,
+    ignoredUpdateVersions: Array.isArray(preferences.ignoredUpdateVersions)
+      ? preferences.ignoredUpdateVersions.filter(
+          (version): version is string => typeof version === 'string'
+        )
+      : [],
     systemBackground: isSystemBackground(preferences.systemBackground)
       ? preferences.systemBackground
       : 'none',

@@ -6,6 +6,7 @@ import DuplicateTaskHost from '@/components/scan/DuplicateTaskHost.vue'
 import GlobalNotifications from '@/components/ui/GlobalNotifications.vue'
 import ThemePreviewDialog from '@/components/settings/ThemePreviewDialog.vue'
 import GlobalSearchHost from '@/components/search/GlobalSearchHost.vue'
+import AppUpdateNotification from '@/components/settings/AppUpdateNotification.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import router from '@/router'
 import { flushPlayerDataStorage } from '@/stores/persistence'
@@ -70,4 +71,5 @@ onBeforeUnmount(() => {
   <DuplicateTaskHost />
   <ThemePreviewDialog />
   <GlobalSearchHost />
+  <AppUpdateNotification />
 </template>

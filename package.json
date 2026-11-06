@@ -42,6 +42,7 @@
     "test:macos-runtime": "node scripts/test-macos-runtime.cjs",
     "build:linux": "npm run prepare:ytdlp && npm run prepare:fpcalc && npm run build:nocheck && electron-builder --linux",
     "test:ui": "electron scripts/check-ui-components.cjs",
+    "test:updates": "node scripts/test-automatic-updates.mjs && electron scripts/check-automatic-updates.cjs",
     "test:list-loading": "electron scripts/check-list-loading.cjs",
     "test:song-columns": "electron scripts/check-song-columns.cjs",
     "test:home": "electron scripts/check-home-layout.cjs",

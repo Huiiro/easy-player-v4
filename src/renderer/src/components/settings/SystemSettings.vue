@@ -221,6 +221,12 @@ watch(
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.updates')">
+    <SettingRow
+      :label="t('settings.autoCheckUpdates')"
+      :description="t('settings.autoCheckUpdatesDescription')"
+    >
+      <BaseSwitch v-model="ui.autoCheckUpdates" size="md" />
+    </SettingRow>
     <div class="setting-row">
       <div>
         <h3>{{ t('settings.appUpdate') }}</h3>

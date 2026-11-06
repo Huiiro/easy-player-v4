@@ -90,6 +90,8 @@ export const UI_PREFERENCE_KEYS = [
   'playQueuePosition',
   'closeToTray',
   'autoStart',
+  'autoCheckUpdates',
+  'ignoredUpdateVersions',
   'showWelcomeText',
   'homeSectionOrder',
   'hiddenHomeSections',
@@ -329,6 +331,8 @@ export const useUIStore = defineStore(
     const playQueuePosition = ref<'left' | 'right'>('right')
     const closeToTray = ref(false)
     const autoStart = ref(false)
+    const autoCheckUpdates = ref(true)
+    const ignoredUpdateVersions = ref<string[]>([])
     const showWelcomeText = ref(true)
     const homeSectionOrder = ref<string[]>([...DEFAULT_HOME_SECTION_ORDER])
     const hiddenHomeSections = ref<string[]>([...DEFAULT_HIDDEN_HOME_SECTIONS])
@@ -1026,6 +1030,8 @@ export const useUIStore = defineStore(
       playQueuePosition,
       closeToTray,
       autoStart,
+      autoCheckUpdates,
+      ignoredUpdateVersions,
       useLocalFileName,
       useFullProgress,
       showWelcomeText,

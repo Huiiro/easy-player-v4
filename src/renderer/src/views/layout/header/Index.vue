@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, ref } from '
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import ScanProgress from '@/components/scan/ScanProgress.vue'
 import SearchIndexStatus from '@/components/search/SearchIndexStatus.vue'
+import AppUpdateStatus from '@/components/settings/AppUpdateStatus.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useRoute } from 'vue-router'
@@ -179,6 +180,7 @@ eventBus.on('openAudioControls', openAudioControls)
     </button>
     <div class="h-full min-w-4 flex-1" />
     <SearchIndexStatus />
+    <AppUpdateStatus />
     <div class="flex self-stretch [-webkit-app-region:no-drag]">
       <button
         v-if="route.path === '/home' && !ui.useCardView"
