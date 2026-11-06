@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import SettingGroup from '@/components/settings/SettingGroup.vue'
+import SettingsSearch from '@/components/settings/SettingsSearch.vue'
+import type { SettingsSearchEntry } from '@/utils/settingsSearch'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -35,6 +37,8 @@ const mp3tagUrl = 'https://www.mp3tag.de/'
 const tagScannerUrl = 'https://www.xdlab.ru/en/download.htm'
 const { t } = useI18n()
 const activeSection = ref('playback')
+const searchOpen = ref(false)
+let clearSearchHighlight: (() => void) | undefined
 const resetThemeVisible = ref(false)
 const settingsScroller = ref<HTMLElement | null>(null)
 let sectionObserver: IntersectionObserver | undefined
@@ -115,6 +119,33 @@ function onSettingsScroll(): void {
   }, 120)
 }
 
+function selectSearchResult(entry: SettingsSearchEntry): void {
+  clearSearchHighlight?.()
+  const container = settingsScroller.value
+  const target = entry.target.isConnected ? entry.target : document.getElementById(entry.sectionId)
+  if (!container || !target) return
+  activeSection.value = entry.sectionId
+  navigatingBySidebar = true
+  const top = target.getBoundingClientRect().top - container.getBoundingClientRect().top
+  container.scrollTo({
+    top: container.scrollTop + top - 24,
+    behavior: ui.reduceMotion ? 'instant' : 'smooth'
+  })
+  onSettingsScroll()
+  const previousTabIndex = target.getAttribute('tabindex')
+  target.tabIndex = -1
+  target.classList.add('settings-search-highlight')
+  target.focus({ preventScroll: true })
+  const timer = window.setTimeout(() => clearSearchHighlight?.(), 2500)
+  clearSearchHighlight = () => {
+    window.clearTimeout(timer)
+    target.classList.remove('settings-search-highlight')
+    if (previousTabIndex === null) target.removeAttribute('tabindex')
+    else target.setAttribute('tabindex', previousTabIndex)
+    clearSearchHighlight = undefined
+  }
+}
+
 async function refreshFonts(): Promise<void> {
   await ui.loadCustomFonts()
 }
@@ -140,6 +171,7 @@ onMounted(() => {
   }
 })
 onBeforeUnmount(() => {
+  clearSearchHighlight?.()
   sectionObserver?.disconnect()
   if (sidebarScrollTimer) window.clearTimeout(sidebarScrollTimer)
 })
@@ -156,6 +188,16 @@ onBeforeUnmount(() => {
     >
       <aside class="settings-nav">
         <p class="settings-nav-title">{{ t('settings.navigation') }}</p>
+        <button
+          type="button"
+          class="settings-nav-item"
+          aria-haspopup="dialog"
+          :aria-expanded="searchOpen"
+          @click="searchOpen = true"
+        >
+          <span class="settings-nav-icon"><SvgIcon name="common-search" :size="16" /></span>
+          <span>{{ t('settings.searchTitle') }}</span>
+        </button>
         <button
           v-for="section in navigationSections"
           :key="section.id"
@@ -578,6 +620,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
   </main>
+  <SettingsSearch v-model="searchOpen" :root="settingsScroller" @select="selectSearchResult" />
   <BaseConfirmDialog
     v-model="resetThemeVisible"
     :title="t('settings.restoreDefault')"

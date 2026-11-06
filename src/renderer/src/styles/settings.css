@@ -1,3 +1,10 @@
+.settings-search-highlight {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
 .settings-page .settings-group + .settings-group {
   margin-top: 0.35rem;
   /* border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent); */
@@ -80,8 +87,8 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 0.8rem;
-    margin-left: 0.8rem;
+    padding-bottom: 0.8rem;
+    padding-left: 0.8rem;
   }
   .section-heading h2 {
     display: grid;

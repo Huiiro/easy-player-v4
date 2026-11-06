@@ -119,3 +119,11 @@ function inputAttrs(): Record<string, unknown> {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* BaseInput provides its own clear button for search fields. */
+.ep-input[type='search']::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  display: none;
+}
+</style>
