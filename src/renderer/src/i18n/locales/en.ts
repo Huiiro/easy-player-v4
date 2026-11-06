@@ -1268,6 +1268,7 @@ export default {
     playerBackgroundAlbum: 'Album artwork',
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundLiquid: 'Liquid flow',
+    playerBackgroundMesh: 'Flowing mesh',
     systemBackgroundSolid: 'Follow song',
     playerCoverStyle: 'Cover style',
     playerCoverStyleDescription: 'Choose how the cover appears in the player.',

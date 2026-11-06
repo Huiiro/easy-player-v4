@@ -1236,6 +1236,7 @@ export default {
     playerBackgroundAlbum: '专辑封面',
     playerBackgroundAmbient: '氛围光晕',
     playerBackgroundLiquid: '流体氛围',
+    playerBackgroundMesh: '流动网格',
     systemBackgroundSolid: '跟随歌曲',
     playerCoverStyle: '封面样式',
     playerCoverStyleDescription: '选择播放器中的封面外观。',

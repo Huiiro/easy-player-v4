@@ -82,6 +82,17 @@ const openFooterAnywhere = computed({
             <span class="preview-window"><i /><b /><em /></span>
             <span>{{ t('settings.playerBackgroundLiquid') }}</span>
           </button>
+          <button
+            type="button"
+            class="theme-option mesh-background-preview"
+            :class="{ selected: playerBackground === PlayerBgType.MESH }"
+            :aria-checked="playerBackground === PlayerBgType.MESH"
+            role="radio"
+            @click="playerBackground = PlayerBgType.MESH"
+          >
+            <span class="preview-window"><i /><b /></span>
+            <span>{{ t('settings.playerBackgroundMesh') }}</span>
+          </button>
         </div>
       </div>
       <div class="setting-row setting-row-stack">
@@ -174,6 +185,21 @@ const openFooterAnywhere = computed({
 </template>
 
 <style scoped>
+.mesh-background-preview .preview-window {
+  background:
+    radial-gradient(ellipse at 15% 65%, #c46485, transparent 68%),
+    radial-gradient(ellipse at 85% 25%, #d1aa72, transparent 62%),
+    linear-gradient(120deg, #47538b, #584572);
+}
+.mesh-background-preview i {
+  background: rgb(255 255 255 / 16%);
+}
+.mesh-background-preview b {
+  background: rgb(255 255 255 / 10%);
+}
+.theme-options {
+  flex-wrap: wrap;
+}
 .album-background-preview .preview-window {
   background: linear-gradient(135deg, #6e4467, #171524);
 }

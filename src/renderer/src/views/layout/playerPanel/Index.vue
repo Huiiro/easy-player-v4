@@ -18,8 +18,9 @@ import eventBus from '@/utils/eventBus'
 import LyricsSearchDialog from '@/components/lyrics/LyricsSearchDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
-import LiquidBackground from '@/components/background/LiquidBackground.vue'
-import AmbientBubbleCanvas from '@/components/background/AmbientBubbleCanvas.vue'
+import LiquidBackground from '@/components/background/player/LiquidBackground.vue'
+import MeshFlowBackground from '@/components/background/player/MeshFlowBackground.vue'
+import AmbientBubbleCanvas from '@/components/background/player/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { usePlayerRhythm } from '@/components/player/usePlayerRhythm'
 import { formatArtists, splitArtists } from '@/utils/artists'
@@ -319,9 +320,11 @@ onUnmounted(() => {
  */
 const {
   liquidUnavailable,
+  meshUnavailable,
   useAlbumArtwork,
   useAmbientBackground,
   useLiquidBackground,
+  useMeshBackground,
   ambientIntensity,
   liquidCoverSource,
   backgroundSource,
@@ -548,6 +551,19 @@ function changeLyricsOffset(event: WheelEvent): void {
           :energy="rhythmAmount"
           :beat-sequence="player.audioAnalysis.beatSequence"
           :intensity="ambientIntensity"
+        />
+      </Transition>
+      <Transition name="panel-background">
+        <MeshFlowBackground
+          v-if="useMeshBackground && !meshUnavailable && paletteReady"
+          :cover-src="coverFailed ? null : displayedCoverUrl"
+          :primary="coverColors.primary"
+          :secondary="coverColors.secondary"
+          :tertiary="coverColors.tertiary"
+          :active="ui.showPlayer && isPanelVisible"
+          :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
+          :energy="player.isPlaying ? liquidBass : 0"
+          @unavailable="meshUnavailable = true"
         />
       </Transition>
     </div>
@@ -1078,11 +1094,11 @@ function changeLyricsOffset(event: WheelEvent): void {
   --ep-range-fill-background: linear-gradient(var(--ep-progress-fill), var(--ep-progress-fill));
 }
 .liquid-background-soften {
-  background: rgb(8 11 20 / 48%);
-  backdrop-filter: blur(6px) brightness(0.9) saturate(1.62) contrast(1.14);
+  background: rgba(8, 11, 20, 0.5);
+  backdrop-filter: brightness(0.9) saturate(1.62) contrast(1.14);
 }
 .panel-background-item {
-  filter: blur(52px) saturate(1.68) contrast(1.28) brightness(0.52);
+  filter: blur(64px) saturate(1.68) contrast(1.28) brightness(0.52);
 }
 .panel-tool {
   display: flex;

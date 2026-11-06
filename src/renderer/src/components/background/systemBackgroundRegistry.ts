@@ -6,7 +6,7 @@ const SandboxedThemeBackground = defineAsyncComponent(
 const DeclarativeThemeBackground = defineAsyncComponent(
   () => import('./DeclarativeThemeBackground.vue')
 )
-const SolidBackground = defineAsyncComponent(() => import('./SolidBackground.vue'))
+const SolidBackground = defineAsyncComponent(() => import('./player/SolidBackground.vue'))
 
 export type SystemBackground = `plugin:${string}` | 'none' | 'solid'
 

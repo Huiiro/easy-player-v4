@@ -43,9 +43,11 @@ vec2 sineFold(vec2 point, float phase, float strength) {
 }
 
 float angularWave(vec2 point, float frequency) {
-  // The swapped atan arguments intentionally preserve the reference's angular
-  // orientation. Each deformation changes the origin of the following wave.
-  return sin(atan(point.x, point.y) * frequency);
+  // Retain the original rotating lobes, but fade their singular centre so
+  // the colour fronts do not collapse into a sharp intersection.
+  float radiusSquared = dot(point, point);
+  float core = radiusSquared / (radiusSquared + 0.09);
+  return sin(atan(point.x, point.y + 1.0e-5) * frequency) * core;
 }
 
 vec3 sampleArtwork(vec2 uv) {
@@ -63,27 +65,24 @@ void main() {
   float beat = clamp(u_beat, 0.0, 1.0);
   // u_time is an integrated phase: audio changes speed without jumping position.
   float time = u_time;
-  float strength = 1.0 + energy * 0.04 + bass * 0.055 + beat * 0.025;
+  float strength = 0.96 + energy * 0.04 + bass * 0.055 + beat * 0.025;
   float beatPhase = beat * 0.04;
 
-  vec3 support = neighbourColour(u_color_c);
+  // Restore the original nested twisting motion. Give the broad lobes most
+  // of the colour and reduce the finer folds rather than replacing the flow.
   vec3 accumulated = vec3(0.0);
-
   point = sineFold(point, time * 1.20 + beatPhase, strength);
   accumulated += angularWave(point, 2.0) * u_color_a;
-
   point = sineFold(point, time * 1.40 - beatPhase * 0.70, strength);
   accumulated += angularWave(point, 3.0) * u_color_b;
-
   point = sineFold(point, time * 1.60 + beatPhase * 0.50, strength);
-  accumulated += angularWave(point, 4.0) * u_color_c;
-
+  accumulated += angularWave(point, 4.0) * u_color_c * 0.65;
   point = sineFold(point, time * 1.80 - beatPhase * 0.35, strength);
-  accumulated += angularWave(point, 5.0) * support;
+  accumulated += angularWave(point, 5.0) * neighbourColour(u_color_c) * 0.25;
 
-  // Signed accumulation plus framebuffer clipping creates the milky planes,
-  // near-black valleys, and razor-thin folds seen in the reference.
-  vec3 color = accumulated * 0.50 + 0.50;
+  // A smooth shoulder preserves light and dark colour planes without hard
+  // clipping seams. No separate travelling brightness wave is added.
+  vec3 color = 0.5 + 0.5 * accumulated / sqrt(accumulated * accumulated + 0.48);
 
   vec3 artwork = sampleArtwork(screenUv);
   float artworkLight = dot(artwork, vec3(0.2126, 0.7152, 0.0722));
@@ -94,5 +93,8 @@ void main() {
 
   float pulse = exp(-dot(point, point) * 0.14) * beat;
   color *= 1.0 + pulse * 0.035 + energy * 0.025;
+  // Static sub-LSB dithering breaks up contour bands after 8-bit output.
+  float dither = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+  color += (dither - 0.5) / 255.0;
   gl_FragColor = vec4(color, 1.0);
 }

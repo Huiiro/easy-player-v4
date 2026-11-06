@@ -50,6 +50,7 @@
     "test:window-material": "electron scripts/check-mica-dialog.cjs",
     "test:background-transition": "electron scripts/check-background-transition.cjs",
     "test:animation-activity": "electron scripts/check-animation-activity.cjs",
+    "test:mesh-background": "electron scripts/check-mesh-background.cjs && electron scripts/check-player-panel-switch.cjs --mesh",
     "test:theme-system": "electron scripts/check-theme-system.cjs",
     "test:card-motion": "electron scripts/check-card-motion.cjs",
     "test:genres": "node scripts/test-genres.mjs",

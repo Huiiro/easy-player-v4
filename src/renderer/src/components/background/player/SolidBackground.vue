@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import vertexSource from '@/shaders/vertexSource.glsl?raw'
-import fragmentSource from '@/shaders/solidSource.glsl?raw'
-import { solidBackgroundColor } from './songThemeColors'
+import vertexSource from '@/components/background/shaders/liquidVertexSource.glsl?raw'
+import fragmentSource from '@/components/background/shaders/solidSource.glsl?raw'
+import { solidBackgroundColor } from '../songThemeColors'
 
 const props = defineProps<{
   primary: string

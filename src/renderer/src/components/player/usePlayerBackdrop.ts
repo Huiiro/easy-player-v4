@@ -17,6 +17,7 @@ export function usePlayerBackdrop(
   isPanelVisible: Readonly<Ref<boolean>>
 ) {
   const liquidUnavailable = ref(false)
+  const meshUnavailable = ref(false)
   const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
   const defaultLiquidColors = {
     primary: '77 136 220',
@@ -27,7 +28,8 @@ export function usePlayerBackdrop(
   const effectivePlayerBackground = computed(() =>
     resolvePlayerBgType(selectedPlayerBackground.value, {
       coverAvailable: Boolean(coverUrl.value && !coverFailed.value),
-      liquidAvailable: !liquidUnavailable.value
+      liquidAvailable: !liquidUnavailable.value,
+      meshAvailable: !meshUnavailable.value
     })
   )
   const useAlbumArtwork = computed(() => effectivePlayerBackground.value === PlayerBgType.ALBUM)
@@ -43,6 +45,7 @@ export function usePlayerBackdrop(
   const liquidCoverSource = computed(() =>
     coverColorSource.value === 'failed' ? null : coverUrl.value
   )
+  const useMeshBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.MESH)
   const backgroundSource = computed(() => {
     if (useAlbumArtwork.value && displayedCoverUrl.value && !coverFailed.value)
       return displayedCoverUrl.value
@@ -50,6 +53,7 @@ export function usePlayerBackdrop(
   })
   watch(selectedPlayerBackground, (background) => {
     liquidUnavailable.value = false
+    meshUnavailable.value = false
     if (background === PlayerBgType.LIQUID)
       coverColorSource.value = coverUrl.value ? 'loading' : 'idle'
     else coverColorSource.value = 'idle'
@@ -240,12 +244,14 @@ export function usePlayerBackdrop(
   })
   return {
     liquidUnavailable,
+    meshUnavailable,
     coverColorSource,
     selectedPlayerBackground,
     effectivePlayerBackground,
     useAlbumArtwork,
     useAmbientBackground,
     useLiquidBackground,
+    useMeshBackground,
     ambientIntensity,
     liquidCoverSource,
     backgroundSource,

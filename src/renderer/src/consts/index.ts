@@ -17,13 +17,15 @@ export enum PlayerDisplayMode {
 export enum PlayerBgType {
   ALBUM = 'album',
   AMBIENT = 'ambient',
-  LIQUID = 'liquid'
+  LIQUID = 'liquid',
+  MESH = 'mesh'
 }
 
 export const PLAYER_BG_TYPES = [
   PlayerBgType.ALBUM,
   PlayerBgType.AMBIENT,
-  PlayerBgType.LIQUID
+  PlayerBgType.LIQUID,
+  PlayerBgType.MESH
 ] as const
 
 export const DEFAULT_PLAYER_BG_TYPE = PlayerBgType.ALBUM
@@ -42,6 +44,7 @@ export function resolvePlayerCoverStyle(value: unknown): PlayerCoverStyle {
 export interface PlayerBgAvailability {
   coverAvailable?: boolean
   liquidAvailable?: boolean
+  meshAvailable?: boolean
 }
 
 export function resolvePlayerBgType(
@@ -54,6 +57,8 @@ export function resolvePlayerBgType(
   if (selected === PlayerBgType.ALBUM && availability.coverAvailable === false)
     return PlayerBgType.AMBIENT
   if (selected === PlayerBgType.LIQUID && availability.liquidAvailable === false)
+    return PlayerBgType.AMBIENT
+  if (selected === PlayerBgType.MESH && availability.meshAvailable === false)
     return PlayerBgType.AMBIENT
   return selected
 }

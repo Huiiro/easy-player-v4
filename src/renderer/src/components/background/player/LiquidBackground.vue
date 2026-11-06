@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import fragmentSource from '@/shaders/fragmentSource.glsl?raw'
-import vertexSource from '@/shaders/vertexSource.glsl?raw'
+import fragmentSource from '@/components/background/shaders/liquidFragmentSource.glsl?raw'
+import vertexSource from '@/components/background/shaders/liquidVertexSource.glsl?raw'
 import { advanceLiquidMotion, createLiquidMotion } from './liquidMotion'
 
 const props = defineProps<{
@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
 <template>
   <canvas
     ref="canvas"
-    class="absolute inset-0 size-full pointer-events-none brightness-80 saturate-110"
+    class="absolute inset-0 size-full pointer-events-none brightness-80 saturate-120"
     aria-hidden="true"
   />
 </template>
