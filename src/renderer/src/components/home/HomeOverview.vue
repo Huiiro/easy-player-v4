@@ -11,6 +11,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import HomeStatValue from './HomeStatValue.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { OverviewStats } from './types'
 
@@ -18,35 +19,53 @@ const props = defineProps<{ stats: OverviewStats; loading: boolean; refreshing: 
 const emit = defineEmits<{ refresh: [] }>()
 const { t } = useI18n()
 const uiStore = useUIStore()
+const initialLoading = computed(() => props.loading && !props.refreshing)
+const formatCount = (value: number): string => String(Math.round(value))
+const formatPercent = (value: number): string => `${value.toFixed(1)}%`
 
 const statCards = computed(() => [
-  { label: t('home.stats.songs'), value: String(props.stats.songCount), icon: 'menu-song' },
+  {
+    label: t('home.stats.songs'),
+    value: props.stats.songCount,
+    format: formatCount,
+    icon: 'menu-song'
+  },
   {
     label: t('home.stats.albums'),
-    value: String(props.stats.albumCount),
+    value: props.stats.albumCount,
+    format: formatCount,
     icon: 'common-album-light'
   },
-  { label: t('home.stats.artists'), value: String(props.stats.artistCount), icon: 'menu-artist' },
+  {
+    label: t('home.stats.artists'),
+    value: props.stats.artistCount,
+    format: formatCount,
+    icon: 'menu-artist'
+  },
   {
     label: t('home.stats.librarySize'),
-    value: formatBytes(props.stats.librarySize),
+    value: props.stats.librarySize,
+    format: (value: number) => formatBytes(value, props.stats.librarySize),
     icon: 'common-database'
   },
   {
     label: t('home.stats.totalDuration'),
-    value: formatHours(props.stats.totalPlaySeconds),
+    value: props.stats.totalPlaySeconds,
+    format: formatHours,
     icon: 'common-time'
   },
   {
     label: t('home.stats.todayDuration'),
-    value: formatTodayDuration(props.stats.todayPlaySeconds),
+    value: props.stats.todayPlaySeconds,
+    format: (value: number) => formatTodayDuration(value, props.stats.todayPlaySeconds),
     icon: 'common-time'
   },
   {
     label: t('home.stats.completionRate'),
     value: props.stats.eligiblePlays
-      ? `${((props.stats.completedPlays / props.stats.eligiblePlays) * 100).toFixed(1)}%`
-      : '—',
+      ? (props.stats.completedPlays / props.stats.eligiblePlays) * 100
+      : null,
+    format: formatPercent,
     icon: 'common-task',
     hint: t('home.completionCounts', {
       completed: props.stats.completedPlays,
@@ -213,10 +232,10 @@ function onStatDetailScroll(event: Event): void {
 function formatHours(seconds: number): string {
   return `${(Math.max(0, seconds) / 3600).toFixed(1)} h`
 }
-function formatTodayDuration(seconds: number): string {
+function formatTodayDuration(seconds: number, targetSeconds = seconds): string {
   const hours = Math.floor(Math.max(0, seconds) / 3600)
   const minutes = Math.floor((Math.max(0, seconds) % 3600) / 60)
-  if (hours) return `${hours} h ${minutes} m`
+  if (hours || targetSeconds >= 3600) return `${hours} h ${minutes} m`
   return `${seconds > 0 ? Math.max(1, minutes) : 0} m`
 }
 function formatPeriodDuration(seconds: number): string {
@@ -237,12 +256,14 @@ function qualityRange(id: 'standard' | 'high' | 'ultra' | 'lossless'): string {
     lossless: losslessKbps
   })
 }
-function formatBytes(bytes: number): string {
-  if (!bytes) return '0 B'
+function formatBytes(bytes: number, targetBytes = bytes): string {
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  const index = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)))
+  const index =
+    targetBytes > 0
+      ? Math.max(0, Math.min(units.length - 1, Math.floor(Math.log(targetBytes) / Math.log(1024))))
+      : 0
   const value = bytes / 1024 ** index
-  return `${value.toFixed(value >= 100 ? 0 : 1)} ${units[index]}`
+  return `${value.toFixed(targetBytes / 1024 ** index >= 100 ? 0 : 1)} ${units[index]}`
 }
 
 onMounted(() => {
@@ -294,8 +315,15 @@ watch(
         </span>
         <div class="min-w-0">
           <p class="text-xs text-text-l">{{ item.label }}</p>
-          <p class="home-stat-value">{{ loading ? '—' : item.value }}</p>
-          <p v-if="item.hint && !loading" class="home-stat-hint text-xs text-text-l">
+          <p class="home-stat-value">
+            <HomeStatValue
+              :value="item.value"
+              :format="item.format"
+              :loading="loading"
+              :reduce-motion="uiStore.reduceMotion"
+            />
+          </p>
+          <p v-if="item.hint && !initialLoading" class="home-stat-hint text-xs text-text-l">
             {{ item.hint }}
           </p>
         </div>
@@ -307,9 +335,9 @@ watch(
         <div class="min-w-0 flex-1">
           <p class="text-xs text-text-l">{{ t('home.listeningPeriods') }}</p>
           <p class="home-stat-value truncate">
-            {{ !loading && longestPeriod ? t(`home.periods.${longestPeriod.id}`) : '—' }}
+            {{ !initialLoading && longestPeriod ? t(`home.periods.${longestPeriod.id}`) : '—' }}
           </p>
-          <p v-if="!loading && longestPeriod" class="home-stat-hint text-xs text-text-l">
+          <p v-if="!initialLoading && longestPeriod" class="home-stat-hint text-xs text-text-l">
             {{ formatPeriodDuration(longestPeriod.playedSeconds) }} ·
             {{ percentage(longestPeriod.playedSeconds, totalPeriodSeconds) }}%
           </p>
@@ -343,9 +371,13 @@ watch(
         <div class="min-w-0 flex-1">
           <p class="text-xs text-text-l">{{ t('home.qualityStats') }}</p>
           <p class="home-stat-value truncate">
-            {{ !loading && dominantQuality ? t(`home.qualityLevels.${dominantQuality.id}`) : '—' }}
+            {{
+              !initialLoading && dominantQuality
+                ? t(`home.qualityLevels.${dominantQuality.id}`)
+                : '—'
+            }}
           </p>
-          <p v-if="!loading && dominantQuality" class="home-stat-hint text-xs text-text-l">
+          <p v-if="!initialLoading && dominantQuality" class="home-stat-hint text-xs text-text-l">
             {{ t('home.qualitySongCount', { count: dominantQuality.count }) }} ·
             {{ percentage(dominantQuality.count, knownQualityCount) }}%
           </p>

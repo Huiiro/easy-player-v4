@@ -9,7 +9,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import CollectionHeaderActions from '@/components/collection/CollectionHeaderActions.vue'
 import { useStatisticsStore } from '@/stores/statistics/statisticsStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import type { RecommendationGroup } from '@/views/home/types'
+import type { RecommendationGroup } from '@/components/home/types'
 
 const route = useRoute()
 const router = useRouter()

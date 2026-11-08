@@ -167,6 +167,8 @@ export default {
     heatmap: 'Listening heatmap',
     lastYear: 'Past year',
     heatmapHint: 'Darker means more listening time',
+    heatmapLess: 'Less',
+    heatmapMore: 'More',
     heatmapValue: '{date} · {value}',
     topPlayed: 'Most played',
     topDuration: 'Most listening time',

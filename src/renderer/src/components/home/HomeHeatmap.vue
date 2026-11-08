@@ -7,6 +7,7 @@ import type { HistoryDay } from './types'
 const props = defineProps<{ historyDays: HistoryDay[] }>()
 const { t } = useI18n()
 const uiStore = useUIStore()
+const heatLevels = ['bg-hover', 'bg-primary/20', 'bg-primary/40', 'bg-primary/70', 'bg-primary']
 
 const historyMap = computed(
   () => new Map(props.historyDays.map((item) => [item.date, item.seconds]))
@@ -50,19 +51,19 @@ function formatDuration(seconds: number): string {
 }
 
 function heatClass(seconds: number): string {
-  if (!seconds) return 'bg-hover'
+  if (!seconds) return heatLevels[0]
 
   const ratio = seconds / maxHeat.value
 
   switch (true) {
     case ratio > 0.75:
-      return 'bg-primary'
+      return heatLevels[4]
     case ratio > 0.45:
-      return 'bg-primary/70'
+      return heatLevels[3]
     case ratio > 0.2:
-      return 'bg-primary/40'
+      return heatLevels[2]
     default:
-      return 'bg-primary/20'
+      return heatLevels[1]
   }
 }
 </script>
@@ -96,6 +97,23 @@ function heatClass(seconds: number): string {
         </div>
       </div>
     </div>
-    <p class="mt-3 text-xs text-text-l">{{ t('home.heatmapHint') }}</p>
+    <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <p class="text-xs text-text-l">{{ t('home.heatmapHint') }}</p>
+      <div
+        class="home-heatmap-legend flex shrink-0 items-center gap-1.5 text-[10px] text-text-l"
+        role="img"
+        :aria-label="t('home.heatmapHint')"
+      >
+        <span>{{ t('home.heatmapLess') }}</span>
+        <span
+          v-for="level in heatLevels"
+          :key="level"
+          class="size-3 rounded-sm"
+          :class="level"
+          aria-hidden="true"
+        />
+        <span>{{ t('home.heatmapMore') }}</span>
+      </div>
+    </div>
   </section>
 </template>

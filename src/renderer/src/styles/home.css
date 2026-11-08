@@ -79,6 +79,7 @@
   gap: 8px;
 }
 .home-nav {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -86,10 +87,6 @@
   padding: 14px;
   border-radius: 12px;
   background: var(--home-surface);
-  transition: background-color var(--motion-duration-fast);
-}
-.home-nav:hover {
-  background: var(--color-hover);
 }
 .home-collection-grid {
   display: grid;
@@ -132,9 +129,10 @@
 .home-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: hidden;
+  overflow: visible;
 }
 .home-stat {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 14px;
@@ -143,6 +141,24 @@
   padding: 16px 24px;
   border-right: 1px solid var(--home-stroke);
   border-bottom: 1px solid var(--home-stroke);
+}
+.home-nav,
+.home-stat {
+  transition:
+    transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-radius 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 300ms ease;
+}
+.home-nav:hover,
+.home-nav:focus-visible,
+.home-stat:hover,
+.home-stat:focus-within {
+  z-index: 1;
+  transform: translateY(-4px);
+  border-radius: 12px;
+  background-color: color-mix(in srgb, var(--color-primary) 7%, transparent);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--color-black-20) 60%, transparent);
 }
 .home-stat:nth-child(3n) {
   border-right: 0;
@@ -159,6 +175,33 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--color-primary) 15%, transparent);
   color: var(--color-primary);
+  transition: background-color 300ms ease;
+}
+.home-stat:hover .home-stat-icon,
+.home-stat:focus-within .home-stat-icon {
+  background: color-mix(in srgb, var(--color-primary) 23%, transparent);
+}
+:root.reduce-motion .home-nav,
+:root.reduce-motion .home-stat,
+:root.reduce-motion .home-stat-icon {
+  transition: none;
+}
+:root.reduce-motion .home-nav,
+:root.reduce-motion .home-stat {
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-nav,
+  .home-stat,
+  .home-stat-icon {
+    transition: none;
+  }
+  .home-nav:hover,
+  .home-nav:focus-visible,
+  .home-stat:hover,
+  .home-stat:focus-within {
+    transform: none;
+  }
 }
 .home-stat-value {
   margin-top: 6px;
@@ -177,7 +220,7 @@
 }
 .home-ranked {
   min-width: 0;
-  padding: 24px 20px 16px;
+  padding: 24px 16px 16px;
 }
 .home-ranked > .home-section-heading {
   padding-inline: 4px;
@@ -191,7 +234,7 @@
   width: 100%;
   align-items: center;
   gap: 12px;
-  padding: 9px 4px;
+  padding: 9px 12px 9px 4px;
   border-radius: 10px;
   text-align: left;
   transition: background-color var(--motion-duration-fast);

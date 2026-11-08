@@ -177,6 +177,103 @@ app.whenReady().then(async () => {
     const desktop = await layout()
     assert.equal(desktop.overflow, false, 'Desktop home must not overflow horizontally')
     assert.equal(desktop.stats, 9, 'All existing overview metrics remain available')
+    const numberMotion = await window.webContents.executeJavaScript(`(async()=>{
+      const {Vue}=HomePreview;const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+      const check=(ok,message)=>{if(!ok)throw Error(message)};
+      const command=window.api.database.command;let release;
+      window.homeUi.reduceMotion=false;
+      window.api.database.command=async(action,...args)=>{
+        const result=await command(action,...args);
+        if(action==='getOverviewStats')return new Promise(resolve=>{release=()=>resolve({...result,data:{...result.data,songCount:10012}})});
+        return result;
+      };
+      const refresh=()=>document.querySelector('.home-overview .home-section-link').click();
+      refresh();await Vue.nextTick();await wait(30);
+      const number=()=>document.querySelector('.home-stat-number > [aria-hidden=true]');
+      const rate=()=>document.querySelectorAll('.home-stat-number > [aria-hidden=true]')[6];
+      check(number().textContent==='8680','Refresh retains the existing value while the response is pending');
+      check(![...document.querySelectorAll('.home-stat-value')].some(el=>el.textContent.trim()==='—'),'Refresh never replaces other overview cards with placeholders');
+      const valueNode=number();release();await wait(80);await Vue.nextTick();
+      const initial=Number(number().textContent);await wait(200);const early=Number(number().textContent);await wait(500);const late=Number(number().textContent);
+      check(initial>=8680&&initial<early&&early<late&&late<=10012,'The visible number grows monotonically from the old value');
+      check(early-initial>(late-early)/2.5,'Count-up eases toward its target');
+      check(!document.querySelector('.home-number-strip')&&number()===valueNode,'Counting preserves the same text node container without rolling columns');
+      check(document.querySelector('.home-stat-number .sr-only').textContent==='10012','Accessible value exposes only the final number');
+      await wait(1100);check(number().textContent==='10012','The count settles exactly on the target');
+      check(rate().textContent==='87.3%','The completion rate settles to its correctly rounded percentage');
+      refresh();await Vue.nextTick();await wait(30);
+      check(number().textContent==='10012'&&number()===valueNode,'Another refresh retains both the value and its container');
+      release();await wait(80);const replayStart=Number(number().textContent);const rateStart=parseFloat(rate().textContent);await wait(200);const replayNext=Number(number().textContent);const rateNext=parseFloat(rate().textContent);
+      check(replayStart>=0&&replayStart<replayNext&&replayNext<10012,'Unchanged statistics replay a visible count-up after refresh completes');
+      check(rateStart>=0&&rateStart<rateNext&&rateNext<87.3,'Completion percentages replay their count-up despite decimal rounding');
+      check(number()===valueNode&&!number().textContent.includes('—'),'Replay keeps the text container and never inserts an empty placeholder');
+      await wait(1500);check(number().textContent==='10012'&&rate().textContent==='87.3%','Longer refresh animations settle exactly on both counts and percentages');
+      window.homeUi.reduceMotion=true;await Vue.nextTick();
+      window.api.database.command=command;refresh();await wait(100);
+      check(number().textContent==='8680','Reduced motion applies the new total immediately');
+      return {countUp:true,loading:true,refresh:true,reducedMotion:true};
+    })()`)
+    assert.equal(numberMotion.countUp, true)
+    const hoverTarget = await window.webContents.executeJavaScript(`(()=>{
+      const card=document.querySelector('.home-stat');const rect=card.getBoundingClientRect();
+      return {x:Math.round(rect.left+rect.width/2),y:Math.round(rect.top+rect.height/2),left:rect.left,top:rect.top,background:getComputedStyle(card).backgroundColor};
+    })()`)
+    window.webContents.sendInputEvent({ type: 'mouseMove', x: hoverTarget.x, y: hoverTarget.y })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const hover = await window.webContents.executeJavaScript(`(()=>{
+      const card=document.querySelector('.home-stat');const rect=card.getBoundingClientRect();
+      return {background:getComputedStyle(card).backgroundColor,icon:getComputedStyle(card.querySelector('.home-stat-icon')).transform,left:rect.left,top:rect.top};
+    })()`)
+    assert.notEqual(hover.background, hoverTarget.background, 'Hover tints the overview card')
+    assert.equal(hover.icon, 'none', 'Hover does not move the icon independently')
+    assert.equal(hover.left, hoverTarget.left, 'Hover preserves horizontal alignment')
+    assert.ok(
+      Math.abs(hover.top - hoverTarget.top + 4) < 0.5,
+      'Hover gently lifts the entire overview card'
+    )
+    window.webContents.sendInputEvent({ type: 'mouseMove', x: 0, y: 0 })
+    const legend = await window.webContents.executeJavaScript(`(()=>{
+      const legend=document.querySelector('.home-heatmap-legend');
+      const colors=[...legend.querySelectorAll('[aria-hidden=true]')].map(cell=>getComputedStyle(cell).backgroundColor);
+      const dayColors=new Set([...document.querySelectorAll('.home-heatmap-cell')].map(cell=>getComputedStyle(cell).backgroundColor));
+      return {text:legend.textContent,colors,consistent:colors.every(color=>dayColors.has(color))};
+    })()`)
+    assert.ok(
+      legend.text.includes('少') && legend.text.includes('多'),
+      'Heatmap labels its lower and upper intensity'
+    )
+    assert.equal(legend.colors.length, 5, 'Heatmap legend includes every intensity level')
+    assert.equal(new Set(legend.colors).size, 5, 'Heatmap legend has distinct ordered colors')
+    assert.ok(legend.consistent, 'Legend colors exactly match rendered heatmap cells')
+    const navTarget = await window.webContents.executeJavaScript(`(async()=>{
+      window.homeUi.hiddenHomeSections=[];await HomePreview.Vue.nextTick();
+      const card=document.querySelector('.home-nav');card.scrollIntoView({block:'center'});
+      await new Promise(resolve=>setTimeout(resolve,100));const rect=card.getBoundingClientRect();
+      return {x:Math.round(rect.left+rect.width/2),y:Math.round(rect.top+rect.height/2),top:rect.top};
+    })()`)
+    window.webContents.sendInputEvent({ type: 'mouseMove', x: navTarget.x, y: navTarget.y })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const navTop = await window.webContents.executeJavaScript(
+      `document.querySelector('.home-nav').getBoundingClientRect().top`
+    )
+    assert.ok(
+      Math.abs(navTop - navTarget.top + 4) < 0.5,
+      'Navigation uses the same slow whole-card lift'
+    )
+    await window.webContents.executeJavaScript(
+      `document.documentElement.classList.add('reduce-motion');void 0`
+    )
+    assert.equal(
+      await window.webContents.executeJavaScript(
+        `getComputedStyle(document.querySelector('.home-nav')).transform`
+      ),
+      'none',
+      'Navigation lift respects reduced motion'
+    )
+    window.webContents.sendInputEvent({ type: 'mouseMove', x: 0, y: 0 })
+    await window.webContents.executeJavaScript(
+      `document.documentElement.classList.remove('reduce-motion');window.homeUi.hiddenHomeSections=['navigation'];window.scrollTo(0,0);document.querySelector('.home-page').scrollTo(0,0);void 0;`
+    )
     assert.ok(
       desktop.cover >= 160 && desktop.cover <= 209,
       'Artwork uses the larger responsive size'

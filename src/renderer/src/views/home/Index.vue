@@ -12,12 +12,12 @@ import {
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import Draggable from 'vuedraggable'
-import HomeClock from '@/views/home/HomeClock.vue'
-import HomeHeatmap from './HomeHeatmap.vue'
-import HomeOverview from './HomeOverview.vue'
-import HomePlaylists from './HomePlaylists.vue'
-import HomeRankedList from './HomeRankedList.vue'
-import HomeRecommendations from './HomeRecommendations.vue'
+import HomeClock from '@/components/home/HomeClock.vue'
+import HomeHeatmap from '../../components/home/HomeHeatmap.vue'
+import HomeOverview from '../../components/home/HomeOverview.vue'
+import HomePlaylists from '../../components/home/HomePlaylists.vue'
+import HomeRankedList from '../../components/home/HomeRankedList.vue'
+import HomeRecommendations from '../../components/home/HomeRecommendations.vue'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -33,7 +33,13 @@ import { useVisibleInterval } from '@/hooks/useVisibleInterval'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
-import type { OverviewStats, HistoryDay, RankedSong, Playlist, RecommendationCard } from './types'
+import type {
+  OverviewStats,
+  HistoryDay,
+  RankedSong,
+  Playlist,
+  RecommendationCard
+} from '@/components/home/types'
 import '../../styles/home.css'
 
 const { t } = useI18n()

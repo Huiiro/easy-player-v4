@@ -165,6 +165,8 @@ export default {
     heatmap: '播放热力图',
     lastYear: '过去一年',
     heatmapHint: '颜色越深，播放时长越多',
+    heatmapLess: '少',
+    heatmapMore: '多',
     heatmapValue: '{date} · {value}',
     topPlayed: '播放次数最多',
     topDuration: '播放时长最多',

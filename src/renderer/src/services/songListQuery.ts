@@ -1,6 +1,6 @@
 import type { DatabaseAction } from '../../../main/ipc/databaseIpcHandlers'
 import type { LibrarySong, PagedLibrarySongs } from '@/types/library'
-import type { RecommendationGroup } from '@/views/home/types'
+import type { RecommendationGroup } from '@/components/home/types'
 
 export type SongListSource =
   | { type: 'songs' | 'local' | 'remote' | 'history' | 'liked' }
