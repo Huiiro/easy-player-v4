@@ -392,12 +392,15 @@ const batchMenuItems = computed(() => [
     <div v-if="selectionMode" class="flex flex-wrap items-center gap-0.5 px-5 pb-2.5 text-xs">
       <BaseButton class="header-button" size="sm" variant="ghost" @click="emit('toggleAll')">
         <template #left>
-          <SvgIcon :name="allSelected ? 'common-close' : 'common-check'" class-name="size-4" />
+          <SvgIcon
+            :name="allSelected ? 'common-close' : 'common-check'"
+            :class-name="allSelected ? 'size-3' : 'size-4'"
+          />
         </template>
         {{ allSelected ? t('songList.clearSelection') : t('songList.selectAll') }}
       </BaseButton>
       <BaseButton class="header-button" size="sm" variant="ghost" @click="emit('selectNewest')">
-        <template #left><SvgIcon name="common-select" class-name="size-4" /></template>
+        <template #left><SvgIcon name="common-select-multiple" class-name="size-3.5" /></template>
         {{ t('songList.selectNewest') }}
       </BaseButton>
       <BaseButton

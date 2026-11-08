@@ -74,9 +74,10 @@ textarea,
 
 /* 自定义滚动条样式 */
 .custom-scrollbar,
-.vue-recycle-scroller {
+.vue-recycle-scroller,
+.scrollbar-thin {
   &::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
     height: 6px;
   }
 
@@ -98,10 +99,6 @@ textarea,
   &::-webkit-scrollbar {
     width: 0;
   }
-}
-
-.scrollbar-thin::-webkit-scrollbar {
-  width: 4px;
 }
 
 .lrc {

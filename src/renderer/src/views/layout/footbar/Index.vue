@@ -68,18 +68,32 @@ const footerRoot = ref<HTMLElement | null>(null)
 const footerSection = ref<HTMLElement | null>(null)
 const footerTime = ref<HTMLElement | null>(null)
 const footerTransport = ref<HTMLElement | null>(null)
+const footerActions = ref<HTMLElement | null>(null)
 let footerLayoutObserver: ResizeObserver | null = null
+function updateFooterLayout(): void {
+  const section = footerSection.value
+  if (!section) return
+  updateFooterSideWidths(section)
+  if (collapsed.value && footerActions.value) {
+    const bounds = section.getBoundingClientRect()
+    const scale = bounds.width / section.offsetWidth || 1
+    const reserved = (bounds.right - footerActions.value.getBoundingClientRect().left) / scale + 12
+    section.style.setProperty('--ep-footer-collapsed-actions-space', `${Math.ceil(reserved)}px`)
+  } else {
+    section.style.removeProperty('--ep-footer-collapsed-actions-space')
+  }
+}
 watch(
-  [footerSection, footerTime, footerTransport, layoutStyle],
+  [footerSection, footerTime, footerTransport, footerActions, collapsed, layoutStyle],
   () => {
     footerLayoutObserver?.disconnect()
     const section = footerSection.value
     if (!section) return
-    footerLayoutObserver ??= new ResizeObserver(() => updateFooterSideWidths(section))
-    for (const element of [section, footerTime.value, footerTransport.value]) {
+    footerLayoutObserver ??= new ResizeObserver(updateFooterLayout)
+    for (const element of [section, footerTime.value, footerTransport.value, footerActions.value]) {
       if (element) footerLayoutObserver.observe(element)
     }
-    updateFooterSideWidths(section)
+    updateFooterLayout()
   },
   { flush: 'post' }
 )
@@ -202,8 +216,8 @@ function openPlayerPanelFromCover(): void {
 }
 
 function toggleCollapsed(): void {
+  closeMoreMenu()
   collapsed.value = !collapsed.value
-  if (collapsed.value) closeMoreMenu()
 }
 
 function openDesktopLyrics(): void {
@@ -477,82 +491,105 @@ onBeforeUnmount(() => {
           <span class="shrink-0">{{ player.durationFormatted }}</span>
         </div>
       </div>
-      <div v-if="!collapsed" class="ep-footer-actions flex min-w-0 items-center justify-end gap-2">
+      <div
+        ref="footerActions"
+        class="ep-footer-actions flex min-w-0 items-center justify-end gap-2"
+        :class="{ 'relative z-10': collapsed }"
+      >
         <div
-          class="ep-footer-action-volume group relative"
-          :title="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
-          @click.stop
-          @wheel="changeVolume"
+          v-if="collapsed"
+          class="collapsed-footer-controls flex items-center gap-2 text-[11px] tabular-nums text-text-l"
         >
+          <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
           <button
-            class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-            type="button"
-            :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+            class="ep-button--primary grid size-7 place-items-center rounded-full"
+            :disabled="!player.currentFile"
+            :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
+            @click.stop="togglePlayback"
           >
-            <SvgIcon :name="volumeIcon" class-name="size-5" />
+            <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-3.5" />
           </button>
-          <div
-            class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-[var(--motion-duration-fast)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-          >
-            <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
-            <input
-              class="absolute left-1/2 top-[5.5rem] h-1.5 w-32 -translate-x-1/2 -rotate-90 cursor-pointer accent-[var(--ep-progress-fill)]"
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              :value="Math.round(player.volume * 100)"
-              :aria-label="t('footer.volume')"
-              @input="setVolume"
-            />
-          </div>
         </div>
-        <button
-          class="ep-footer-action-mode grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-          :title="playModeLabel"
-          @click.stop="cyclePlayMode"
-        >
-          <SvgIcon :name="playModeIcon" class-name="size-5" />
-        </button>
-        <button
-          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
-          :class="currentPreference === 1 ? 'text-primary' : 'text-text'"
-          :disabled="!player.currentQueueSong"
-          :title="t('recommendation.like')"
-          @click.stop="markCurrent(1)"
-        >
-          <SvgIcon
-            :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
-            class-name="size-5"
-          />
-        </button>
-        <button
-          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
-          :class="currentPreference === -1 ? 'text-danger' : 'text-text'"
-          :disabled="!player.currentQueueSong"
-          :title="t('recommendation.dislike')"
-          @click.stop="markCurrent(-1)"
-        >
-          <SvgIcon name="play-dislike" class-name="size-5" />
-        </button>
-        <button
-          class="ep-footer-action-queue grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-          :title="t('queue.title')"
-          @click.stop="queueVisible = true"
-        >
-          <SvgIcon name="control-playlist" class-name="size-5" />
-        </button>
-        <button
-          class="ep-footer-action-secondary grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-          :title="t('footer.desktopLyrics')"
-          @click.stop="openDesktopLyrics"
-        >
-          <SvgIcon name="common-lyrics2" class-name="size-5" />
-        </button>
-        <div class="relative" @click.stop>
+        <template v-if="!collapsed">
+          <div
+            class="ep-footer-action-volume group relative"
+            :title="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+            @click.stop
+            @wheel="changeVolume"
+          >
+            <button
+              class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+              type="button"
+              :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+            >
+              <SvgIcon :name="volumeIcon" class-name="size-5" />
+            </button>
+            <div
+              class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-[var(--motion-duration-fast)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+            >
+              <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
+              <input
+                class="absolute left-1/2 top-[5.5rem] h-1.5 w-32 -translate-x-1/2 -rotate-90 cursor-pointer accent-[var(--ep-progress-fill)]"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                :value="Math.round(player.volume * 100)"
+                :aria-label="t('footer.volume')"
+                @input="setVolume"
+              />
+            </div>
+          </div>
+          <button
+            class="ep-footer-action-mode grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            :title="playModeLabel"
+            @click.stop="cyclePlayMode"
+          >
+            <SvgIcon :name="playModeIcon" class-name="size-5" />
+          </button>
+          <button
+            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+            :class="currentPreference === 1 ? 'text-primary' : 'text-text'"
+            :disabled="!player.currentQueueSong"
+            :title="t('recommendation.like')"
+            @click.stop="markCurrent(1)"
+          >
+            <SvgIcon
+              :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
+              class-name="size-5"
+            />
+          </button>
+          <button
+            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+            :class="currentPreference === -1 ? 'text-danger' : 'text-text'"
+            :disabled="!player.currentQueueSong"
+            :title="t('recommendation.dislike')"
+            @click.stop="markCurrent(-1)"
+          >
+            <SvgIcon name="play-dislike" class-name="size-5" />
+          </button>
+          <button
+            class="ep-footer-action-queue grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            :title="t('queue.title')"
+            @click.stop="queueVisible = true"
+          >
+            <SvgIcon name="control-playlist" class-name="size-5" />
+          </button>
+          <button
+            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            :title="t('footer.desktopLyrics')"
+            @click.stop="openDesktopLyrics"
+          >
+            <SvgIcon name="common-lyrics2" class-name="size-5" />
+          </button>
+        </template>
+        <div class="relative" @pointerdown.stop @click.stop>
           <button
             class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
             :title="t('footer.more')"
+            :aria-label="t('footer.more')"
+            :aria-expanded="moreVisible"
+            aria-haspopup="menu"
             @click="toggleMoreMenu"
           >
             <SvgIcon name="menu-more-vertical" class-name="size-5" />
@@ -652,21 +689,6 @@ onBeforeUnmount(() => {
             </template>
           </div>
         </div>
-      </div>
-
-      <div
-        v-if="collapsed"
-        class="collapsed-footer-controls relative z-10 flex items-center gap-2 text-[11px] tabular-nums text-text-l"
-      >
-        <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
-        <button
-          class="ep-button--primary grid size-7 place-items-center rounded-full"
-          :disabled="!player.currentFile"
-          :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
-          @click.stop="togglePlayback"
-        >
-          <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-3.5" />
-        </button>
       </div>
 
       <button
@@ -793,7 +815,6 @@ onBeforeUnmount(() => {
 }
 .app-footer--collapsed {
   position: relative;
-  overflow: hidden;
   touch-action: pan-y;
   animation: footer-collapse-settle var(--motion-duration-emphasized) var(--motion-ease-spring);
 }
@@ -802,6 +823,7 @@ onBeforeUnmount(() => {
   inset: 0;
   z-index: 0;
   overflow: hidden;
+  border-radius: inherit;
 }
 .collapsed-song-track {
   display: flex;
@@ -816,9 +838,9 @@ onBeforeUnmount(() => {
   flex: 0 0 33.333333%;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.625rem 9.5rem 0.625rem 1rem;
+  padding: 0.625rem var(--ep-footer-collapsed-actions-space, 12rem) 0.625rem 1rem;
 }
-.collapsed-footer-controls {
+.app-footer--collapsed > .ep-footer-actions {
   grid-column: 2;
 }
 .app-footer--expanded {

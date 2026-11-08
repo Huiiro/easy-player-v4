@@ -400,7 +400,7 @@ async function save(): Promise<void> {
   min-height: 8rem;
 }
 .lyric-editor::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 .lyric-editor::-webkit-scrollbar-track {
   background: color-mix(in srgb, var(--color-bg-l) 70%, transparent);

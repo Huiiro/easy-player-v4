@@ -177,7 +177,7 @@ defineExpose({
       v-if="activeMenuSong"
       :ref="setMenuElement"
       :data-song-context-menu="menuId"
-      class="fixed z-[9999] w-47 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left shadow-xl"
+      class="ep-menu custom-scrollbar fixed z-[9999] w-56 max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-border bg-bg p-1 text-left shadow-xl"
       :style="menuPosition"
       @click.stop
       @dblclick.stop
@@ -186,38 +186,29 @@ defineExpose({
       <p v-if="menuSongs.length > 1" class="px-3 py-1.5 text-xs text-text-l">
         {{ t('songList.selected', { count: menuSongs.length }) }}
       </p>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="playActiveMenuSong"
-      >
+      <button class="menu-item" @click="playActiveMenuSong">
         <SvgIcon name="play-play" class-name="size-4" />
         {{ t('songList.play') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="addActiveMenuSongToQueue"
-      >
+      <button class="menu-item" @click="addActiveMenuSongToQueue">
         <SvgIcon name="common-plus" class-name="size-4" />
         {{ t('songList.addToQueue') }}
       </button>
       <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm enabled:hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50"
+        class="menu-item"
         :disabled="activeMenuQueueIndex < 0"
         @click="removeActiveMenuSongFromQueue"
       >
         <SvgIcon name="common-minimize" class-name="size-4" />
         {{ t('songList.removeFromQueue') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="addActiveMenuSongToPlaylist"
-      >
+      <button class="menu-item" @click="addActiveMenuSongToPlaylist">
         <SvgIcon name="common-plus" class-name="size-4" />
         {{ t('songList.addToPlaylist') }}
       </button>
       <button
         ref="marksTrigger"
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+        class="menu-item"
         :class="{ 'bg-hover': marksOpen }"
         aria-haspopup="menu"
         :aria-expanded="marksOpen"
@@ -234,7 +225,7 @@ defineExpose({
       </button>
       <button
         ref="editTrigger"
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+        class="menu-item"
         :class="{ 'bg-hover': editOpen }"
         aria-haspopup="menu"
         :aria-expanded="editOpen"
@@ -249,54 +240,39 @@ defineExpose({
         <span class="flex-1">{{ t('songList.editSong') }}</span>
         <SvgIcon name="arrow-arrow-right-thin" class-name="size-4" />
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="openSongTags"
-      >
+      <button class="menu-item" @click="openSongTags">
         <SvgIcon name="common-tag" class-name="size-4" />
         {{ t('songList.editTags') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="openSongDetails"
-      >
+      <button class="menu-item" @click="openSongDetails">
         <SvgIcon name="common-detail" class-name="size-4" />
         {{ t('songList.details') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="openActiveMenuSongFolder"
-      >
+      <button class="menu-item" @click="openActiveMenuSongFolder">
         <SvgIcon name="common-folder" class-name="size-4" />
         {{ t('songList.openFolder') }}
       </button>
       <button
         v-if="activeMenuSong.sourceId === null"
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+        class="menu-item"
         @click="reloadActiveMenuSongFromDisk"
       >
         <SvgIcon name="common-refresh" class-name="size-4" />
         {{ t('songList.reloadFromDisk') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-        @click="copyActiveMenuSongName"
-      >
+      <button class="menu-item" @click="copyActiveMenuSongName">
         <SvgIcon name="common-text-case" class-name="size-4" />
         {{ t('songList.copyName') }}
       </button>
       <button
         v-if="source.type === 'playlist'"
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-danger hover:bg-hover"
+        class="menu-item text-danger"
         @click="removeActiveMenuSong"
       >
         <SvgIcon name="common-delete" class-name="size-4" />
         {{ t('songList.removeFromPlaylist') }}
       </button>
-      <button
-        class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm text-danger hover:bg-hover"
-        @click="requestDeleteActiveMenuSong"
-      >
+      <button class="menu-item text-danger" @click="requestDeleteActiveMenuSong">
         <SvgIcon name="common-delete" class-name="size-4" />
         {{ t('songList.delete') }}
       </button>
@@ -316,7 +292,7 @@ defineExpose({
         :data-song-context-menu="menuId"
         role="menu"
         :aria-label="t('songList.marksAndPreference')"
-        class="w-64 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left text-text shadow-xl"
+        class="ep-menu custom-scrollbar w-64 max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-border bg-bg p-1 text-left shadow-xl"
         @pointerenter="cancelMarksHide"
         @pointerleave="deferMarksHide"
         @click.stop
@@ -326,7 +302,7 @@ defineExpose({
         @keydown.esc.stop.prevent="returnToMarksTrigger"
       >
         <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          class="menu-item"
           :class="menuAllLiked ? 'text-primary' : ''"
           :aria-pressed="menuAllLiked"
           @click="setActiveMenuSongPreference(1)"
@@ -335,7 +311,7 @@ defineExpose({
           {{ t(menuAllLiked ? 'songList.cancelLike' : 'songList.like') }}
         </button>
         <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          class="menu-item"
           :class="menuAllDisliked ? 'text-danger' : ''"
           :aria-pressed="menuAllDisliked"
           @click="setActiveMenuSongPreference(-1)"
@@ -345,7 +321,7 @@ defineExpose({
         </button>
         <div class="mx-2 my-1.5 h-px bg-border" role="separator" />
         <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          class="menu-item"
           :class="{ 'text-primary': menuAllDisableNetwork }"
           :aria-pressed="menuAllDisableNetwork"
           @click="setMenuLyricFlag('disableNetwork', !menuAllDisableNetwork)"
@@ -361,7 +337,7 @@ defineExpose({
           }}
         </button>
         <button
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
+          class="menu-item"
           :class="{ 'text-primary': menuAllInstrumental }"
           :aria-pressed="menuAllInstrumental"
           @click="setMenuLyricFlag('instrumental', !menuAllInstrumental)"
@@ -389,7 +365,7 @@ defineExpose({
         :data-song-context-menu="menuId"
         role="menu"
         :aria-label="t('songList.editSong')"
-        class="w-52 max-h-[calc(100vh-16px)] overflow-y-auto rounded-lg border border-border bg-bg p-1 text-left text-text shadow-xl"
+        class="ep-menu custom-scrollbar w-56 max-h-[calc(100vh-16px)] overflow-y-auto rounded-xl border border-border bg-bg p-1 text-left shadow-xl"
         @pointerenter="cancelEditHide"
         @pointerleave="deferEditHide"
         @click.stop
@@ -398,27 +374,15 @@ defineExpose({
         @keydown.left.stop.prevent="returnToEditTrigger"
         @keydown.esc.stop.prevent="returnToEditTrigger"
       >
-        <button
-          role="menuitem"
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openMetadataEdit"
-        >
+        <button role="menuitem" class="menu-item" @click="openMetadataEdit">
           <SvgIcon name="common-edit" class-name="size-4 shrink-0" />
           {{ t('songList.editMetadata') }}
         </button>
-        <button
-          role="menuitem"
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openLyricsEditor"
-        >
+        <button role="menuitem" class="menu-item" @click="openLyricsEditor">
           <SvgIcon name="common-edit-lrc" class-name="size-4 shrink-0" />
           {{ t('lyricEditor.title') }}
         </button>
-        <button
-          role="menuitem"
-          class="flex items-center gap-2 w-full rounded-md px-3 py-1.5 text-left text-sm hover:bg-hover"
-          @click="openLyricsSearch"
-        >
+        <button role="menuitem" class="menu-item" @click="openLyricsSearch">
           <SvgIcon name="common-search" class-name="size-4 shrink-0" />
           {{ t('playerPanel.lyricSearchTitle') }}
         </button>

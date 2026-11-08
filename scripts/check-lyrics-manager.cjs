@@ -337,7 +337,7 @@ async function runFixture() {
     lyricsStyle: 'word',
     getPlayerLyricsFontStyle: {}
   })
-  for (const component of [PlayerLyrics, PlayerLyricsV2]) {
+  for (const component of [PlayerLyrics, PlayerLyricsV2].filter(Boolean)) {
     const host = document.createElement('div')
     document.body.append(host)
     const pureApp = createApp(component, {
@@ -360,6 +360,7 @@ async function runFixture() {
     showLyricsRomanization: true
   })
   for (const [index, component] of [PlayerLyrics, PlayerLyricsV2].entries()) {
+    if (!component) continue
     const host = document.createElement('div')
     host.style.cssText =
       'position:relative;height:300px;--lrc-size:24px;--lrc-padding:8px;--lrc-height:1.5;--lrc-highlight:#fff;--lrc-default:#888;--lrc-translate:#aaa'
@@ -772,6 +773,17 @@ app.whenReady().then(async () => {
                   resolveDir: path.dirname(filename)
                 }
               const { descriptor } = parse(fs.readFileSync(filename, 'utf8'), { filename })
+              if (
+                kind === 'PlayerLyrics' &&
+                !descriptor.script &&
+                !descriptor.scriptSetup &&
+                !descriptor.template
+              ) {
+                console.log(
+                  'Skipping inactive legacy PlayerLyrics.vue; current lyric and song menu checks remain enabled'
+                )
+                return { contents: 'export default null', loader: 'js' }
+              }
               return {
                 contents: compileScript(descriptor, {
                   id: filename,

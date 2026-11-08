@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
               v-for="playlist in playlists"
               :key="playlist.id"
               draggable="true"
-              class="ep-sidebar-item relative flex h-9 w-full items-center pl-1 transition-colors"
+              class="ep-sidebar-item relative flex h-9 w-full items-center justify-center px-0 transition-colors"
               :class="
                 isActive(`/playlist/${playlist.id}`) ? 'ep-sidebar-item--active' : 'text-text-l'
               "

@@ -113,6 +113,12 @@ html.mica-enabled:not(.dark)[data-window-material='mica'] .ep-footer {
 .ep-footer-actions .ep-footer-menu-volume {
   display: none;
 }
+.app-footer--collapsed .ep-footer-menu-secondary,
+.app-footer--collapsed .ep-footer-menu-mode,
+.app-footer--collapsed .ep-footer-menu-queue,
+.app-footer--collapsed .ep-footer-menu-volume {
+  display: flex;
+}
 @container footer-actions (width < 272px) {
   .ep-footer-action-secondary {
     display: none;
