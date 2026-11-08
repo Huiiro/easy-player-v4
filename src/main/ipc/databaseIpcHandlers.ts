@@ -1,5 +1,6 @@
 import { t } from '../i18n'
 import { ipcMain } from 'electron'
+import type { LibrarySortBy } from '../../shared/librarySort'
 import * as library from '../database/repository'
 import {
   clearLessRecommended,
@@ -91,21 +92,28 @@ const handlers = {
   queryAlbums: ({
     sort,
     search,
-    groupByName
-  }: { sort?: 'asc' | 'desc'; search?: string; groupByName?: boolean } = {}) =>
-    library.queryAlbums(sort, search, groupByName === true),
+    groupByName,
+    sortBy
+  }: {
+    sort?: 'asc' | 'desc'
+    search?: string
+    groupByName?: boolean
+    sortBy?: LibrarySortBy
+  } = {}) => library.queryAlbums(sort, search, groupByName === true, sortBy),
   queryArtists: ({
     sort,
     search,
-    separator
-  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string } = {}) =>
-    library.queryArtists(sort, search, separator),
+    separator,
+    sortBy
+  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string; sortBy?: LibrarySortBy } = {}) =>
+    library.queryArtists(sort, search, separator, sortBy),
   queryGenres: ({
     sort,
     search,
-    separator
-  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string } = {}) =>
-    library.queryGenres(sort, search, separator),
+    separator,
+    sortBy
+  }: { sort?: 'asc' | 'desc'; search?: string; separator?: string; sortBy?: LibrarySortBy } = {}) =>
+    library.queryGenres(sort, search, separator, sortBy),
   countSongsByAlbum: ({ album, artist }: { album: string; artist: string | null }) =>
     library.countSongsByAlbum(album, artist),
   countSongsByArtist: ({ artist }: { artist: string | null }) => library.countSongsByArtist(artist),

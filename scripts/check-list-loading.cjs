@@ -42,10 +42,12 @@ async function runChecks() {
     artistSeparator: '/',
     genreSeparator: '/',
     librarySortOrder: { artist: 'asc', album: 'asc', genre: 'asc' },
+    librarySortBy: { artist: 'name', album: 'name', genre: 'name' },
     libraryCardSize: { artist: 176, album: 176, genre: 176 }
   })
   window.player = { currentQueueSong: null }
   let resolveSong, resolveGrid, activeApp
+  const gridRequests = []
   window.songQuery = () =>
     new Promise((resolve) => {
       resolveSong = resolve
@@ -53,11 +55,12 @@ async function runChecks() {
   window.api = {
     database: {
       onSearchIndexChanged: () => () => {},
-      command: async (action) =>
+      command: async (action, params) =>
         action === 'listSources'
           ? { success: true, data: [] }
           : new Promise((resolve) => {
               resolveGrid = resolve
+              gridRequests.push({ action, params, resolve })
             })
     }
   }
@@ -214,6 +217,11 @@ async function runChecks() {
   const grid = document.querySelector('section .custom-scrollbar'),
     firstGrid = grid
   check(
+    getComputedStyle(document.querySelector('header input')).opacity === '1' &&
+      document.querySelector('header input').getBoundingClientRect().width > 150,
+    'library search stays visible without hover or focus'
+  )
+  check(
     grid.clientHeight > 500 &&
       !document.querySelector('[role=status]') &&
       !document.querySelector('.ep-skeleton') &&
@@ -235,6 +243,10 @@ async function runChecks() {
     'artist loading reveals complete grid after data is ready'
   )
   grid.scrollTop = 500
+  check(
+    document.querySelector('header [aria-live=polite]').textContent.includes('100'),
+    'library header shows the total collection count'
+  )
   grid.dispatchEvent(new Event('scroll'))
   await wait(180)
   const image = grid.querySelector('img'),
@@ -285,6 +297,112 @@ async function runChecks() {
     document.querySelector('[role=status]')?.textContent.trim() === zh.library.empty &&
       document.querySelector('section .custom-scrollbar').scrollTop === 0,
     'new library query resets scroll and shows empty state after completion'
+  )
+  check(
+    document.querySelector('header [aria-live=polite]').textContent.includes('0') &&
+      document.querySelector('header [aria-live=polite]').textContent.includes('100'),
+    'library search keeps the unfiltered total alongside the result count'
+  )
+  document.querySelector('header button[aria-label="刷新"]').click()
+  await wait()
+  gridRequests.at(-2).resolve({ success: true, data: [] })
+  gridRequests.at(-1).resolve({ success: true, data: artistData.slice(0, 80) })
+  await wait()
+  check(
+    document.querySelector('header [aria-live=polite]').textContent.includes('80'),
+    'refresh updates the unfiltered total while a search is active'
+  )
+  document.querySelector('header button[aria-label="清除搜索"]').click()
+  await wait()
+  resolveGrid({ success: true, data: artistData })
+  await wait()
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  let options = [...document.querySelectorAll('[role=menuitem]')]
+  check(
+    options.length === 4 &&
+      options.some((option) => option.textContent.includes('添加时间')) &&
+      options.some((option) => option.textContent.includes('播放次数')),
+    'artists offer name, added date, play count and song count sorting'
+  )
+  options.find((option) => option.textContent.includes('歌曲数量')).click()
+  await wait()
+  check(
+    window.ui.librarySortBy.artist === 'songCount' &&
+      gridRequests.at(-1).params.sortBy === 'songCount',
+    'selecting a sort field persists the preference and sends it to the database'
+  )
+  resolveGrid({ success: true, data: artistData })
+  await wait()
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  options = [...document.querySelectorAll('[role=menuitem]')]
+  check(
+    options
+      .find((option) => option.textContent.includes('歌曲数量'))
+      .lastElementChild.querySelector('use')
+      ?.getAttribute('xlink:href') === '#icon-arrow-arrow-sm-up' &&
+      options.find((option) => option.textContent.includes('歌曲数量')).querySelectorAll('svg')
+        .length === 1,
+    'active sort direction appears at the right edge of the dropdown item'
+  )
+  options.find((option) => option.textContent.includes('歌曲数量')).click()
+  await wait()
+  check(
+    gridRequests.at(-1).params.sort === 'desc' && gridRequests.at(-1).params.sortBy === 'songCount',
+    'selecting the active sort field toggles its direction'
+  )
+  resolveGrid({ success: true, data: artistData })
+  await wait()
+  check(
+    document
+      .querySelector('header button[aria-label="排序方式"] use')
+      ?.getAttribute('xlink:href') === '#icon-common-sort-converse' &&
+      !document.querySelector('header button[aria-label="升序"], header button[aria-label="降序"]'),
+    'sort trigger shows the direction without a separate direction button'
+  )
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  options = [...document.querySelectorAll('[role=menuitem]')]
+  options.find((option) => option.textContent.includes('名称')).click()
+  await wait()
+  check(
+    gridRequests.at(-1).params.sort === 'asc',
+    'switching sort fields resets the direction to ascending'
+  )
+  resolveGrid({ success: true, data: artistData })
+  await wait()
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  options = [...document.querySelectorAll('[role=menuitem]')]
+  options.find((option) => option.textContent.includes('播放次数')).click()
+  await wait()
+  check(
+    gridRequests.at(-1).params.sort === 'desc' && gridRequests.at(-1).params.sortBy === 'playCount',
+    'play count defaults to descending like the song list header'
+  )
+  resolveGrid({ success: true, data: artistData })
+  await wait()
+  await mount(LibraryBrowserGrid, { kind: 'album' })
+  resolveGrid({ success: true, data: [] })
+  await wait()
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  options = [...document.querySelectorAll('[role=menuitem]')]
+  check(options.length === 5, 'albums also offer year sorting')
+  options.find((option) => option.textContent.includes('年份')).click()
+  await wait()
+  check(gridRequests.at(-1).params.sortBy === 'year', 'album year sorting reaches the database')
+  resolveGrid({ success: true, data: [] })
+  await wait()
+  await mount(LibraryBrowserGrid, { kind: 'genre' })
+  resolveGrid({ success: true, data: [] })
+  await wait()
+  document.querySelector('header button[aria-label="排序方式"]').click()
+  await wait()
+  check(
+    document.querySelectorAll('[role=menuitem]').length === 2,
+    'genres offer name and song count sorting'
   )
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   activeApp.unmount()

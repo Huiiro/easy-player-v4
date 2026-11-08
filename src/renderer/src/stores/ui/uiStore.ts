@@ -10,6 +10,7 @@ import type { InstalledThemePackage } from '../../../../shared/themePackage'
 import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 import { DEFAULT_GENRE_SEPARATOR } from '../../../../shared/metadataValues'
+import type { LibrarySortBy } from '../../../../shared/librarySort'
 import { deserializeUIPreferences } from './uiPreferences'
 import {
   resolveAppearance,
@@ -143,6 +144,7 @@ export const UI_PREFERENCE_KEYS = [
   'artistSeparator',
   'genreSeparator',
   'librarySortOrder',
+  'librarySortBy',
   'libraryCardSize',
   'useDesktopLyrics',
   'desktopLyricsStyles',
@@ -524,6 +526,11 @@ export const useUIStore = defineStore(
       album: 'asc',
       artist: 'asc',
       genre: 'asc'
+    })
+    const librarySortBy = reactive<Record<'album' | 'artist' | 'genre', LibrarySortBy>>({
+      album: 'name',
+      artist: 'name',
+      genre: 'name'
     })
     const libraryCardSize = reactive<Record<'album' | 'artist' | 'genre', number>>({
       album: 176,
@@ -1100,6 +1107,7 @@ export const useUIStore = defineStore(
       artistSeparator,
       genreSeparator,
       librarySortOrder,
+      librarySortBy,
       libraryCardSize,
       useDesktopLyrics,
       desktopLyricsStyles,

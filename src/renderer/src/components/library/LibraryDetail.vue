@@ -89,6 +89,7 @@ watch(coverUrl, () => {
         </p>
       </div>
       <CollectionHeaderActions
+        play-variant="primary"
         :disabled="!songList || songList.loading"
         :playing="playing"
         @play="playAll"

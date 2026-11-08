@@ -1,3 +1,4 @@
+import type { LibrarySortBy } from '../../../shared/librarySort'
 export type LibraryKind = 'album' | 'artist' | 'genre'
 type SortOrder = 'asc' | 'desc'
 
@@ -40,12 +41,14 @@ export async function queryLibraryItems(
   separator: string,
   unknownLabel: string,
   albumGroupByName = false,
-  variousArtistsLabel = ''
+  variousArtistsLabel = '',
+  sortBy: LibrarySortBy = 'name'
 ): Promise<GridItem[]> {
   const action =
     kind === 'album' ? 'queryAlbums' : kind === 'artist' ? 'queryArtists' : 'queryGenres'
   const response = await window.api.database.command(action, {
     sort: order,
+    sortBy,
     search: search,
     separator: kind === 'album' ? undefined : separator,
     ...(kind === 'album' ? { groupByName: albumGroupByName } : {})

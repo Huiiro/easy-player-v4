@@ -139,6 +139,68 @@ try {
   genres.forEach((genre, index) =>
     insert.run(index + 1, `Track ${index + 1}`, `file-${index + 1}.mp3`, genre)
   )
+  db.exec('SAVEPOINT collection_sorting')
+  const sortInsert = db.prepare(`INSERT INTO song
+    (id,title,audio,folder_id,artist,album,play_times,created_at,year,genre)
+    VALUES(?,?,?,1,?,?,?,?,?,?)`)
+  const sortRows = [
+    ['Sort A', 'Sort Alpha', 2, '2024-01-01', 2010, 'Sort Single'],
+    ['Sort A / Sort B', 'Sort Alpha', 5, '2026-01-01', 2010, 'Sort Frequent'],
+    ['Sort A', 'Sort Beta', 1, '2025-01-01', 2022, 'Sort Frequent'],
+    ['Sort C', 'Sort Gamma', 20, '2023-01-01', null, 'Sort Frequent'],
+    ['Sort C', 'Sort Gamma', null, null, null, 'Sort Frequent']
+  ]
+  sortRows.forEach((row, index) =>
+    sortInsert.run(2001 + index, `Sort ${index}`, `sort-${index}.mp3`, ...row)
+  )
+  const albumNames = (by, order = 'asc', grouped = true) =>
+    catalog.queryAlbums(order, 'Sort', grouped, by).map((item) => item.albumName)
+  assert.deepEqual(albumNames('name'), ['Sort Alpha', 'Sort Beta', 'Sort Gamma'])
+  assert.deepEqual(albumNames('addedAt'), ['Sort Gamma', 'Sort Beta', 'Sort Alpha'])
+  assert.deepEqual(albumNames('playCount', 'desc'), ['Sort Gamma', 'Sort Alpha', 'Sort Beta'])
+  assert.deepEqual(albumNames('songCount'), ['Sort Beta', 'Sort Alpha', 'Sort Gamma'])
+  assert.deepEqual(albumNames('year'), ['Sort Alpha', 'Sort Beta', 'Sort Gamma'])
+  assert.deepEqual(
+    albumNames('year', 'desc'),
+    ['Sort Beta', 'Sort Alpha', 'Sort Gamma'],
+    'missing years stay last in either direction'
+  )
+  assert.deepEqual(albumNames('songCount', 'desc', false), [
+    'Sort Gamma',
+    'Sort Alpha',
+    'Sort Alpha',
+    'Sort Beta'
+  ])
+  assert.deepEqual(albumNames('playCount', 'desc', false), [
+    'Sort Gamma',
+    'Sort Alpha',
+    'Sort Alpha',
+    'Sort Beta'
+  ])
+  assert.deepEqual(
+    albumNames('invalid SQL sort'),
+    albumNames('name'),
+    'unrecognized sort fields fall back to names'
+  )
+  const artistNames = (by, order = 'asc', separator = '/') =>
+    catalog.queryArtists(order, 'Sort', separator, by).map((item) => item.artistName)
+  assert.deepEqual(artistNames('name'), ['Sort A', 'Sort B', 'Sort C'])
+  assert.deepEqual(artistNames('songCount'), ['Sort B', 'Sort C', 'Sort A'])
+  assert.deepEqual(artistNames('songCount', 'desc'), ['Sort A', 'Sort C', 'Sort B'])
+  assert.deepEqual(
+    artistNames('playCount', 'desc'),
+    ['Sort C', 'Sort A', 'Sort B'],
+    'shared tracks contribute once to each artist'
+  )
+  assert.deepEqual(artistNames('addedAt'), ['Sort C', 'Sort A', 'Sort B'])
+  assert.deepEqual(artistNames('addedAt', 'desc', ''), ['Sort A / Sort B', 'Sort A', 'Sort C'])
+  assert.deepEqual(artistNames('playCount', 'desc', ''), ['Sort C', 'Sort A / Sort B', 'Sort A'])
+  assert.deepEqual(artistNames('songCount', 'desc', ''), ['Sort A', 'Sort C', 'Sort A / Sort B'])
+  assert.deepEqual(
+    catalog.queryGenres('desc', 'Sort', '/', 'songCount').map((item) => item.name),
+    ['Sort Frequent', 'Sort Single']
+  )
+  db.exec('ROLLBACK TO collection_sorting; RELEASE collection_sorting')
   const counts = Object.fromEntries(
     catalog.queryGenres('asc', '', separators).map(({ name, count }) => [name, count])
   )
@@ -316,7 +378,7 @@ try {
           success: true,
           data:
             name === 'queryAlbums'
-              ? catalog.queryAlbums(params.sort, params.search, params.groupByName)
+              ? catalog.queryAlbums(params.sort, params.search, params.groupByName, params.sortBy)
               : catalog.getSongsByAlbum(
                   params.album,
                   params.artist,

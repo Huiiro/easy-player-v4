@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
-import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import type {
@@ -71,7 +70,12 @@ function finishSearchComposition(event: CompositionEvent): void {
   emit('update:keyword', (event.target as HTMLInputElement).value)
   emit('compositionChange', false)
 }
-const direction = computed(() => (props.sortOrder === 'asc' ? '↑' : '↓'))
+const sortIcon = computed(() =>
+  props.sortOrder === 'asc' ? 'common-sort' : 'common-sort-converse'
+)
+const sortDirectionIcon = computed(() =>
+  props.sortOrder === 'asc' ? 'arrow-arrow-sm-up' : 'arrow-arrow-sm-down'
+)
 const sortFields = computed(() => [
   ...(props.showRelevanceSort
     ? [{ field: 'relevance' as const, label: t('songList.relevance') }]
@@ -101,13 +105,37 @@ const activeSortLabel = computed(
 const sortMenuItems = computed(() => {
   const items = sortFields.value.map(({ field, label }) => ({
     value: field,
-    label: field === props.sortBy ? `${label} ${direction.value}` : label,
+    label,
+    trailingIcon: field === props.sortBy ? sortDirectionIcon.value : undefined,
     onClick: () => emit('sort', field)
   }))
   return [
     ...items.filter((item) => item.value !== 'playTimes'),
     { type: 'divider' as const },
     { type: 'group' as const, children: items.filter((item) => item.value === 'playTimes') }
+  ]
+})
+const activeSourceLabel = computed(
+  () =>
+    props.sourceOptions?.find((option) => option.value === (props.sourceFilter || 'all'))?.label ??
+    t('songList.sourceFilter')
+)
+const sourceMenuItems = computed(() => {
+  const options = props.sourceOptions ?? []
+  const ungrouped = options.filter((option) => !option.group)
+  const groups = [
+    ...new Set(options.filter((option) => option.group).map((option) => option.group))
+  ]
+  return [
+    ...ungrouped,
+    ...groups.flatMap((label, index) => [
+      ...(ungrouped.length || index ? [{ type: 'divider' as const }] : []),
+      {
+        type: 'group' as const,
+        label,
+        children: options.filter((option) => option.group === label)
+      }
+    ])
   ]
 })
 const columnMenuLabels = {
@@ -253,7 +281,7 @@ const batchMenuItems = computed(() => [
           />
           <input
             :value="keyword"
-            class="ep-input ep-control--sm w-52 border text-xs outline-none search-input"
+            class="ep-input ep-control--sm w-64 border text-xs outline-none search-input"
             :placeholder="t('songList.search')"
             :aria-label="t('songList.search')"
             @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
@@ -276,30 +304,42 @@ const batchMenuItems = computed(() => [
         </p>
       </div>
       <div class="flex flex-wrap items-center justify-end gap-1.5">
+        <!-- order -->
         <BaseMenu
           :model-value="sortBy"
           :items="sortMenuItems"
           size="sm"
-          width="w-40"
+          width="w-48"
           :max-height="360"
         >
           <template #trigger>
             <button class="header-button header-control px-2" :aria-label="t('songList.sort')">
-              <SvgIcon name="common-sort" class-name="size-4" />
-              {{ activeSortLabel }} {{ direction }}
+              <SvgIcon :name="sortIcon" class-name="size-4.5" />
+              {{ activeSortLabel }}
             </button>
           </template>
         </BaseMenu>
         <!-- source -->
-        <BaseSelect
+        <BaseMenu
           v-if="sourceOptions?.length"
           :model-value="sourceFilter || 'all'"
-          :options="sourceOptions"
-          :aria-label="t('songList.sourceFilter')"
+          :items="sourceMenuItems"
           size="sm"
-          class="header-source w-48"
+          width="w-56"
+          :max-height="360"
           @update:model-value="emit('update:sourceFilter', $event)"
-        />
+        >
+          <template #trigger>
+            <button
+              class="header-button header-control px-2"
+              :aria-label="t('songList.sourceFilter')"
+              :title="activeSourceLabel"
+            >
+              <SvgIcon name="common-database" class-name="size-4 shrink-0" />
+              <span class="max-w-44 truncate">{{ activeSourceLabel }}</span>
+            </button>
+          </template>
+        </BaseMenu>
         <!-- tag -->
         <button
           v-if="showTagManager"
@@ -331,9 +371,10 @@ const batchMenuItems = computed(() => [
           :title="t('songList.refresh')"
           @click="emit('refresh')"
         >
-          <SvgIcon name="common-refresh" class-name="size-4" />
+          <SvgIcon name="common-refresh" class-name="size-[15px]" />
           <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
+        <!-- more -->
         <BaseMenu :items="moreMenuItems" size="sm" width="w-56" :max-height="440">
           <template #trigger>
             <button
@@ -341,7 +382,7 @@ const batchMenuItems = computed(() => [
               :aria-label="t('songList.more')"
               :title="t('songList.more')"
             >
-              <SvgIcon name="menu-more-horizontal" class-name="size-4" />
+              <SvgIcon name="menu-more-horizontal" class-name="size-4.5" />
             </button>
           </template>
         </BaseMenu>
@@ -397,7 +438,7 @@ const batchMenuItems = computed(() => [
             variant="ghost"
             :disabled="selectedCount === 0"
           >
-            <template #left><SvgIcon name="common-preference" class-name="size-4" /></template>
+            <template #left><SvgIcon name="common-preference" class-name="size-3" /></template>
             {{ t('songList.batchFeedback') }}
             <template #right><SvgIcon name="arrow-arrow-down" class-name="size-3" /></template>
           </BaseButton>
@@ -410,7 +451,7 @@ const batchMenuItems = computed(() => [
         :disabled="selectedCount === 0"
         @click="emit('batchReloadFromDisk')"
       >
-        <template #left><SvgIcon name="common-refresh" class-name="size-4" /></template>
+        <template #left><SvgIcon name="common-refresh" class-name="size-3.5" /></template>
         {{ t('songList.reloadFromDisk') }}
       </BaseButton>
       <BaseButton
@@ -513,18 +554,6 @@ const batchMenuItems = computed(() => [
 .header-button:enabled:hover {
   background: transparent;
   color: var(--color-primary);
-}
-.header-source :deep(.ep-select) {
-  background: transparent;
-  border-color: var(--color-border);
-}
-.header-source :deep(.ep-select:enabled:hover) {
-  background: transparent;
-  border-color: var(--color-border);
-  color: var(--color-primary);
-}
-.header-source :deep(.ep-select:enabled:hover svg) {
-  color: inherit;
 }
 .header-control {
   display: inline-flex;

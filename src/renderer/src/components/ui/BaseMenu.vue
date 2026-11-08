@@ -15,6 +15,7 @@ type MenuItemType = {
   value?: string | number
   icon?: string // use svg icon
   iconClass?: string
+  trailingIcon?: string
   onClick?: () => void
   disabled?: boolean
   type?: 'item' | 'divider'
@@ -60,21 +61,17 @@ const emit = defineEmits<{
 
 const triggerRef = ref<HTMLElement | null>(null)
 const sizeClass = computed(() => controlSizeClasses[props.size])
-const menuTransition = computed(() => {
-  // Keep small glass-menu icons at their final pixel size throughout the fade.
-  const glass = props.appearance === 'glass'
-  const transition = glass ? 'transition-opacity' : 'transition'
-  const hidden = glass ? 'opacity-0' : 'opacity-0 scale-95'
-  const visible = glass ? 'opacity-100' : 'opacity-100 scale-100'
-  return {
-    enterActiveClass: `${transition} duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]`,
-    enterFromClass: hidden,
-    enterToClass: visible,
-    leaveActiveClass: `${transition} duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]`,
-    leaveFromClass: visible,
-    leaveToClass: hidden
-  }
-})
+// Preserve text, icons and one-pixel dividers at their final size throughout the fade.
+const menuTransition = {
+  enterActiveClass:
+    'transition-opacity duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-enter)]',
+  enterFromClass: 'opacity-0',
+  enterToClass: 'opacity-100',
+  leaveActiveClass:
+    'transition-opacity duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]',
+  leaveFromClass: 'opacity-100',
+  leaveToClass: 'opacity-0'
+}
 const maxHeightStyle = computed(() => {
   const value = props.maxHeight ?? '60vh'
 
@@ -158,6 +155,11 @@ function handleClick(item: MenuItemType): void {
                   >
                     <SvgIcon v-if="child.icon" :name="child.icon" :class="iconClass(child)" />
                     <span class="min-w-0 flex-1 text-left">{{ child.label }}</span>
+                    <SvgIcon
+                      v-if="child.trailingIcon"
+                      :name="child.trailingIcon"
+                      :class="defaultIconClass"
+                    />
                   </button>
                 </MenuItem>
               </template>
@@ -187,6 +189,11 @@ function handleClick(item: MenuItemType): void {
               >
                 <SvgIcon v-if="item.icon" :name="item.icon" :class="iconClass(item)" />
                 <span class="min-w-0 flex-1 text-left">{{ item.label }}</span>
+                <SvgIcon
+                  v-if="item.trailingIcon"
+                  :name="item.trailingIcon"
+                  :class="defaultIconClass"
+                />
               </button>
             </MenuItem>
           </template>

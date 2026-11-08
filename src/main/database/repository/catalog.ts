@@ -3,6 +3,28 @@ import { buildSongSearchFilter } from '../../search/searchQuery'
 import type { Album, Artist, Genre, Song } from '../types'
 import { songColumns, relevanceOrder, attachTags, mapSong, type SongRow } from './songHelpers'
 import { genreMatchKey, splitGenres, splitMetadataValues } from '../../../shared/metadataValues'
+import type { LibrarySortBy } from '../../../shared/librarySort'
+
+function collectionOrder(
+  sortBy: LibrarySortBy,
+  direction: string,
+  name: string,
+  album = false
+): string {
+  const expression =
+    sortBy === 'addedAt'
+      ? 'MAX(created_at)'
+      : sortBy === 'playCount'
+        ? 'SUM(COALESCE(play_times, 0))'
+        : sortBy === 'songCount'
+          ? 'COUNT(*)'
+          : sortBy === 'year' && album
+            ? 'MAX(CASE WHEN year > 0 THEN year END)'
+            : null
+  return expression
+    ? `${expression} IS NULL, ${expression} ${direction}, ${name} COLLATE NOCASE ASC`
+    : `${name} COLLATE NOCASE ${direction}`
+}
 
 function queryScopedSongs(
   scope: string,
@@ -67,9 +89,11 @@ export function getSongsByArtist(artist: string, separator = '', search = ''): S
 export function queryAlbums(
   sort: 'asc' | 'desc' = 'asc',
   search = '',
-  groupByName = false
+  groupByName = false,
+  sortBy: LibrarySortBy = 'name'
 ): Album[] {
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
+  const order = collectionOrder(sortBy, direction, 'albumName', true)
   const keyword = search.trim()
   if (groupByName) {
     return getDatabase()
@@ -80,67 +104,91 @@ export function queryAlbums(
        FROM song
        GROUP BY CASE WHEN album IS NULL OR TRIM(album) = '' THEN NULL ELSE album END
        ${keyword ? 'HAVING MAX(CASE WHEN album LIKE @search OR artist LIKE @search THEN 1 ELSE 0 END) = 1' : ''}
-       ORDER BY albumName COLLATE NOCASE ${direction}`
+       ORDER BY ${order}`
       )
       .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
   }
   return getDatabase()
     .prepare(
-      `SELECT album AS albumName, artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS albumCover FROM song ${keyword ? 'WHERE album LIKE @search OR artist LIKE @search' : ''} GROUP BY album, artist ORDER BY album COLLATE NOCASE ${direction}`
+      `SELECT album AS albumName, artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS albumCover FROM song ${keyword ? 'WHERE album LIKE @search OR artist LIKE @search' : ''} GROUP BY album, artist ORDER BY ${order}, artist COLLATE NOCASE ASC`
     )
     .all(keyword ? { search: `%${keyword}%` } : {}) as Album[]
 }
 
-export function queryArtists(sort: 'asc' | 'desc' = 'asc', search = '', separator = ''): Artist[] {
+export function queryArtists(
+  sort: 'asc' | 'desc' = 'asc',
+  search = '',
+  separator = '',
+  sortBy: LibrarySortBy = 'name'
+): Artist[] {
   if (separator) {
     const rows = getDatabase()
-      .prepare('SELECT artist, cover FROM song ORDER BY id DESC')
-      .all() as Array<{ artist: string | null; cover: string | null }>
-    const artists = new Map<string, Artist>()
-    let unknownCount = 0
-    let unknownCover: string | null = null
+      .prepare('SELECT artist, cover, created_at, play_times FROM song ORDER BY id DESC')
+      .all() as Array<{
+      artist: string | null
+      cover: string | null
+      created_at: string | null
+      play_times: number | null
+    }>
+    const artists = new Map<string, Artist & { addedAt: string; playCount: number }>()
     for (const row of rows) {
       const names = splitArtistNames(row.artist, separator)
-      if (!names.length) {
-        unknownCount += 1
-        unknownCover ||= row.cover
-        continue
+      for (const name of names.length ? names : [null]) {
+        const key = name ?? '__easy_player_unknown_artist__'
+        const current = artists.get(key)
+        if (current) {
+          current.songCount += 1
+          current.playCount += row.play_times ?? 0
+          if ((row.created_at ?? '') > current.addedAt) current.addedAt = row.created_at!
+          if (name === null) current.artistCover ||= row.cover
+        } else
+          artists.set(key, {
+            artistName: name,
+            songCount: 1,
+            artistCover: row.cover,
+            addedAt: row.created_at ?? '',
+            playCount: row.play_times ?? 0
+          })
       }
-      for (const name of names) {
-        const current = artists.get(name)
-        if (current) current.songCount += 1
-        else artists.set(name, { artistName: name, songCount: 1, artistCover: row.cover })
-      }
-    }
-    if (unknownCount) {
-      artists.set('__easy_player_unknown_artist__', {
-        artistName: null,
-        songCount: unknownCount,
-        artistCover: unknownCover
-      })
     }
     const keyword = search.trim().toLocaleLowerCase()
     const direction = sort === 'desc' ? -1 : 1
     return [...artists.values()]
       .filter((item) => !keyword || item.artistName?.toLocaleLowerCase().includes(keyword))
-      .sort(
-        (left, right) =>
-          String(left.artistName ?? '').localeCompare(String(right.artistName ?? ''), undefined, {
+      .sort((left, right) => {
+        const nameOrder = String(left.artistName ?? '').localeCompare(
+          String(right.artistName ?? ''),
+          undefined,
+          {
             sensitivity: 'base',
             numeric: true
-          }) * direction
-      )
+          }
+        )
+        if (sortBy === 'addedAt') {
+          if (!left.addedAt !== !right.addedAt) return left.addedAt ? -1 : 1
+          return left.addedAt.localeCompare(right.addedAt) * direction || nameOrder
+        }
+        if (sortBy === 'playCount' || sortBy === 'songCount')
+          return (left[sortBy] - right[sortBy]) * direction || nameOrder
+        return nameOrder * direction
+      })
+      .map(({ artistName, songCount, artistCover }) => ({ artistName, songCount, artistCover }))
   }
   const direction = sort === 'desc' ? 'DESC' : 'ASC'
   const keyword = search.trim()
   return getDatabase()
     .prepare(
-      `SELECT artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS artistCover FROM song ${keyword ? 'WHERE artist LIKE @search' : ''} GROUP BY artist ORDER BY artist COLLATE NOCASE ${direction}`
+      `SELECT artist AS artistName, COUNT(*) AS songCount, MAX(cover) AS artistCover FROM song ${keyword ? 'WHERE artist LIKE @search' : ''} GROUP BY artist ORDER BY ${collectionOrder(sortBy, direction, 'artistName')}`
     )
     .all(keyword ? { search: `%${keyword}%` } : {}) as Artist[]
 }
 
-export function queryGenres(sort: 'asc' | 'desc' = 'asc', search = '', separator = ''): Genre[] {
+export function queryGenres(
+  sort: 'asc' | 'desc' = 'asc',
+  search = '',
+  separator = '',
+  sortBy: LibrarySortBy = 'name'
+): Genre[] {
   const rows = getDatabase().prepare('SELECT genre FROM song ORDER BY id').all() as Array<{
     genre: string | null
   }>
@@ -165,6 +213,7 @@ export function queryGenres(sort: 'asc' | 'desc' = 'asc', search = '', separator
     )
     .sort(
       (left, right) =>
+        (sortBy === 'songCount' ? (left.count - right.count) * direction : 0) ||
         left.name.localeCompare(right.name, undefined, {
           sensitivity: 'base',
           numeric: true

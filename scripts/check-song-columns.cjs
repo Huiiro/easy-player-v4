@@ -151,7 +151,7 @@ async function runChecks() {
     document.querySelector('header button[aria-label="' + trigger + '"]').click()
     await wait(220)
     const option = [...document.querySelectorAll('.ep-menu-item')].find(
-      (button) => button.textContent.trim().replace(/ [↑↓]$/, '') === label
+      (button) => button.textContent.trim() === label
     )
     check(!!option, 'menu exposes ' + label)
     if (label === '播放次数') {
@@ -186,6 +186,60 @@ async function runChecks() {
     'new columns are hidden by default'
   )
   aligned('default columns with vertical scrollbar')
+  const menuFrames = []
+  document.querySelector('header button[aria-label="更多"]').click()
+  const menuOpenedAt = performance.now()
+  await new Promise((resolve) => {
+    function sampleMenu() {
+      const menu = document.querySelector('.ep-menu')
+      if (
+        menu &&
+        getComputedStyle(menu).visibility === 'visible' &&
+        Number(getComputedStyle(menu).opacity) > 0
+      ) {
+        const rect = menu.getBoundingClientRect()
+        menuFrames.push({
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          dividers: [...menu.querySelectorAll('.h-px')].map((divider) => {
+            const box = divider.getBoundingClientRect()
+            return { left: box.left, width: box.width, height: box.height }
+          })
+        })
+      }
+      if (performance.now() - menuOpenedAt < 360) requestAnimationFrame(sampleMenu)
+      else resolve()
+    }
+    requestAnimationFrame(sampleMenu)
+  })
+  const finalMenuFrame = menuFrames.at(-1)
+  check(
+    menuFrames.length > 5 &&
+      menuFrames.every((frame) =>
+        ['left', 'top', 'width', 'height'].every(
+          (key) => Math.abs(frame[key] - finalMenuFrame[key]) < 0.25
+        )
+      ),
+    'more menu keeps its final position and size throughout opening: ' +
+      JSON.stringify({ first: menuFrames[0], last: finalMenuFrame })
+  )
+  check(
+    menuFrames.every(
+      (frame) =>
+        frame.dividers.length === 2 &&
+        frame.dividers.every(
+          (divider) =>
+            Math.abs(divider.height - 1) < 0.01 &&
+            Math.abs(divider.left - frame.dividers[0].left) < 0.01 &&
+            Math.abs(divider.width - frame.dividers[0].width) < 0.01
+        )
+    ),
+    'group dividers retain the same one-pixel thickness, width and inset throughout opening'
+  )
+  document.querySelector('header button[aria-label="更多"]').click()
+  await wait(220)
   for (const label of ['显示流派列', '显示年份列', '显示播放次数列'])
     await menuAction('更多', label)
   check(
@@ -358,11 +412,11 @@ async function runChecks() {
   async function sourceOptions() {
     sourceTrigger().click()
     await wait()
-    const labels = [...document.querySelectorAll('[role=option]')].map((option) =>
+    const labels = [...document.querySelectorAll('[role=menuitem]')].map((option) =>
       option.textContent.trim()
     )
-    const groups = [...document.querySelectorAll('.ep-select-group')].map((group) =>
-      group.textContent.trim()
+    const groups = [...document.querySelectorAll('.ep-menu .flow-root > div:first-child')].map(
+      (group) => group.textContent.trim()
     )
     sourceTrigger().click()
     await wait()
