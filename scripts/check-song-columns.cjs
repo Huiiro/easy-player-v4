@@ -548,6 +548,125 @@ async function runChecks() {
     'Default sorting after search uses membership time rather than relevance order'
   )
   playlistApp.unmount()
+  const rowPlays = []
+  window.player.playCollection = async (...args) => {
+    rowPlays.push(args)
+    return true
+  }
+  window.songQuery = async () => fixture.map((song) => ({ ...song }))
+  const selectionApp = createApp({ render: () => h(SongListView) })
+  selectionApp.config.errorHandler = (error) => errors.push(String(error))
+  selectionApp.use(router).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+  selectionApp
+    .component('SvgIcon', window.Check.SvgIcon)
+    .component('RecycleScroller', RecycleScroller)
+  selectionApp.mount('#app')
+  await wait(180)
+  const selectButton = (label) =>
+    document.querySelector('header button[aria-label="' + label + '"]')
+  const visibleSelectableRow = () =>
+    [...document.querySelectorAll('.song-list-row')].find((row) => {
+      const box = row.getBoundingClientRect(),
+        viewport = document.querySelector('.song-list-scroller').getBoundingClientRect()
+      return (
+        getComputedStyle(row).visibility !== 'hidden' &&
+        box.top >= viewport.top &&
+        box.bottom <= viewport.bottom &&
+        row.children[2].querySelector('button') &&
+        row.children[3].querySelector('button')
+      )
+    })
+  const mouse = (element, type, detail = 1, button = 0) =>
+    element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, detail, button }))
+  const doubleClick = (element) => {
+    mouse(element, 'click', 1)
+    mouse(element, 'click', 2)
+    mouse(element, 'dblclick', 2)
+  }
+  for (const trigger of ['single', 'double']) {
+    window.ui.songPlayTrigger = trigger
+    const before = rowPlays.length
+    let row = visibleSelectableRow()
+    mouse(row.querySelector('.song-list-name'), 'click', 1)
+    await wait()
+    check(
+      rowPlays.length === before + (trigger === 'single' ? 1 : 0),
+      trigger + ' playback preference works before selection mode'
+    )
+    selectButton(zh.songList.select).click()
+    await wait()
+    row = visibleSelectableRow()
+    const checkbox = () => row.querySelector('input[type=checkbox]')
+    const baseline = rowPlays.length
+    mouse(row.querySelector('.song-list-name'), 'click')
+    await wait()
+    check(
+      checkbox().checked && rowPlays.length === baseline,
+      trigger + ' mode: clicking the title selects without playing'
+    )
+    mouse(row, 'click')
+    await wait()
+    check(!checkbox().checked, trigger + ' mode: clicking row space deselects')
+    doubleClick(row.querySelector('.song-list-name'))
+    await wait()
+    check(
+      checkbox().checked && rowPlays.length === baseline,
+      trigger + ' mode: double click selects once and never plays'
+    )
+    mouse(row, 'click', 1, 2)
+    await wait()
+    check(checkbox().checked, trigger + ' mode: a secondary click does not toggle selection')
+    checkbox().click()
+    await wait()
+    check(!checkbox().checked, trigger + ' mode: checkbox toggles once without bubbling to the row')
+    const path = router.currentRoute.value.fullPath
+    doubleClick(row.children[2].querySelector('button'))
+    await wait()
+    check(
+      checkbox().checked && router.currentRoute.value.fullPath === path,
+      trigger + ' mode: artist text selects without navigating'
+    )
+    mouse(row.children[3].querySelector('button'), 'click')
+    await wait()
+    check(
+      !checkbox().checked && router.currentRoute.value.fullPath === path,
+      trigger + ' mode: album text selects without navigating'
+    )
+    check(
+      rowPlays.length === baseline,
+      trigger + ' mode: all selection gestures keep playback unchanged'
+    )
+    selectButton(zh.songList.cancelSelection).click()
+    await wait()
+    check(
+      !row.querySelector('input[type=checkbox]'),
+      trigger + ' mode: exiting removes selection controls'
+    )
+    const restored = rowPlays.length
+    mouse(row.querySelector('.song-list-name'), 'click', 1)
+    await wait()
+    check(
+      rowPlays.length === restored + (trigger === 'single' ? 1 : 0),
+      trigger + ' playback preference is restored after selection'
+    )
+    if (trigger === 'double') {
+      mouse(row.querySelector('.song-list-name'), 'dblclick', 2)
+      await wait()
+      check(
+        rowPlays.length === restored + 1,
+        'Double click playback is restored after exiting selection'
+      )
+    }
+    selectButton(zh.songList.select).click()
+    await wait()
+    check(
+      !visibleSelectableRow().querySelector('input[type=checkbox]').checked,
+      'Reentering selection starts without stale selected IDs'
+    )
+    selectButton(zh.songList.cancelSelection).click()
+    await wait()
+  }
+  selectionApp.unmount()
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   return checks
 }

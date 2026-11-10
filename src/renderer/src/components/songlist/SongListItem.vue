@@ -78,7 +78,25 @@ watch(
 const requestMenu = (event: MouseEvent): void => {
   emit('requestMenu', props.song, event.clientX, event.clientY)
 }
-function openArtist(artist: string): void {
+function onRowActivation(event: MouseEvent): void {
+  if (props.selectionMode) {
+    // A double click includes a second click; keep it as one selection gesture.
+    if (
+      !event.defaultPrevented &&
+      event.button === 0 &&
+      event.type === 'click' &&
+      event.detail <= 1
+    )
+      emit('toggleSelect', props.song.id)
+    return
+  }
+  activateSong(event, () => emit('play', props.song))
+}
+function openArtist(artist: string, event: MouseEvent): void {
+  if (props.selectionMode) {
+    onRowActivation(event)
+    return
+  }
   if (artist) {
     void router.push({
       path: '/artist/detail',
@@ -86,7 +104,11 @@ function openArtist(artist: string): void {
     })
   }
 }
-function openAlbum(): void {
+function openAlbum(event: MouseEvent): void {
+  if (props.selectionMode) {
+    onRowActivation(event)
+    return
+  }
   if (!props.song.album?.trim()) return
   void router.push({
     path: '/album/detail',
@@ -108,13 +130,13 @@ function openAlbum(): void {
     <div
       class="song-list-row grid h-full items-center gap-3 px-5 transition-colors hover:bg-hover"
       :class="[
-        { 'song-list-row--small': small },
+        { 'song-list-row--small': small, 'cursor-pointer': selectionMode },
         current
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       ]"
-      @click="activateSong($event, () => emit('play', song))"
-      @dblclick="activateSong($event, () => emit('play', song))"
+      @click="onRowActivation"
+      @dblclick="onRowActivation"
       @contextmenu.prevent.stop="requestMenu"
     >
       <span class="flex items-center gap-2 text-sm text-text-l">
@@ -191,7 +213,11 @@ function openAlbum(): void {
         <span v-if="artistTokens.length" class="max-w-full truncate">
           <template v-for="(token, tokenIndex) in artistTokens" :key="tokenIndex">
             <span v-if="token.type === 'separator'">{{ token.text }}</span>
-            <button v-else class="hover:text-primary" @click.stop="openArtist(token.artist)">
+            <button
+              v-else
+              class="hover:text-primary"
+              @click.stop="openArtist(token.artist, $event)"
+            >
               <template
                 v-for="(part, partIndex) in getHighlightParts(token.text, keyword)"
                 :key="partIndex"
