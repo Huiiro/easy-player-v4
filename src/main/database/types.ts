@@ -5,6 +5,9 @@ export type SongSource = 'local' | 'remote' | 'all'
 
 /** Database row shape. `bpm` is intentionally absent from the v1 schema. */
 export interface Song {
+  /** Present only when queried as a playlist member. */
+  playlistAddedAt?: string
+  playlistEntryId?: number
   sortReadings?: {
     title: string | null
     artist: string | null

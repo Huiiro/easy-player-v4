@@ -1,4 +1,7 @@
 export interface LibrarySong {
+  /** Present only when queried as a playlist member. */
+  playlistAddedAt?: string
+  playlistEntryId?: number
   sortReadings?: {
     title: string | null
     artist: string | null

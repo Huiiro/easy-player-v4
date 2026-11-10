@@ -144,17 +144,21 @@ const nameSortValues = computed(() => {
     ])
   )
 })
-const recommendationOrder = computed(
-  () => new Map(songs.value.map((song, index) => [song.id, index]))
-)
+const sourceOrder = computed(() => new Map(songs.value.map((song, index) => [song.id, index])))
 
 function compareSongs(left: LibrarySong, right: LibrarySong): number {
   const field = sortBy.value
   let result = 0
 
-  if (field === 'id' && props.source.type === 'recommendation') {
-    result =
-      (recommendationOrder.value.get(right.id) ?? 0) - (recommendationOrder.value.get(left.id) ?? 0)
+  if (field === 'id' && props.source.type === 'playlist') {
+    const addedOrder =
+      (left.playlistAddedAt ?? '').localeCompare(right.playlistAddedAt ?? '') ||
+      (left.playlistEntryId ?? 0) - (right.playlistEntryId ?? 0)
+    if (addedOrder) return addedOrder * (sortOrder.value === 'asc' ? 1 : -1)
+  }
+
+  if (field === 'id' && ['recommendation', 'playlist'].includes(props.source.type)) {
+    result = (sourceOrder.value.get(right.id) ?? 0) - (sourceOrder.value.get(left.id) ?? 0)
     return result * (sortOrder.value === 'asc' ? 1 : -1)
   }
 
@@ -329,7 +333,12 @@ const toggleSort = (field: SortField): void => {
   if (sortBy.value === field) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   else {
     sortBy.value = field
-    sortOrder.value = field === 'relevance' || field === 'playTimes' ? 'desc' : 'asc'
+    sortOrder.value =
+      field === 'relevance' ||
+      field === 'playTimes' ||
+      (field === 'id' && props.source.type === 'playlist')
+        ? 'desc'
+        : 'asc'
   }
   if (field !== 'relevance') browsingSort = { field, order: sortOrder.value }
 }

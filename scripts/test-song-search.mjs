@@ -391,6 +391,51 @@ try {
   repo.removeSongsFromPlaylist(1, [10])
   assert.equal(repo.listPlaylists().find((item) => item.id === 1).songCount, 1)
   repo.deletePlaylists([emptyPlaylist.id])
+  const orderedPlaylist = repo.createPlaylist({ name: 'Playlist addition order' })
+  repo.addSongsToPlaylist(orderedPlaylist.id, [10, 3, 1])
+  db.prepare('UPDATE song_list_item SET created_at = ? WHERE song_list_id = ?').run(
+    '2000-01-01 00:00:00',
+    orderedPlaylist.id
+  )
+  assert.equal(
+    repo.queryPlaylistSongs(orderedPlaylist.id).data[0].playlistAddedAt,
+    '2000-01-01 00:00:00'
+  )
+  assert.ok(repo.queryPlaylistSongs(orderedPlaylist.id).data[0].playlistEntryId > 0)
+  const playlistIds = (query = {}) =>
+    repo.queryPlaylistSongs(orderedPlaylist.id, query).data.map((song) => song.id)
+  assert.deepEqual(
+    playlistIds(),
+    [1, 3, 10],
+    'Older library songs added last must appear first; same-second additions use entry ID'
+  )
+  assert.deepEqual(
+    playlistIds({ size: 2, page: 1 }),
+    [1, 3],
+    'Pagination follows playlist addition order'
+  )
+  assert.deepEqual(playlistIds({ size: 2, page: 2 }), [10])
+  assert.deepEqual(playlistIds({ sortOrder: 'asc' }), [10, 3, 1], 'Addition order can be reversed')
+  assert.deepEqual(
+    playlistIds({ sortBy: 'id', sortOrder: 'desc' }),
+    [10, 3, 1],
+    'Explicit song-ID sorting remains available to callers'
+  )
+  assert.equal(repo.addSongsToPlaylist(orderedPlaylist.id, [3]).added, 0)
+  assert.deepEqual(playlistIds(), [1, 3, 10], 'Adding a duplicate does not move its original entry')
+  db.prepare(
+    'UPDATE song_list_item SET created_at = ? WHERE song_list_id = ? AND song_id = 10'
+  ).run('2000-01-02 00:00:00', orderedPlaylist.id)
+  assert.deepEqual(playlistIds(), [10, 1, 3], 'Membership timestamp takes precedence over entry ID')
+  repo.removeSongsFromPlaylist(orderedPlaylist.id, [3])
+  repo.addSongsToPlaylist(orderedPlaylist.id, [3])
+  assert.deepEqual(
+    playlistIds(),
+    [3, 10, 1],
+    'Removing then re-adding a song gives it a fresh addition time'
+  )
+  repo.deletePlaylists([orderedPlaylist.id])
+
   assert.equal(repo.getLikedPlaylistCover().songCount, repo.querySongs({ preference: 1 }).total)
   db.prepare('UPDATE song SET preference = 0 WHERE id = 10').run()
   assert.equal(repo.getLikedPlaylistCover().songCount, repo.querySongs({ preference: 1 }).total)

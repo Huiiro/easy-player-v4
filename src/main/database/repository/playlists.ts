@@ -231,9 +231,13 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
     )
   }
   const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
-  const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : 'id'
+  const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : undefined
   const order = query.sortOrder ? (query.sortOrder === 'desc' ? 'DESC' : 'ASC') : 'DESC'
-  const column = `s.${sort}`
+  // Membership time is distinct from when the song entered the library.
+  // The entry ID keeps same-second additions in a stable newest-first order.
+  const sorting = sort
+    ? `s.${sort} ${order}, sli.id ${order}`
+    : `sli.created_at ${order}, sli.id ${order}`
   const size =
     query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
   if (size) {
@@ -245,7 +249,7 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const data = attachTags(
     db
       .prepare(
-        `SELECT ${songColumnsFor('s.')}, ${searchFilter.score} AS searchScore FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${column} ${order} ${pagination}`
+        `SELECT ${songColumnsFor('s.')}, sli.created_at AS playlistAddedAt, sli.id AS playlistEntryId, ${searchFilter.score} AS searchScore FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${sorting} ${pagination}`
       )
       .all(params)
       .map((row) => mapSong(row as SongRow))

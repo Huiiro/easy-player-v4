@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type -- Isolated JavaScript fixture executed in Chromium. */
+/* eslint-disable @typescript-eslint/no-require-imports, @typescript-eslint/explicit-function-return-type, vue/one-component-per-file -- Isolated JavaScript fixture executed in Chromium. */
 const { app, BrowserWindow } = require('electron')
 const fs = require('node:fs'),
   path = require('node:path'),
@@ -485,6 +485,69 @@ async function runChecks() {
   eventBus.emit('musicSourcesChanged')
   await wait()
   check(queries === beforeUnmount, 'unmounted song lists stop reacting to source changes')
+  // The server returns membership-time order, deliberately different from song IDs.
+  const playlistOrder = [fixture[1], fixture[0], fixture[2], ...fixture.slice(3, 33)].map(
+    (song, index) => ({
+      ...song,
+      playlistAddedAt: '2000-01-01 00:00:00',
+      playlistEntryId: fixture.length - index
+    })
+  )
+  window.songQuery = async () => playlistOrder
+  const playlistApp = createApp({
+    render: () => h(SongListView, { source: { type: 'playlist', id: 1 } })
+  })
+  playlistApp.config.errorHandler = (error) => errors.push(String(error))
+  playlistApp.use(router).use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
+  playlistApp
+    .component('SvgIcon', window.Check.SvgIcon)
+    .component('RecycleScroller', RecycleScroller)
+  playlistApp.mount('#app')
+  await wait(180)
+  const playlistTopTitles = () =>
+    [...document.querySelectorAll('.vue-recycle-scroller__item-view')]
+      .filter((row) => getComputedStyle(row).visibility !== 'hidden')
+      .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+      .slice(0, 3)
+      .map((row) => row.querySelector('.song-list-name')?.textContent.trim())
+      .join(',')
+  check(
+    playlistTopTitles() === 'Track 2,Track 1,Track 3',
+    'Playlist default display preserves newest additions instead of sorting by library song ID'
+  )
+  await menuAction('排序', zh.songList.title)
+  check(
+    playlistTopTitles() === 'Track 1,Track 2,Track 3',
+    'Explicit playlist title sorting still works'
+  )
+  await menuAction('排序', '默认')
+  check(
+    playlistTopTitles() === 'Track 2,Track 1,Track 3',
+    'Returning to default restores playlist addition order'
+  )
+  await menuAction('排序', '默认')
+  check(
+    playlistTopTitles() === 'Track 33,Track 32,Track 31',
+    'Default sort can reverse the playlist addition order'
+  )
+  window.songQuery = async () =>
+    [playlistOrder[2], ...playlistOrder.slice(0, 2), ...playlistOrder.slice(3)].map(
+      (song, index) => ({ ...song, searchScore: 100 - index })
+    )
+  const playlistSearch = document.querySelector('header input')
+  playlistSearch.value = 'Track'
+  playlistSearch.dispatchEvent(new Event('input', { bubbles: true }))
+  await wait(360)
+  check(
+    playlistTopTitles().startsWith('Track 3,'),
+    'Playlist search can rank an older addition first by relevance'
+  )
+  await menuAction('排序', '默认')
+  check(
+    playlistTopTitles() === 'Track 2,Track 1,Track 3',
+    'Default sorting after search uses membership time rather than relevance order'
+  )
+  playlistApp.unmount()
   check(errors.length === 0, 'no Vue errors: ' + errors.join('; '))
   return checks
 }
