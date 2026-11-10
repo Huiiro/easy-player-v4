@@ -49,6 +49,7 @@
     "test:modal-lifecycle": "electron scripts/check-modal-lifecycle.cjs",
     "test:settings-search": "node scripts/test-settings-search.mjs && electron scripts/check-settings-search.cjs",
     "test:updates": "node scripts/test-automatic-updates.mjs && electron scripts/check-automatic-updates.cjs",
+    "test:scroll-position": "electron scripts/check-scroll-position.cjs",
     "test:list-loading": "electron scripts/check-list-loading.cjs",
     "test:song-columns": "electron scripts/check-song-columns.cjs",
     "test:footer-menu": "electron scripts/check-footer-menu.cjs",

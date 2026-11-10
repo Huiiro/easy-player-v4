@@ -119,13 +119,27 @@ const layoutMenuItems = computed(() => [
   }
 ])
 const {
+  isRestoringScroll,
   saveScrollPosition,
+  setScrollPosition,
   scheduleScrollPositionSave,
   clearSavedScrollPosition,
   restoreScrollPosition
 } = useScrollPosition(
   scrollContainer,
-  computed(() => `library-scroll-position:${props.kind}`)
+  computed(
+    () =>
+      `library-scroll-position:${JSON.stringify([
+        props.kind,
+        keyword.value.trim(),
+        order.value,
+        sortBy.value,
+        separator.value,
+        props.kind === 'album' && ui.albumGroupByName,
+        cardSize.value
+      ])}`
+  ),
+  { ready: computed(() => !loading.value) }
 )
 
 function itemKey(item: GridItem): string {
@@ -145,11 +159,9 @@ function observeCover(element: unknown, item: GridItem): void {
   element.setAttribute('data-cover-key', key)
   coverObserver?.observe(element)
 }
-async function load(
-  restoreScroll = false,
-  resetScroll = false,
-  updateTotal = false
-): Promise<void> {
+async function load(resetScroll = false, updateTotal = false): Promise<void> {
+  if (resetScroll) clearSavedScrollPosition()
+  else saveScrollPosition()
   loading.value = true
   const revision = ++loadRevision
   try {
@@ -178,7 +190,7 @@ async function load(
       if (resetScroll) {
         await nextTick()
         if (revision === loadRevision) scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
-      } else if (restoreScroll) {
+      } else {
         await restoreScrollPosition()
       }
     }
@@ -202,20 +214,65 @@ function open(item: GridItem): void {
 }
 function refresh(): void {
   saveScrollPosition()
-  void load(true, false, true)
+  void load(false, true)
 }
 
 watch(
   [keyword, order, sortBy, separator, () => (props.kind === 'album' ? ui.albumGroupByName : false)],
   (value, previous) => {
-    clearSavedScrollPosition()
-    void load(false, true, value[3] !== previous[3] || value[4] !== previous[4])
+    void load(true, value[3] !== previous[3] || value[4] !== previous[4])
   }
 )
-watch(cardSize, () => {
-  clearSavedScrollPosition()
-  scrollContainer.value?.scrollTo({ top: 0, behavior: 'auto' })
-})
+let layoutAnchor: { element: HTMLElement; fraction: number } | undefined
+watch(
+  cardSize,
+  async (_, __, onCleanup) => {
+    let cancelled = false
+    onCleanup(() => {
+      cancelled = true
+    })
+    const container = scrollContainer.value
+    if (!container?.isConnected || loading.value || !items.value.length) {
+      layoutAnchor = undefined
+      return
+    }
+    const viewportTop = container.getBoundingClientRect().top
+    const firstVisible = Array.from(container.children).find(
+      (child): child is HTMLElement =>
+        child instanceof HTMLElement && child.getBoundingClientRect().bottom > viewportTop
+    )
+    if (!firstVisible) return
+    const oldRect = firstVisible.getBoundingClientRect()
+    const anchor = layoutAnchor ?? {
+      element: firstVisible,
+      fraction: (viewportTop - oldRect.top) / Math.max(1, oldRect.height)
+    }
+    layoutAnchor = anchor
+    const revision = loadRevision
+    // Read the old grid before column count and row height change, then keep
+    // the same card and partial-row offset in the newly laid out grid.
+    await nextTick()
+    if (cancelled) return
+    layoutAnchor = undefined
+    if (
+      !container.isConnected ||
+      loading.value ||
+      revision !== loadRevision ||
+      !container.contains(anchor.element)
+    )
+      return
+    const newRect = anchor.element.getBoundingClientRect()
+    setScrollPosition({
+      top:
+        container.scrollTop +
+        newRect.top -
+        container.getBoundingClientRect().top +
+        anchor.fraction * newRect.height,
+      left: container.scrollLeft
+    })
+  },
+  { flush: 'pre' }
+)
 onMounted(() => {
   coverObserver = new IntersectionObserver(
     (entries) => {
@@ -228,20 +285,23 @@ onMounted(() => {
     },
     { rootMargin: '320px 0px' }
   )
-  void load(true)
+  void load()
 })
 onBeforeUnmount(() => {
   loadRevision++
   coverObserver?.disconnect()
 })
 onActivated(() => {
-  if (activated) void load(true, false, true)
+  if (activated) void load(false, true)
   activated = true
 })
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col pt-6 text-text" :aria-busy="loading">
+  <section
+    class="flex h-full min-h-0 flex-col pt-6 text-text"
+    :aria-busy="loading || isRestoringScroll"
+  >
     <header class="mb-5 flex flex-wrap items-center justify-between gap-3 px-6">
       <div class="flex min-w-0 flex-wrap items-center gap-3">
         <div class="flex items-baseline gap-2">
@@ -336,8 +396,8 @@ onActivated(() => {
       <div
         ref="scrollContainer"
         class="custom-scrollbar absolute inset-0 grid auto-rows-min content-start gap-2 overflow-y-auto pb-24 pr-1"
-        :class="{ invisible: loading || !items.length }"
-        :inert="loading || !items.length"
+        :class="{ invisible: loading || isRestoringScroll || !items.length }"
+        :inert="loading || isRestoringScroll || !items.length"
         :style="gridStyle"
         @scroll.passive="scheduleScrollPositionSave"
       >

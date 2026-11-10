@@ -25,6 +25,7 @@ import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
 import type { LibrarySong } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
 import BaseBackTop from '@/components/ui/BaseBackTop.vue'
+import { useScrollPosition } from '@/hooks/useScrollPosition'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
 import type { MusicSource } from '../../../../shared/remoteSources'
@@ -55,6 +56,7 @@ const scroller = ref<{
   el?: HTMLElement
   scrollToItem?: (index: number) => void
   scrollToPosition?: (position: number) => void
+  updateVisibleItems?: (itemsChanged: boolean) => unknown
 } | null>(null)
 const backTopTarget = (): HTMLElement | null => scroller.value?.el ?? null
 const rowHeight = computed(() => songListRowHeight(uiStore.compactSongList, uiStore.smallSongList))
@@ -76,6 +78,7 @@ const loading = ref(true)
 const keyword = ref('')
 const composing = ref(false)
 let appliedSearch = ''
+const appliedSearchKey = ref('')
 let searchTimer: ReturnType<typeof setTimeout> | undefined
 let loadRevision = 0
 let disposed = false
@@ -256,7 +259,40 @@ const getSongs = (): Promise<LibrarySong[]> =>
     statistics
   })
 
+const {
+  isRestoringScroll,
+  saveScrollPosition,
+  scheduleScrollPositionSave,
+  clearSavedScrollPosition,
+  restoreScrollPosition
+} = useScrollPosition(
+  computed(() => scroller.value?.el ?? null),
+  computed(
+    () =>
+      `song-list-scroll-position:${JSON.stringify([
+        props.source,
+        appliedSearchKey.value,
+        sortBy.value,
+        sortOrder.value,
+        selectedTagIds.value,
+        canFilterBySource.value ? sourceFilter.value : '',
+        uiStore.artistSeparator,
+        uiStore.genreSeparator,
+        uiStore.albumGroupByName
+      ])}`
+  ),
+  {
+    ready: computed(() => !loading.value),
+    onRestore: () => {
+      scroller.value?.updateVisibleItems?.(true)
+      syncScrollLayout()
+    }
+  }
+)
+
 const load = async (resetScroll = false): Promise<void> => {
+  if (resetScroll) clearSavedScrollPosition()
+  else saveScrollPosition()
   const revision = ++loadRevision
   loading.value = true
   try {
@@ -269,6 +305,8 @@ const load = async (resetScroll = false): Promise<void> => {
         if (!disposed && revision === loadRevision) {
           scroller.value?.scrollToItem?.(0)
         }
+      } else {
+        await restoreScrollPosition()
       }
     }
   } catch (error) {
@@ -296,6 +334,7 @@ const toggleSort = (field: SortField): void => {
   if (field !== 'relevance') browsingSort = { field, order: sortOrder.value }
 }
 const onListScroll = (event: Event): void => {
+  scheduleScrollPositionSave()
   actions.value?.closeMenu()
   scrollLeft.value = (event.target as HTMLElement).scrollLeft
 }
@@ -469,7 +508,7 @@ onBeforeUnmount(() => {
 })
 watch(
   () => props.source,
-  () => void load(true),
+  () => void load(),
   { deep: true }
 )
 watch(selectedTagIds, () => canFilterByTags.value && void load(true))
@@ -502,6 +541,7 @@ watch([keyword, composing], () => {
       sortOrder.value = browsingSort.order
     }
     appliedSearch = nextSearch
+    appliedSearchKey.value = nextSearch
     hasSearch.value = Boolean(appliedSearch)
     void load(true)
   }, 200)
@@ -511,7 +551,7 @@ watch([keyword, composing], () => {
 <template>
   <section
     class="relative flex h-full min-h-0 flex-col text-text"
-    :aria-busy="loading"
+    :aria-busy="loading || isRestoringScroll"
     :style="layoutStyle"
   >
     <SongListHeader
@@ -570,10 +610,10 @@ watch([keyword, composing], () => {
         ref="scroller"
         class="song-list-scroller custom-scrollbar overflow-y-auto"
         :class="{
-          invisible: loading || !filteredSongs.length,
+          invisible: loading || isRestoringScroll || !filteredSongs.length,
           'song-list-scroller--small': uiStore.smallSongList
         }"
-        :inert="loading || !filteredSongs.length"
+        :inert="loading || isRestoringScroll || !filteredSongs.length"
         :items="filteredSongs"
         :item-size="rowHeight"
         :disable-transform="uiStore.smallSongList === true"
