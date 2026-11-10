@@ -110,11 +110,23 @@ async function initializeDraft(): Promise<void> {
 function updateVisible(value: boolean): void {
   emit('update:modelValue', value)
 }
+function afterLeave(): void {
+  if (props.modelValue) return
+  cancelRequest()
+  settingsReady.value = false
+  saving.value = false
+  editingSong.value = null
+  candidates.value = []
+  lyric.value = translation.value = romanization.value = ''
+  error.value = ''
+}
 watch(
   // Playback can advance independently; each open dialog owns one editing target.
   () => props.modelValue,
   (visible) => {
     editSession++
+    requests.cancelAll()
+    if (!visible) return
     settingsReady.value = false
     cancelRequest()
     saving.value = false
@@ -219,6 +231,7 @@ async function save(): Promise<void> {
     :close-on-overlay="false"
     width="max-w-5xl"
     @update:model-value="updateVisible"
+    @after-leave="afterLeave"
   >
     <div class="grid h-[min(68vh,45rem)] min-h-0 gap-5 md:grid-cols-[13rem_minmax(0,1fr)]">
       <div class="flex min-h-0 flex-col gap-4 overflow-hidden" data-lyric-search-sidebar>
@@ -312,19 +325,19 @@ async function save(): Promise<void> {
         <p v-if="error" class="text-sm text-danger">{{ error }}</p>
         <textarea
           v-model="lyric"
-          class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1"
+          class="lyric-editor lyric-editor--main custom-scrollbar min-h-0 flex-1 ep-lyric-textarea"
           :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricEditorPlaceholder')"
         />
         <textarea
           v-model="translation"
-          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
+          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0 ep-lyric-textarea"
           :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricTranslationPlaceholder')"
         />
         <textarea
           v-model="romanization"
-          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0"
+          class="lyric-editor lyric-editor--translation custom-scrollbar shrink-0 ep-lyric-textarea"
           :readonly="draftLoading || saving || !editingSong || !settingsReady"
           :placeholder="t('playerPanel.lyricRomanizationPlaceholder')"
         />
@@ -398,24 +411,6 @@ async function save(): Promise<void> {
 }
 .lyric-editor--main {
   min-height: 8rem;
-}
-.lyric-editor::-webkit-scrollbar {
-  width: 6px;
-}
-.lyric-editor::-webkit-scrollbar-track {
-  background: color-mix(in srgb, var(--color-bg-l) 70%, transparent);
-  border-radius: 999px;
-}
-.lyric-editor::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--color-text-l) 52%, transparent);
-  border: 2px solid transparent;
-  background-clip: padding-box;
-  border-radius: 999px;
-}
-.lyric-editor::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
-  border: 2px solid transparent;
-  background-clip: padding-box;
 }
 .lyric-editor--translation {
   height: 5.5rem;

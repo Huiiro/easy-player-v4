@@ -47,12 +47,29 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'close'): void
+  (e: 'beforeEnter'): void
+  (e: 'beforeLeave'): void
   (e: 'afterEnter'): void
   (e: 'afterLeave'): void
 }>()
 
 const { t } = useI18n()
-const { close, onOverlayClose, onKeydown } = useModalClose(props, emit)
+const {
+  isOpen,
+  close,
+  beforeEnter: prepareEnter,
+  afterLeave: finishLeave,
+  onOverlayClose,
+  onKeydown
+} = useModalClose(props, emit)
+function beforeEnter(): void {
+  prepareEnter()
+  emit('beforeEnter')
+}
+function afterLeave(): void {
+  finishLeave()
+  emit('afterLeave')
+}
 // =======================
 // layout
 // =======================
@@ -153,13 +170,9 @@ const leaveTo = computed(() => {
 </script>
 
 <template>
-  <TransitionRoot
-    :show="modelValue"
-    as="template"
-    @after-enter="emit('afterEnter')"
-    @after-leave="emit('afterLeave')"
-  >
+  <TransitionRoot :show="isOpen" appear as="template">
     <Dialog
+      static
       as="div"
       class="ep-drawer pointer-events-auto fixed inset-0 z-50 text-text"
       @close="onOverlayClose"
@@ -203,6 +216,10 @@ const leaveTo = computed(() => {
     translate-y-0
   "
         :leave-to="leaveTo"
+        @before-enter="beforeEnter"
+        @before-leave="emit('beforeLeave')"
+        @after-enter="emit('afterEnter')"
+        @after-leave="afterLeave"
       >
         <DialogPanel :class="[panelClasses, panelClass]" :style="panelStyle">
           <!-- floating close -->

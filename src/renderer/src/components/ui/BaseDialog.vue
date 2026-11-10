@@ -38,12 +38,29 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'update:modelValue', val: boolean): void
   (e: 'close'): void
+  (e: 'beforeEnter'): void
+  (e: 'beforeLeave'): void
   (e: 'afterEnter'): void
   (e: 'afterLeave'): void
 }>()
 
 const { t } = useI18n()
-const { close, onOverlayClose, onKeydown } = useModalClose(props, emit)
+const {
+  isOpen,
+  close,
+  beforeEnter: prepareEnter,
+  afterLeave: finishLeave,
+  onOverlayClose,
+  onKeydown
+} = useModalClose(props, emit)
+function beforeEnter(): void {
+  prepareEnter()
+  emit('beforeEnter')
+}
+function afterLeave(): void {
+  finishLeave()
+  emit('afterLeave')
+}
 const legacyWidth = computed(
   () => typeof props.width === 'string' && /^(?:max-w-|w-)/.test(props.width)
 )
@@ -63,12 +80,7 @@ const footerClass = computed(() => {
 
 <template>
   <!-- TransitionRoot owns unmounting so the portal stays intact during leave. -->
-  <TransitionRoot
-    :show="modelValue"
-    as="template"
-    @after-enter="emit('afterEnter')"
-    @after-leave="emit('afterLeave')"
-  >
+  <TransitionRoot :show="isOpen" appear as="template">
     <Dialog
       static
       as="div"
@@ -102,6 +114,10 @@ const footerClass = computed(() => {
           leave="transition duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
           leave-from="opacity-100 scale-100"
           leave-to="opacity-0 scale-95"
+          @before-enter="beforeEnter"
+          @before-leave="emit('beforeLeave')"
+          @after-enter="emit('afterEnter')"
+          @after-leave="afterLeave"
         >
           <DialogPanel
             :class="[

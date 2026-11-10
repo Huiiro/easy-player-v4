@@ -67,10 +67,11 @@ function formatFileSize(bytes: number | null): string {
 async function load(): Promise<void> {
   const revision = ++loadRevision
   const id = props.songId
+  if (!props.modelValue) return
   song.value = null
   coverFailed.value = false
   loading.value = false
-  if (!props.modelValue || !id) return
+  if (!id) return
   loading.value = true
   try {
     const response = await window.api.database.command('getSong', { id })
@@ -81,6 +82,12 @@ async function load(): Promise<void> {
   } finally {
     if (revision === loadRevision) loading.value = false
   }
+}
+function afterLeave(): void {
+  if (props.modelValue) return
+  song.value = null
+  loading.value = false
+  coverFailed.value = false
 }
 watch(
   () => [props.modelValue, props.songId],
@@ -95,6 +102,7 @@ watch(
     :title="t('songDetails.title')"
     width="max-w-3xl"
     @update:model-value="emit('update:modelValue', $event)"
+    @after-leave="afterLeave"
   >
     <p v-if="loading" class="py-8 text-center text-sm text-[var(--color-text-l)]">
       {{ t('songDetails.loading') }}

@@ -91,6 +91,9 @@ ${scope} :is(.ep-input, .input-base) {
 ${scope} :is(.ep-input, .input-base):where(:not(:focus):not([aria-invalid='true']):not(:invalid)) {
   border-color: ${token('--ep-glass-control-border')};
 }
+${scope} .ep-lyric-textarea {
+  background-color: rgb(255 255 255 / 6%);
+}
 ${scope} .ep-select { border-radius: var(--ep-control-radius); }
 ${scope} .ep-color-trigger {
   border-radius: var(--ep-control-radius);

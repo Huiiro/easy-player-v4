@@ -79,6 +79,7 @@ export function useSourceMetadata(
       const token = ++session
       ++searchId
       ++detailId
+      if (!open) return
       loading.value = false
       searching.value = false
       fetching.value = false
@@ -91,7 +92,7 @@ export function useSourceMetadata(
       snapshot.value = undefined
       error.value = ''
       searched.value = false
-      if (!open || id === null) return
+      if (id === null) return
       loading.value = true
       try {
         const [list, file] = await Promise.all([

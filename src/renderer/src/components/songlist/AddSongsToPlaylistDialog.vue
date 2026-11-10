@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -22,6 +22,10 @@ const loading = ref(false)
 const submitting = ref(false)
 const creating = ref(false)
 const name = ref('')
+let loadRevision = 0
+onBeforeUnmount(() => {
+  ++loadRevision
+})
 
 const coverUrl = (playlist: PlaylistTarget): string | null => {
   const cover = playlist.customCover || playlist.cover
@@ -29,15 +33,18 @@ const coverUrl = (playlist: PlaylistTarget): string | null => {
 }
 
 async function load(): Promise<void> {
+  const revision = ++loadRevision
   loading.value = true
   try {
     const response = await window.api.database.command('listPlaylists')
+    if (revision !== loadRevision || !props.modelValue) return
     if (!response.success) throw new Error(response.error || t('songList.playlistLoadFailed'))
     playlists.value = response.data as PlaylistTarget[]
   } catch (error) {
-    showError(error instanceof Error ? error.message : t('songList.playlistLoadFailed'))
+    if (revision === loadRevision && props.modelValue)
+      showError(error instanceof Error ? error.message : t('songList.playlistLoadFailed'))
   } finally {
-    loading.value = false
+    if (revision === loadRevision) loading.value = false
   }
 }
 
@@ -96,13 +103,22 @@ async function createAndAdd(): Promise<void> {
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) void load()
-    else {
+    ++loadRevision
+    if (open) {
       creating.value = false
       name.value = ''
+      void load()
     }
-  }
+  },
+  { immediate: true }
 )
+function afterLeave(): void {
+  if (props.modelValue) return
+  creating.value = false
+  name.value = ''
+  playlists.value = []
+  loading.value = false
+}
 </script>
 
 <template>
@@ -110,6 +126,7 @@ watch(
     :model-value="modelValue"
     :title="t('songList.addToPlaylist')"
     width="max-w-md"
+    @after-leave="afterLeave"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <div class="flex flex-col max-h-[60vh]">

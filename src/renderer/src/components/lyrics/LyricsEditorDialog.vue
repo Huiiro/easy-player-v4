@@ -516,8 +516,7 @@ function requestClose(): void {
   if (dirty.value) discardOpen.value = true
   else close()
 }
-async function load(): Promise<void> {
-  const token = ++session
+function resetEditor(): void {
   showSearch.value = false
   showOffset.value = false
   activeEditor.value = null
@@ -537,7 +536,15 @@ async function load(): Promise<void> {
   canUndo.value = false
   canRedo.value = false
   currentMatch.value = null
-  if (!props.modelValue || props.songId == null) return
+}
+function afterLeave(): void {
+  if (!props.modelValue) resetEditor()
+}
+async function load(): Promise<void> {
+  const token = ++session
+  if (!props.modelValue) return
+  resetEditor()
+  if (props.songId == null) return
   const id = props.songId
   loading.value = true
   try {
@@ -643,6 +650,7 @@ function keyboard(event: KeyboardEvent): void {
     :close-on-esc="!saving"
     :show-close="!saving"
     @update:model-value="!$event && requestClose()"
+    @after-leave="afterLeave"
   >
     <div
       ref="root"
@@ -908,7 +916,7 @@ function keyboard(event: KeyboardEvent): void {
           <textarea
             :value="draft[track].content"
             :data-lyric-track="track"
-            class="editor-textarea custom-scrollbar min-h-20 flex-1"
+            class="editor-textarea custom-scrollbar min-h-20 flex-1 ep-lyric-textarea"
             :aria-label="t(`lyricEditor.${track}`)"
             :placeholder="t('lyricEditor.emptyTrack')"
             :readonly="busy || !editable"
@@ -952,7 +960,7 @@ function keyboard(event: KeyboardEvent): void {
                         :value="pendingCells[record.key] ?? record.raw"
                         :data-lyric-cell="record.key"
                         :data-track="track"
-                        class="editor-textarea custom-scrollbar"
+                        class="editor-textarea custom-scrollbar ep-lyric-textarea"
                         :rows="Math.min(6, record.raw.split('\n').length + 1)"
                         :aria-label="t(`lyricEditor.${track}`)"
                         :readonly="busy || !editable"
@@ -1019,7 +1027,7 @@ function keyboard(event: KeyboardEvent): void {
                         :value="pendingCells[record.key] ?? record.raw"
                         :data-lyric-cell="record.key"
                         :data-track="track"
-                        class="editor-textarea custom-scrollbar mb-1"
+                        class="editor-textarea custom-scrollbar mb-1 ep-lyric-textarea"
                         :rows="Math.min(6, record.raw.split('\n').length + 1)"
                         :aria-label="t(`lyricEditor.${track}`)"
                         :readonly="busy || !editable"
@@ -1037,7 +1045,7 @@ function keyboard(event: KeyboardEvent): void {
                         :value="pendingCells[`new:${row.key}:${track}`] ?? ''"
                         :data-lyric-cell="`new:${row.key}:${track}`"
                         :data-track="track"
-                        class="editor-textarea"
+                        class="editor-textarea ep-lyric-textarea custom-scrollbar"
                         rows="2"
                         :aria-label="t(`lyricEditor.${track}`)"
                         :placeholder="t('lyricEditor.addCell')"
