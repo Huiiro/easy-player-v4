@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import { build } from 'esbuild'
 
-const source = readFileSync('src/renderer/src/services/lyrics.ts', 'utf8')
-const { outputText } = ts.transpileModule(source, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
+const parserBundle = await build({
+  entryPoints: ['src/renderer/src/services/lyrics.ts'],
+  bundle: true,
+  write: false,
+  format: 'esm',
+  platform: 'browser'
 })
 const { parseLyrics } = await import(
-  `data:text/javascript;base64,${Buffer.from(outputText).toString('base64')}`
+  `data:text/javascript;base64,${Buffer.from(parserBundle.outputFiles[0].text).toString('base64')}`
 )
 
 const language = Buffer.from(
@@ -69,6 +73,30 @@ const yrc = parseLyrics({
 })
 assert.equal(yrc.lines[0].translation, 'Hello')
 assert.equal(yrc.lines[0].words?.length, 2)
+
+// QQ can leave suffix-style QRC spacers among normalized YRC lines.
+const mixedQrcSpacer = '[186,2336] (2521,1)\n[2522,400](2522,400,0)Hello'
+for (const format of [undefined, 'yrc']) {
+  const parsed = parseLyrics({ content: mixedQrcSpacer, format, source: 'network' })
+  assert.equal(parsed.format, 'yrc')
+  assert.equal(parsed.lines[0].text, ' ', 'A timed QRC spacer remains whitespace, not a timestamp')
+  assert.equal(parsed.lines[0].timeMs, 186)
+  assert.equal(parsed.lines[0].endMs, 2522)
+  assert.equal(parsed.lines[0].words, undefined, 'Do not invent sung words for a blank spacer')
+  assert.equal(parsed.lines[1].text, 'Hello')
+  assert.equal(parsed.lines[1].words[0].startMs, 2522)
+}
+for (const content of ['[186,2336] (2521,1)', '[186,2336](2521,1)']) {
+  const parsed = parseLyrics({ content, source: 'database' })
+  assert.equal(parsed.format, 'yrc', 'Standalone spacers are recognized without a format hint')
+  assert.equal(parsed.lines[0].text.trim(), '')
+}
+assert.equal(
+  parseLyrics({ content: '[186,2336]Literal (2521,1)', format: 'yrc', source: 'local' }).lines[0]
+    .text,
+  'Literal (2521,1)',
+  'Numeric parentheses in ordinary text are preserved'
+)
 
 const lrc = parseLyrics({ content: '[00:01.00]Hello', format: 'lrc', source: 'network' })
 assert.equal(lrc.lines[0].text, 'Hello')

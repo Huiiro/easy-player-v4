@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
+import { build } from 'esbuild'
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type -- Runtime-only TypeScript test fixture.
 async function load(name) {
   const text = readFileSync(`src/renderer/src/components/lyrics/${name}.ts`, 'utf8')
   const { outputText } = ts.transpileModule(text, {
@@ -106,12 +108,15 @@ assert.equal(
   2
 )
 assert.equal(withLyricInterludes([{ timeMs: 0, text: 'Plain', untimed: true }]).length, 1)
-const parserText = readFileSync('src/renderer/src/services/lyrics.ts', 'utf8')
-const parserJs = ts.transpileModule(parserText, {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 }
-}).outputText
+const parserBundle = await build({
+  entryPoints: ['src/renderer/src/services/lyrics.ts'],
+  bundle: true,
+  write: false,
+  format: 'esm',
+  platform: 'browser'
+})
 const { parseLyrics } = await import(
-  `data:text/javascript;base64,${Buffer.from(parserJs).toString('base64')}`
+  `data:text/javascript;base64,${Buffer.from(parserBundle.outputFiles[0].text).toString('base64')}`
 )
 const parsed = parseLyrics({
   content: '[00:03.000]First\n[00:05.000]\n[00:11.000]Next',
@@ -127,3 +132,16 @@ assert.equal(
   0
 )
 console.log('PASS: timing-only source remains empty for fallback')
+
+assert.deepEqual(
+  withLyricInterludes(
+    parseLyrics({
+      content: '[186,2336] (2521,1)\n[2522,400](2522,400,0)Hello',
+      format: 'yrc',
+      source: 'network'
+    }).lines
+  ).map((line) => line.text),
+  ['Hello'],
+  'QRC whitespace spacers never become visible lyric rows'
+)
+console.log('PASS: mixed QRC spacers remain hidden during playback')

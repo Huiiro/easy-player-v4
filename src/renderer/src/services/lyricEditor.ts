@@ -1,4 +1,4 @@
-import { detectLyricFormat, isLyricFormat, type LyricFormat } from './lyrics'
+import { detectLyricFormat, isLyricFormat, stripQrcSpacerTiming, type LyricFormat } from './lyrics'
 
 export const lyricTracks = ['lyric', 'translation', 'romanization'] as const
 export type LyricTrack = (typeof lyricTracks)[number]
@@ -219,9 +219,9 @@ export function lyricEditorRecords(track: LyricTrack, value: EditorTrack): Lyric
         ]
         timeMs = repeatTimes[0]
       }
-      text = raw
-        .replace(/^\s*(?:\[\d+:[\d.:]+\]|\[\d+,\d+\])+/g, '')
-        .replace(/<\d+:[\d.:]+>|\(\d+,\d+,\d+\)|<\d+,\d+,\d+>/g, '')
+      text = raw.replace(/^\s*(?:\[\d+:[\d.:]+\]|\[\d+,\d+\])+/g, '')
+      if (value.format === 'yrc' && wordTime) text = stripQrcSpacerTiming(text)
+      text = text.replace(/<\d+:[\d.:]+>|\(\d+,\d+,\d+\)|<\d+,\d+,\d+>/g, '')
     }
     records.push({
       key: `${track}:${match.index}`,

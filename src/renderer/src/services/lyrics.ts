@@ -116,7 +116,11 @@ export function detectLyricFormat(content: string): LyricFormat {
   const source = content.replace(/^\uFEFF/, '').trim()
   if (/<tt(?:\s|>)/i.test(source)) return 'ttml'
   if (/^\s*\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(source)) return 'krc'
-  if (/^\s*\[\d+,\d+\]\s*\(\d+,\d+,\d+\)/m.test(source)) return 'yrc'
+  if (
+    /^\s*\[\d+,\d+\]\s*\(\d+,\d+,\d+\)/m.test(source) ||
+    /^\s*\[\d+,\d+\](?:\s*\(\d+,\d+\))+\s*$/m.test(source)
+  )
+    return 'yrc'
   if (ELRC_WORD_TAG.test(source)) {
     ELRC_WORD_TAG.lastIndex = 0
     return 'elrc'
@@ -248,6 +252,11 @@ function parseLrcTrack(source: string): ParsedLrcTrack {
   return { metadata, lines }
 }
 
+/** QQ may leave whitespace-only QRC rows unchanged when converting a track to YRC. */
+export function stripQrcSpacerTiming(content: string): string {
+  return /^(?:\s*\(\d+,\d+\))+\s*$/.test(content) ? content.replace(/\(\d+,\d+\)/g, '') : content
+}
+
 function parseYrcTrack(source: string): ParsedLrcTrack {
   const metadata = emptyMetadata()
   const lines: LyricLine[] = []
@@ -261,6 +270,12 @@ function parseYrcTrack(source: string): ParsedLrcTrack {
     const durationMs = Number(match[2])
     if (!Number.isFinite(timeMs) || !Number.isFinite(durationMs) || timeMs < 0 || durationMs < 0)
       continue
+
+    const spacer = stripQrcSpacerTiming(match[3])
+    if (spacer !== match[3]) {
+      lines.push({ timeMs, endMs: Math.max(timeMs + 1, timeMs + durationMs), text: spacer })
+      continue
+    }
 
     const words: LyricWord[] = []
     for (const token of match[3].matchAll(YRC_WORD_TAG)) {

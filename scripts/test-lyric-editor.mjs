@@ -50,6 +50,21 @@ try {
     ]
   })
   const editor = require(join(directory, 'editor.cjs'))
+  const spacerRaw = '[186,2336] (2521,1)'
+  const spacerTrack = editor.editorTrack(spacerRaw)
+  assert.equal(spacerTrack.format, 'yrc')
+  const spacerRecord = editor.lyricEditorRecords('lyric', spacerTrack)[0]
+  assert.equal(spacerRecord.text, ' ', 'Editor preview hides QRC spacer timing')
+  assert.equal(spacerRecord.raw, spacerRaw, 'Editor keeps the original source losslessly')
+  assert.equal(spacerRecord.timeMs, 186)
+  assert.equal(
+    editor.lyricEditorRecords(
+      'lyric',
+      editor.editorTrack('[186,2336](186,2336,0)(2521,1)', 'yrc')
+    )[0].text,
+    '(2521,1)',
+    'A numeric parenthesis inside a timed word is actual text'
+  )
   const initial = editor.emptyLyricDraft()
   initial.lyric = editor.editorTrack(
     '[ar:Artist]\r\n[offset:100]\r\n[00:01.00]<00:01.00>Hello <00:01.50>world\r\n[00:03.00]Later',
