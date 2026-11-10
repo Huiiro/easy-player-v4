@@ -35,3 +35,9 @@ PluginManifest.author 可声明 PluginAuthor（name、可选 HTTPS url），作�
 官方主题可选 renderer: { entry }，与 shader 互斥。此字节入口只在官方索引/种子认证后提供，在无 Node、preload、宿主 API 的不透明来源框架中运行；第三方主题拒绝该入口。InstalledPluginTheme.rendererUrl 由宿主生成，客户端不得自行指定任意页面。
 
 插件主动诊断使用现有 host.log(level, message)；宿主绑定插件身份与激活版本。日志查看、脱敏和维护约定见 [插件日志](../../docs/plugin-logging.md)。
+
+Liquid Glass 组件材质新增公开 `--ep-glass-*` tokens，包括圆角、浮层模糊、底色比例、边框、高光、阴影，以及开关/滑块/进度条/骨架颜色。SDK 导出 `THEME_GLASS_TOKENS` 变量目录、`PluginThemeGlassToken` 键名类型和 `PluginThemeTokens`，`PluginThemeData.tokens` 保留已有语义变量并提供玻璃变量补全；`schemas/theme.schema.json` 同步提供默认值和说明。参数配置用户开启的内置玻璃叠加效果，不会自行开启全局开关。`.ep-message`、`.ep-color-trigger`、`.ep-switch-track`、`.ep-glass-panel` 是新增公开规则钩子；内部 data 属性不属于作者 API。宿主 uiDEV `/dev/ui` 可操作预览并生成 tokens/rules 片段，完整清单见主题变量参考。
+
+BackTop 使用公开 `.ep-backtop` 钩子；`THEME_BACKTOP_TOKENS` / `PluginThemeBackTopToken` 和 `PluginThemeTokens` 提供 size、radius、right、bottom 四个几何变量的补全，Schema 同步说明。几何变量也适用于未开启玻璃的主题；开启时复用已有玻璃染色、边缘和阴影参数，不自动改变用户的效果开关。
+
+Tooltip 使用 `.ep-tooltip`、`.ep-tooltip--control` 和 `.ep-tooltip-trigger` 公共钩子，`THEME_TOOLTIP_TOKENS` / `PluginThemeTooltipToken` 提供底色、文字、边框、圆角、阴影、字号、内边距、最大宽度及竖向调节面板尺寸补全。变量同时适用于普通主题和 Liquid Glass；开启玻璃后缺省跟随浮层材质，显式 Tooltip 属性仍可覆盖。Schema、uiDEV 示例和属性表已同步。

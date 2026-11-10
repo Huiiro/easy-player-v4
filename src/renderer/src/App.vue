@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, watch } from 'vue'
+import { defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useI18n } from 'vue-i18n'
 import DuplicateTaskHost from '@/components/scan/DuplicateTaskHost.vue'
@@ -16,6 +16,9 @@ useFileDropImport()
 
 const { t } = useI18n()
 const ui = useUIStore()
+const LiquidGlassStudioHost = defineAsyncComponent(
+  () => import('@/components/background/LiquidGlassStudioHost.vue')
+)
 const { success } = useMessage()
 watch(
   () => [ui.autoImportLocalMusic, ui.ignoreShortSongs] as const,
@@ -72,4 +75,5 @@ onBeforeUnmount(() => {
   <ThemePreviewDialog />
   <GlobalSearchHost />
   <AppUpdateNotification />
+  <LiquidGlassStudioHost v-if="ui.interfaceEffect === 'liquid-glass-studio'" />
 </template>

@@ -27,6 +27,7 @@ export default {
     retry: '重试'
   },
   ui: {
+    backToTop: '返回顶部',
     selectPlaceholder: '请选择',
     empty: '暂无数据',
     color: '选择颜色',
@@ -1091,6 +1092,9 @@ export default {
     confirmResetTheme:
       '确定恢复默认主题吗？明暗、强调色和全局背景将恢复默认，原生材质与当前主题将关闭。已导入的主题和播放页外观会保留。',
     appearanceMode: '外观模式',
+    interfaceEffect: 'Liquid Glass 样式效果',
+    interfaceEffectDescription:
+      '独立的内置玻璃效果，可叠加当前主题、图片或视频背景。原生窗口材质和极致播放模式下暂停。',
     appearanceDescription: '自定义背景默认遵循深色方案，以保证内容清晰易读。',
     appearanceModeLight: '浅色',
     appearanceModeDark: '深色',

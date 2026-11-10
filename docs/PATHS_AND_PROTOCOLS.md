@@ -1,7 +1,7 @@
 # 主进程路径与协议说明
 
 本文对应 `src/main` 当前实现。应用名称为 `EasyPlayer`，应用数据根目录名称为 `easy_player`。
-固定目录和运行资源路径统一由 [utils/pathUtils.ts](./utils/pathUtils.ts) 定义和获取；业务模块负责具体文件的读写、生命周期和访问校验。
+固定目录和运行资源路径统一由 [utils/pathUtils.ts](../src/main/utils/pathUtils.ts) 定义和获取；业务模块负责具体文件的读写、生命周期和访问校验。
 开发环境不自动迁移或删除旧目录，已有协议名保持不变。
 
 ## 1. 路径使用约定
@@ -26,7 +26,7 @@
 | macOS            | `~/Library/Application Support/easy_player`                                              |
 | Linux 等其他平台 | `$XDG_CONFIG_HOME/easy_player`；未设置时使用 `~/.config/easy_player`                     |
 
-[主进程入口](./index.ts) 在创建窗口、打开数据库之前，将 Electron `userData` 设置为 `getBaseDir()`。
+[主进程入口](../src/main/index.ts) 在创建窗口、打开数据库之前，将 Electron `userData` 设置为 `getBaseDir()`。
 Electron 会话数据与应用库、插件、日志共享同一根目录，不随显示名称变化。
 
 开发或测试隔离示例（PowerShell，在启动应用前设置）：
@@ -47,16 +47,16 @@ npm run dev
 | ----------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------- |
 | `getBaseDir()`                | `<base>`                                  | Electron `userData`，入口初始化                                                             |
 | `getDataPath(...parts)`       | `<base>/player_data/...parts`             | 通用应用数据目录；有专用 getter 时优先使用专用 getter                                       |
-| `getDatabasePath()`           | `<base>/player_data/player.db`            | [database/index.ts](./database/index.ts)；歌曲、歌单、设置和来源等 SQLite 数据              |
-| `getPluginPath(...parts)`     | `<base>/player_plugin/...parts`           | [plugins/management.ts](./plugins/management.ts) 中的插件包管理器                           |
-| `getLogPath(...parts)`        | `<base>/player_log/...parts`              | [service/loggerService.ts](./service/loggerService.ts)，如 `log-YYYY-MM-DD.log`（UTC 日期） |
+| `getDatabasePath()`           | `<base>/player_data/player.db`            | [database/index.ts](../src/main/database/index.ts)；歌曲、歌单、设置和来源等 SQLite 数据              |
+| `getPluginPath(...parts)`     | `<base>/player_plugin/...parts`           | [plugins/management.ts](../src/main/plugins/management.ts) 中的插件包管理器                           |
+| `getLogPath(...parts)`        | `<base>/player_log/...parts`              | [service/loggerService.ts](../src/main/service/loggerService.ts)，如 `log-YYYY-MM-DD.log`（UTC 日期） |
 | `getCachePath(...parts)`      | `<base>/player_data/cache/...parts`       | 远程音频默认缓存等                                                                          |
 | `getStemCachePath()`          | `<base>/player_data/auto-mix-stems`        | 开发与正式环境共享的分轨结果，独立于通用缓存清理范围                                         |
 | `getStemRuntimeRoot()`        | `<base>/player_data/components/auto-mix`  | 可选运行时和模型的版本目录及安装状态，不随普通缓存清理                                       |
 | `getCoverPath(...parts)`      | `<base>/player_data/covers/...parts`      | 本地封面、歌单封面及 `remote/` 下的远程封面                                                 |
 | `getFontPath(...parts)`       | `<base>/player_data/ttf/...parts`         | 用户字体，支持 TTF、OTF、WOFF、WOFF2                                                        |
 | `getBackgroundPath(...parts)` | `<base>/player_data/backgrounds/...parts` | 导入的 MP4 背景视频                                                                         |
-| `getThemePath(...parts)`      | `<base>/player_data/themes/...parts`      | [service/themePackageService.ts](./service/themePackageService.ts) 管理的独立主题资源包     |
+| `getThemePath(...parts)`      | `<base>/player_data/themes/...parts`      | [service/themePackageService.ts](../src/main/service/themePackageService.ts) 管理的独立主题资源包     |
 | `getDataTempPath(...parts)`   | `<base>/player_data/temp/...parts`        | 应用数据内预留临时目录，与系统临时目录不同                                                  |
 
 远程音频缓存允许用户在 `remote.cache-directory` 设置中指定其他位置；未配置时使用 `getCachePath()`。
@@ -79,7 +79,7 @@ writeFileSync(destination, imageBytes) // imageBytes 为业务代码提供的图
 `cache`、`covers`、`temp`、`ttf`。成功返回 `true`；失败记录错误并返回 `false`，入口会终止初始化。
 `backgrounds`、`themes` 等目录由对应业务在写入时按需创建。
 
-插件管理器以 `getPluginPath()` 为根目录，其内部布局由 [plugins/packages.ts](./plugins/packages.ts) 管理：
+插件管理器以 `getPluginPath()` 为根目录，其内部布局由 [plugins/packages.ts](../src/main/plugins/packages.ts) 管理：
 
 ```text
 player_plugin/
@@ -148,13 +148,13 @@ player_plugin/
 
 yt-dlp 的开发平台子目录分别为 `win`、`mac`、`linux/<process.arch>`。
 图标、构建目录及第三方程序的既有文件名保持与实际资源一致，不按数据根目录的命名方式自行重命名。
-打包资源复制规则见项目根目录的 [electron-builder.yml](../../electron-builder.yml)。
+打包资源复制规则见项目根目录的 [electron-builder.yml](../electron-builder.yml)。
 
 ## 5. 应用媒体协议 `easy-player-media`
 
 ### 5.1 定义和注册
 
-[主进程入口](./index.ts) 在应用就绪前通过 `protocol.registerSchemesAsPrivileged()` 声明：
+[主进程入口](../src/main/index.ts) 在应用就绪前通过 `protocol.registerSchemesAsPrivileged()` 声明：
 
 ```ts
 {
@@ -196,8 +196,8 @@ URL 的主机名决定资源类别，`path` 查询参数是本地绝对路径；
 
 - `cover`、`cover-thumb`、`font`、`background`：校验请求路径位于对应目录内且存在。未知主机、缺失路径、越界路径和不存在的文件返回 `404`。
 - `background`：只提供 `.mp4`；正常完整响应为 `200`，有效分段响应为 `206`；不支持或无效的 Range 返回 `416`。
-- `theme`：只允许读取 manifest 中声明的资源；通过真实路径、文件类型和符号链接检查防止逃逸。实现见 [service/themePackageService.ts](./service/themePackageService.ts)。
-- `plugin-theme`：插件必须已安装且处于 `active` 状态，URL 哈希必须匹配当前版本；资源必须位于包管理器认可的资源集合内。失效或不可访问时返回 `404`。实现见 [plugins/packages.ts](./plugins/packages.ts) 和 [plugins/themeProtocol.ts](./plugins/themeProtocol.ts)。
+- `theme`：只允许读取 manifest 中声明的资源；通过真实路径、文件类型和符号链接检查防止逃逸。实现见 [service/themePackageService.ts](../src/main/service/themePackageService.ts)。
+- `plugin-theme`：插件必须已安装且处于 `active` 状态，URL 哈希必须匹配当前版本；资源必须位于包管理器认可的资源集合内。失效或不可访问时返回 `404`。实现见 [plugins/packages.ts](../src/main/plugins/packages.ts) 和 [plugins/themeProtocol.ts](../src/main/plugins/themeProtocol.ts)。
 - 媒体响应提供 `Access-Control-Allow-Origin: *`，支持渲染器跨源读取和 Canvas 取色；这不会扩大允许访问的目录范围。
 - 成功生成的缩略图响应使用 `public, max-age=31536000, immutable` 缓存；插件主题资源响应使用 `no-store`。
 - 原始封面、字体等最终文件响应可通过 `full=1` 设置 `Cache-Control: no-store`。需要原图时使用 `cover`；不要把 `full=1` 当作关闭 `cover-thumb` 缩略图处理的开关。
@@ -210,10 +210,10 @@ URL 的主机名决定资源类别，`path` 查询参数是本地绝对路径；
 easy-player-media://plugin-theme/<pluginId>/<sha256>/__frame.html
 ```
 
-该 HTML 由宿主 [plugins/themeFrame.ts](./plugins/themeFrame.ts) 生成，不读取主题包自带的任意 HTML。
+该 HTML 由宿主 [plugins/themeFrame.ts](../src/main/plugins/themeFrame.ts) 生成，不读取主题包自带的任意 HTML。
 第三方数据主题不能使用这条宿主脚本框架入口。CSP 限制脚本来源并禁止网络连接、子框架、对象和表单等能力。
 
-渲染器组件 [SandboxedThemeBackground.vue](../renderer/src/components/background/SandboxedThemeBackground.vue)
+渲染器组件 [SandboxedThemeBackground.vue](../src/renderer/src/components/background/SandboxedThemeBackground.vue)
 通过 `postMessage` 的 `channel: 'easy-player-theme'` 发送 `state`（包含暂停状态）和 `dispose`，接收 `ready`、`failed`。
 `easy-player-theme` 是消息频道标识，**不是 URL scheme**；接收时还会检查消息是否来自当前 iframe。
 
@@ -221,12 +221,12 @@ easy-player-media://plugin-theme/<pluginId>/<sha256>/__frame.html
 
 | 协议或机制                | 用途                                                                         | 定义或调用位置                                                                |
 | ------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `file:`                   | 主进程通过 `pathToFileURL()` 与 `net.fetch()` 获取已验证的本地资源           | [index.ts](./index.ts) 中的媒体协议处理器                                     |
-| HTTP / HTTPS              | 开发渲染器 HMR、网络来源请求与下载；不映射应用本地数据目录                   | 入口、[service/mediaDownloadRuntime.ts](./service/mediaDownloadRuntime.ts) 等 |
-| `ms-settings:defaultapps` | Windows 默认应用选择页，配合注册表中的 `EasyPlayer` 应用标识                 | [service/fileAssociationService.ts](./service/fileAssociationService.ts)      |
-| Electron IPC              | 渲染器与主进程间的业务调用，如 `fonts:list`、`files:import-background-video` | [ipc](./ipc) 与 [preload](../preload)；频道名不是文件路径或 URL scheme        |
+| `file:`                   | 主进程通过 `pathToFileURL()` 与 `net.fetch()` 获取已验证的本地资源           | [index.ts](../src/main/index.ts) 中的媒体协议处理器                                     |
+| HTTP / HTTPS              | 开发渲染器 HMR、网络来源请求与下载；不映射应用本地数据目录                   | 入口、[service/mediaDownloadRuntime.ts](../src/main/service/mediaDownloadRuntime.ts) 等 |
+| `ms-settings:defaultapps` | Windows 默认应用选择页，配合注册表中的 `EasyPlayer` 应用标识                 | [service/fileAssociationService.ts](../src/main/service/fileAssociationService.ts)      |
+| Electron IPC              | 渲染器与主进程间的业务调用，如 `fonts:list`、`files:import-background-video` | [ipc](../src/main/ipc) 与 [preload](../src/preload)；频道名不是文件路径或 URL scheme        |
 
-远程来源的协议能力集中声明于 [shared/remoteSources.ts](../shared/remoteSources.ts) 的 `REMOTE_PROTOCOLS`：
+远程来源的协议能力集中声明于 [shared/remoteSources.ts](../src/shared/remoteSources.ts) 的 `REMOTE_PROTOCOLS`：
 
 | 来源类型                                      | 地址协议                                  |
 | --------------------------------------------- | ----------------------------------------- |
@@ -237,8 +237,8 @@ easy-player-media://plugin-theme/<pluginId>/<sha256>/__frame.html
 | `sftp`                                        | `sftp:`                                   |
 
 这些来源由对应 provider 连接，不通过 `protocol.handle('easy-player-media', ...)` 转发远程音频。
-来源验证与路径边界见 [service/nasProviders.ts](./service/nasProviders.ts)、[service/fileTransferProviders.ts](./service/fileTransferProviders.ts)
-及 [service/remoteSourceService.ts](./service/remoteSourceService.ts)。
+来源验证与路径边界见 [service/nasProviders.ts](../src/main/service/nasProviders.ts)、[service/fileTransferProviders.ts](../src/main/service/fileTransferProviders.ts)
+及 [service/remoteSourceService.ts](../src/main/service/remoteSourceService.ts)。
 
 ## 7. 修改时同步检查
 

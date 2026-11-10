@@ -17,6 +17,8 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     anchor: HTMLElement | null
+    /** Use this surrounding surface's edge while aligning with the trigger. */
+    edgeAnchor?: HTMLElement | null
     side?: FloatingSide
     align?: FloatingAlign
     offset?: number
@@ -43,8 +45,18 @@ function update(): void {
   frame = 0
   const el = panel.value
   if (!props.open || !el || !props.anchor) return
-  const anchor = props.anchor.getBoundingClientRect()
-  if (props.matchWidth) el.style.width = `${anchor.width}px`
+  const trigger = props.anchor.getBoundingClientRect()
+  const edge = props.edgeAnchor?.getBoundingClientRect() ?? trigger
+  const vertical = props.side === 'top' || props.side === 'bottom'
+  const anchor = {
+    left: vertical ? trigger.left : edge.left,
+    right: vertical ? trigger.right : edge.right,
+    top: vertical ? edge.top : trigger.top,
+    bottom: vertical ? edge.bottom : trigger.bottom,
+    width: vertical ? trigger.width : edge.width,
+    height: vertical ? edge.height : trigger.height
+  }
+  if (props.matchWidth) el.style.width = `${trigger.width}px`
   const rect = el.getBoundingClientRect()
   const position = floatingPosition(
     anchor,
@@ -66,7 +78,7 @@ function update(): void {
     position: props.teleport ? 'fixed' : 'absolute',
     left: `${left}px`,
     top: `${top}px`,
-    width: props.matchWidth ? `${anchor.width}px` : 'max-content',
+    width: props.matchWidth ? `${trigger.width}px` : 'max-content',
     maxWidth: 'calc(100vw - 16px)',
     visibility: 'visible',
     '--ep-floating-available-height': `${position.availableHeight}px`,
@@ -83,19 +95,34 @@ function update(): void {
 function schedule(): void {
   if (!frame) frame = requestAnimationFrame(update)
 }
+function onScroll(event: Event): void {
+  // Scrolling an option list does not move its anchor. Repositioning here can
+  // feed constrained height back into side selection and move the whole popup.
+  if (event.target instanceof Node && panel.value?.contains(event.target)) return
+  // Sibling scroll areas do not move this trigger. In particular, a library
+  // wheel event must not remeasure a fixed Footer's hovering menu button.
+  if (
+    event.target instanceof Element &&
+    !event.target.contains(props.anchor) &&
+    !event.target.contains(props.edgeAnchor ?? null)
+  )
+    return
+  schedule()
+}
 function stop(): void {
   observer?.disconnect()
   observer = undefined
   cancelAnimationFrame(frame)
   frame = 0
   window.removeEventListener('resize', schedule)
-  window.removeEventListener('scroll', schedule, true)
+  window.removeEventListener('scroll', onScroll, true)
 }
 watch(
   () => [
     active.value,
     props.open,
     props.anchor,
+    props.edgeAnchor,
     props.teleport,
     props.side,
     props.align,
@@ -122,8 +149,9 @@ watch(
     observer = new ResizeObserver(schedule)
     if (panel.value) observer.observe(panel.value)
     if (props.anchor) observer.observe(props.anchor)
+    if (props.edgeAnchor) observer.observe(props.edgeAnchor)
     window.addEventListener('resize', schedule, { passive: true })
-    window.addEventListener('scroll', schedule, { passive: true, capture: true })
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true })
   },
   { immediate: true, flush: 'post' }
 )

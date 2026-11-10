@@ -52,6 +52,193 @@
       },
       "additionalProperties": {
         "$ref": "#/definitions/cssValue"
+      },
+      "properties": {
+        "--ep-glass-control-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "输入框、选择器和颜色按钮圆角",
+          "default": "10px"
+        },
+        "--ep-glass-button-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "按钮圆角",
+          "default": "999px"
+        },
+        "--ep-glass-dialog-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "弹窗和抽屉圆角",
+          "default": "22px"
+        },
+        "--ep-glass-floating-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "菜单和浮层圆角",
+          "default": "16px"
+        },
+        "--ep-glass-message-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "消息通知圆角",
+          "default": "16px"
+        },
+        "--ep-glass-control-bg": {
+          "$ref": "#/definitions/cssValue",
+          "description": "次要按钮和颜色按钮底色",
+          "default": "color-mix(in srgb, var(--color-bg-l2) 28%, transparent)"
+        },
+        "--ep-glass-control-border": {
+          "$ref": "#/definitions/cssValue",
+          "description": "控件边框颜色",
+          "default": "color-mix(in srgb, var(--color-text) 14%, transparent)"
+        },
+        "--ep-glass-control-highlight": {
+          "$ref": "#/definitions/cssValue",
+          "description": "控件和滑块表面高光",
+          "default": "linear-gradient(135deg, rgb(255 255 255 / 14%), rgb(255 255 255 / 2%))"
+        },
+        "--ep-glass-control-shadow": {
+          "$ref": "#/definitions/cssValue",
+          "description": "控件内高光和阴影",
+          "default": "inset 0 1px 0 rgb(255 255 255 / 14%), 0 2px 8px rgb(0 0 0 / 8%)"
+        },
+        "--ep-glass-input-bg": {
+          "$ref": "#/definitions/cssValue",
+          "description": "输入框底色",
+          "default": "color-mix(in srgb, var(--color-bg-d) 8%, transparent)"
+        },
+        "--ep-glass-switch-inactive": {
+          "$ref": "#/definitions/cssValue",
+          "description": "开关关闭轨道颜色",
+          "default": "color-mix(in srgb, var(--color-text) 18%, transparent)"
+        },
+        "--ep-glass-switch-thumb": {
+          "$ref": "#/definitions/cssValue",
+          "description": "开关滑块颜色",
+          "default": "color-mix(in srgb, var(--color-white, #fff) 88%, transparent)"
+        },
+        "--ep-glass-track": {
+          "$ref": "#/definitions/cssValue",
+          "description": "滑块和进度条未播放轨道",
+          "default": "color-mix(in srgb, var(--color-text) 22%, transparent)"
+        },
+        "--ep-glass-track-fill": {
+          "$ref": "#/definitions/cssValue",
+          "description": "滑块和进度条已播放轨道",
+          "default": "var(--color-primary)"
+        },
+        "--ep-glass-thumb": {
+          "$ref": "#/definitions/cssValue",
+          "description": "滑块和原生进度条拇指颜色",
+          "default": "color-mix(in srgb, var(--color-text) 88%, var(--color-primary))"
+        },
+        "--ep-glass-skeleton": {
+          "$ref": "#/definitions/cssValue",
+          "description": "骨架屏底色",
+          "default": "color-mix(in srgb, var(--color-text) 10%, transparent)"
+        },
+        "--ep-glass-surface-border": {
+          "$ref": "#/definitions/cssValue",
+          "description": "独立玻璃面板边框颜色",
+          "default": "color-mix(in srgb, var(--color-text) 10%, transparent)"
+        },
+        "--ep-glass-surface-shadow": {
+          "$ref": "#/definitions/cssValue",
+          "description": "独立面板阴影",
+          "default": "0 8px 32px rgb(0 0 0 / 10%), inset 0 .5px 1.5px rgb(255 255 255 / 6%)"
+        },
+        "--ep-glass-chrome-tint": {
+          "$ref": "#/definitions/cssValue",
+          "description": "Header 和侧栏底色比例",
+          "default": "4%"
+        },
+        "--ep-glass-footer-tint": {
+          "$ref": "#/definitions/cssValue",
+          "description": "Footer 底色比例",
+          "default": "6%"
+        },
+        "--ep-glass-panel-tint": {
+          "$ref": "#/definitions/cssValue",
+          "description": "弹窗和抽屉底色比例",
+          "default": "8%"
+        },
+        "--ep-glass-floating-tint": {
+          "$ref": "#/definitions/cssValue",
+          "description": "菜单、颜色面板和消息底色比例",
+          "default": "12%"
+        },
+        "--ep-glass-floating-blur-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "浮层高斯采样半径，0–200，显示像素；缺省跟随当前光学预设",
+          "default": "60"
+        },
+        "--ep-backtop-size": {
+          "$ref": "#/definitions/cssValue",
+          "description": "回到顶部按钮宽高",
+          "default": "36px"
+        },
+        "--ep-backtop-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "回到顶部按钮圆角",
+          "default": "999px"
+        },
+        "--ep-backtop-right": {
+          "$ref": "#/definitions/cssValue",
+          "description": "回到顶部按钮右侧间距",
+          "default": "20px"
+        },
+        "--ep-backtop-bottom": {
+          "$ref": "#/definitions/cssValue",
+          "description": "通用回到顶部按钮底部间距；歌曲列表缺省跟随 Footer 避让",
+          "default": "20px"
+        },
+        "--ep-tooltip-bg": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层底色；玻璃开启时缺省跟随浮层染色",
+          "default": "var(--color-bg-l)"
+        },
+        "--ep-tooltip-text": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层文字颜色",
+          "default": "var(--color-text)"
+        },
+        "--ep-tooltip-border": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层边框；玻璃开启时缺省跟随玻璃控件边框",
+          "default": "var(--color-border)"
+        },
+        "--ep-tooltip-radius": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层圆角",
+          "default": "10px"
+        },
+        "--ep-tooltip-shadow": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层阴影；玻璃开启时缺省跟随玻璃面板阴影",
+          "default": "0 6px 20px rgb(0 0 0 / 16%)"
+        },
+        "--ep-tooltip-font-size": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层字号",
+          "default": "12px"
+        },
+        "--ep-tooltip-padding": {
+          "$ref": "#/definitions/cssValue",
+          "description": "文字提示内边距",
+          "default": "6px 10px"
+        },
+        "--ep-tooltip-max-width": {
+          "$ref": "#/definitions/cssValue",
+          "description": "提示层最大宽度，自动限制在视口内",
+          "default": "280px"
+        },
+        "--ep-tooltip-control-width": {
+          "$ref": "#/definitions/cssValue",
+          "description": "竖向调节提示层宽度",
+          "default": "40px"
+        },
+        "--ep-tooltip-control-height": {
+          "$ref": "#/definitions/cssValue",
+          "description": "竖向调节提示层高度",
+          "default": "160px"
+        }
       }
     },
     "rules": {
@@ -68,6 +255,76 @@
         },
         "additionalProperties": {
           "$ref": "#/definitions/cssValue"
+        }
+      }
+    },
+    "glass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selectors", "blur", "refraction", "saturation"],
+      "properties": {
+        "selectors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^\\.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?(?: \\.ep-[a-z][a-z0-9-]*(?::(?:hover|focus-visible|disabled))?)*$"
+          }
+        },
+        "blur": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "refraction": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 40
+        },
+        "saturation": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "thickness": {
+          "type": "number",
+          "minimum": 4,
+          "maximum": 64
+        },
+        "ior": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 2.5
+        },
+        "dispersion": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "fresnel": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "highlight": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 2
+        },
+        "lightAngle": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 360
+        },
+        "shadow": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "interactive": {
+          "type": "boolean"
         }
       }
     },

@@ -210,8 +210,8 @@ function handleClick(item: MenuItemType): void {
 .ep-menu--glass {
   border-color: rgb(255 255 255 / 12%);
   border-radius: 0.5rem;
-  background: rgb(9 12 17 / 90%);
-  color: rgb(255 255 255 / 72%);
+  background: var(--ep-menu-glass-bg, rgb(9 12 17 / 90%));
+  color: var(--ep-menu-glass-text, rgb(255 255 255 / 72%));
   backdrop-filter: blur(10px);
   box-shadow: 0 8px 24px rgb(0 0 0 / 20%);
 }

@@ -10,6 +10,10 @@
     "url": "https://github.com/Huiiro/easy-player-v4.git"
   },
   "scripts": {
+    "test:liquid-glass-studio": "electron scripts/check-liquid-glass-studio.cjs",
+    "test:liquid-glass-regressions": "electron scripts/check-liquid-glass-regressions.cjs",
+    "test:liquid-glass-components": "electron scripts/check-liquid-glass-components.cjs",
+    "test:liquid-glass-scroll": "electron scripts/check-liquid-glass-scroll.cjs",
     "format": "prettier --write .",
     "lint": "eslint --cache .",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
@@ -102,6 +106,8 @@
     "build:plugin-sdk": "npm --prefix packages/plugin-sdk run build && npm pack ./packages/plugin-sdk --pack-destination ./build --ignore-scripts",
     "test:theme-plugins": "node scripts/test-theme-plugins.mjs",
     "pack:theme": "node scripts/pack-theme.mjs",
+    "test:liquid-glass": "node scripts/test-liquid-glass-optics.mjs && electron scripts/check-liquid-glass.cjs",
+    "test:liquid-glass:perf": "electron scripts/check-liquid-glass-performance.cjs",
     "pack:themes": "node scripts/package-theme-examples.mjs",
     "sync:theme-contract": "node scripts/sync-theme-contract.mjs",
     "test:theme-contract": "node scripts/sync-theme-contract.mjs --check && node scripts/test-theme-contract.mjs",

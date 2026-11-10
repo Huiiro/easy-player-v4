@@ -35,6 +35,7 @@ vm.runInNewContext(
 )
 vm.runInNewContext(compile(readFileSync('src/shared/themePackage.ts', 'utf8')), { exports: shared })
 const themes = {}
+shared.applyLiquidGlass = () => {}
 vm.runInNewContext(compile(readFileSync('src/renderer/src/services/customTheme.ts', 'utf8')), {
   exports: themes,
   require: () => shared,
@@ -67,6 +68,7 @@ function harness() {
       context.followSystemTheme.value = mode === 'system'
     },
     useCustomBg: vue.ref(false),
+    interfaceEffect: vue.ref('none'),
     systemBackground: vue.ref('none'),
     followSystemTheme: vue.ref(false),
     useMica: vue.ref(false),

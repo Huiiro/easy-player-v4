@@ -1,0 +1,47 @@
+{
+  "files": [
+    {
+      "path": "src/utils/GLUtils.ts",
+      "sha256": "881bad39fa601debbd5185128405b9f275c3d67aa7bcb5dd16a228331a5e3cda"
+    },
+    {
+      "path": "src/shaders/fragment-bg.glsl",
+      "sha256": "fa6214e86bbae4923719067f480d827107854b3e47844b1fd71a8448e950d803"
+    },
+    {
+      "path": "src/shaders/fragment-bg-hblur.glsl",
+      "sha256": "3e481060b7e9a628c5875df60de0a78a3512781ed804a7043227ccbf2b5a5917"
+    },
+    {
+      "path": "src/shaders/fragment-bg-vblur.glsl",
+      "sha256": "90eec79564c59af29bc29b768f5626c4fdc0a51c69c03bb0bf45c8b4262e87fb"
+    },
+    {
+      "path": "src/shaders/fragment-main.glsl",
+      "sha256": "fa2108ca4a71bbdf15b93b2954c4dbd2164e55b37dc581b6926c76b0eaf8afc9"
+    },
+    {
+      "path": "src/shaders/lib/color.glsl",
+      "sha256": "0f07b667a00e925061160e99b599f193729c2ea69b92306f1b7fe6dd05bb43d3"
+    },
+    {
+      "path": "src/shaders/lib/math.glsl",
+      "sha256": "d3b3f670963fc312cc97ec54b8d1b83126fda3d499a62a921c2377bd48f08290"
+    },
+    {
+      "path": "src/shaders/lib/sdf.glsl",
+      "sha256": "947f194ff9c6f20d248fd46129843142e6be841c5641c5fc23093b76db90e324"
+    },
+    {
+      "path": "src/shaders/vertex.glsl",
+      "sha256": "0fc72d79d41899be45201d1807671a49513879db68d622cccbb67efa1f1f3918"
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "fc2398f73fb001de6506ff9258276f41d0cc7642d1f1a41cbbfd791f346a68ef"
+    }
+  ],
+  "repository": "https://github.com/iyinchao/liquid-glass-studio",
+  "license": "MIT",
+  "commit": "f7b28c36305a862f5cffed3ddd51511cf1204f56"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "huiiro.liquid-glass",
+  "displayName": "Liquid Glass",
+  "author": { "name": "Huiiro" },
+  "version": "1.2.0",
+  "apiVersion": 2,
+  "kind": "theme",
+  "sources": [],
+  "theme": {
+    "displayName": "Liquid Glass",
+    "names": { "zh": "流光玻璃", "en": "Liquid Glass" }
+  }
+}

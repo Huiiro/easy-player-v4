@@ -10,6 +10,8 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    interfaceEffect:
+      preferences.interfaceEffect === 'liquid-glass-studio' ? 'liquid-glass-studio' : 'none',
     autoCheckUpdates:
       typeof preferences.autoCheckUpdates === 'boolean' ? preferences.autoCheckUpdates : true,
     ignoredUpdateVersions: Array.isArray(preferences.ignoredUpdateVersions)

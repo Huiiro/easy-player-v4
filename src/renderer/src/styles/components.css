@@ -107,48 +107,24 @@ html.mica-enabled:not(.dark)[data-window-material='mica'] .ep-footer {
 .app-footer--expanded > .ep-footer-toggle {
   grid-area: toggle;
 }
-.ep-footer-actions .ep-footer-menu-secondary,
-.ep-footer-actions .ep-footer-menu-mode,
-.ep-footer-actions .ep-footer-menu-queue,
-.ep-footer-actions .ep-footer-menu-volume {
-  display: none;
-}
-.app-footer--collapsed .ep-footer-menu-secondary,
-.app-footer--collapsed .ep-footer-menu-mode,
-.app-footer--collapsed .ep-footer-menu-queue,
-.app-footer--collapsed .ep-footer-menu-volume {
-  display: flex;
-}
 @container footer-actions (width < 272px) {
   .ep-footer-action-secondary {
     display: none;
-  }
-  .ep-footer-actions .ep-footer-menu-secondary {
-    display: flex;
   }
 }
 @container footer-actions (width < 152px) {
   .ep-footer-action-mode {
     display: none;
   }
-  .ep-footer-actions .ep-footer-menu-mode {
-    display: flex;
-  }
 }
 @container footer-actions (width < 112px) {
   .ep-footer-action-queue {
     display: none;
   }
-  .ep-footer-actions .ep-footer-menu-queue {
-    display: flex;
-  }
 }
 @container footer-actions (width < 72px) {
-  .ep-footer-action-volume {
+  .app-footer--expanded .ep-footer-actions .ep-footer-action-volume {
     display: none;
-  }
-  .ep-footer-actions .ep-footer-menu-volume {
-    display: flex;
   }
 }
 @media (width <= 980px) {

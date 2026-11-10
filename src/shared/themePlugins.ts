@@ -67,6 +67,73 @@ export function parsePluginThemeData(value: unknown): PluginThemeData {
     chromeBorder: color(value.chromeBorder),
     background: color(value.background, true)
   }
+  if (value.glass !== undefined) {
+    const glass = value.glass
+    if (
+      !object(glass) ||
+      Object.keys(glass).some(
+        (key) =>
+          ![
+            'selectors',
+            'blur',
+            'refraction',
+            'saturation',
+            'thickness',
+            'ior',
+            'dispersion',
+            'fresnel',
+            'highlight',
+            'lightAngle',
+            'shadow',
+            'interactive'
+          ].includes(key)
+      ) ||
+      !Array.isArray(glass.selectors) ||
+      glass.selectors.length < 1 ||
+      glass.selectors.length > 16 ||
+      new Set(glass.selectors).size !== glass.selectors.length ||
+      !glass.selectors.every(
+        (selector) => typeof selector === 'string' && themeSelectorPattern.test(selector)
+      ) ||
+      ![
+        ['blur', 0, 24],
+        ['refraction', 0, 40],
+        ['saturation', 1, 2]
+      ].every(([key, min, max]) => {
+        const n = glass[key as string]
+        return typeof n === 'number' && Number.isFinite(n) && n >= Number(min) && n <= Number(max)
+      })
+    )
+      throw new Error('pluginPackageInvalid')
+    const optionalRanges = {
+      thickness: [4, 64],
+      ior: [1, 2.5],
+      dispersion: [0, 1],
+      fresnel: [0, 1],
+      highlight: [0, 2],
+      lightAngle: [0, 360],
+      shadow: [0, 1]
+    }
+    for (const [key, [min, max]] of Object.entries(optionalRanges)) {
+      const n = glass[key]
+      if (n !== undefined && (typeof n !== 'number' || !Number.isFinite(n) || n < min || n > max))
+        throw new Error('pluginPackageInvalid')
+    }
+    if (glass.interactive !== undefined && typeof glass.interactive !== 'boolean')
+      throw new Error('pluginPackageInvalid')
+    result.glass = {
+      selectors: [...glass.selectors] as string[],
+      blur: glass.blur as number,
+      refraction: glass.refraction as number,
+      saturation: glass.saturation as number,
+      ...Object.fromEntries(
+        Object.keys(optionalRanges)
+          .filter((key) => glass[key] !== undefined)
+          .map((key) => [key, glass[key]])
+      ),
+      ...(glass.interactive !== undefined ? { interactive: glass.interactive as boolean } : {})
+    }
+  }
   if (value.tokens !== undefined) {
     if (!object(value.tokens) || Object.keys(value.tokens).length > 64)
       throw new Error('pluginPackageInvalid')

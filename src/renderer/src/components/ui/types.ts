@@ -9,6 +9,8 @@ export const controlSizeClasses: Record<ControlSize, string> = {
 export type FloatingSide = 'top' | 'bottom' | 'left' | 'right'
 export type FloatingAlign = 'start' | 'center' | 'end'
 export type PageTransition = 'none' | 'fade' | 'slide'
+export type BackTopTarget = HTMLElement | Window | null | (() => HTMLElement | Window | null)
+export type BackTopBehavior = 'auto' | 'instant' | 'smooth'
 
 export function cssSize(value: string | number): string {
   return typeof value === 'number' ? `${value}px` : value

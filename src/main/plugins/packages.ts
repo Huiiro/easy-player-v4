@@ -1,4 +1,5 @@
 import { officialThemeFrame } from './themeFrame'
+import { themeGlassSnapshot } from './themeGlassSnapshot'
 import { createHash, randomUUID } from 'node:crypto'
 import { assertApplicationActive } from '../service/applicationShutdown'
 import {
@@ -439,6 +440,8 @@ export class OfficialPluginPackages {
     if (!entry || entry.sha256 !== hash || this.manager.get(id)?.state !== 'active')
       return undefined
     const theme = this.themes.get(hash)
+    if (path === '__glass-snapshot.js' && theme?.data.renderer && entry.origin !== 'third-party')
+      return themeGlassSnapshot
     if (path === '__frame.html' && theme?.data.renderer && entry.origin !== 'third-party')
       return officialThemeFrame(
         `easy-player-media://plugin-theme/${id}/${hash}/${theme.data.renderer.entry}`

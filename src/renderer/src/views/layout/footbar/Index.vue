@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseRange from '@/components/ui/BaseRange.vue'
+import BaseTooltip from '@/components/ui/BaseTooltip.vue'
+import FloatingPanel from '@/components/ui/FloatingPanel.vue'
 import { useFooterSwipe } from '@/components/player/useFooterSwipe'
 import { useFooterAutoHide } from '@/components/player/useFooterAutoHide'
 import { useSeekProgress } from '@/components/player/useSeekProgress'
@@ -69,11 +71,14 @@ const footerSection = ref<HTMLElement | null>(null)
 const footerTime = ref<HTMLElement | null>(null)
 const footerTransport = ref<HTMLElement | null>(null)
 const footerActions = ref<HTMLElement | null>(null)
+const moreMenuAnchor = ref<HTMLElement | null>(null)
+const footerActionsWidth = ref(0)
 let footerLayoutObserver: ResizeObserver | null = null
 function updateFooterLayout(): void {
   const section = footerSection.value
   if (!section) return
   updateFooterSideWidths(section)
+  footerActionsWidth.value = footerActions.value?.clientWidth ?? 0
   if (collapsed.value && footerActions.value) {
     const bounds = section.getBoundingClientRect()
     const scale = bounds.width / section.offsetWidth || 1
@@ -103,6 +108,7 @@ const detailsVisible = ref(false)
 const tagVisible = ref(false)
 const playlistVisible = ref(false)
 const lyricSourceVisible = ref(false)
+const volumeTooltipVisible = ref(false)
 const footerBusy = computed(
   () =>
     queueVisible.value ||
@@ -110,7 +116,8 @@ const footerBusy = computed(
     detailsVisible.value ||
     tagVisible.value ||
     playlistVisible.value ||
-    lyricSourceVisible.value
+    lyricSourceVisible.value ||
+    volumeTooltipVisible.value
 )
 const { footerHidden, footerPeekVisible, autoHideActive } = useFooterAutoHide(
   footerRoot,
@@ -343,7 +350,7 @@ onBeforeUnmount(() => {
   >
     <section
       ref="footerSection"
-      class="ep-footer app-footer pointer-events-auto mx-auto grid min-h-[72px] items-center rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:py-2"
+      class="ep-footer app-footer pointer-events-auto mx-auto grid items-center rounded-3xl border px-4 py-2.5 text-text-l shadow-[0_12px_35px_rgb(0_0_0_/_20%)] backdrop-blur-2xl transition-all duration-[var(--motion-duration-slow)] max-[700px]:px-3 max-[700px]:py-2"
       :style="layoutStyle"
       :class="
         collapsed
@@ -511,35 +518,37 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <template v-if="!collapsed">
-          <div
-            class="ep-footer-action-volume group relative"
-            :title="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+          <BaseTooltip
+            class="ep-footer-action-volume"
+            interactive
+            variant="control"
+            :aria-label="t('footer.volume')"
+            @show="volumeTooltipVisible = true"
+            @hide="volumeTooltipVisible = false"
             @click.stop
             @wheel="changeVolume"
           >
-            <button
-              class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
-              type="button"
-              :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
-            >
-              <SvgIcon :name="volumeIcon" class-name="size-5" />
-            </button>
-            <div
-              class="pointer-events-none absolute bottom-10 left-1/2 z-30 flex h-40 w-10 -translate-x-1/2 flex-col items-center gap-1 rounded-lg bg-[#090c11]/90 px-1 py-2 text-xs opacity-0 shadow-xl backdrop-blur-md transition-opacity duration-[var(--motion-duration-fast)] group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
-            >
-              <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
-              <input
-                class="absolute left-1/2 top-[5.5rem] h-1.5 w-32 -translate-x-1/2 -rotate-90 cursor-pointer accent-[var(--ep-progress-fill)]"
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                :value="Math.round(player.volume * 100)"
-                :aria-label="t('footer.volume')"
-                @input="setVolume"
-              />
-            </div>
-          </div>
+            <template #trigger="{ triggerProps }"
+              ><button
+                v-bind="triggerProps"
+                class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+                type="button"
+                :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
+              >
+                <SvgIcon :name="volumeIcon" class-name="size-5" /></button
+            ></template>
+            <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
+            <input
+              class="accent-primary"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              :value="Math.round(player.volume * 100)"
+              :aria-label="t('footer.volume')"
+              @input="setVolume"
+            />
+          </BaseTooltip>
           <button
             class="ep-footer-action-mode grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
             :title="playModeLabel"
@@ -583,7 +592,7 @@ onBeforeUnmount(() => {
             <SvgIcon name="common-lyrics2" class-name="size-5" />
           </button>
         </template>
-        <div class="relative" @pointerdown.stop @click.stop>
+        <div ref="moreMenuAnchor" class="relative" @pointerdown.stop @click.stop>
           <button
             class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
             :title="t('footer.more')"
@@ -594,100 +603,135 @@ onBeforeUnmount(() => {
           >
             <SvgIcon name="menu-more-vertical" class-name="size-5" />
           </button>
-          <div
-            v-if="moreVisible"
-            class="ep-menu custom-scrollbar absolute bottom-full right-0 z-[9999] mb-4 max-h-[min(70vh,480px)] w-56 overflow-y-auto rounded-xl border border-border bg-bg p-1 shadow-xl"
+          <FloatingPanel
+            :open="moreVisible"
+            :anchor="moreMenuAnchor"
+            :edge-anchor="footerSection"
+            side="top"
+            align="end"
+            :offset="6"
+            teleport
           >
-            <div class="ep-footer-menu-volume items-center gap-2 px-3 py-2 text-sm">
-              <SvgIcon :name="volumeIcon" class-name="size-4 shrink-0" />
-              <label for="footer-menu-volume">{{ t('footer.volume') }}</label>
-              <input
-                id="footer-menu-volume"
-                class="min-w-0 flex-1 accent-primary"
-                type="range"
-                min="0"
-                max="100"
-                :value="Math.round(player.volume * 100)"
-                :aria-label="t('footer.volume')"
-                @input="setVolume"
-              />
+            <div
+              v-if="moreVisible"
+              class="ep-footer-more-menu ep-menu w-56 overflow-hidden rounded-xl border border-border bg-bg text-text shadow-xl"
+              @pointerdown.stop
+              @click.stop
+            >
+              <div class="ep-footer-more-list custom-scrollbar p-1">
+                <div
+                  v-show="collapsed || footerActionsWidth < 72"
+                  class="ep-footer-menu-volume flex items-center gap-2 px-3 py-2 text-sm"
+                >
+                  <SvgIcon :name="volumeIcon" class-name="size-4 shrink-0" />
+                  <label for="footer-menu-volume">{{ t('footer.volume') }}</label>
+                  <input
+                    id="footer-menu-volume"
+                    class="min-w-0 flex-1 accent-primary"
+                    type="range"
+                    min="0"
+                    max="100"
+                    :value="Math.round(player.volume * 100)"
+                    :aria-label="t('footer.volume')"
+                    @input="setVolume"
+                  />
+                </div>
+                <button
+                  v-show="collapsed || footerActionsWidth < 152"
+                  class="ep-footer-menu-mode menu-item"
+                  @click="cyclePlayMode"
+                >
+                  <SvgIcon :name="playModeIcon" class-name="size-4 shrink-0" />
+                  {{ playModeLabel }}
+                </button>
+                <button
+                  v-show="collapsed || footerActionsWidth < 112"
+                  class="ep-footer-menu-queue menu-item"
+                  @click="openQueueFromMenu"
+                >
+                  <SvgIcon name="control-playlist" class-name="size-4 shrink-0" />
+                  {{ t('queue.title') }}
+                </button>
+                <button
+                  v-show="collapsed || footerActionsWidth < 272"
+                  class="ep-footer-menu-secondary menu-item"
+                  :class="currentPreference === 1 && 'text-primary'"
+                  :disabled="!player.currentQueueSong"
+                  @click="markCurrent(1)"
+                >
+                  <SvgIcon
+                    :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
+                    class-name="size-4 shrink-0"
+                  />
+                  {{ t('recommendation.like') }}
+                </button>
+                <button
+                  v-show="collapsed || footerActionsWidth < 272"
+                  class="ep-footer-menu-secondary menu-item"
+                  :class="currentPreference === -1 && 'text-danger'"
+                  :disabled="!player.currentQueueSong"
+                  @click="markCurrent(-1)"
+                >
+                  <SvgIcon name="play-dislike" class-name="size-4 shrink-0" />
+                  {{ t('recommendation.dislike') }}
+                </button>
+                <button
+                  v-show="collapsed || footerActionsWidth < 272"
+                  class="ep-footer-menu-secondary menu-item"
+                  @click="openDesktopLyricsFromMenu"
+                >
+                  <SvgIcon name="common-lyrics2" class-name="size-4 shrink-0" />
+                  {{ t('footer.desktopLyrics') }}
+                </button>
+                <p v-if="!currentSong" class="px-3 py-2 text-xs text-text-l">
+                  {{ t('footer.noTrack') }}
+                </p>
+                <template v-if="currentSong">
+                  <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
+                    <SvgIcon name="common-plus" class-name="size-4 shrink-0" />
+                    {{ t('songList.addToPlaylist') }}
+                  </button>
+                  <button class="menu-item flex items-center gap-2" @click="openTags">
+                    <SvgIcon name="common-tag-edit" class-name="size-4" />{{
+                      t('songList.editTags')
+                    }}
+                  </button>
+                  <button
+                    v-for="artist in currentArtists"
+                    :key="artist"
+                    class="menu-item flex items-center gap-2"
+                    @click="openArtist(artist)"
+                  >
+                    <SvgIcon name="common-user" class-name="size-4 shrink-0" />
+                    <span class="min-w-0 truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
+                  </button>
+                  <button
+                    class="menu-item flex items-center gap-2"
+                    :disabled="!currentSong.album"
+                    @click="openAlbum"
+                  >
+                    <SvgIcon name="common-album" class-name="size-4" />
+                    {{ t('footer.goAlbum') }}
+                  </button>
+                  <button class="menu-item flex items-center gap-2" @click="openDetails">
+                    <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
+                  </button>
+                  <button class="menu-item flex items-center gap-2" @click="openFolder">
+                    <SvgIcon name="common-folder" class-name="size-4" />{{
+                      t('songList.openFolder')
+                    }}
+                  </button>
+                  <button class="menu-item flex items-center gap-2" @click="locateSong">
+                    <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
+                  </button>
+                  <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
+                    <SvgIcon name="common-edit-lrc" class-name="size-4" />
+                    {{ t('footer.openInLyricEditor') }}
+                  </button>
+                </template>
+              </div>
             </div>
-            <button class="ep-footer-menu-mode menu-item" @click="cyclePlayMode">
-              <SvgIcon :name="playModeIcon" class-name="size-4 shrink-0" />
-              {{ playModeLabel }}
-            </button>
-            <button class="ep-footer-menu-queue menu-item" @click="openQueueFromMenu">
-              <SvgIcon name="control-playlist" class-name="size-4 shrink-0" />
-              {{ t('queue.title') }}
-            </button>
-            <button
-              class="ep-footer-menu-secondary menu-item"
-              :class="currentPreference === 1 && 'text-primary'"
-              :disabled="!player.currentQueueSong"
-              @click="markCurrent(1)"
-            >
-              <SvgIcon
-                :name="currentPreference === 1 ? 'play-like-fill' : 'play-like'"
-                class-name="size-4 shrink-0"
-              />
-              {{ t('recommendation.like') }}
-            </button>
-            <button
-              class="ep-footer-menu-secondary menu-item"
-              :class="currentPreference === -1 && 'text-danger'"
-              :disabled="!player.currentQueueSong"
-              @click="markCurrent(-1)"
-            >
-              <SvgIcon name="play-dislike" class-name="size-4 shrink-0" />
-              {{ t('recommendation.dislike') }}
-            </button>
-            <button class="ep-footer-menu-secondary menu-item" @click="openDesktopLyricsFromMenu">
-              <SvgIcon name="common-lyrics2" class-name="size-4 shrink-0" />
-              {{ t('footer.desktopLyrics') }}
-            </button>
-            <p v-if="!currentSong" class="px-3 py-2 text-xs text-text-l">
-              {{ t('footer.noTrack') }}
-            </p>
-            <template v-if="currentSong">
-              <button class="menu-item flex items-center gap-2" @click="openPlaylistPicker">
-                <SvgIcon name="common-plus" class-name="size-4 shrink-0" />
-                {{ t('songList.addToPlaylist') }}
-              </button>
-              <button class="menu-item flex items-center gap-2" @click="openTags">
-                <SvgIcon name="common-tag-edit" class-name="size-4" />{{ t('songList.editTags') }}
-              </button>
-              <button
-                v-for="artist in currentArtists"
-                :key="artist"
-                class="menu-item flex items-center gap-2"
-                @click="openArtist(artist)"
-              >
-                <SvgIcon name="common-user" class-name="size-4 shrink-0" />
-                <span class="min-w-0 truncate">{{ t('footer.goArtist') }} · {{ artist }}</span>
-              </button>
-              <button
-                class="menu-item flex items-center gap-2"
-                :disabled="!currentSong.album"
-                @click="openAlbum"
-              >
-                <SvgIcon name="common-album" class-name="size-4" />
-                {{ t('footer.goAlbum') }}
-              </button>
-              <button class="menu-item flex items-center gap-2" @click="openDetails">
-                <SvgIcon name="common-detail" class-name="size-4" />{{ t('songList.details') }}
-              </button>
-              <button class="menu-item flex items-center gap-2" @click="openFolder">
-                <SvgIcon name="common-folder" class-name="size-4" />{{ t('songList.openFolder') }}
-              </button>
-              <button class="menu-item flex items-center gap-2" @click="locateSong">
-                <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
-              </button>
-              <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
-                <SvgIcon name="common-edit-lrc" class-name="size-4" />
-                {{ t('footer.openInLyricEditor') }}
-              </button>
-            </template>
-          </div>
+          </FloatingPanel>
         </div>
       </div>
 
@@ -807,11 +851,28 @@ onBeforeUnmount(() => {
   }
 }
 .app-footer {
+  box-sizing: border-box;
+  height: 84px;
+  min-height: 84px;
+  max-height: 84px;
   will-change: max-width, grid-template-columns;
   transition:
     max-width var(--motion-duration-emphasized) var(--motion-ease-spring),
     grid-template-columns var(--motion-duration-slow) var(--motion-ease-emphasized),
     gap var(--motion-duration-slow) var(--motion-ease-emphasized);
+}
+.ep-footer-more-menu {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70dvh, 480px, var(--ep-floating-available-height, calc(100dvh - 16px)));
+}
+.ep-footer-more-list {
+  min-height: 0;
+  flex: 0 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 .app-footer--collapsed {
   position: relative;

@@ -45,6 +45,7 @@ for (const name of new Set([...Object.values(resources).map((item) => item.path)
   copyFileSync(path.join(original, name), target)
 }
 for (const [directory, destination] of [
+  [path.join(root, 'docs/themes/liquid-glass'), path.join(output, 'liquid-glass')],
   [path.join(root, 'docs/themes/gi-columbina'), path.join(output, 'columbina')],
   [staging, path.join(output, 'nyan-cat')]
 ]) {

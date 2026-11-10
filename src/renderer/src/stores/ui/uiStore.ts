@@ -83,6 +83,7 @@ export const UI_PREFERENCE_KEYS = [
   'useCustomBg',
   'reduceMotion',
   'pauseAnimationsOnBlur',
+  'interfaceEffect',
   'useLocalFileName',
   'useFullProgress',
   'extremePlayback',
@@ -247,7 +248,8 @@ export const useUIStore = defineStore(
                 ...parseCustomTheme(JSON.stringify({ ...theme, plugin: undefined })),
                 plugin: theme.plugin
               }
-            : null
+            : null,
+          interfaceEffect.value !== 'liquid-glass-studio'
         )
       } catch {
         if (customThemePreviewActive.value) {
@@ -325,6 +327,7 @@ export const useUIStore = defineStore(
     const useCustomBg = ref(false)
     const reduceMotion = ref(false)
     const pauseAnimationsOnBlur = ref(true)
+    const interfaceEffect = ref<'none' | 'liquid-glass-studio'>('none')
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const extremePlayback = ref(false)
@@ -800,6 +803,8 @@ export const useUIStore = defineStore(
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
       if (typeof saved.reduceMotion === 'boolean') reduceMotion.value = saved.reduceMotion
+      if (saved.interfaceEffect === 'liquid-glass-studio')
+        interfaceEffect.value = saved.interfaceEffect
       if (typeof saved.pauseAnimationsOnBlur === 'boolean')
         pauseAnimationsOnBlur.value = saved.pauseAnimationsOnBlur
       if (isSystemBackground(saved.systemBackground)) {
@@ -959,6 +964,7 @@ export const useUIStore = defineStore(
     }
     watch([resolvedAppearance, effectiveCustomTheme], scheduleAppearance, { deep: true })
     watch([customFontFamily, reduceMotion, lyricsFontSize, lyricsFontPadding], scheduleAppearance)
+    watch(interfaceEffect, () => refreshCustomTheme())
     watch(
       playerBgType,
       (value) => {
@@ -1031,6 +1037,7 @@ export const useUIStore = defineStore(
       useCustomBg,
       reduceMotion,
       pauseAnimationsOnBlur,
+      interfaceEffect,
       extremePlayback,
       autoPlayOnRestore,
       songPlayTrigger,

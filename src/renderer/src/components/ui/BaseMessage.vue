@@ -62,7 +62,7 @@ function handleClose(msg: MessageInstance): void {
           v-for="msg in messages"
           :key="msg.id"
           :role="msg.type === 'error' ? 'alert' : 'status'"
-          class="pointer-events-auto relative flex items-center gap-3 pl-5 pr-4 py-3 rounded-lg shadow-lg bg-bg border border-border min-w-75 max-w-125 overflow-hidden"
+          class="ep-message pointer-events-auto relative flex items-center gap-3 pl-5 pr-4 py-3 rounded-lg shadow-lg bg-bg border border-border min-w-75 max-w-125 overflow-hidden"
           :class="getConfig(msg.type ?? 'info').cls"
         >
           <!-- 左边颜色条 -->

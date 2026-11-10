@@ -107,7 +107,7 @@ function toggle(): void {
     @click="toggle"
   >
     <!-- 轨道 + 滑块 -->
-    <span :class="trackClass" :style="trackStyle">
+    <span class="ep-switch-track" :class="trackClass" :style="trackStyle">
       <span
         class="ep-switch-thumb absolute rounded-full shadow-sm transition-transform duration-[var(--motion-duration-standard)] ease-[var(--motion-ease-standard)]"
         :style="knobStyle"

@@ -56,6 +56,7 @@ const uiModule = load(
     pinia: Pinia,
     vue: { ...Vue, watch() {} },
     '@/utils/preferenceDefaults': defaults,
+    '@/utils/lyricsDisplay': load('src/renderer/src/utils/lyricsDisplay.ts'),
     '@/utils/footerLayout': footer,
     '../../../../shared/shortcuts': shortcuts,
     '../../../../shared/metadataValues': load('src/shared/metadataValues.ts'),
@@ -65,19 +66,22 @@ const uiModule = load(
     '@/services/pluginThemes': { connectPluginThemes: () => () => {} },
     '@/services/appearance': appearance,
     '@/services/appearanceController': controller,
-    '@/stores/persistence': { playerDataStorage: uiPreferenceStorage },
+    '@/components/background/backgroundScene': load(
+      'src/renderer/src/components/background/backgroundScene.ts'
+    ),
+    '@/stores/persistence': {
+      playerDataStorage: uiPreferenceStorage,
+      hasPersistedStore: () => false
+    },
     '@/components/background/systemBackgroundRegistry': {
       ...backgroundRegistry,
       getSystemBackgroundTheme: () => ({ accentColor: '#00ff00' })
     },
-    '@/consts': {
-      PlayerBgType: { ALBUM: 'album' },
-      PlayerCoverStyle: { STANDARD: 'standard' },
-      PlayerDisplayMode: { Normal: 0 },
-      TagStyle: { Full: 3 },
-      DEFAULT_PLAYER_BG_TYPE: 'album',
-      DEFAULT_PLAYER_COVER_STYLE: 'standard'
-    }
+    '@/constants': load(
+      'src/renderer/src/constants/index.ts',
+      {},
+      { __APP_VERSION__: 'test', __APP_BUILD__: 'test' }
+    )
   },
   {
     window: {
@@ -88,6 +92,22 @@ const uiModule = load(
 )
 Pinia.setActivePinia(Pinia.createPinia())
 const ui = uiModule.useUIStore()
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('interfaceEffect'))
+assert.equal(ui.interfaceEffect, 'none', 'built-in material is independently opt-in')
+for (const effect of ['none', 'liquid-glass-studio', 'unknown', true, null]) {
+  const restored = uiPreferenceMigration.deserializeUIPreferences(
+    JSON.stringify({
+      interfaceEffect: effect,
+      systemBackground: 'plugin:builtin.theme.aurora',
+      useCustomBg: true,
+      customBg: { kind: 'video', url: 'easy-player-media://custom/video' }
+    })
+  )
+  assert.equal(restored.interfaceEffect, effect === 'liquid-glass-studio' ? effect : 'none')
+  assert.equal(restored.systemBackground, 'plugin:builtin.theme.aurora')
+  assert.equal(restored.useCustomBg, true)
+  assert.equal(restored.customBg.kind, 'video')
+}
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('genreSeparator'))
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('normalizeMetadataSeparator'))
 assert.ok(!uiModule.UI_PREFERENCE_KEYS.includes('normalizeGenreSeparator'))
@@ -98,7 +118,11 @@ assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songListColumns'))
 assert.deepEqual(JSON.parse(JSON.stringify(ui.songListColumns)), {
   genre: false,
   year: false,
-  playTimes: false
+  playTimes: false,
+  disableNetworkLyrics: false,
+  instrumental: false,
+  preference: false,
+  remoteSource: false
 })
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
@@ -305,21 +329,54 @@ const columnsUi = uiModule.useUIStore(columnsPinia)
 assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
   genre: true,
   year: true,
-  playTimes: true
+  playTimes: true,
+  disableNetworkLyrics: false,
+  instrumental: false,
+  preference: false,
+  remoteSource: false
 })
 columnsUi.$persist()
 assert.deepEqual(JSON.parse(savedUiPreferences).songListColumns, {
   genre: true,
   year: true,
-  playTimes: true
+  playTimes: true,
+  disableNetworkLyrics: false,
+  instrumental: false,
+  preference: false,
+  remoteSource: false
 })
 columnsUi.resetPreferences()
 assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
   genre: false,
   year: false,
-  playTimes: false
+  playTimes: false,
+  disableNetworkLyrics: false,
+  instrumental: false,
+  preference: false,
+  remoteSource: false
 })
 Pinia.disposePinia(columnsPinia)
 console.log(
   'Initial preference defaults, repeat resets, resource preservation, song columns and configuration-only persistence passed'
+)
+savedUiPreferences = JSON.stringify({
+  interfaceEffect: 'liquid-glass-studio',
+  systemBackground: 'solid',
+  useCustomBg: true,
+  customBg: { kind: 'video', url: 'easy-player-media://background?path=example.mp4' }
+})
+const effectPinia = Pinia.createPinia().use(persisted)
+Vue.createSSRApp({ render: () => null }).use(effectPinia)
+const effectUi = uiModule.useUIStore(effectPinia)
+assert.equal(effectUi.interfaceEffect, 'liquid-glass-studio')
+effectUi.interfaceEffect = 'none'
+effectUi.$persist()
+const savedEffect = JSON.parse(savedUiPreferences)
+assert.equal(savedEffect.interfaceEffect, 'none')
+assert.equal(savedEffect.systemBackground, 'solid')
+assert.equal(savedEffect.useCustomBg, true)
+assert.equal(savedEffect.customBg.url, 'easy-player-media://background?path=example.mp4')
+Pinia.disposePinia(effectPinia)
+console.log(
+  'Independent material effect: validation, hydration, persistence and background retention passed'
 )

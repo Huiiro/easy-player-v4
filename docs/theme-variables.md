@@ -112,6 +112,8 @@
 | `--ep-dialog-bg`            | `var(--color-bg)`                                                      | BaseDialog 与 BaseDrawer 面板背景                 |
 | `--ep-dialog-radius`        | `1rem`                                                                 | BaseDialog 圆角；不自动控制抽屉圆角               |
 | `--ep-overlay-bg`           | `rgb(0 0 0 / 50%)`                                                     | 对话框/抽屉遮罩 background                        |
+| `--ep-menu-glass-bg`        | `rgb(9 12 17 / 90%)`                                                   | BaseMenu glass 外观的背景，可用透明色覆盖局部材质 |
+| `--ep-menu-glass-text`      | `rgb(255 255 255 / 72%)`                                               | BaseMenu glass 外观的文字与图标颜色               |
 | `--ep-surface-shadow`       | `0 20px 25px -5px rgb(0 0 0 / 10%), 0 8px 10px -6px rgb(0 0 0 / 10%)`  | 对话框/抽屉阴影，CSS box-shadow                   |
 | `--ep-switch-active`        | `var(--color-primary)`                                                 | 开启时背景颜色；显式 `activeColor` 组件属性优先   |
 | `--ep-switch-inactive`      | `var(--color-border)`                                                  | 关闭时背景颜色；显式 `inactiveColor` 组件属性优先 |
@@ -250,3 +252,100 @@ JSON 的双引号转义发生在解析阶段，下面 `areas` 的实际 CSS 值�
 | --ep-background-scrim         | 与 --color-bg 混合 62% 的透明遮罩 | 深色系统/插件背景的可读性遮罩；浅色模式使用宿主统一策略           |
 
 值沿用安全 CSS 规则，不允许手写资源 URL。雨夜插件通过这两个变量保留原静态回退和遮罩效果。
+
+## Liquid Glass 组件参数
+
+这些 `tokens` 在内置 Liquid Glass 开关启用时生效，可由主题 `.epp` 的 `theme.json` 或自定义主题 JSON 声明，支持局部 CSS 变量覆盖。SDK 导出 `THEME_GLASS_TOKENS`、`PluginThemeGlassToken` 和 `PluginThemeTokens`，JSON Schema 提供同一组补全。颜色取自当前主题；缺省模糊跟随当前光学预设。
+
+| 属性 | 用途 | 缺省值 |
+| --- | --- | --- |
+| `--ep-glass-control-radius` | 输入框、选择器和颜色按钮圆角 | `10px` |
+| `--ep-glass-button-radius` | 按钮圆角 | `999px` |
+| `--ep-glass-dialog-radius` | 弹窗和抽屉圆角 | `22px` |
+| `--ep-glass-floating-radius` | 菜单和浮层圆角 | `16px` |
+| `--ep-glass-message-radius` | 消息通知圆角 | `16px` |
+| `--ep-glass-control-bg` | 次要按钮和颜色按钮底色 | `color-mix(in srgb, var(--color-bg-l2) 28%, transparent)` |
+| `--ep-glass-control-border` | 控件边框颜色 | `color-mix(in srgb, var(--color-text) 14%, transparent)` |
+| `--ep-glass-control-highlight` | 控件和滑块表面高光 | `linear-gradient(135deg, rgb(255 255 255 / 14%), rgb(255 255 255 / 2%))` |
+| `--ep-glass-control-shadow` | 控件内高光和阴影 | `inset 0 1px 0 rgb(255 255 255 / 14%), 0 2px 8px rgb(0 0 0 / 8%)` |
+| `--ep-glass-input-bg` | 输入框底色 | `color-mix(in srgb, var(--color-bg-d) 8%, transparent)` |
+| `--ep-glass-switch-inactive` | 开关关闭轨道颜色 | `color-mix(in srgb, var(--color-text) 18%, transparent)` |
+| `--ep-glass-switch-thumb` | 开关滑块颜色 | `color-mix(in srgb, var(--color-white, #fff) 88%, transparent)` |
+| `--ep-glass-track` | 滑块和进度条未播放轨道 | `color-mix(in srgb, var(--color-text) 22%, transparent)` |
+| `--ep-glass-track-fill` | 滑块和进度条已播放轨道 | `var(--color-primary)` |
+| `--ep-glass-thumb` | 滑块和原生进度条拇指颜色 | `color-mix(in srgb, var(--color-text) 88%, var(--color-primary))` |
+| `--ep-glass-skeleton` | 骨架屏底色 | `color-mix(in srgb, var(--color-text) 10%, transparent)` |
+| `--ep-glass-surface-border` | 独立玻璃面板边框颜色 | `color-mix(in srgb, var(--color-text) 10%, transparent)` |
+| `--ep-glass-surface-shadow` | 独立面板阴影 | `0 8px 32px rgb(0 0 0 / 10%), inset 0 .5px 1.5px rgb(255 255 255 / 6%)` |
+| `--ep-glass-chrome-tint` | Header 和侧栏底色比例 | `4%` |
+| `--ep-glass-footer-tint` | Footer 底色比例 | `6%` |
+| `--ep-glass-panel-tint` | 弹窗和抽屉底色比例 | `8%` |
+| `--ep-glass-floating-tint` | 菜单、颜色面板和消息底色比例 | `12%` |
+| `--ep-glass-floating-blur-radius` | 浮层高斯采样半径，0–200，显示像素；缺省跟随当前光学预设 | `60` |
+
+新增公共钩子：`.ep-message`（真实消息面板）、`.ep-color-trigger`（颜色选择器按钮）、`.ep-switch-track`（开关轨道）、`.ep-glass-panel`（主动选择玻璃效果的独立面板）。原有 `.ep-color-picker`、`.ep-switch-thumb`、`.ep-slider-control`、`.ep-progress-track`、`.ep-progress-thumb`、`.ep-range`、`.ep-skeleton-block` 继续可用。按钮、开关、滑块和骨架采用轻量材质，不为每个控件分配 WebGL 上下文；独立面板与颜色/消息浮层使用有预算限制的实时折射。原生进度条通过现有 `--ep-range-*` 与新的玻璃拇指、轨道变量调整，主题 rules 不开放伪元素选择器。
+
+内置引擎的 `data-ep-*` 标记只用于稳定绑定和生命周期清理，不是插件作者接口。消息图标/状态条、主按钮/危险按钮、focus、invalid 与 disabled 保留原本语义。
+
+Select 的 `.ep-select-options` 是固定玻璃外框，内部 `.ep-select-list` 承担原生滚动和选项排版；滚动条以 `.ep-select-scrollbar` / `.ep-select-scrollbar-thumb` 覆盖显示，不占内容宽度，颜色仍由 `--scrollbar-thumb` / `--scrollbar-thumb-hover` 控制。需要调整列表滚动样式时修改内部列表，不将外框改为滚动容器。Input 默认仅 8% 底色和轻高光，不额外叠加模糊，保留输入、错误和焦点语义。
+
+## BackTop 独立组件
+
+`BaseBackTop` 从 `components/ui` 导出并支持统一组件注册，公开样式钩子为 `.ep-backtop`。缺省监听 window，滚动超过 320px 后显示；支持 `target` 为 HTMLElement、Window 或返回目标/空值的 getter，`visibilityHeight` 调整阈值，`visible` 可选择受控显示。`behavior` 缺省 smooth；系统/应用减少动态效果或 `reducedMotion` 时改用 auto。
+
+`scrollToTop(behavior)` 可接入虚拟列表自己的回顶 API；歌曲列表继续调用 `scrollToItem(0)`，不改变其横向滚动和 Footer 避让。`position` 缺省 fixed，默认 Teleport 到 body，避免被滚动内容带走；局部容器使用 absolute 并将组件放在滚动视口外、相对定位宿主内。支持 disabled、ariaLabel、自定义图标插槽、click 事件，以及 size/right/bottom 的数值或 CSS 长度 props。
+
+```vue
+<div class="relative">
+  <div ref="scrollArea" class="overflow-y-auto" style="height: 240px">…</div>
+  <BaseBackTop :target="() => scrollArea" position="absolute" :bottom="12" :right="12" />
+</div>
+```
+
+| 主题变量 | 用途 | 缺省值 |
+| --- | --- | --- |
+| `--ep-backtop-size` | 回到顶部按钮宽高 | `36px` |
+| `--ep-backtop-radius` | 回到顶部按钮圆角 | `999px` |
+| `--ep-backtop-right` | 回到顶部按钮右侧间距 | `20px` |
+| `--ep-backtop-bottom` | 通用回到顶部按钮底部间距；歌曲列表缺省跟随 Footer 避让 | `20px` |
+
+四个几何变量在普通主题和玻璃主题下均可修改，显式组件 props 优先。SDK 导出 `THEME_BACKTOP_TOKENS` 与 `PluginThemeBackTopToken`，`PluginThemeTokens` 和 Schema 提供同样补全。歌曲列表缺省底距跟随 Footer；声明 `--ep-backtop-bottom` 可以显式覆盖。
+
+启用 Liquid Glass 后，按钮复用统一引擎的实时折射、色散、菲涅尔边缘光与阴影，保持清透、不额外叠加模糊。可用现有 `--ep-glass-chrome-tint`、`--ep-glass-control-highlight`、`--ep-glass-control-border`、`--ep-glass-surface-border` 和 `--ep-glass-surface-shadow` 调整材质。只在按钮显示时创建预算内表面，不增加持续动画循环；目标切换、KeepAlive 离开和卸载时释放监听及待执行帧。uiDEV 提供独立滚动容器演示。
+
+## Tooltip 独立组件
+
+`BaseTooltip` 从 `components/ui` 导出，公开 `.ep-tooltip` / `.ep-tooltip-trigger` / `.ep-tooltip--control` 样式钩子。默认是文字提示，设置 `interactive` 和 `variant="control"` 后承载可操作滑块。Footer 音量和播放页倍速、音量、歌词偏移、字号、行距已统一使用此组件。
+
+提示默认延迟 100ms 显示、140ms 关闭，支持 hover、焦点、触屏点击和 Esc；交互模式支持在触发按钮上按上下方向键打开并聚焦首个控件。浮层 Teleport 至 body，自动翻转、约束视口并跟随祖先滚动；鼠标移入浮层、拖动或在内部操作时保持打开，离开页面后清理监听和玻璃材质。`@wheel` 同时接收按钮与浮层的滚轮事件，可保留原调节行为。`disabled` 关闭提示；`placement`、`offset`、`openDelay`、`closeDelay` 可调整定位与时序。
+
+`@show` / `@hide` 可与宿主容器联动；Footer 已在音量提示打开期间暂停自动隐藏，关闭后恢复计时。
+
+```vue
+<BaseTooltip interactive variant="control" aria-label="音量">
+  <template #trigger="{ triggerProps }">
+    <button v-bind="triggerProps" aria-label="音量">音量</button>
+  </template>
+  <b>{{ volume }}%</b>
+  <input v-model.number="volume" type="range" min="0" max="100" aria-label="音量" />
+</BaseTooltip>
+```
+
+请将 `triggerProps` 绑定到实际可聚焦按钮，以提供 `aria-controls` / `aria-expanded`（交互面板）或 `aria-describedby`（文字提示）。交互面板使用带标签的 dialog，文字提示使用 tooltip，避免把可操作滑块放进纯文本提示语义中。
+
+SDK 导出 `THEME_TOOLTIP_TOKENS` / `PluginThemeTooltipToken`，Schema 和 uiDEV 属性表同步补全。以下变量也适用于普通主题；设置在主题根节点，确保 Teleport 后仍可读取。`controlWidth` / `controlHeight` 属性可单独调整某个调节器。
+
+| 变量 | 缺省值 | 用途 |
+| --- | --- | --- |
+| `--ep-tooltip-bg` | `var(--color-bg-l)` | 底色；玻璃开启时缺省使用浮层染色 |
+| `--ep-tooltip-text` | `var(--color-text)` | 文字颜色 |
+| `--ep-tooltip-border` | `var(--color-border)` | 边框；玻璃开启时缺省使用玻璃控件边框 |
+| `--ep-tooltip-radius` | `10px` | 圆角 |
+| `--ep-tooltip-shadow` | `0 6px 20px rgb(0 0 0 / 16%)` | 阴影；玻璃开启时缺省使用玻璃面板阴影 |
+| `--ep-tooltip-font-size` | `12px` | 字号 |
+| `--ep-tooltip-padding` | `6px 10px` | 文字提示内边距 |
+| `--ep-tooltip-max-width` | `280px` | 最大宽度，受视口约束 |
+| `--ep-tooltip-control-width` | `40px` | 竖向调节面板宽度 |
+| `--ep-tooltip-control-height` | `160px` | 竖向调节面板高度 |
+
+玻璃模式沿用 `--ep-glass-floating-tint` / `--ep-glass-floating-blur-radius` 和统一的边缘折射、色散、高光；显式 Tooltip 颜色/阴影变量仍可覆盖。提示隐藏时不挂载材质，不新增常驻动画循环。uiDEV 提供文字、音量和倍速提示演示。

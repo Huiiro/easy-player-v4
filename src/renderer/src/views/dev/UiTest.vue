@@ -12,6 +12,7 @@ import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSkeleton from '@/components/ui/BaseSkeleton.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
+import LiquidGlassPreview from './LiquidGlassPreview.vue'
 const inputValue = ref('可清除文本')
 const confirming = ref(false)
 const menuValue = ref('one')
@@ -67,7 +68,8 @@ const customPresets = [
 
 <template>
   <div class="p-6 space-y-10 text-text max-w-3xl mx-auto">
-    <h1 class="text-2xl font-bold">UI 组件测试</h1>
+    <h1 class="text-2xl font-bold">UI 组件效果预览</h1>
+    <LiquidGlassPreview />
 
     <section class="space-y-4">
       <h2 class="text-lg font-semibold">规范化控件与状态</h2>

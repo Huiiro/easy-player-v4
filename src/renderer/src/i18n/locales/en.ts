@@ -28,6 +28,7 @@ export default {
     retry: 'Retry'
   },
   ui: {
+    backToTop: 'Back to top',
     selectPlaceholder: 'Select an option',
     empty: 'No options',
     color: 'Choose color',
@@ -323,6 +324,7 @@ export default {
     customRemoteSources: 'Custom remote sources',
     remoteSong: 'Remote song',
     refresh: 'Refresh',
+    backToTop: 'Back to top',
     refreshed: 'Song list refreshed',
     reloadFromDisk: 'Reload from disk',
     reloadedFromDisk: 'Updated {count} song(s) from disk',
@@ -1114,6 +1116,9 @@ export default {
     confirmResetTheme:
       'Restore color mode, accent and global background defaults, and turn off native material and the active theme? Imported themes and player appearance will be kept.',
     appearanceMode: 'Appearance Mode',
+    interfaceEffect: 'Liquid Glass style effect',
+    interfaceEffectDescription:
+      'Built-in glass layered over your current theme, image or video background. Paused with native window materials or extreme playback mode.',
     appearanceDescription: 'Custom backgrounds default to dark scheme to ensure clear readability.',
     appearanceModeLight: 'Light',
     appearanceModeDark: 'Dark',

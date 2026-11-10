@@ -200,6 +200,7 @@ onBeforeUnmount(() => {
       <video
         v-if="scene.mediaUrl"
         ref="video"
+        crossorigin="anonymous"
         :src="scene.mediaUrl"
         muted
         loop

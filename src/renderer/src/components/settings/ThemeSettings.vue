@@ -171,6 +171,16 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.themeBackground')">
+      <SettingRow
+        :label="t('settings.interfaceEffect')"
+        :description="t('settings.interfaceEffectDescription')"
+      >
+        <BaseSwitch
+          :model-value="ui.interfaceEffect === 'liquid-glass-studio'"
+          :aria-label="t('settings.interfaceEffect')"
+          @update:model-value="ui.interfaceEffect = $event ? 'liquid-glass-studio' : 'none'"
+        />
+      </SettingRow>
       <div class="setting-row theme-background-row">
         <div>
           <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

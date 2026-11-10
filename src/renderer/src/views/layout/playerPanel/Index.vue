@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import BaseRange from '@/components/ui/BaseRange.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
+import BaseTooltip from '@/components/ui/BaseTooltip.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { getVolumeLevel } from '@/utils/volume'
@@ -675,26 +676,35 @@ function changeLyricsOffset(event: WheelEvent): void {
               />
             </button>
             <!-- speed -->
-            <label
-              class="panel-tool vertical-tool"
-              :class="player.playbackSpeedConfig.speed !== 1 && 'active'"
-              :title="t('playerPanel.speed')"
+            <BaseTooltip
+              interactive
+              variant="control"
+              :aria-label="t('playerPanel.speed')"
               @wheel="changeSpeed"
             >
-              <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
-              <span class="vertical-popup">
-                <b>{{ player.playbackSpeedConfig.speed.toFixed(1) }}×</b>
-                <input
-                  type="range"
-                  class="accent-primary"
-                  min="0.5"
-                  max="2"
-                  step="0.1"
-                  :value="player.playbackSpeedConfig.speed"
-                  @input="setSpeed($event)"
-                />
-              </span>
-            </label>
+              <template #trigger="{ triggerProps }">
+                <button
+                  type="button"
+                  v-bind="triggerProps"
+                  class="panel-tool"
+                  :class="player.playbackSpeedConfig.speed !== 1 && 'active'"
+                  :aria-label="t('playerPanel.speed')"
+                >
+                  <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
+                </button>
+              </template>
+              <b>{{ player.playbackSpeedConfig.speed.toFixed(1) }}×</b>
+              <input
+                :aria-label="t('playerPanel.speed')"
+                type="range"
+                class="accent-primary"
+                min="0.5"
+                max="2"
+                step="0.1"
+                :value="player.playbackSpeedConfig.speed"
+                @input="setSpeed($event)"
+              />
+            </BaseTooltip>
             <!-- rhythm visuals -->
             <button
               class="panel-tool"
@@ -714,104 +724,131 @@ function changeLyricsOffset(event: WheelEvent): void {
               <svg-icon name="common-rhythm" class-name="w-[16px] h-[16px]" />
             </button>
             <!-- lyrics timing -->
-            <label
-              class="panel-tool vertical-tool"
-              :class="player.lyricsOffsetMs !== 0 && 'active'"
-              :title="t('playerPanel.lyricTiming')"
+            <BaseTooltip
+              interactive
+              variant="control"
+              :aria-label="t('playerPanel.lyricTiming')"
+              :control-width="96"
+              :control-height="192"
               @wheel="changeLyricsOffset"
             >
-              <svg-icon name="common-time" class-name="w-[16px] h-[16px]" />
-              <span class="vertical-popup lyric-timing-popup">
-                <b>{{ lyricsOffsetLabel }}</b>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  min="-5000"
-                  max="5000"
-                  step="100"
-                  :value="player.lyricsOffsetMs"
-                  @input="player.setLyricsOffset(Number(($event.target as HTMLInputElement).value))"
-                />
-                <span class="lyric-timing-actions">
-                  <button
-                    type="button"
-                    class="lyric-timing-reset"
-                    :disabled="savingOffset || !player.lyricsSettingsReady"
-                    :title="t('playerPanel.lyricOffsetSave')"
-                    :aria-label="t('playerPanel.lyricOffsetSave')"
-                    @click.prevent="saveOffset()"
-                  >
-                    <SvgIcon name="common-check" class-name="size-3" />
-                  </button>
-                  <button
-                    v-if="player.songLyricSettings.offsetMs !== null"
-                    type="button"
-                    class="lyric-timing-reset"
-                    :disabled="savingOffset"
-                    :title="t('playerPanel.lyricOffsetRemove')"
-                    @click.prevent="saveOffset(true)"
-                  >
-                    <SvgIcon name="common-close" class-name="size-3" />
-                  </button>
-                  <button
-                    type="button"
-                    class="lyric-timing-reset"
-                    :title="t('playerPanel.lyricTimingReset')"
-                    @click.prevent="player.setLyricsOffset(0)"
-                  >
-                    <SvgIcon name="common-refresh" class-name="size-3" />
-                  </button>
-                </span>
+              <template #trigger="{ triggerProps }">
+                <button
+                  type="button"
+                  v-bind="triggerProps"
+                  class="panel-tool"
+                  :class="player.lyricsOffsetMs !== 0 && 'active'"
+                  :aria-label="t('playerPanel.lyricTiming')"
+                >
+                  <svg-icon name="common-time" class-name="w-[16px] h-[16px]" />
+                </button>
+              </template>
+              <b>{{ lyricsOffsetLabel }}</b>
+              <input
+                :aria-label="t('playerPanel.lyricTiming')"
+                class="accent-primary"
+                type="range"
+                min="-5000"
+                max="5000"
+                step="100"
+                :value="player.lyricsOffsetMs"
+                @input="player.setLyricsOffset(Number(($event.target as HTMLInputElement).value))"
+              />
+              <span class="lyric-timing-actions">
+                <button
+                  type="button"
+                  class="lyric-timing-reset"
+                  :disabled="savingOffset || !player.lyricsSettingsReady"
+                  :title="t('playerPanel.lyricOffsetSave')"
+                  :aria-label="t('playerPanel.lyricOffsetSave')"
+                  @click.prevent="saveOffset()"
+                >
+                  <SvgIcon name="common-check" class-name="size-3" />
+                </button>
+                <button
+                  v-if="player.songLyricSettings.offsetMs !== null"
+                  type="button"
+                  class="lyric-timing-reset"
+                  :disabled="savingOffset"
+                  :title="t('playerPanel.lyricOffsetRemove')"
+                  @click.prevent="saveOffset(true)"
+                >
+                  <SvgIcon name="common-close" class-name="size-3" />
+                </button>
+                <button
+                  type="button"
+                  class="lyric-timing-reset"
+                  :title="t('playerPanel.lyricTimingReset')"
+                  @click.prevent="player.setLyricsOffset(0)"
+                >
+                  <SvgIcon name="common-refresh" class-name="size-3" />
+                </button>
               </span>
-            </label>
+            </BaseTooltip>
             <!-- font size -->
-            <label
-              class="panel-tool vertical-tool"
-              :title="t('playerPanel.lyricFontSize')"
+            <BaseTooltip
+              interactive
+              variant="control"
+              :aria-label="t('playerPanel.lyricFontSize')"
               @wheel="changeLyricSize"
             >
-              <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
-              </span>
-              <span class="vertical-popup">
-                <b>{{ lyricsFontScale.toFixed(1) }}×</b>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  min="0.6"
-                  max="2"
-                  step="0.1"
-                  :value="lyricsFontScale"
-                  @input="
-                    ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value) * 2.4)
-                  "
-                />
-              </span>
-            </label>
+              <template #trigger="{ triggerProps }">
+                <button
+                  type="button"
+                  v-bind="triggerProps"
+                  class="panel-tool"
+                  :aria-label="t('playerPanel.lyricFontSize')"
+                >
+                  <span class="w-[16px] h-[16px] flex items-center justify-center">
+                    <svg-icon name="menu-font" class-name="w-[10px] h-[10px]" />
+                  </span>
+                </button>
+              </template>
+              <b>{{ lyricsFontScale.toFixed(1) }}×</b>
+              <input
+                :aria-label="t('playerPanel.lyricFontSize')"
+                class="accent-primary"
+                type="range"
+                min="0.6"
+                max="2"
+                step="0.1"
+                :value="lyricsFontScale"
+                @input="
+                  ui.setLyricsFontSize(Number(($event.target as HTMLInputElement).value) * 2.4)
+                "
+              />
+            </BaseTooltip>
             <!-- font padding -->
-            <label
-              class="panel-tool vertical-tool"
-              :title="t('playerPanel.lyricSpacing')"
+            <BaseTooltip
+              interactive
+              variant="control"
+              :aria-label="t('playerPanel.lyricSpacing')"
               @wheel="changeLyricPadding"
             >
-              <span class="w-[16px] h-[16px] flex items-center justify-center">
-                <svg-icon name="arrow-arrow-up-down" class-name="w-[12px] h-[12px]" />
-              </span>
-              <span class="vertical-popup">
-                <b>{{ lyricsFontSpacingScale.toFixed(1) }}×</b>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  min="3"
-                  max="78"
-                  step="3"
-                  :value="ui.lyricsFontPadding"
-                  @input="
-                    ui.setLyricsFontPadding(Number(($event.target as HTMLInputElement).value))
-                  "
-                />
-              </span>
-            </label>
+              <template #trigger="{ triggerProps }">
+                <button
+                  type="button"
+                  v-bind="triggerProps"
+                  class="panel-tool"
+                  :aria-label="t('playerPanel.lyricSpacing')"
+                >
+                  <span class="w-[16px] h-[16px] flex items-center justify-center">
+                    <svg-icon name="arrow-arrow-up-down" class-name="w-[12px] h-[12px]" />
+                  </span>
+                </button>
+              </template>
+              <b>{{ lyricsFontSpacingScale.toFixed(1) }}×</b>
+              <input
+                :aria-label="t('playerPanel.lyricSpacing')"
+                class="accent-primary"
+                type="range"
+                min="3"
+                max="78"
+                step="3"
+                :value="ui.lyricsFontPadding"
+                @input="ui.setLyricsFontPadding(Number(($event.target as HTMLInputElement).value))"
+              />
+            </BaseTooltip>
             <!-- lyrics alignment -->
             <BaseMenu
               appearance="glass"
@@ -951,22 +988,31 @@ function changeLyricsOffset(event: WheelEvent): void {
           <!-- play control -->
           <div class="flex items-center gap-6">
             <!-- volume -->
-            <label
-              class="panel-secondary-text vertical-tool grid size-6 place-items-center rounded-full transition hover:scale-105"
-              :title="t('footer.volume')"
+            <BaseTooltip
+              interactive
+              variant="control"
+              :aria-label="t('footer.volume')"
               @wheel="changeVolume"
             >
-              <SvgIcon :name="volumeIcon" class-name="size-6" />
-              <span class="vertical-popup">
-                <small>{{ Math.round(player.volume * 100) }}%</small>
-                <input
-                  class="accent-primary"
-                  type="range"
-                  :value="player.volume * 100"
-                  @input="player.setVolume(Number(($event.target as HTMLInputElement).value) / 100)"
-                />
-              </span>
-            </label>
+              <template #trigger="{ triggerProps }">
+                <button
+                  type="button"
+                  v-bind="triggerProps"
+                  class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105"
+                  :aria-label="t('footer.volume')"
+                >
+                  <SvgIcon :name="volumeIcon" class-name="size-6" />
+                </button>
+              </template>
+              <small>{{ Math.round(player.volume * 100) }}%</small>
+              <input
+                :aria-label="t('footer.volume')"
+                class="accent-primary"
+                type="range"
+                :value="player.volume * 100"
+                @input="player.setVolume(Number(($event.target as HTMLInputElement).value) / 100)"
+              />
+            </BaseTooltip>
             <!-- play mode -->
             <button
               class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
@@ -1157,50 +1203,8 @@ function changeLyricsOffset(event: WheelEvent): void {
 .lyric-editor:focus {
   border-color: var(--color-primary);
 }
-.vertical-tool {
-  position: relative;
-  cursor: pointer;
-}
-.vertical-popup {
-  position: absolute;
-  bottom: 2rem;
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.35rem;
-  width: 2.5rem;
-  height: 10rem;
-  padding: 0.5rem 0.2rem;
-  border-radius: 0.5rem;
-  background: rgb(9 12 17 / 0.9);
-  backdrop-filter: blur(10px);
-  transform: translateX(-50%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--motion-duration-fast) var(--motion-ease-standard);
-}
-.vertical-popup input {
-  position: absolute;
-  top: 5.5rem;
-  left: 50%;
-  width: 7rem;
-  height: 0.35rem;
-  margin: 0;
-  transform: translateX(-50%) rotate(-90deg);
-}
-.vertical-tool:hover .vertical-popup,
-.vertical-tool:focus-within .vertical-popup {
-  opacity: 1;
-  pointer-events: auto;
-}
-.lyric-timing-popup {
-  width: 6rem;
-  height: 12rem;
-}
 .lyric-timing-actions {
-  position: absolute;
-  bottom: 0.5rem;
+  flex-shrink: 0;
   display: flex;
   gap: 0.3rem;
 }
@@ -1208,22 +1212,20 @@ function changeLyricsOffset(event: WheelEvent): void {
   position: static;
 }
 .lyric-timing-reset {
-  position: absolute;
-  bottom: 0.5rem;
   display: grid;
   place-items: center;
   width: 1.45rem;
   height: 1.45rem;
   border-radius: 999px;
-  color: rgb(255 255 255 / 0.72);
-  background: rgb(255 255 255 / 0.09);
+  color: var(--ep-tooltip-text, var(--color-text-l));
+  background: color-mix(in srgb, var(--color-text) 9%, transparent);
   transition:
     color var(--motion-duration-fast) var(--motion-ease-standard),
     background-color var(--motion-duration-fast) var(--motion-ease-standard),
     transform var(--motion-duration-fast) var(--motion-ease-standard);
 }
 .lyric-timing-reset:hover {
-  color: white;
+  color: var(--color-text);
   background: color-mix(in srgb, var(--color-primary) 38%, transparent);
   transform: rotate(-35deg);
 }

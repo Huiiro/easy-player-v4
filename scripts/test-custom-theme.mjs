@@ -30,6 +30,7 @@ class TestFontFace {
   }
 }
 const exports = {}
+shared.applyLiquidGlass = () => {}
 vm.runInNewContext(
   ts.transpileModule(readFileSync('src/renderer/src/services/customTheme.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }

@@ -318,6 +318,13 @@ for (const entry of renderers) {
     .themeResource(entry.id, dto.revision, '__frame.html')
     .toString()
   assert(shell.includes("connect-src 'none'"))
+  assert(shell.includes('/__glass-snapshot.js'))
+  assert(
+    officialScenes.packages
+      .themeResource(entry.id, dto.revision, '__glass-snapshot.js')
+      .toString()
+      .includes('event.source !== window.parent')
+  )
   assert(
     shell.includes(
       'script-src easy-player-media://plugin-theme/' +
@@ -359,6 +366,10 @@ for (const entry of renderers) {
   )
   assert.equal(
     officialScenes.packages.themeResource(entry.id, dto.revision, 'background.js'),
+    undefined
+  )
+  assert.equal(
+    officialScenes.packages.themeResource(entry.id, dto.revision, '__glass-snapshot.js'),
     undefined
   )
   officialScenes.manager.activate(entry.id)

@@ -14,6 +14,8 @@ import BaseSkeleton from './BaseSkeleton.vue'
 import BasePopover from './BasePopover.vue'
 import BaseRange from './BaseRange.vue'
 import BaseConfirmDialog from './BaseConfirmDialog.vue'
+import BaseBackTop from './BaseBackTop.vue'
+import BaseTooltip from './BaseTooltip.vue'
 
 // 统一管理
 const components = [
@@ -30,14 +32,16 @@ const components = [
   BaseSkeleton,
   BasePopover,
   BaseRange,
-  BaseConfirmDialog
+  BaseConfirmDialog,
+  BaseBackTop,
+  BaseTooltip
 ]
 
 /**
  * 插件注册
  */
 export default {
-  install(app: App) {
+  install(app: App): void {
     components.forEach((component) => {
       if (!component.name) {
         console.warn('Component is missing name:', component)
@@ -64,5 +68,14 @@ export {
 export { default as BasePopover } from './BasePopover.vue'
 export { default as BaseRange } from './BaseRange.vue'
 export { default as BaseConfirmDialog } from './BaseConfirmDialog.vue'
+export { default as BaseBackTop } from './BaseBackTop.vue'
+export { default as BaseTooltip } from './BaseTooltip.vue'
 export { useMessage } from './useMessage'
-export type { ControlSize, FloatingSide, FloatingAlign, PageTransition } from './types'
+export type {
+  ControlSize,
+  FloatingSide,
+  FloatingAlign,
+  PageTransition,
+  BackTopTarget,
+  BackTopBehavior
+} from './types'

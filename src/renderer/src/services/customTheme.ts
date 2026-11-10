@@ -1,4 +1,5 @@
 import { reportThemeFailure } from './pluginLogs'
+import { applyLiquidGlass } from './liquidGlass'
 import {
   themeSelectorPattern as selectorPattern,
   themeTokenPattern as tokenPattern,
@@ -237,7 +238,8 @@ function loadPackageFonts(packages: RuntimePackage[]): void {
   }
 }
 
-export function applyCustomTheme(theme: CustomTheme | null): void {
+export function applyCustomTheme(theme: CustomTheme | null, pluginGlass = true): void {
+  applyLiquidGlass(pluginGlass ? theme?.plugin?.data.glass : undefined)
   loadPackageFonts(theme ? runtimePackages(theme) : [])
   const existing = document.getElementById('ep-custom-theme')
   if (!theme) {

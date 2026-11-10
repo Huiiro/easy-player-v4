@@ -24,6 +24,7 @@ import SongListActions from './SongListActions.vue'
 import TagManagerDialog from '@/components/tag/TagManagerDialog.vue'
 import type { LibrarySong } from '@/types/library'
 import { useMessage } from '@/components/ui/useMessage'
+import BaseBackTop from '@/components/ui/BaseBackTop.vue'
 import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 
 import type { MusicSource } from '../../../../shared/remoteSources'
@@ -55,6 +56,7 @@ const scroller = ref<{
   scrollToItem?: (index: number) => void
   scrollToPosition?: (position: number) => void
 } | null>(null)
+const backTopTarget = (): HTMLElement | null => scroller.value?.el ?? null
 const rowHeight = computed(() => songListRowHeight(uiStore.compactSongList, uiStore.smallSongList))
 const columns = computed(() => normalizeSongListColumns(uiStore.songListColumns))
 const layoutStyle = computed(() => songListLayout(columns.value, uiStore.smallSongList === true))
@@ -70,7 +72,6 @@ function toggleColumn(column: OptionalSongColumn): void {
   uiStore.songListColumns = { ...columns.value, [column]: !columns.value[column] }
 }
 watch(columns, () => void nextTick(syncScrollLayout))
-const showBackTop = ref(false)
 const loading = ref(true)
 const keyword = ref('')
 const composing = ref(false)
@@ -229,7 +230,6 @@ watch(
     if (scroller.value?.scrollToPosition) scroller.value.scrollToPosition(position)
     else element.scrollTop = position
     syncScrollLayout()
-    showBackTop.value = element.scrollTop > 320
   },
   { flush: 'pre' }
 )
@@ -268,7 +268,6 @@ const load = async (resetScroll = false): Promise<void> => {
       if (resetScroll) {
         if (!disposed && revision === loadRevision) {
           scroller.value?.scrollToItem?.(0)
-          showBackTop.value = false
         }
       }
     }
@@ -299,11 +298,10 @@ const toggleSort = (field: SortField): void => {
 const onListScroll = (event: Event): void => {
   actions.value?.closeMenu()
   scrollLeft.value = (event.target as HTMLElement).scrollLeft
-  showBackTop.value = (event.target as HTMLElement).scrollTop > 320
 }
 const backToTop = (): void => {
-  scroller.value?.scrollToItem?.(0)
-  showBackTop.value = false
+  if (scroller.value?.scrollToItem) scroller.value.scrollToItem(0)
+  else scroller.value?.el?.scrollTo({ top: 0, behavior: 'auto' })
 }
 const playSong = async (song: LibrarySong): Promise<void> => {
   if (loading.value || song.songStatus === 0) return
@@ -606,16 +604,15 @@ watch([keyword, composing], () => {
         </template>
       </RecycleScroller>
     </div>
-    <button
-      v-if="showBackTop && !loading && filteredSongs.length"
-      type="button"
-      class="song-list-backtop absolute right-5 z-10 grid size-9 place-items-center rounded-full border border-border bg-bg-l text-text shadow-lg"
+    <BaseBackTop
+      v-if="!loading && filteredSongs.length"
+      :target="backTopTarget"
+      :scroll-to-top="backToTop"
+      position="absolute"
+      bottom="var(--ep-backtop-bottom, var(--song-list-backtop-bottom, 7rem))"
+      class="song-list-backtop"
       :aria-label="t('songList.backToTop')"
-      :title="t('songList.backToTop')"
-      @click="backToTop"
-    >
-      <svgIcon name="arrow-arrow-up" class-name="size-5" />
-    </button>
+    />
     <TagManagerDialog v-model="tagManagerOpen" v-model:selected-ids="selectedTagIds" />
     <SongListActions
       ref="actions"
@@ -640,23 +637,5 @@ watch([keyword, composing], () => {
 /* Small text should not be promoted to a transform compositing layer. */
 .song-list-scroller--small :deep(.vue-recycle-scroller__item-view) {
   will-change: auto;
-}
-.song-list-backtop {
-  bottom: var(--song-list-backtop-bottom, 7rem);
-  isolation: isolate;
-  transition: bottom var(--motion-duration-slow) var(--motion-ease-spring);
-}
-.song-list-backtop::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border-radius: inherit;
-  background: var(--color-hover-bg);
-  opacity: 0;
-  transition: opacity var(--motion-duration-fast) var(--motion-ease-enter);
-}
-.song-list-backtop:hover::before {
-  opacity: 1;
 }
 </style>
