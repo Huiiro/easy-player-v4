@@ -64,6 +64,22 @@ app.whenReady().then(async () => {
           `window.controller=Glass.mountLiquidGlassStudio();void 0`
         )
       await wait(500)
+      if (mode === 'studio') {
+        // Image decode and the following paint-boundary commit may take longer
+        // than a fixed delay in offscreen Electron. Benchmark the live RGB
+        // material only after it has actually replaced the startup fallback.
+        let ready = false
+        const deadline = Date.now() + 5000
+        while (!ready && Date.now() < deadline) {
+          ready = await win.webContents.executeJavaScript(`(()=>{
+            const css=getComputedStyle(document.querySelector('.ep-footer'));
+            const id=css.backdropFilter.match(/#([^"')]+)/)?.[1];
+            return !!id && document.getElementById(id)?.querySelectorAll('feDisplacementMap').length===3;
+          })()`)
+          if (!ready) await wait(20)
+        }
+        assert(ready, 'Live RGB refraction must finish initialization before measuring scrolling')
+      }
       const initial = await win.webContents.executeJavaScript(`(()=>{
         const element=document.querySelector('.ep-footer'),css=getComputedStyle(element);
         const id=css.backdropFilter.match(/#([^"')]+)/)?.[1],filter=id&&document.getElementById(id);
@@ -124,7 +140,13 @@ app.whenReady().then(async () => {
       assert.equal(
         stableFilter,
         true,
-        'Wheel and idle must use the same material without delayed quality switching'
+        'Wheel and idle must use the same material without delayed quality switching: ' +
+          JSON.stringify({
+            mode,
+            initial,
+            idleFilter,
+            filters: [...new Set(samples.map((s) => s.filter))]
+          })
       )
       if (mode === 'studio') {
         assert.equal(

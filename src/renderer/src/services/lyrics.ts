@@ -91,7 +91,7 @@ interface ParsedLrcTrack {
 const LRC_TIME_TAG = /\[(\d+):(\d{1,2}(?:[.:]\d{1,3})?)\]/g
 const ELRC_WORD_TAG = /<(\d+):(\d{1,2}(?:[.:]\d{1,3})?)>([^<]*)/g
 const YRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
-const YRC_WORD_TAG = /\((\d+),(\d+),\d+\)([^()]+)/g
+const YRC_WORD_TAG = /\((\d+),(\d+),\d+\)/g
 const KRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
 const KRC_WORD_TAG = /<(\d+),(\d+),\d+>([^<]*)/g
 const MAX_LYRIC_CONTENT_LENGTH = 1_000_000
@@ -278,25 +278,28 @@ function parseYrcTrack(source: string): ParsedLrcTrack {
     }
 
     const words: LyricWord[] = []
-    for (const token of match[3].matchAll(YRC_WORD_TAG)) {
+    // A syllable can be empty. Split at timing markers independently of the
+    // text, so adjacent markers are consumed and literal parentheses survive.
+    const tokens = [...match[3].matchAll(YRC_WORD_TAG)]
+    for (const [index, token] of tokens.entries()) {
       if (wordCount >= MAX_LYRIC_WORDS) break
       const rawStart = Number(token[1])
       const wordDuration = Number(token[2])
-      const text = token[3]
+      const prefix = index === 0 ? match[3].slice(0, token.index) : ''
+      const text = prefix + match[3].slice(token.index + token[0].length, tokens[index + 1]?.index)
       if (!text || !Number.isFinite(rawStart) || !Number.isFinite(wordDuration)) continue
       const startMs = rawStart < timeMs ? timeMs + rawStart : rawStart
       words.push({ text, startMs, endMs: Math.max(startMs + 1, startMs + wordDuration) })
       wordCount += 1
     }
-    const text =
-      words.map((word) => word.text).join('') || match[3].replace(YRC_WORD_TAG, '').trim()
+    const text = tokens.length ? words.map((word) => word.text).join('') : match[3].trim()
     YRC_WORD_TAG.lastIndex = 0
-    if (text)
+    if (text || tokens.length)
       lines.push({
         timeMs,
         endMs: Math.max(timeMs + 1, timeMs + durationMs),
         text,
-        words: words.length ? words : undefined
+        words: words.length && text.trim() ? words : undefined
       })
   }
   return { metadata, lines }

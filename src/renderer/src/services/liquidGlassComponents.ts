@@ -35,6 +35,16 @@ ${scope} {
   --scrollbar-thumb: color-mix(in srgb, var(--color-text) 28%, transparent) !important;
   --scrollbar-thumb-hover: color-mix(in srgb, var(--color-text) 46%, transparent) !important;
 }
+/* This selector also covers portals before asynchronous surface discovery. */
+${scope} :is(.ep-header, .ep-sidebar, .ep-footer, .ep-dialog-panel, .ep-drawer-panel, .ep-menu, .ep-popover, .ep-select-options, .ep-color-picker, .ep-message, .ep-glass-panel, .ep-backtop, .ep-tooltip) {
+  isolation: isolate;
+  background-color: color-mix(in srgb, var(--color-bg) var(--ep-studio-surface-tint, var(--ep-glass-chrome-tint, 4%)), transparent) !important;
+  background-image: none !important;
+  backdrop-filter: blur(calc(var(--ep-studio-blur-radius, 0) * var(--ep-glass-fallback-blur-unit))) saturate(1);
+}
+${scope} :is(.ep-header, .ep-sidebar, .ep-footer, .ep-dialog-panel, .ep-drawer-panel, .ep-menu, .ep-popover, .ep-select-options, .ep-color-picker, .ep-message, .ep-glass-panel, .ep-tooltip) {
+  transition-property: color, background-color, border-color, box-shadow, opacity, transform, translate, scale, rotate, width, height, min-height, max-width, padding, gap, border-radius, grid-template-columns !important;
+}
 ${scope} .ep-footer { border-radius: var(--ep-dialog-radius); --ep-studio-surface-tint: ${token('--ep-glass-footer-tint')}; }
 ${scope} .ep-sidebar {
   border-radius: 20px;
@@ -143,7 +153,8 @@ export function mountGlassComponentEffects(): () => void {
   const previous = root.getAttribute(attribute)
   const style = document.createElement('style')
   style.id = 'ep-glass-component-effects'
-  style.textContent = css
+  style.textContent =
+    css + `${scope}{--ep-glass-fallback-blur-unit:${1 / (3 * (window.devicePixelRatio || 1))}px}`
   document.head.append(style)
   root.setAttribute(attribute, 'liquid-glass-studio')
   return () => {

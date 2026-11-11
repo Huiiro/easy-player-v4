@@ -169,7 +169,10 @@ function createFilter(
       svgNode('feColorMatrix', {
         in: 'normal',
         type: 'matrix',
-        values: `1 0 0 0 ${-1 / 510} 0 1 0 0 ${-1 / 510} 0 0 1 0 0 0 0 0 1 0`,
+        // SVG's image resource may lag the HTML image decode on the GPU.
+        // Transparent/missing map pixels must mean zero displacement (0.5),
+        // rather than a large negative offset that separates RGB across a panel.
+        values: `1 0 0 ${-0.5 - 1 / 510} 0.5 0 1 0 ${-0.5 - 1 / 510} 0.5 0 0 1 0 0 0 0 0 0 1`,
         result: 'normal-centred'
       })
     )
@@ -374,7 +377,13 @@ interface Surface {
   light?: SVGFEColorMatrixElement
   pixels: number
   committedPixels?: number
+  mapGeometry?: GlassGeometry
+  commitFrame?: number
   generation?: number
+  rule?: CSSStyleRule
+  ruleText?: string
+  fastRule?: CSSStyleRule
+  fastRuleText?: string
   pending?: NonNullable<ReturnType<typeof createFilter>>
 }
 
@@ -418,6 +427,31 @@ export function createLiquidGlassEffect(
     const fallback = `blur(${optics.blur}px) saturate(${optics.saturation})`
     const baseCSS = `${glass.selectors.join(',')}{backdrop-filter:${fallback};box-shadow:0 2px 6px rgb(0 5 18 / ${optics.shadow * 0.4}),0 16px 40px rgb(0 5 18 / ${optics.shadow}),inset 0 1px 0 rgb(255 255 255 / ${optics.highlight * 0.1})}`
     style.textContent = baseCSS
+    const sheet = style.sheet!
+    const retired = new Set<SVGFilterElement>()
+    let retirementFrame = 0
+    const retireFilters = (...filters: Array<SVGFilterElement | undefined>): void => {
+      for (const filter of filters) if (filter) retired.add(filter)
+      if (!retired.size || retirementFrame) return
+      // Keep the previous resource alive through the first paint using its
+      // replacement. This avoids a temporarily unresolved backdrop URL.
+      retirementFrame = requestAnimationFrame(() => {
+        const batch = [...retired]
+        retirementFrame = requestAnimationFrame(() => {
+          retirementFrame = 0
+          for (const filter of batch) {
+            retired.delete(filter)
+            filter.remove()
+          }
+          if (retired.size) retireFilters()
+        })
+      })
+    }
+    const removeRule = (rule?: CSSStyleRule): void => {
+      if (!rule) return
+      const index = [...sheet.cssRules].indexOf(rule)
+      if (index >= 0) sheet.deleteRule(index)
+    }
     let frame = 0
     let disposed = false
     let pointer: { x: number; y: number; target: Element | null } | undefined
@@ -438,9 +472,12 @@ export function createLiquidGlassEffect(
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)')
     const removeSurface = (surface: Surface): void => {
       resize.unobserve(surface.element)
+      removeRule(surface.rule)
+      removeRule(surface.fastRule)
       surface.element.classList.remove(surface.className)
       if (surface.element.getAttribute(surfaceAttribute) === surface.id)
         surface.element.removeAttribute(surfaceAttribute)
+      cancelAnimationFrame(surface.commitFrame ?? 0)
       surface.filter?.remove()
       surface.fast?.remove()
       surface.pending?.node.remove()
@@ -448,23 +485,37 @@ export function createLiquidGlassEffect(
       surfaces.delete(surface.element)
     }
     const writeCSS = (): void => {
-      const nextCSS =
-        baseCSS +
-        [...surfaces.values()]
-          .filter((surface) => surface.filter || surface.surface || options.blurForSurface)
-          .map(
-            (surface) =>
-              `${`[${surfaceAttribute}="${surface.id}"]`.repeat(3)}{backdrop-filter:${surface.filter ? `url("#${surface.filter.id}")` : `blur(${surface.blur}px) saturate(${optics.saturation})`};` +
+      // Mutate only the affected surface rule. Replacing <style>.textContent
+      // invalidates every SVG backdrop, including unchanged Header/Footer.
+      for (const surface of surfaces.values()) {
+        const selector = `[${surfaceAttribute}="${surface.id}"]`.repeat(3)
+        const paint =
+          surface.filter || surface.surface || options.blurForSurface
+            ? `backdrop-filter:${surface.filter ? `url("#${surface.filter.id}")` : `blur(${surface.blur}px) saturate(${optics.saturation})`};` +
               (surface.surface && surface.background
                 ? `background-image:url("${surface.surface}"),${surface.background.image};background-size:100% 100%,${surface.background.size};background-position:center,${surface.background.position};background-repeat:no-repeat,${surface.background.repeat};background-origin:border-box,${surface.background.origin};background-clip:border-box,${surface.background.clip}`
-                : '') +
-              '}' +
-              (surface.fast && options.adaptiveQuality !== false
-                ? `html[${busyAttribute}] ${`[${surfaceAttribute}="${surface.id}"]`.repeat(3)}{backdrop-filter:url("#${surface.fast.id}")}`
                 : '')
-          )
-          .join('')
-      if (style.textContent !== nextCSS) style.textContent = nextCSS
+            : ''
+        if (surface.ruleText !== paint) {
+          surface.rule ??= sheet.cssRules[
+            sheet.insertRule(`${selector}{}`, sheet.cssRules.length)
+          ] as CSSStyleRule
+          surface.rule.style.cssText = paint
+          surface.ruleText = paint
+        }
+        const fastPaint =
+          surface.fast && options.adaptiveQuality !== false
+            ? `backdrop-filter:url("#${surface.fast.id}")`
+            : ''
+        if (surface.fastRuleText !== fastPaint) {
+          if (fastPaint)
+            surface.fastRule ??= sheet.cssRules[
+              sheet.insertRule(`html[${busyAttribute}] ${selector}{}`, sheet.cssRules.length)
+            ] as CSSStyleRule
+          if (surface.fastRule) surface.fastRule.style.cssText = fastPaint
+          surface.fastRuleText = fastPaint
+        }
+      }
     }
     const refresh = (): void => {
       let budget = mapBudget
@@ -521,22 +572,35 @@ export function createLiquidGlassEffect(
           blur
         ])
         if (surface.signature !== signature) {
+          cancelAnimationFrame(surface.commitFrame ?? 0)
+          surface.commitFrame = undefined
           surface.pending?.node.remove()
           surface.pending?.fast?.remove()
           surface.pending = undefined
           surface.pixels = surface.committedPixels ?? 0
-          if (!options.waitForImages || budget < 1024 || surface.pixels > budget) {
-            surface.filter?.remove()
-            surface.fast?.remove()
+          const previous = surface.mapGeometry
+          const previousShortSide = previous && Math.min(previous.width, previous.height)
+          const shortSide = Math.min(geometry.width, geometry.height)
+          const abruptResize =
+            previousShortSide &&
+            Math.max(shortSide / previousShortSide, previousShortSide / shortSide) > 2
+          if (!options.waitForImages || budget < 1024 || surface.pixels > budget || abruptResize) {
+            if (options.waitForImages) retireFilters(surface.filter, surface.fast)
+            else {
+              surface.filter?.remove()
+              surface.fast?.remove()
+            }
             surface.filter = undefined
             surface.light = undefined
             surface.fast = undefined
             surface.surface = undefined
             surface.committedPixels = 0
+            surface.mapGeometry = undefined
             surface.pixels = 0
           } else if (surface.filter) {
-            // Keep a decoded map covering the whole box while its replacement
-            // loads. Uncovered feImage pixels are zero, a large negative offset.
+            // Small resizes can reuse a decoded map. A large aspect change must
+            // use the neutral blur fallback: stretching its old rim creates RGB
+            // bands deep inside the new panel (e.g. compact search -> results).
             for (const image of surface.filter.querySelectorAll('feImage')) {
               image.setAttribute('width', String(geometry.width))
               image.setAttribute('height', String(geometry.height))
@@ -563,30 +627,57 @@ export function createLiquidGlassEffect(
                 // Charge the larger reservation so later surfaces cannot spend it.
                 surface.pixels = Math.max(retainedPixels, built.pixels)
                 const commit = (): void => {
-                  surface.filter?.remove()
-                  surface.fast?.remove()
+                  if (options.waitForImages) retireFilters(surface.filter, surface.fast)
+                  else {
+                    surface.filter?.remove()
+                    surface.fast?.remove()
+                  }
                   surface.filter = built.node
                   surface.light = built.light
                   surface.fast = built.fast
                   surface.surface = surfaceReflection ? built.surface : undefined
                   surface.pixels = surface.committedPixels = built.pixels
+                  surface.mapGeometry = geometry
                 }
                 if (options.waitForImages) {
                   surface.pending = built
                   void built.ready.then((ready) => {
                     if (disposed || surfaces.get(element) !== surface || surface.pending !== built)
                       return
-                    surface.pending = undefined
-                    if (ready) commit()
-                    else {
-                      built.node.remove()
-                      built.fast?.remove()
-                      surface.pixels = retainedPixels
+                    const finish = (): void => {
+                      surface.commitFrame = undefined
+                      if (
+                        disposed ||
+                        surfaces.get(element) !== surface ||
+                        surface.pending !== built
+                      )
+                        return
+                      const currentGeometry = geometryOf(element)
+                      if (
+                        ready &&
+                        currentGeometry &&
+                        (currentGeometry.width !== geometry.width ||
+                          currentGeometry.height !== geometry.height)
+                      ) {
+                        // FloatingPanel may have completed positioning since the
+                        // decode finished; never attach a graph for its old box.
+                        refresh()
+                        return
+                      }
+                      surface.pending = undefined
+                      if (ready) commit()
+                      else {
+                        built.node.remove()
+                        built.fast?.remove()
+                        surface.pixels = retainedPixels
+                      }
+                      writeCSS()
+                      if (surface.pixels < Math.max(retainedPixels, built.pixels)) schedule(true)
                     }
-                    writeCSS()
-                    // Reuse space released by a shrinking map without waiting
-                    // for another user action or unrelated layout mutation.
-                    if (surface.pixels < Math.max(retainedPixels, built.pixels)) schedule(true)
+                    // Decode completion can land midway through a floating panel's
+                    // layout/reveal. Bind the new SVG graph at the next paint boundary.
+                    if (ready) surface.commitFrame = requestAnimationFrame(finish)
+                    else finish()
                   })
                 } else commit()
                 defs.append(built.node)
@@ -650,7 +741,36 @@ export function createLiquidGlassEffect(
         updateLight()
       })
     }
-    const resize = new ResizeObserver(() => schedule(true))
+    const resize = new ResizeObserver((entries) => {
+      let changed = false
+      if (options.waitForImages)
+        for (const { target } of entries) {
+          const surface = surfaces.get(target as HTMLElement)
+          const previous = surface?.mapGeometry
+          if (!surface || !previous) continue
+          const oldSide = Math.min(previous.width, previous.height)
+          const newSide = Math.min(surface.element.offsetWidth, surface.element.offsetHeight)
+          if (!newSide || Math.max(newSide / oldSide, oldSide / newSide) <= 2) continue
+          // ResizeObserver runs after rAF but before paint. Deferring this to
+          // another rAF exposes the old-size graph for one complete frame.
+          retireFilters(surface.filter, surface.fast)
+          surface.filter = undefined
+          surface.fast = undefined
+          surface.light = undefined
+          surface.surface = undefined
+          surface.mapGeometry = undefined
+          surface.pixels = surface.committedPixels = 0
+          surface.signature = ''
+          cancelAnimationFrame(surface.commitFrame ?? 0)
+          surface.commitFrame = undefined
+          surface.pending?.node.remove()
+          surface.pending?.fast?.remove()
+          surface.pending = undefined
+          changed = true
+        }
+      if (changed) writeCSS()
+      schedule(true)
+    })
     const selectors = glass.selectors.join(',')
     const selectorClasses = new Set(
       glass.selectors.flatMap((selector) => selector.match(/ep-[a-z][a-z0-9-]*/g) ?? [])
@@ -765,6 +885,9 @@ export function createLiquidGlassEffect(
       clearTimeout(interactionTimer)
       document.documentElement.removeAttribute(busyAttribute)
       cancelAnimationFrame(frame)
+      cancelAnimationFrame(retirementFrame)
+      for (const filter of retired) filter.remove()
+      retired.clear()
       mutations.disconnect()
       resize.disconnect()
       for (const surface of [...surfaces.values()]) removeSurface(surface)

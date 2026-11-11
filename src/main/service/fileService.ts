@@ -2,7 +2,7 @@ import { t } from '../i18n'
 import { logOperation } from './operationLogger'
 import AdmZip from 'adm-zip'
 import { existsSync, mkdirSync, promises as fs, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { basename, dirname, extname, join } from 'node:path'
+import { basename, dirname, extname, join, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parseAudioFile } from './audioMetadataService'
 import { getCoverPath, getExportTempPath } from '../utils/pathUtils'
@@ -27,7 +27,7 @@ export async function recoverMovedSongs(
       const db = getDatabase()
       const localSongs = db
         .prepare(
-          'SELECT id, audio, file_name AS fileName, file_size AS fileSize FROM song WHERE source_id IS NULL'
+          'SELECT id, audio, file_name AS fileName, file_size AS fileSize FROM song WHERE source_id IS NULL ORDER BY id'
         )
         .all() as Array<{
         id: number
@@ -41,12 +41,14 @@ export async function recoverMovedSongs(
       if (!missing.length) return { total: 0, recovered: 0 }
       const files = new Map<string, string[]>()
       const names = new Map<string, string[]>()
+      const sizes = new Map<string, number>()
       const visit = async (directory: string): Promise<void> => {
         for (const name of await fs.readdir(directory)) {
           const fullPath = join(directory, name)
           const stat = await fs.stat(fullPath)
           if (stat.isDirectory()) await visit(fullPath)
           else {
+            sizes.set(fullPath, stat.size)
             for (const fileName of new Set([name, basename(name, extname(name))])) {
               const key = `${fileName}\0${stat.size}`
               files.set(key, [...(files.get(key) ?? []), fullPath])
@@ -57,20 +59,46 @@ export async function recoverMovedSongs(
       }
       await visit(root)
       const update = db.prepare(
-        'UPDATE song SET audio = ?, file_name = ?, file_size = ?, song_status = 1 WHERE id = ?'
+        `UPDATE song SET audio = ?, file_name = ?, file_size = ?, song_status = 1
+         WHERE id = ? AND audio = ? AND source_id IS NULL
+         AND NOT EXISTS (SELECT 1 FROM song WHERE audio = ? AND id != ?)`
       )
-      let recovered = 0
-      for (const song of missing) {
-        if (!song.fileName || song.fileSize === null) continue
-        const candidates = files.get(`${song.fileName}\0${song.fileSize}`) ?? []
-        const fallback = names.get(song.fileName) ?? []
-        const filePath =
-          candidates.length === 1 ? candidates[0] : fallback.length === 1 ? fallback[0] : null
-        if (filePath) {
-          update.run(filePath, basename(filePath), (await fs.stat(filePath)).size, song.id)
-          recovered++
-        }
+      const pathKey = (audio: string): string => {
+        const path = resolve(audio)
+        return process.platform === 'win32' ? path.toLowerCase() : path
       }
+      // Scanning yields to imports and other recovery calls. Read ownership at
+      // commit time, and reserve each successful match within one transaction.
+      const recovered = db.transaction(() => {
+        const occupied = new Set(
+          (db.prepare('SELECT audio FROM song').all() as Array<{ audio: string }>).map((song) =>
+            pathKey(song.audio)
+          )
+        )
+        let count = 0
+        for (const song of missing) {
+          if (!song.fileName || song.fileSize === null) continue
+          const candidates = files.get(`${song.fileName}\0${song.fileSize}`) ?? []
+          const fallback = names.get(song.fileName) ?? []
+          const filePath =
+            candidates.length === 1 ? candidates[0] : fallback.length === 1 ? fallback[0] : null
+          if (!filePath || occupied.has(pathKey(filePath)) || !existsSync(filePath)) continue
+          const result = update.run(
+            filePath,
+            basename(filePath),
+            sizes.get(filePath)!,
+            song.id,
+            song.audio,
+            filePath,
+            song.id
+          )
+          if (result.changes) {
+            occupied.add(pathKey(filePath))
+            count++
+          }
+        }
+        return count
+      })()
       return { total: missing.length, recovered }
     },
     { successLevel: 'info', warnOnFalse: false }

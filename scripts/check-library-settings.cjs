@@ -23,8 +23,17 @@ async function checkSettings() {
   let selected = 'D:\\Music Archive'
   let failSave = false
   let pendingSave
+  let fileProgress
+  const unhandled = []
+  const onUnhandled = (event) => unhandled.push(String(event.reason))
+  window.addEventListener('unhandledrejection', onUnhandled)
   window.api = {
-    files: { onImportProgress: () => () => {} },
+    files: {
+      onImportProgress: (callback) => {
+        fileProgress = callback
+        return () => {}
+      }
+    },
     library: {
       getWatchedFolders: async () => structuredClone(folders),
       selectLocalMusicFolder: async () => selected,
@@ -99,8 +108,50 @@ async function checkSettings() {
     rows().length === 1 && rows()[0].textContent.includes('Downloads'),
     'completed folder imports must refresh the open settings page'
   )
+  const previousErrors = window.errors.length
+  for (const [action, label] of [
+    ['recoverMovedSongs', zh.settings.recover],
+    ['importLibrary', zh.settings.importLibrary],
+    ['exportLibrary', zh.settings.exportLibrary]
+  ]) {
+    window.api.files[action] = async () => {
+      throw new Error('IPC recovery fixture failure')
+    }
+    fileProgress({ current: 1, total: 3 })
+    await wait()
+    check(document.querySelector('.progress'), 'Import progress starts before a file operation')
+    const button = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent.trim() === label
+    )
+    check(button, 'A real settings button invokes ' + action)
+    button.click()
+    await wait()
+    check(!document.querySelector('.progress'), 'Rejected IPC clears progress for ' + action)
+  }
+  check(
+    window.errors.length === previousErrors + 3,
+    'Every rejected file operation shows a localized failure'
+  )
+  check(
+    unhandled.length === 0,
+    'File operation IPC errors never escape as unhandled promises: ' + unhandled
+  )
+  window.api.files.recoverMovedSongs = async () => ({
+    success: true,
+    data: { total: 2, recovered: 1 }
+  })
+  const recovery = [...document.querySelectorAll('button')].find(
+    (button) => button.textContent.trim() === zh.settings.recover
+  )
+  recovery.click()
+  await wait()
+  check(
+    window.errors.length === previousErrors + 3,
+    'Partial recovery remains a successful operation'
+  )
+  window.removeEventListener('unhandledrejection', onUnhandled)
   component.unmount()
-  return 'Library settings UI passed: load, toggle, add, cancel, plain IPC payloads, save failure, busy state, remove and empty list.'
+  return 'Library settings UI passed: watched folders, file operation rejection handling, progress cleanup and partial recovery.'
 }
 
 app.whenReady().then(async () => {

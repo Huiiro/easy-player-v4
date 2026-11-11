@@ -34,7 +34,8 @@ try {
             '../../utils/pathUtils': 'export const getCoverPath=()=>""',
             './songHelpers':
               'export const attachTags=x=>x,songColumns="",relevanceOrder=()=>"",mapSong=x=>x',
-            './playlists': 'export const refreshPlaylistCover=()=>{}'
+            './playlists': 'export const refreshPlaylistCover=()=>{}',
+            './autoImport': 'export const excludeAutoImportFiles=()=>{}'
           }
           builder.onResolve({ filter: /.*/ }, (args) =>
             args.importer.replaceAll('\\', '/').endsWith('/repository/songs.ts') && mocks[args.path]
@@ -57,6 +58,16 @@ try {
   assert.equal(spacerRecord.text, ' ', 'Editor preview hides QRC spacer timing')
   assert.equal(spacerRecord.raw, spacerRaw, 'Editor keeps the original source losslessly')
   assert.equal(spacerRecord.timeMs, 186)
+  const emptyYrcRaw =
+    '[0,9079](0,1297,0)(1297,1297,0)(2594,1297,0)(3891,1297,0)(5188,1297,0)(6485,1297,0)(7782,1297,0)'
+  for (const format of [undefined, 'yrc']) {
+    const track = editor.editorTrack(emptyYrcRaw, format)
+    const record = editor.lyricEditorRecords('lyric', track)[0]
+    assert.equal(track.format, 'yrc')
+    assert.equal(record.text, '', 'Empty YRC syllables remain blank in the editor preview')
+    assert.equal(record.raw, emptyYrcRaw, 'Editing preserves all empty-syllable source markers')
+    assert.equal(record.timeMs, 0)
+  }
   assert.equal(
     editor.lyricEditorRecords(
       'lyric',

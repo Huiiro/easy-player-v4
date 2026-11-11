@@ -145,3 +145,19 @@ assert.deepEqual(
   'QRC whitespace spacers never become visible lyric rows'
 )
 console.log('PASS: mixed QRC spacers remain hidden during playback')
+
+assert.deepEqual(
+  withLyricInterludes(
+    parseLyrics({
+      content:
+        '[0,9079](0,1297,0)(1297,1297,0)(2594,1297,0)(3891,1297,0)(5188,1297,0)(6485,1297,0)(7782,1297,0)\n[9079,400](9079,400,0)Hello',
+      source: 'database'
+    }).lines
+  ).map(({ timeMs, endMs, text }) => ({ timeMs, endMs, text })),
+  [
+    { timeMs: 0, endMs: 9079, text: '' },
+    { timeMs: 9079, endMs: 9479, text: 'Hello' }
+  ],
+  'An empty YRC syllable sequence becomes a single leading interlude without visible tags'
+)
+console.log('PASS: empty YRC syllables retain the leading instrumental interval')

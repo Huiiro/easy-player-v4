@@ -70,7 +70,10 @@ app.whenReady().then(async () => {
               loader: 'js'
             }))
             build.onResolve(
-              { filter: /(?:SearchIndexStatus|ScanProgress|AudioControlPanelV2)\.vue$/ },
+              {
+                filter:
+                  /(?:SearchIndexStatus|ScanProgress|AudioControlPanelV2|AppUpdateStatus)\.vue$/
+              },
               ({ path: file }) => ({ path: file, namespace: 'unrelated-feature' })
             )
             build.onLoad({ filter: /.*/, namespace: 'unrelated-feature' }, () => ({
@@ -186,13 +189,13 @@ app.whenReady().then(async () => {
       let input=document.querySelector('.global-search-panel .global-search-input input');
       check(input&&document.activeElement===input,'Header opens the dialog and focuses the real song search');
       const initialInputTop=input.getBoundingClientRect().top;
-      check(!document.querySelector('.global-search-results')&&document.querySelector('.global-search-panel').getBoundingClientRect().height<120,'Opening displays only the search box without an empty results area');
+      check(getComputedStyle(document.querySelector('.global-search-results')).display==='none'&&document.querySelector('.global-search-panel').getBoundingClientRect().height<120,'Opening displays only the search box without an empty results area');
       check(indexListeners===1,'Only one search index subscription is active');
       check(!document.querySelector('.global-search-panel .ep-select,.global-search-panel [aria-haspopup="menu"],.global-search-panel [type="checkbox"]'),'Search contains no source, sorting or bulk-action controls');
       check(!requests.some(request=>request.action==='querySongs'||request.action==='listSources'),'An empty search never loads the library or its source options');
       const type=async text=>{input.value=text;input.dispatchEvent(new Event('input',{bubbles:true}));await wait(280)};
       await type('remote');
-      check(!!document.querySelector('.global-search-results')&&Math.abs(input.getBoundingClientRect().top-initialInputTop)<1,'Typing expands results below the stationary search box');
+      check(getComputedStyle(document.querySelector('.global-search-results')).display!=='none'&&Math.abs(input.getBoundingClientRect().top-initialInputTop)<1,'Typing expands results below the stationary search box');
       check(document.querySelector('.global-search-panel').textContent.includes('Remote song')&&requests.at(-1).params.source==='all'&&window.searchUi.musicSource==='local','Basic search covers all sources without changing songs-page filters');
       await type('dx');
       check(requests.some(request=>request.action==='querySongs'&&request.params.search==='dx'),'Modal uses the same indexed querySongs search as the songs page');
@@ -218,7 +221,7 @@ app.whenReady().then(async () => {
       await type('late');const stale=window.resolveLate;await type('dx');stale();await wait();
       check(!document.querySelector('.global-search-panel').textContent.includes('Remote song'),'A stale query cannot overwrite newer search results');
       const beforeClear=requests.length;document.querySelector('.global-search-input button').click();await wait(280);
-      check(!input.value&&!document.querySelector('.global-search-results')&&document.querySelector('.global-search-panel').getBoundingClientRect().height<120&&requests.length===beforeClear,'Clearing the query collapses results without loading the library');
+      check(!input.value&&getComputedStyle(document.querySelector('.global-search-results')).display==='none'&&document.querySelector('.global-search-panel').getBoundingClientRect().height<120&&requests.length===beforeClear,'Clearing the query collapses results without loading the library');
       input.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true}));input.value='dao';input.dispatchEvent(new Event('input',{bubbles:true}));await wait(260);
       check(!requests.some(request=>request.params?.search==='dao'),'IME input does not send incomplete searches');
       input.value='missing';input.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true}));await wait(280);

@@ -147,6 +147,8 @@ interface Surface {
   revision: number
   textureWidth?: number
   textureHeight?: number
+  layoutWidth?: number
+  layoutHeight?: number
   blurKey?: string
   blurX?: ReturnType<typeof studioBlurSamples>
   blurY?: ReturnType<typeof studioBlurSamples>
@@ -196,6 +198,9 @@ export function mountLiquidGlassStudio(options?: {
   backdrop(material)
   const source = createGlassBackground()
   const surfaces = new Map<HTMLElement, Surface>()
+  // Hovering between submenus must not repeatedly tear down GPU contexts and
+  // replace their compositor mailboxes. Keep two renderers ready for reuse.
+  const menuRenderers: Surface[] = []
   let disposed = false,
     active = true,
     reduced = false,
@@ -204,6 +209,7 @@ export function mountLiquidGlassStudio(options?: {
     frame = 0,
     timer: ReturnType<typeof setTimeout> | undefined
   let sourceDirty = true
+  let layoutDirty = false
   let gpuFailed = false
   const style = document.createElement('style')
   style.id = id
@@ -220,15 +226,27 @@ export function mountLiquidGlassStudio(options?: {
   `
   document.head.append(style)
 
-  function remove(surface: Surface): void {
+  function releaseGPU(surface: Surface): void {
+    surface.gl?.deleteTexture(surface.texture ?? null)
+    surface.renderer?.dispose()
+    surface.gl?.getExtension('WEBGL_lose_context')?.loseContext()
+  }
+  function remove(surface: Surface, retain = true): void {
     resize.unobserve(surface.element)
     surface.canvas.remove()
     surface.element.classList.remove('ep-studio-surface', 'ep-studio-relative')
     surface.element.removeAttribute('data-ep-studio-surface')
     surface.element.removeAttribute('data-ep-studio-relative')
-    surface.gl?.deleteTexture(surface.texture ?? null)
-    surface.renderer?.dispose()
-    surface.gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    if (
+      retain &&
+      surface.element.matches('.ep-menu') &&
+      surface.renderer &&
+      !surface.gl?.isContextLost()
+    ) {
+      surface.canvas.hidden = true
+      if (menuRenderers.length === 2) releaseGPU(menuRenderers.shift()!)
+      menuRenderers.push(surface)
+    } else releaseGPU(surface)
     surfaces.delete(surface.element)
   }
   function discover(): void {
@@ -262,18 +280,23 @@ export function mountLiquidGlassStudio(options?: {
       )
         continue
       if (surfaces.size >= 8) break
-      const canvas = document.createElement('canvas')
+      let retained = element.matches('.ep-menu') ? menuRenderers.pop() : undefined
+      if (retained?.gl?.isContextLost()) {
+        releaseGPU(retained)
+        retained = undefined
+      }
+      const canvas = retained?.canvas ?? document.createElement('canvas')
       canvas.className = 'ep-studio-canvas'
       canvas.hidden = true
       canvas.setAttribute('aria-hidden', 'true')
-      const surface: Surface = { element, canvas, geometry: '', revision: -1 }
+      const surface: Surface = { ...retained, element, canvas, geometry: '', revision: -1 }
       if (getComputedStyle(element).position === 'static') {
         element.setAttribute('data-ep-studio-relative', '')
         element.classList.add('ep-studio-relative')
       }
       element.setAttribute('data-ep-studio-surface', '')
       element.classList.add('ep-studio-surface')
-      if (!gpuFailed) {
+      if (!gpuFailed && !surface.renderer) {
         try {
           surface.renderer = new MultiPassRenderer(canvas, passes)
           surface.gl = canvas.getContext('webgl2')!
@@ -287,11 +310,10 @@ export function mountLiquidGlassStudio(options?: {
           canvas.addEventListener(
             'webglcontextlost',
             () => {
-              surface.canvas.hidden = true
+              canvas.hidden = true
             },
             { once: true }
           )
-          element.prepend(canvas)
         } catch (error) {
           surface.renderer?.dispose()
           canvas.getContext('webgl2')?.getExtension('WEBGL_lose_context')?.loseContext()
@@ -299,6 +321,7 @@ export function mountLiquidGlassStudio(options?: {
           console.warn('[Liquid Glass Studio] WebGL unavailable; using transparent surface.', error)
         }
       }
+      if (surface.renderer) element.prepend(canvas)
       surfaces.set(element, surface)
       resize.observe(element)
     }
@@ -426,12 +449,15 @@ export function mountLiquidGlassStudio(options?: {
     })
     canvas.hidden = false
     surface.geometry = geometry
+    surface.layoutWidth = w
+    surface.layoutHeight = h
     surface.revision = revision
   }
   async function render(): Promise<void> {
     frame = 0
     if (disposed || !active || pending) return
     pending = true
+    layoutDirty = false
     try {
       discover()
       if (
@@ -450,7 +476,7 @@ export function mountLiquidGlassStudio(options?: {
     } finally {
       pending = false
       if (!disposed && active) {
-        if (sourceDirty) schedule()
+        if (sourceDirty || layoutDirty) schedule()
         else if (source.dynamic && !reduced && timer === undefined)
           timer = setTimeout(() => {
             timer = undefined
@@ -460,7 +486,15 @@ export function mountLiquidGlassStudio(options?: {
     }
   }
   function schedule(): void {
-    if (!disposed && active && !frame && !pending)
+    if (disposed || !active) return
+    // A sandboxed dynamic background can be awaiting its frame when a popup
+    // opens or resizes. Preserve that request instead of waiting for the next
+    // background polling interval to discover and paint the new surface.
+    if (pending) {
+      layoutDirty = true
+      return
+    }
+    if (!frame)
       frame = requestAnimationFrame(() => {
         void render()
       })
@@ -471,7 +505,28 @@ export function mountLiquidGlassStudio(options?: {
     sourceDirty = true
     schedule()
   }
-  const resize = new ResizeObserver(schedule)
+  const resize = new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      const surface = surfaces.get(target as HTMLElement)
+      if (!surface) continue
+      const { canvas, element } = surface
+      const w = surface.layoutWidth,
+        h = surface.layoutHeight
+      const previousShortSide = w && h && Math.min(w, h)
+      const shortSide = Math.min(element.clientWidth, element.clientHeight)
+      if (
+        previousShortSide &&
+        shortSide &&
+        Math.max(shortSide / previousShortSide, previousShortSide / shortSide) > 2
+      ) {
+        canvas.hidden = true
+        // A rapid expand/collapse may return to the last drawn dimensions.
+        // Still redraw once so the temporarily hidden layer becomes visible.
+        surface.geometry = ''
+      }
+    }
+    schedule()
+  })
   const observer = new MutationObserver((records) => {
     let changed = false
     for (const record of records) {
@@ -560,7 +615,9 @@ export function mountLiquidGlassStudio(options?: {
       for (const event of mediaEvents) document.removeEventListener(event, onMediaChange, true)
       document.removeEventListener('transitionend', schedule, true)
       document.fonts?.removeEventListener('loadingdone', refresh)
-      for (const surface of surfaces.values()) remove(surface)
+      for (const surface of surfaces.values()) remove(surface, false)
+      for (const surface of menuRenderers) releaseGPU(surface)
+      menuRenderers.length = 0
       source.dispose()
       style.remove()
     }

@@ -74,6 +74,49 @@ const yrc = parseLyrics({
 assert.equal(yrc.lines[0].translation, 'Hello')
 assert.equal(yrc.lines[0].words?.length, 2)
 
+// Empty YRC syllables are timing markers, not visible lyric text.
+const emptyYrc =
+  '[0,9079](0,1297,0)(1297,1297,0)(2594,1297,0)(3891,1297,0)(5188,1297,0)(6485,1297,0)(7782,1297,0)'
+for (const format of [undefined, 'yrc']) {
+  const parsed = parseLyrics({ content: emptyYrc, format, source: 'database' })
+  assert.equal(parsed.format, 'yrc')
+  assert.equal(parsed.lines.length, 1)
+  assert.equal(parsed.lines[0].text, '', 'Consecutive empty syllables must not leak timing tags')
+  assert.equal(parsed.lines[0].timeMs, 0)
+  assert.equal(parsed.lines[0].endMs, 9079)
+  assert.equal(parsed.lines[0].words, undefined)
+}
+const whitespaceYrc = parseLyrics({ content: '[0,200](0,100,0) (100,100,0)', source: 'local' })
+assert.equal(whitespaceYrc.lines[0].text, ' ')
+assert.equal(
+  whitespaceYrc.lines[0].words,
+  undefined,
+  'Whitespace-only syllables are not sung words'
+)
+const mixedEmptyYrc = parseLyrics({
+  content:
+    emptyYrc + '\n[9079,900](9079,100,0)(9179,300,0)你(9479,100,0)(9579,200,0)(好)(9779,200,0)',
+  source: 'network'
+})
+assert.deepEqual(
+  mixedEmptyYrc.lines.map((line) => line.text),
+  ['', '你(好)']
+)
+assert.deepEqual(
+  mixedEmptyYrc.lines[1].words.map(({ text, startMs, endMs }) => [text, startMs, endMs]),
+  [
+    ['你', 9179, 9479],
+    ['(好)', 9579, 9779]
+  ],
+  'Empty syllables do not consume the text or timing of neighboring words'
+)
+assert.equal(
+  parseLyrics({ content: '[186,2336](186,2336,0)(2521,1)', format: 'yrc', source: 'local' })
+    .lines[0].text,
+  '(2521,1)',
+  'Two-field numeric parentheses inside a YRC word remain literal text'
+)
+
 // QQ can leave suffix-style QRC spacers among normalized YRC lines.
 const mixedQrcSpacer = '[186,2336] (2521,1)\n[2522,400](2522,400,0)Hello'
 for (const format of [undefined, 'yrc']) {

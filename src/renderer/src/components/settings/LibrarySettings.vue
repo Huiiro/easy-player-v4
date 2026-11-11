@@ -96,28 +96,29 @@ async function importSingleSong(): Promise<void> {
 }
 
 async function run(action: 'exportLibrary' | 'importLibrary' | 'recoverMovedSongs'): Promise<void> {
-  const result =
-    action === 'exportLibrary'
-      ? await window.api.files.exportLibrary(['songs', 'playlists', 'tags', 'settings'])
-      : await window.api.files[action]()
-  if (result.cancelled) {
-    importProgress.value = null
-    return
-  }
-  if (!result.success) {
-    importProgress.value = null
+  try {
+    const result =
+      action === 'exportLibrary'
+        ? await window.api.files.exportLibrary(['songs', 'playlists', 'tags', 'settings'])
+        : await window.api.files[action]()
+    if (result.cancelled) return
+    if (!result.success) {
+      error(t('settings.fileOperationFailed'))
+      return
+    }
+    success(
+      action === 'recoverMovedSongs'
+        ? t('settings.filesRecovered', result.data as { recovered: number; total: number })
+        : t('settings.fileOperationDone')
+    )
+    eventBus.emit('scanFinished')
+    eventBus.emit('playlistsChanged')
+    eventBus.emit('tagsChanged')
+  } catch {
     error(t('settings.fileOperationFailed'))
-    return
+  } finally {
+    importProgress.value = null
   }
-  success(
-    action === 'recoverMovedSongs'
-      ? t('settings.filesRecovered', result.data as { recovered: number; total: number })
-      : t('settings.fileOperationDone')
-  )
-  importProgress.value = null
-  eventBus.emit('scanFinished')
-  eventBus.emit('playlistsChanged')
-  eventBus.emit('tagsChanged')
 }
 async function checkMissingSongs(): Promise<void> {
   const result = await window.api.database.command('checkMissingSongs')

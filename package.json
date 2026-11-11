@@ -11,6 +11,7 @@
   },
   "scripts": {
     "test:liquid-glass-studio": "electron scripts/check-liquid-glass-studio.cjs",
+    "test:liquid-glass-search": "electron scripts/check-liquid-glass-search.cjs",
     "test:liquid-glass-regressions": "electron scripts/check-liquid-glass-regressions.cjs",
     "test:liquid-glass-components": "electron scripts/check-liquid-glass-components.cjs",
     "test:liquid-glass-scroll": "electron scripts/check-liquid-glass-scroll.cjs",
@@ -66,6 +67,7 @@
     "test:library-auto-import": "node scripts/test-library-auto-import.mjs",
     "test:file-drop-import": "node scripts/test-file-drop-import.mjs",
     "test:library-auto-import:ui": "electron scripts/check-library-settings.cjs",
+    "test:recover-moved-songs": "node scripts/test-recover-moved-songs.mjs",
     "test:fingerprint-diagnostics": "node scripts/test-fingerprint-diagnostics.mjs",
     "test:duplicate-checking": "node scripts/test-duplicate-checking.mjs",
     "test:duplicate-task": "node scripts/test-duplicate-task.mjs",

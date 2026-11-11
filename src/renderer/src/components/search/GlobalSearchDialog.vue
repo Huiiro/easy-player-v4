@@ -170,7 +170,7 @@ defineExpose({ focusSearch })
         </template>
       </BaseInput>
     </div>
-    <div v-if="hasQuery" class="global-search-results" :aria-busy="loading">
+    <div v-show="hasQuery" class="global-search-results" :aria-busy="loading">
       <p v-if="loading" class="px-5 py-8 text-center text-sm text-text-l" role="status">
         {{ t('songList.loading') }}
       </p>
@@ -181,8 +181,10 @@ defineExpose({ focusSearch })
         {{ t('songList.empty') }}
       </p>
       <RecycleScroller
-        v-else
-        class="custom-scrollbar h-full overflow-y-auto"
+        class="custom-scrollbar absolute inset-0 h-full overflow-y-auto"
+        :class="{ invisible: loading || !!searchError || !songs.length }"
+        :inert="loading || !!searchError || !songs.length"
+        :aria-hidden="loading || !!searchError || !songs.length || undefined"
         :items="songs"
         :item-size="68"
         key-field="id"
@@ -227,6 +229,7 @@ defineExpose({ focusSearch })
 
 <style scoped>
 .global-search-results {
+  position: relative;
   height: min(52dvh, 440px);
   min-height: min(160px, calc(100dvh - 180px));
   overflow: hidden;
