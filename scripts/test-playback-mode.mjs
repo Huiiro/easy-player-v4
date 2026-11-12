@@ -29,7 +29,8 @@ function load(file, mocks = {}, globals = {}) {
   )
   return exports
 }
-const policy = load('src/main/service/playbackMode.ts')
+const shutdown = load('src/main/service/applicationShutdown.ts')
+const policy = load('src/main/service/playbackMode.ts', { './applicationShutdown': shutdown })
 const changes = []
 const off = policy.onPlaybackModeChanged((enabled) => changes.push(enabled))
 policy.setPlaybackOnly(true)
@@ -90,6 +91,8 @@ const playerModule = load(
   {
     vue: Vue,
     pinia: Pinia,
+    '@/services/songLyricController': { createSongLyricController: () => ({}) },
+    '@/utils/rhythmVisual': load('src/renderer/src/utils/rhythmVisual.ts'),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
     '@/services/audioBridge': { audioBridge: bridge },
     './smartShuffle': { selectSmartNext: () => -1 },
@@ -106,7 +109,7 @@ const playerModule = load(
       })
     },
     '@/i18n': { t: (key) => key },
-    '@/consts': { PlayMode: { List: 0, Random: 1, Single: 2 } },
+    '@/constants': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
   },
   {

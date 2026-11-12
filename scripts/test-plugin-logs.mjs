@@ -54,7 +54,9 @@ const mocks = {
     }
   },
   [path.resolve('src/main/i18n.ts')]: { t: (key) => key },
-  [path.resolve('src/main/utils/pathUtils.ts')]: { getLogPath: (...parts) => path.join(directory, ...parts) },
+  [path.resolve('src/main/utils/pathUtils.ts')]: {
+    getLogPath: (...parts) => path.join(directory, ...parts)
+  },
   [path.resolve('src/main/database/repository.ts')]: {
     getAppSetting: (key) => settings.get(key),
     setAppSetting: (key, value) => settings.set(key, value)
@@ -106,6 +108,10 @@ function load(file) {
 const { Logger } = load('src/main/service/loggerService.ts')
 const { redactPluginLog } = load('src/shared/pluginLogs.ts')
 Logger.registerIpc()
+let formatted = 0
+const expensive = { toJSON: () => (++formatted, { payload: 'large diagnostic context' }) }
+Logger.debug('filtered', expensive)
+assert.equal(formatted, 0, 'filtered diagnostics must not serialize their parameters')
 const context = {
   pluginId: 'example.test',
   version: '1.0.0',
@@ -148,6 +154,8 @@ assert.equal(
   'ordinary app traffic cannot evict the plugin buffer'
 )
 playbackOnly = true
+Logger.info('muted', expensive)
+assert.equal(formatted, 0, 'playback-only logging must skip serialization')
 const before = Logger.recentPlugins().at(-1).id
 Logger.plugin('warn', context, 'muted')
 assert.equal(Logger.recentPlugins().at(-1).id, before)

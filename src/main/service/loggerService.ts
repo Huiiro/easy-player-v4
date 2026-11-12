@@ -45,7 +45,15 @@ function format(value: unknown): string {
 }
 
 export class Logger {
+  private static enabled(level: LogLevel): boolean {
+    return (
+      (!isPlaybackOnly() || level === 'error') &&
+      LEVELS.indexOf(level) >= LEVELS.indexOf(minimumLevel)
+    )
+  }
+
   static write(level: LogLevel, source: LogSource, message: string, ...params: unknown[]): void {
+    if (!this.enabled(level)) return
     this.publish(level, source, [message, ...params.map(format)].join(' '))
   }
 
@@ -55,6 +63,7 @@ export class Logger {
     message: unknown,
     source: LogSource = 'main'
   ): void {
+    if (!isLogLevel(level) || !this.enabled(level)) return
     const plugin = pluginLogContext(context)
     if (!plugin || !isLogLevel(level)) return
     this.publish(
@@ -75,8 +84,7 @@ export class Logger {
     message: string,
     plugin?: PluginLogContext
   ): void {
-    if (isPlaybackOnly() && level !== 'error') return
-    if (LEVELS.indexOf(level) < LEVELS.indexOf(minimumLevel)) return
+    if (!this.enabled(level)) return
     const entry: LogEntry = {
       id: nextId++,
       timestamp: Date.now(),

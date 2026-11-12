@@ -165,7 +165,13 @@ export function fetchMediaImage(url: string, headers: Record<string, string>): P
       let size = 0
       response.on('data', (chunk: Buffer) => {
         size += chunk.length
-        if (size <= 5 * 1024 * 1024) chunks.push(chunk)
+        if (size > 5 * 1024 * 1024) {
+          chunks.length = 0
+          reject(new Error(t('coverTooLarge')))
+          request.abort()
+          return
+        }
+        chunks.push(chunk)
       })
       response.on('end', () => {
         if (size > 5 * 1024 * 1024) return reject(new Error(t('coverTooLarge')))

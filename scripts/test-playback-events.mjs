@@ -124,7 +124,7 @@ const module = run(
     },
     '@/components/ui/useMessage': { useMessage: () => ({ warning() {}, success() {}, info() {} }) },
     '@/i18n': { t: (key) => key },
-    '@/consts': { PlayMode: { List: 0, Random: 1, Single: 2 } },
+    '@/constants': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
   },
   globals
@@ -209,12 +209,23 @@ assert.equal(player.isPlaying, true)
 assert.equal(await systemAction('play'), true, 'repeated play must not pause playback')
 assert.equal(player.isPlaying, true)
 
+let finishAnalysis
+bridge.getAudioAnalysis = () => new Promise((resolve) => (finishAnalysis = resolve))
+player.setAudioAnalysisPollingRate(30, true)
+assert.equal(typeof finishAnalysis, 'function', 'analysis must be pending during teardown')
 player.unsubscribe() // Only teardown of the outer lifecycle releases shared listeners.
+finishAnalysis(null)
+await new Promise(setImmediate)
+assert.equal(timers.size, 0, 'a late analysis result must not restart polling after unsubscribe')
 for (const callbacks of listeners.values()) assert.equal(callbacks.size, 0)
 assert.equal(documentListeners.size, 0)
 assert.equal(timers.size, 0, 'Route timers and playback timers must be cleaned up')
 player.subscribeToEvents()
+finishAnalysis(null)
+await new Promise(setImmediate)
+assert.equal(timers.size, 1, 'a replacement lifecycle resumes a single analysis loop')
 emit('position', { positionMs: 900, durationMs: 90000 })
 assert.equal(player.positionMs, 900, 'A replacement playback lifecycle can subscribe again')
 player.unsubscribe()
+assert.equal(timers.size, 0)
 console.log('Playback route subscription regression tests passed')

@@ -300,6 +300,7 @@ await assert.rejects(
   artwork.fetchArtworkDataUrl('https://image.test/cover'),
   codeIs('AUTH_REQUIRED')
 )
+assert.equal(fetchResponse.bodyUsed, true, 'HTTP failure must cancel its unread response body')
 
 // Format fallback is cooperative: after cancellation no new provider work starts.
 const preferred = deferred()

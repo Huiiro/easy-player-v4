@@ -9,8 +9,10 @@ export function fetchArtworkDataUrl(
     throw new SourceCallError('INVALID_REQUEST')
   return invokeArtworkFetch(async ({ signal }) => {
     const response = await fetch(imageUrl, { signal })
-    if (!response.ok)
+    if (!response.ok) {
+      await response.body?.cancel()
       throw Object.assign(new Error('Artwork HTTP failure'), { status: response.status })
+    }
     const contentType = response.headers.get('content-type')?.split(';')[0] ?? ''
     if (!contentType.startsWith('image/') || !response.body) {
       await response.body?.cancel()

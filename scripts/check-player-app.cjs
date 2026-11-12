@@ -89,6 +89,10 @@ async function run() {
   fs.copyFileSync(fixture, secondFixture)
   const Database = require('better-sqlite3')
   const database = new Database(path.join(isolated, 'easy-player/player_data/player.db'))
+  // This independent writer also executes the song search-index triggers.
+  database.function('search_normalize', { deterministic: true }, (text) =>
+    text.normalize('NFKC').toLowerCase().trim()
+  )
   const folder = database
     .prepare(
       "INSERT INTO folder(name, full_path, is_root_path, import_time) VALUES (?, ?, 1, datetime('now'))"
@@ -202,12 +206,34 @@ async function run() {
     samples,
     errors
   }
+  await js('window.api.audio.stop()')
+  const idleSeconds = Math.max(0, Math.min(600, Number(process.env.PERF_IDLE_SECONDS) || 0))
+  if (idleSeconds) {
+    report.idleSeconds = idleSeconds
+    for (const phase of ['idleVisible', 'idleHidden', 'idleRestored']) {
+      if (phase === 'idleHidden') window.hide()
+      if (phase === 'idleRestored') window.show()
+      await sleep(3000)
+      samples[phase] = []
+      app.getAppMetrics() // Prime interval-based CPU accounting after the transition.
+      for (let i = 0; i < idleSeconds; i++) {
+        await sleep(1000)
+        const metrics = app.getAppMetrics()
+        samples[phase].push({
+          cpu: metrics.reduce((sum, m) => sum + m.cpu.percentCPUUsage, 0),
+          workingSetMiB: metrics.reduce((sum, m) => sum + m.memory.workingSetSize, 0) / 1024,
+          privateMiB: metrics.reduce((sum, m) => sum + (m.memory.privateBytes || 0), 0) / 1024,
+          rendererHeapMiB: await js('performance.memory.usedJSHeapSize / 1048576'),
+          hidden: await js('document.hidden')
+        })
+      }
+    }
+  }
   fs.writeFileSync(
     path.join(buildDir, 'playback-app-performance.json'),
     JSON.stringify(report, null, 2)
   )
   console.log('APP_PERFORMANCE_RESULT ' + JSON.stringify(report))
-  await js('window.api.audio.stop()')
   if (errors.length) throw Error('Renderer errors: ' + errors.join('; '))
   app.quit()
 }
@@ -225,5 +251,7 @@ setTimeout(
     console.error('App performance timeout')
     app.exit(1)
   },
-  (Number(process.env.PERF_EXTREME_SECONDS) || 20) * 1000 + 70000
+  (Number(process.env.PERF_EXTREME_SECONDS) || 20) * 1000 +
+    Math.min(600, Math.max(0, Number(process.env.PERF_IDLE_SECONDS) || 0)) * 3000 +
+    90000
 )

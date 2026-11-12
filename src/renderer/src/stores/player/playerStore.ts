@@ -1854,6 +1854,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Event subscriptions ──
   let unsubs: (() => void)[] = []
+  let eventsSubscribed = false
   let analysisTimer: ReturnType<typeof setTimeout> | undefined
   const audioControlAnalysisPollingRate = 2
   let audioControlAnalysisActive = false
@@ -1868,6 +1869,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function startAudioAnalysisPolling(): void {
     if (
+      !eventsSubscribed ||
       ui.extremePlayback ||
       analysisTimer ||
       analysisRefreshInFlight ||
@@ -1880,6 +1882,7 @@ export const usePlayerStore = defineStore('player', () => {
     void refreshAudioAnalysis(audioAnalysisIncludesSpectrum).finally(() => {
       analysisRefreshInFlight = false
       if (
+        !eventsSubscribed ||
         ui.extremePlayback ||
         state.value !== 'playing' ||
         !documentVisible ||
@@ -2085,7 +2088,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function subscribeToEvents(): void {
-    if (unsubs.length) return
+    if (eventsSubscribed) return
+    eventsSubscribed = true
+    documentVisible = !document.hidden
     if (!statistics.ready) void statistics.refresh().catch(() => undefined)
     void loadRecommendationScores()
     document.addEventListener('visibilitychange', handleDocumentVisibility)
@@ -2148,6 +2153,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function unsubscribe(): void {
+    eventsSubscribed = false
     document.removeEventListener('visibilitychange', handleDocumentVisibility)
     flushHistory(true, 'closed')
     unsubs.forEach((fn) => fn())
