@@ -4,9 +4,29 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
-## v3.3.0
+## v3.4.0
+
+- Added in-app update checks, downloads, and restart-to-install controls, with optional startup checks, update notifications, and per-version dismissal.
+- Added settings search to locate groups by setting names, descriptions, and keywords.
+- Added library folder monitoring to import new songs from enabled folders and subfolders, including startup checks, folder management, and optional import notifications. Fixed repeated imports after file deletion.
+- Added drag-and-drop import of local audio files and folders. Improved missing-song cleanup and added relocation matching against a newly selected music folder.
+- Added duplicate detection with quick file-hash and metadata checks, local audio fingerprint matching, progress, analysis caching, and confirmation before cleanup. Similar recordings are review candidates; files are not deleted automatically.
+- Added Windows system media controls with song details, artwork, and playback actions. Improved the taskbar playback bar, thumbnail buttons, and artwork updates.
+- Added network proxy modes for direct connections, system settings, and custom HTTP, HTTPS, or SOCKS5 proxies, covering host-managed plugin requests, plugin installation, and host media resolution and downloads. Settings persist across restarts.
+- Added a built-in Liquid Glass toggle that works with theme colors, custom images, and videos, with consistent materials for sidebars, footers, dialogs, menus, and controls. Improved live refraction, scrolling, and resource cleanup, and expanded glass styling variables for theme plugins.
+- Added a particle-flow player background. Improved mesh backgrounds, ambient colors, artwork, and background transitions, and reduced animation overhead when pages are hidden or reduced motion is enabled.
+- Improved installation, status checks, and cache management for the optional Auto Mix vocal-separation component, along with cross-format transitions. Crossfades and Auto Mix pause at playback speeds other than 1x and resume at normal speed.
+- Fixed YRC word-timed lyric parsing and lyric wave animations, and refined lyric zoom, offset controls, and desktop lyrics settings.
+- Improved player, footer, and More menu layouts and interactions. Unified dialog styling and fixed cleanup after closing, with refinements to search overlays, page scrolling, and settings layouts.
+- Fixed default playlist sorting and multi-selection actions, and improved list loading, page transitions, and performance during playback.
+- Improved Windows and macOS ARM64 builds and runtime dependency packaging, pinned and verified media-resolution and audio-fingerprint tools, and added on-demand Auto Mix component downloads.
+
+## v3.3.1
 
 - Added a persistent Windows playback bar beside the system tray, showing the song title and artist, with previous, play/pause, and next controls and a toggle in System settings.
+
+## v3.3.0
+
 - Added a plugin management page for on-demand installation, updates, enabling, disabling, and removal of official source and theme plugins, plus log filtering, export, and clearing. Startup does not download plugins automatically.
 - Moved NetEase Cloud Music, Kugou, and QQ Music lyrics, artwork, and metadata, plus Bilibili and YouTube media search and downloads, into independent official plugins, with a public plugin SDK.
 - Moved Black Hole, Rainy Night, Aurora, Ocean, Sunset, Forest, Matrix, Starfield, Star Trails, and DNA backgrounds into separately installable theme plugins. Added local third-party data and shader theme packages; official code backgrounds run in sandboxed frames.
