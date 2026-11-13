@@ -657,10 +657,69 @@ static void background_plan_and_cache_regression() {
     Logger::instance().set_callback({});
 }
 
+static void playback_speed_mix_regression() {
+    wave("speed-out.wav", 8, 1, 440);
+    wave("speed-in.wav", 10, 0, 660);
+    const auto has_crossfade = [](const AudioChainStatus& status) {
+        return std::find(status.active_nodes.begin(), status.active_nodes.end(), "Crossfade") != status.active_nodes.end();
+    };
+    {
+        AudioEngine engine(std::make_shared<FakeFactory>());
+        auto config = engine.transition_config();
+        config.crossfade_enabled = config.crossfade_auto = true;
+        CHECK(engine.set_transition_config(config)); CHECK(engine.open("speed-out.wav"));
+        CHECK(prepare_next(engine, "speed-in.wav"));
+        const auto request = engine.auto_mix_stem_request(); CHECK(request.fade_frames > 0);
+        CHECK(engine.set_playback_speed_config({true, 1.5f}));
+        CHECK(!has_crossfade(engine.audio_chain_status()));
+        CHECK(!engine.auto_mix_preparing() && engine.auto_mix_stem_request().fade_frames == 0);
+        CHECK(!engine.set_auto_mix_vocals(request.revision, "unused", "unused"));
+        CHECK(engine.set_transition_config(config)); // Cannot re-enable the effective mix at speed.
+        CHECK(!engine.auto_mix_preparing() && !has_crossfade(engine.audio_chain_status()));
+        CHECK(engine.transition_config().crossfade_enabled && engine.transition_config().crossfade_auto);
+        CHECK(engine.set_playback_speed_config({false, 1.5f})); wait_for_mix_plan(engine);
+        CHECK(has_crossfade(engine.audio_chain_status()) && engine.auto_mix_stem_request().fade_frames > 0);
+        CHECK(engine.set_playback_speed_config({true, 1.0f}));
+        CHECK(has_crossfade(engine.audio_chain_status()));
+    }
+    for (bool adaptive : {false, true}) for (bool change_during_mix : {false, true}) {
+        std::atomic<int> starts{0};
+        std::atomic<bool> gapless{false};
+        Logger::instance().set_callback([&](LogLevel, const std::string& message) {
+            if (message.find("Crossfade started:") != std::string::npos) ++starts;
+            if (message.find("Track transition:") != std::string::npos &&
+                message.find("mode=gapless") != std::string::npos &&
+                message.find("incomingConsumed=0ms") != std::string::npos) gapless = true;
+        });
+        {
+            AudioEngine engine(std::make_shared<FakeFactory>());
+            const float speed = adaptive ? 0.75f : 1.5f;
+            if (!change_during_mix) CHECK(engine.set_playback_speed_config({true, speed}));
+            auto config = engine.transition_config();
+            config.crossfade_enabled = true; config.crossfade_auto = adaptive; config.pause_fade_enabled = false;
+            CHECK(engine.set_transition_config(config)); CHECK(engine.open("speed-out.wav"));
+            CHECK(engine.seek(6000)); CHECK(prepare_next(engine, "speed-in.wav")); CHECK(engine.play());
+            const auto deadline = std::chrono::steady_clock::now() + 5s;
+            if (change_during_mix) {
+                while (!starts && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(1ms);
+                CHECK(starts == 1);
+                CHECK(engine.set_playback_speed_config({true, speed}));
+            }
+            while (!gapless && std::chrono::steady_clock::now() < deadline) std::this_thread::sleep_for(2ms);
+            CHECK(gapless); CHECK(starts == (change_during_mix ? 1 : 0));
+            CHECK(!has_crossfade(engine.audio_chain_status()));
+            CHECK(engine.transition_config().crossfade_enabled);
+            CHECK(engine.stop());
+        }
+        Logger::instance().set_callback({});
+    }
+}
+
 int main(int argc, char** argv) {
     try {
         if (argc == 4 && std::string(argv[1]) == "--stem-request") { stem_request_file(argv[2], argv[3]); return 0; }
         if (argc >= 2) { real_playlist_regression(argv[1], argc >= 3 ? argv[2] : nullptr, argc >= 4 ? argv[3] : nullptr); return 0; }
+        playback_speed_mix_regression();
         background_plan_and_cache_regression();
         vocal_protection_regression();
         preserve_voice_band();

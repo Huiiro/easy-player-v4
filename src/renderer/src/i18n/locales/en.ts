@@ -1847,6 +1847,8 @@ export default {
     stemComponent_installing: 'Verifying and installing…',
     crossfadeVocalCue: 'Enter near vocals',
     crossfadeVocalCueDesc: 'Shorten the next intro where possible to bring vocals in sooner.',
+    crossfadeDisabledBySpeed:
+      'Mixing is temporarily disabled at playback speeds other than 1×. Return to 1× to resume.',
     crossfadeAutoDesc: 'Adapt transitions between songs for smoother listening.',
     crossfadeMax: 'ms maximum',
     eq: 'Parametric EQ',

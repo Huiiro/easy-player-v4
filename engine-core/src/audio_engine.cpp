@@ -357,7 +357,7 @@ AudioChainStatus AudioEngine::audio_chain_status() const {
             status.is_bit_perfect = false;
         }
         const auto transition = transition_config();
-        if (transition.crossfade_enabled && transition.crossfade_ms > 0 && !track_info_.is_dsd) {
+        if (crossfade_speed_supported() && transition.crossfade_enabled && transition.crossfade_ms > 0 && !track_info_.is_dsd) {
             // Crossfade mixes decoded tracks before the DSP pipeline.
             status.active_nodes.insert(status.active_nodes.begin(), "Crossfade");
             status.bit_perfect_blockers.push_back("Crossfade mixes consecutive tracks");
@@ -451,6 +451,28 @@ bool AudioEngine::set_impulse_response_config(const ImpulseResponseConfig& confi
     return true;
 }
 
+bool AudioEngine::crossfade_speed_supported() const {
+    const auto speed = dsp_pipeline_.playback_speed_config();
+    return !speed.enabled || std::abs(speed.speed - 1.0f) < 0.0001f;
+}
+
+bool AudioEngine::set_playback_speed_config(const PlaybackSpeedConfig& config) {
+    {
+        std::lock_guard<std::mutex> lock(decoder_mutex_);
+        const bool was_supported = crossfade_speed_supported();
+        if (!dsp_pipeline_.set_playback_speed_config(config)) return false;
+        if (was_supported == crossfade_speed_supported()) return true;
+        // Cancel both prepared and active overlaps before the decoder sees the
+        // new speed. Rewind the incoming track so bypassing a mix skips no audio.
+        cancel_auto_mix();
+        ++auto_fade_revision_;
+        transition_active_.store(false, std::memory_order_release);
+        if (!next_track_path_.empty()) prepare_next_decoder_locked();
+    }
+    refresh_auto_fade_plan();
+    return true;
+}
+
 bool AudioEngine::set_transition_config(const TransitionConfig& input) {
     TransitionConfig value{};
     value.gapless_enabled = input.gapless_enabled;
@@ -541,7 +563,7 @@ void AudioEngine::service_backend_events() {
 bool AudioEngine::prepare_next_decoder_locked() {
     next_decoder_.close();
     const auto& current = decoder_.track_info();
-    const bool mix = crossfade_enabled_.load(std::memory_order_acquire) && !current.is_dsd;
+    const bool mix = crossfade_speed_supported() && crossfade_enabled_.load(std::memory_order_acquire) && !current.is_dsd;
     if (next_track_path_.empty() || !next_decoder_.open(next_track_path_,
         mix ? current.sample_rate : 0, mix ? current.channels : 0)) return false;
     const auto& next = next_decoder_.track_info();
@@ -606,7 +628,7 @@ void AudioEngine::refresh_auto_fade_plan() {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
         // Finish an audible adaptive overlap before applying transition changes.
         // Its incoming decoder may already point past the pre-rendered segment.
-        if (transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0) return;
+        if (crossfade_speed_supported() && transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0) return;
         cancel_auto_mix();
         auto_fade_end_frame_ = 0;
         auto_fade_frames_ = 0;
@@ -617,7 +639,7 @@ void AudioEngine::refresh_auto_fade_plan() {
         auto_fade_intro_.clear();
         auto_fade_source_frames_ = 0;
         auto_fade_incoming_start_frame_ = 0;
-        if (playback_only_.load(std::memory_order_acquire) || !crossfade_enabled_.load(std::memory_order_acquire) ||
+        if (!crossfade_speed_supported() || playback_only_.load(std::memory_order_acquire) || !crossfade_enabled_.load(std::memory_order_acquire) ||
             !crossfade_auto_.load(std::memory_order_acquire) ||
             next_decoder_.track_info().file_path.empty()) return;
         current_path = decoder_.track_info().file_path;
@@ -690,7 +712,7 @@ void AudioEngine::compute_auto_fade_plan(const std::string& current_path, const 
     }
     {
         std::lock_guard<std::mutex> lock(decoder_mutex_);
-        if (cancelled() || decoder_.track_info().file_path != current_path || next_track_path_ != next_path ||
+        if (cancelled() || !crossfade_speed_supported() || decoder_.track_info().file_path != current_path || next_track_path_ != next_path ||
             !crossfade_auto_.load(std::memory_order_acquire) ||
             !crossfade_enabled_.load(std::memory_order_acquire) ||
             crossfade_ms_.load(std::memory_order_acquire) != max_ms ||
@@ -766,7 +788,7 @@ void AudioEngine::compute_auto_fade_plan(const std::string& current_path, const 
 AutoMixStemRequest AudioEngine::auto_mix_stem_request() const {
     std::lock_guard<std::mutex> lock(decoder_mutex_);
     const auto& current = decoder_.track_info();
-    if (!crossfade_auto_.load() || !crossfade_enabled_.load() || transition_active_.load() ||
+    if (!crossfade_speed_supported() || !crossfade_auto_.load() || !crossfade_enabled_.load() || transition_active_.load() ||
         next_track_path_.empty() || !auto_fade_intro_.empty() || !auto_mix_out_vocals_.empty() || auto_fade_frames_ <= 0 || current.sample_rate <= 0 ||
         current.channels < 1 || current.channels > 2 || auto_fade_frames_ > current.sample_rate * 12LL ||
         decoder_.position() >= auto_fade_end_frame_ - auto_fade_frames_) return {};
@@ -800,7 +822,7 @@ bool AudioEngine::set_auto_mix_vocals(uint64_t revision, const std::string& out_
     std::vector<float> outgoing, incoming;
     if (!read(out_path, outgoing) || !read(in_path, incoming)) return false;
     std::lock_guard<std::mutex> lock(decoder_mutex_);
-    if (auto_fade_revision_ != revision || decoder_.track_info().file_path != request.source_path ||
+    if (!crossfade_speed_supported() || auto_fade_revision_ != revision || decoder_.track_info().file_path != request.source_path ||
         next_track_path_ != request.next_path || transition_active_.load() || !crossfade_auto_.load() ||
         !crossfade_enabled_.load() || decoder_.position() >= std::min(outgoing_start, auto_fade_end_frame_ - auto_fade_frames_) ||
         incoming_start + request.fade_frames >= next_decoder_.total_samples() ||
@@ -1615,12 +1637,13 @@ void AudioEngine::decoder_thread_func() {
             // - Ring buffer reset can't happen between decode and write
             std::lock_guard<std::mutex> lock(decoder_mutex_);
             const auto transition = transition_config();
-            const bool finish_auto_fade = transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0;
-            const bool auto_fade = ((transition.crossfade_enabled && transition.crossfade_auto) || finish_auto_fade) &&
+            const bool mix_speed_supported = crossfade_speed_supported();
+            const bool finish_auto_fade = mix_speed_supported && transition_active_.load(std::memory_order_acquire) && auto_fade_end_frame_ > 0;
+            const bool auto_fade = mix_speed_supported && ((transition.crossfade_enabled && transition.crossfade_auto) || finish_auto_fade) &&
                 auto_fade_end_frame_ > 0 && !next_decoder_.track_info().file_path.empty();
             const int64_t total = auto_fade ? auto_fade_end_frame_ : decoder_.total_samples();
             const int64_t position = decoder_.position();
-            const int fade_frames = (transition.crossfade_enabled || finish_auto_fade) && !track_info_.is_dsd
+            const int fade_frames = mix_speed_supported && (transition.crossfade_enabled || finish_auto_fade) && !track_info_.is_dsd
                 ? static_cast<int>(std::min<int64_t>(total, auto_fade ? auto_fade_frames_ :
                     static_cast<int64_t>(track_info_.sample_rate) * transition.crossfade_ms / 1000))
                 : 0;

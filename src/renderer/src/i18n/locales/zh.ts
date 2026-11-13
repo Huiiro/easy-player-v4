@@ -1796,6 +1796,7 @@ export default {
     stemComponent_installing: '正在校验并安装…',
     crossfadeVocalCue: '靠近人声接入',
     crossfadeVocalCueDesc: '适当缩短下一首的前奏，让人声更快接入。',
+    crossfadeDisabledBySpeed: '非 1× 播放时暂不支持混音，恢复 1× 后自动恢复。',
     crossfadeAutoDesc: '自动调整两首歌的衔接，让切歌更自然。',
     crossfadeMax: 'ms 上限',
     eq: '参数均衡器',

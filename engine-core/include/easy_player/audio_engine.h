@@ -96,7 +96,7 @@ public:
     int replay_gain_mode() const { return replay_gain_mode_; }
     bool replay_gain_prevent_clipping() const { return replay_gain_prevent_clipping_; }
     ReplayGainConfig replay_gain_config() const { return dsp_pipeline_.replay_gain_config(); }
-    bool set_playback_speed_config(const PlaybackSpeedConfig& config) { return dsp_pipeline_.set_playback_speed_config(config); }
+    bool set_playback_speed_config(const PlaybackSpeedConfig& config);
     PlaybackSpeedConfig playback_speed_config() const { return dsp_pipeline_.playback_speed_config(); }
     bool set_eq_bands(const std::array<EqBand, kEqBandCount>& bands);
     std::array<EqBand, kEqBandCount> eq_bands() const { return dsp_pipeline_.eq_bands(); }
@@ -209,6 +209,7 @@ private:
     void close_output();
     bool reopen_output(bool resume);
     bool prepare_next_decoder_locked();
+    bool crossfade_speed_supported() const;
     void refresh_auto_fade_plan();
     void compute_auto_fade_plan(const std::string& current_path, const std::string& next_path,
         int max_ms, int sample_rate, int mix_channels, int generation, uint64_t revision, uint64_t job);

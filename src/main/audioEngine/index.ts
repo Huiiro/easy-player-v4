@@ -269,6 +269,7 @@ export class AudioEngineManager {
     if (ok) {
       this.dspSettings.playbackSpeed = config
       this.persistDspSettings()
+      this.scheduleStemRequest()
     }
     return ok
   }
