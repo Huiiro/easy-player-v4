@@ -62,13 +62,10 @@ function parseColor(value: string): [number, number, number] {
     .match(/[\d.]+/g)
     ?.slice(0, 3)
     .map(Number)
-  return parts?.length === 3 ? [parts[0], parts[1], parts[2]] : [110, 160, 220]
+  return parts?.length === 3 ? [parts[0], parts[1], parts[2]] : [128, 128, 128]
 }
 
-function ambientColor(
-  color: RgbColor,
-  hueOverride?: number
-): { rgb: RgbColor; hue: number; chromatic: boolean } {
+function ambientColor(color: RgbColor): { rgb: RgbColor; hue: number; chromatic: boolean } {
   const channels = color.map((channel) => Math.max(0, Math.min(255, channel)) / 255)
   const maximum = Math.max(...channels)
   const minimum = Math.min(...channels)
@@ -78,8 +75,8 @@ function ambientColor(
   // Absolute RGB distance loses the hue of dark and pastel artwork. Retain
   // meaningful tints, while keeping truly neutral artwork neutral.
   const chromatic = chroma > 1 / 255 && saturation > 0.02
-  let hue = hueOverride ?? 0
-  if (hueOverride === undefined && chromatic) {
+  let hue = 0
+  if (chromatic) {
     const [red, green, blue] = channels
     if (maximum === red) hue = ((green - blue) / chroma + (green < blue ? 6 : 0)) * 60
     else if (maximum === green) hue = ((blue - red) / chroma + 2) * 60
@@ -108,12 +105,7 @@ function readPalette(): Palette {
   const primary = ambientColor(parseColor(props.primary))
   const secondary = ambientColor(parseColor(props.secondary))
   const tertiary = ambientColor(parseColor(props.tertiary))
-  const hueDifference = Math.abs(((secondary.hue - primary.hue + 540) % 360) - 180)
-  const secondColor =
-    primary.chromatic && secondary.chromatic && hueDifference < 28
-      ? ambientColor(secondary.rgb, (primary.hue + 42) % 360).rgb
-      : secondary.rgb
-  return [primary.rgb, secondColor, tertiary.rgb]
+  return [primary.rgb, secondary.rgb, tertiary.rgb]
 }
 
 let palette = readPalette()

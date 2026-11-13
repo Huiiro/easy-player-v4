@@ -294,8 +294,11 @@ export class CoverAnalyzer {
     size = this.SAMPLE_SIZE,
     preserveVibrancy = false
   ): Palette {
-    const fallbackPrimary = this.averageColor(data, 0, size / 2, size)
-    const fallbackSecondary = this.averageColor(data, size / 2, size, size)
+    // Transparent regions cannot contribute a color. Reuse visible artwork,
+    // rather than inserting the default blue into an otherwise valid palette.
+    const average = this.averageColor(data, 0, size, size) ?? '102 102 102'
+    const fallbackPrimary = this.averageColor(data, 0, size / 2, size) ?? average
+    const fallbackSecondary = this.averageColor(data, size / 2, size, size) ?? average
     const swatches = new Map<string, { red: number; green: number; blue: number; weight: number }>()
     for (let index = 0; index < data.length; index += 4) {
       const red = data[index]
@@ -340,10 +343,11 @@ export class CoverAnalyzer {
       return selected
     }, [])
     const primary = preserveVibrancy ? chosen[0] : this.smartSoftenColor(chosen[0])
-    if (!primary) return this.createPalette(fallbackPrimary, fallbackSecondary)
+    if (!primary)
+      return preserveVibrancy
+        ? { primary: fallbackPrimary, secondary: fallbackSecondary, tertiary: average }
+        : this.createPalette(fallbackPrimary, fallbackSecondary)
     const secondary = preserveVibrancy ? chosen[1] : this.smartSoftenColor(chosen[1])
-    // console.log(`primary ${JSON.stringify(chosen[0])} : ${JSON.stringify(primary)}`)
-    // console.log(`secondary ${JSON.stringify(chosen[1])} : ${JSON.stringify(secondary)}`)
     const palette = this.createPalette(
       `${primary.red} ${primary.green} ${primary.blue}`,
       secondary ? `${secondary.red} ${secondary.green} ${secondary.blue}` : fallbackSecondary
@@ -351,7 +355,9 @@ export class CoverAnalyzer {
     const tertiary = preserveVibrancy ? chosen[2] : this.smartSoftenColor(chosen[2])
     return tertiary
       ? { ...palette, tertiary: `${tertiary.red} ${tertiary.green} ${tertiary.blue}` }
-      : palette
+      : preserveVibrancy
+        ? { ...palette, tertiary: palette.secondary }
+        : palette
   }
 
   /**
@@ -556,7 +562,7 @@ export class CoverAnalyzer {
     startX: number,
     endX: number,
     width: number
-  ): string {
+  ): string | null {
     let red = 0
     let green = 0
     let blue = 0
@@ -571,7 +577,7 @@ export class CoverAnalyzer {
         count += alpha
       }
     }
-    if (!count) return '77 136 220'
+    if (!count) return null
     return `${Math.round(red / count)} ${Math.round(green / count)} ${Math.round(blue / count)}`
   }
 

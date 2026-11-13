@@ -41,6 +41,9 @@ export function usePlayerBackdrop(
   const useLiquidBackground = computed(
     () => effectivePlayerBackground.value === PlayerBgType.LIQUID
   )
+  // Both render three colors. The persisted album cache only contains two;
+  // use the complete, unsoftened palette cache for these backgrounds.
+  const useVibrantPalette = computed(() => useLiquidBackground.value || useAmbientBackground.value)
   const ambientIntensity = computed(() =>
     selectedPlayerBackground.value === PlayerBgType.AMBIENT ? 1 : 0.68
   )
@@ -71,7 +74,7 @@ export function usePlayerBackdrop(
   const initialPalette = CoverAnalyzer.getCachedPalette(
     player.currentQueueSong,
     COVER_ANALYSIS_VERSION,
-    useLiquidBackground.value
+    useVibrantPalette.value
   )
   const coverColors = ref(initialPalette ?? { ...defaultLiquidColors })
   const spectrumBackgroundLuminance = ref(0.1)
@@ -147,7 +150,7 @@ export function usePlayerBackdrop(
       song: player.currentQueueSong,
       isPanelBackground: isBackground,
       backgroundFilter: getComputedStyle(image).filter,
-      useLiquidBackground: useLiquidBackground.value,
+      useLiquidBackground: useVibrantPalette.value,
       coverAnalysisVersion: COVER_ANALYSIS_VERSION,
       getLyricsRegion: (loadedImage) => {
         return CoverAnalyzer.getLyricsRegion(loadedImage, {
@@ -192,13 +195,13 @@ export function usePlayerBackdrop(
     paletteReady.value = true
   }
   watch(
-    coverUrl,
-    (url, _, onCleanup) => {
+    [coverUrl, useVibrantPalette],
+    ([url], _, onCleanup) => {
       coverFailed.value = false
       const cached = CoverAnalyzer.getCachedPalette(
         player.currentQueueSong,
         COVER_ANALYSIS_VERSION,
-        useLiquidBackground.value
+        useVibrantPalette.value
       )
       const preserveColors = Boolean(url && paletteReady.value)
       resetCoverPalette(url ? 'loading' : 'idle', preserveColors)

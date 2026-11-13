@@ -10,7 +10,7 @@ const compile = (source) =>
   ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
   }).outputText
-const ambient = script('src/renderer/src/components/background/AmbientBubbleCanvas.vue')
+const ambient = script('src/renderer/src/components/background/player/AmbientBubbleCanvas.vue')
 const tree = ts.createSourceFile('ambient.ts', ambient, ts.ScriptTarget.Latest, true)
 const functions = tree.statements
   .filter(
@@ -22,8 +22,14 @@ const functions = tree.statements
   .join('\n')
 const props = { primary: '', secondary: '', tertiary: '' }
 const analyzer = {}
+let sampledPixels
 vm.runInNewContext(compile(readFileSync('src/renderer/src/hooks/useImageColors.ts', 'utf8')), {
-  exports: analyzer
+  exports: analyzer,
+  document: {
+    createElement: () => ({
+      getContext: () => ({ drawImage() {}, getImageData: () => ({ data: sampledPixels }) })
+    })
+  }
 })
 const colors = { props }
 vm.createContext(colors)
@@ -68,16 +74,95 @@ const palette = colors.readPalette()
 assert.ok(palette[0][0] > palette[0][2], 'dark red artwork must not become fallback blue')
 assert.equal(palette[1][0], palette[1][2], 'neutral secondary must not be hue-shifted')
 assert.ok(palette[2][2] > palette[2][1], 'pastel violet tint remains visible')
+props.secondary = '210 20 20'
+assert.ok(
+  hueDistance(colors.ambientColor(colors.readPalette()[1]).hue, 0) < 1,
+  'similar swatches retain their artwork hue instead of a fixed 42 degree offset'
+)
+
+const options = {
+  image: { naturalWidth: 32, naturalHeight: 32 },
+  isPanelBackground: false,
+  useLiquidBackground: true, // Ambient and liquid share the complete vibrant palette path.
+  coverAnalysisVersion: 11,
+  getLyricsRegion: () => null,
+  song: {
+    id: 1,
+    cover: 'transparent-red',
+    coverAnalysisPath: 'transparent-red',
+    coverAnalysisVersion: 11,
+    coverPrimary: '77 136 220',
+    coverSecondary: '205 78 165'
+  }
+}
+sampledPixels = new Uint8ClampedArray(
+  Array.from({ length: 1024 }, (_, index) =>
+    index % 32 < 16 ? [220, 20, 20, 255] : [0, 0, 0, 0]
+  ).flat()
+)
+const redCover = analyzer.CoverAnalyzer.analyze(options)
+assert.equal(
+  redCover.source,
+  'sampled',
+  'Ambient must bypass the persisted two-color album palette'
+)
+for (const rgb of Object.values(redCover.palette))
+  assert.equal(
+    rgb,
+    '220 20 20',
+    'transparent regions must reuse visible artwork, with no default blue or synthetic tertiary hue'
+  )
+sampledPixels = new Uint8ClampedArray(
+  Array.from({ length: 1024 }, (_, index) => [
+    ...[
+      [220, 20, 20],
+      [20, 180, 40],
+      [230, 170, 20]
+    ][index % 3],
+    255
+  ]).flat()
+)
+const threeOptions = {
+  ...options,
+  song: { ...options.song, cover: 'three-colors', coverAnalysisPath: 'three-colors' }
+}
+const threeCover = analyzer.CoverAnalyzer.analyze(threeOptions)
+assert.equal(
+  new Set(Object.values(threeCover.palette)).size,
+  3,
+  'all three distinct artwork colors are sampled'
+)
+assert.ok(
+  Object.values(threeCover.palette).includes('230 170 20'),
+  'the third artwork color survives sampling'
+)
+const cachedCover = analyzer.CoverAnalyzer.analyze(threeOptions)
+assert.equal(cachedCover.source, 'cache')
+assert.deepEqual(
+  cachedCover.palette,
+  threeCover.palette,
+  'the complete in-memory cache retains the real third swatch'
+)
+sampledPixels = new Uint8ClampedArray(4096)
+const transparent = analyzer.CoverAnalyzer.analyze({ ...options, song: undefined })
+for (const rgb of Object.values(transparent.palette)) {
+  const [r, g, b] = rgb.split(' ').map(Number)
+  assert.equal(r, g, 'fully transparent artwork uses a neutral fallback')
+  assert.equal(g, b)
+}
 
 // Exercise the actual preloader callback without a mounted cover component.
-const panel = script('src/renderer/src/views/layout/playerPanel/Index.vue')
+const panel = readFileSync('src/renderer/src/components/player/usePlayerBackdrop.ts', 'utf8')
 const panelTree = ts.createSourceFile('panel.ts', panel, ts.ScriptTarget.Latest, true)
-const watcher = panelTree.statements.find(
+const backdrop = panelTree.statements.find(
+  (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'usePlayerBackdrop'
+)
+const watcher = backdrop.body.statements.find(
   (node) =>
     ts.isExpressionStatement(node) &&
     ts.isCallExpression(node.expression) &&
     node.expression.expression.getText(panelTree) === 'watch' &&
-    node.expression.arguments[0]?.getText(panelTree) === 'coverUrl'
+    node.expression.arguments[0]?.getText(panelTree) === '[coverUrl, useVibrantPalette]'
 )
 assert.ok(watcher)
 const images = []
@@ -104,7 +189,7 @@ vm.runInNewContext(compile(watcher.getText(panelTree)), {
   CoverAnalyzer: { getCachedPalette: () => null },
   player: { currentQueueSong: { id: 1 } },
   COVER_ANALYSIS_VERSION: 11,
-  useLiquidBackground: { value: false },
+  useVibrantPalette: { value: true },
   paletteReady: { value: false },
   coverColors: { value: null },
   coverColorSource: { value: '' },
@@ -117,19 +202,19 @@ const flush = async () => {
   for (let i = 0; i < 8; i++) await Promise.resolve()
 }
 let cleanup
-load('first', null, (callback) => {
+load(['first', true], null, (callback) => {
   cleanup = callback
 })
 images[0].onload()
 await flush()
 assert.deepEqual(analyzed, ['first'], 'preloaded cover supplies colors without a visible img load')
 assert.equal(displayedCoverUrl.value, 'first')
-load('stale', null, (callback) => {
+load(['stale', true], null, (callback) => {
   cleanup = callback
 })
 images[1].onload()
 cleanup()
-load('current', null, (callback) => {
+load(['current', true], null, (callback) => {
   cleanup = callback
 })
 images[2].onload()
@@ -137,5 +222,5 @@ await flush()
 assert.deepEqual(analyzed, ['first', 'current'], 'stale decode cannot overwrite current colors')
 assert.equal(displayedCoverUrl.value, 'current')
 console.log(
-  'Ambient palette checks passed: dark/pastel hues, neutral artwork, preloading and stale decodes'
+  'Ambient palette checks passed: complete three-color cache, transparent artwork, hue fidelity, preloading and stale decodes'
 )

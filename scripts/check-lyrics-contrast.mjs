@@ -171,13 +171,14 @@ console.log(
 
 // Exercise the page's actual load handlers with controlled event order.
 const panelSource = await readFile(
-  new URL('../src/renderer/src/views/layout/playerPanel/Index.vue', import.meta.url),
+  new URL('../src/renderer/src/components/player/usePlayerBackdrop.ts', import.meta.url),
   'utf8'
 )
-const script = panelSource.match(/<script setup[^>]*>([\s\S]*?)<\/script>/)[1]
+const script = panelSource
 const ast = ts.createSourceFile('panel.ts', script, ts.ScriptTarget.Latest, true)
 const handlers = ast.statements
-  .filter(
+  .find((node) => ts.isFunctionDeclaration(node) && node.name?.text === 'usePlayerBackdrop')
+  .body.statements.filter(
     (node) =>
       ts.isFunctionDeclaration(node) &&
       ['analyzeCoverImage', 'extractCoverColors'].includes(node.name?.text)
@@ -195,6 +196,7 @@ const stats = {
 const page = {
   useAlbumArtwork: { value: true },
   useLiquidBackground: { value: false },
+  useVibrantPalette: { value: false },
   useAmbientBackground: { value: false },
   analyzedBackgrounds: new WeakSet(),
   coverUrl: { value: 'current-cover' },
