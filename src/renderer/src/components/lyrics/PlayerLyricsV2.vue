@@ -7,6 +7,13 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { LyricSpring } from './lyricSpring'
 import { LyricClock } from './lyricClock'
 import { withLyricInterludes } from './lyricInterlude'
+import {
+  createLyricWaveTimeline,
+  lyricWaveLift,
+  LYRIC_WAVE_TAIL_MS,
+  sampleLyricWave,
+  type LyricWaveTimeline
+} from './lyricWave'
 
 const props = withDefaults(
   defineProps<{
@@ -130,6 +137,8 @@ let isUnmounted = false
 const currentIndex = ref(0)
 const activeIndices = ref<number[]>([0])
 const activeIndexSet = computed(() => new Set(activeIndices.value))
+const sweepIndices = ref<number[]>([0])
+const sweepIndexSet = computed(() => new Set(sweepIndices.value))
 const hasUntimedLyrics = computed(
   () => lyrics.value.length > 0 && lyrics.value.every((line) => line.untimed)
 )
@@ -150,6 +159,8 @@ interface SweepElement {
 interface SweepLine {
   elements: SweepElement[]
   interludeElement: HTMLElement | null
+  wave: LyricWaveTimeline
+  waveCenters: Float64Array
 }
 const MAX_CHARACTER_BLEND_MS = 120
 const MAX_BLENDABLE_GAP_MS = 80
@@ -201,6 +212,7 @@ async function load(): Promise<void> {
   isUserScrolling.value = false
   currentIndex.value = 0
   activeIndices.value = [0]
+  sweepIndices.value = [0]
   rowSprings = []
   rowTarget = Number.NaN
   lyrics.value = []
@@ -386,31 +398,7 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
     })
     return
   }
-  const hasTimedCharacters = sweepElements.some((entry) => entry.start !== undefined)
-  let waveCenter = hasTimedCharacters ? -1 : lineFill * sweepElements.length - 1
-  if (hasTimedCharacters) {
-    for (let index = 0; index < sweepElements.length; index += 1) {
-      const entry = sweepElements[index]
-      if (entry.start === undefined || time < entry.start) break
-      const characterProgress = Math.max(0, Math.min(1, (time - entry.start) / entry.duration))
-      waveCenter = index - 1 + characterProgress
-      if (characterProgress < 1) break
-    }
-    let lastTimedIndex = sweepElements.length - 1
-    while (lastTimedIndex >= 0 && sweepElements[lastTimedIndex].start === undefined)
-      lastTimedIndex -= 1
-    const lastTimedEntry = sweepElements[lastTimedIndex]
-    if (lastTimedEntry?.start !== undefined) {
-      const lastCharacterEnd = lastTimedEntry.start + lastTimedEntry.duration
-      if (time > lastCharacterEnd) {
-        const exitProgress = Math.min(
-          1,
-          (time - lastCharacterEnd) / Math.max(1, lastTimedEntry.settleDuration)
-        )
-        waveCenter = lastTimedIndex + exitProgress * 5
-      }
-    }
-  }
+  if (ui.karaokeAnimation !== 'float') sampleLyricWave(time, sweepLine.wave, sweepLine.waveCenters)
   sweepElements.forEach((entry, index) => {
     const distributedEmphasisProgress =
       (lineFill *
@@ -445,7 +433,8 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
     } else {
       emphasis = emphasisProgress + 2.2 * emphasisProgress ** 3 * (1 - emphasisProgress)
     }
-    // Float lifts each glyph on its own timing; wave lifts its neighbors together.
+    // A shared, time-smoothed crest raises neighboring glyphs together.
+    // Highlighting keeps its original exact source timing.
     let lift: number
     if (ui.karaokeAnimation === 'float') {
       const floatProgress =
@@ -457,12 +446,7 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
             )
       lift = floatProgress * floatProgress * (3 - 2 * floatProgress)
     } else {
-      const distanceFromWave = index - waveCenter
-      const waveWidth = distanceFromWave < 0 ? 1.9 : 0.82
-      lift =
-        distanceFromWave <= -5 || distanceFromWave > 3
-          ? 0
-          : Math.exp(-0.5 * (distanceFromWave / waveWidth) ** 2)
+      lift = lyricWaveLift(time, index, sweepLine.waveCenters, sweepLine.wave)
     }
     if (
       entry.previous === progress &&
@@ -501,6 +485,23 @@ function animateSweep(now: number): void {
   const time = clock.read(now)
   const nextActiveIndices = hasUntimedLyrics.value ? [0] : findActiveLineIndices(lyrics.value, time)
   if (!sameIndices(nextActiveIndices, activeIndices.value)) activeIndices.value = nextActiveIndices
+  const nextSweepIndices = [...nextActiveIndices]
+  if (ui.karaokeAnimation !== 'float' && !ui.reduceMotion && props.allowTransform) {
+    // Keep outgoing glyphs mounted for their release without delaying highlight,
+    // active-line selection or scrolling to the next sentence.
+    lyrics.value.forEach((line, index) => {
+      const end = line.endMs ?? lyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
+      if (
+        !line.untimed &&
+        line.text.trim() &&
+        time >= end &&
+        time < end + LYRIC_WAVE_TAIL_MS &&
+        !nextSweepIndices.includes(index)
+      )
+        nextSweepIndices.push(index)
+    })
+  }
+  if (!sameIndices(nextSweepIndices, sweepIndices.value)) sweepIndices.value = nextSweepIndices
   const index = nextActiveIndices[0] ?? 0
   if (index !== currentIndex.value) {
     currentIndex.value = index
@@ -514,8 +515,10 @@ function animateSweep(now: number): void {
 
 function refreshSweepElements(): void {
   sweepLines.clear()
-  for (const lineIndex of activeIndices.value) {
+  for (const lineIndex of sweepIndices.value) {
     const line = lineRefs.value[lineIndex]
+    const lyric = lyrics.value[lineIndex]
+    if (!lyric) continue
     const elements = Array.from(
       line?.querySelectorAll<HTMLElement>('.lyric-karaoke-char, .lyric-char, .interlude-dot') ?? []
     )
@@ -554,8 +557,21 @@ function refreshSweepElements(): void {
         previousLift: -1
       }
     })
+    const distributedDuration =
+      Math.max(
+        1,
+        (lyric.endMs ?? lyrics.value[lineIndex + 1]?.timeMs ?? lyric.timeMs + 5000) - lyric.timeMs
+      ) / Math.max(1, elements.length)
+    const wave = createLyricWaveTimeline(
+      sweepElements.map((entry, index) => ({
+        start: entry.start ?? lyric.timeMs + index * distributedDuration,
+        duration: entry.start === undefined ? distributedDuration : entry.duration
+      }))
+    )
     sweepLines.set(lineIndex, {
       elements: sweepElements,
+      wave,
+      waveCenters: new Float64Array(wave.length),
       interludeElement: line?.querySelector<HTMLElement>('.lyric-interlude') ?? null
     })
   }
@@ -680,7 +696,7 @@ watch(
   }
 )
 
-watch(activeIndices, () => void nextTick(refreshSweepElements), { flush: 'post' })
+watch(sweepIndices, () => void nextTick(refreshSweepElements), { flush: 'post' })
 watch(lyrics, () => void nextTick(observeVisibleLines), { flush: 'post' })
 
 watch(
@@ -810,6 +826,7 @@ onUnmounted(() => {
           lineStyles[idx],
           visibleLineIndices.has(idx),
           activeIndexSet.has(idx),
+          sweepIndexSet.has(idx),
           ui.showLyricsTranslation,
           ui.showLyricsRomanization,
           ui.lyricsStyle,
@@ -860,7 +877,7 @@ onUnmounted(() => {
               :key="segmentIndex"
               class="lyric-ruby"
             >
-              <template v-if="activeIndexSet.has(idx)">
+              <template v-if="sweepIndexSet.has(idx)">
                 <span
                   v-for="(char, charIdx) in segment.chars"
                   :key="charIdx"
@@ -879,7 +896,7 @@ onUnmounted(() => {
             <div v-if="line.untimed" class="lyric-plain">
               {{ line.text }}
             </div>
-            <div v-else-if="activeIndexSet.has(idx)">
+            <div v-else-if="sweepIndexSet.has(idx)">
               <!-- 逐字歌词 -->
               <template v-if="line.chars?.length">
                 <span

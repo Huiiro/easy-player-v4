@@ -12,6 +12,87 @@ async function load(name) {
 }
 const { LyricSpring } = await load('lyricSpring')
 const { LyricClock } = await load('lyricClock')
+const { createLyricWaveTimeline, sampleLyricWave, lyricWaveLift, LYRIC_WAVE_TAIL_MS } =
+  await load('lyricWave')
+const makeWave = (entries) => {
+  const timeline = createLyricWaveTimeline(entries)
+  const centers = new Float64Array(timeline.length)
+  return (time) => {
+    sampleLyricWave(time, timeline, centers)
+    return entries.map((_, index) => lyricWaveLift(time, index, centers, timeline))
+  }
+}
+const connected = makeWave(
+  Array.from({ length: 10 }, (_, index) => ({ start: 1000 + index * 400, duration: 400 }))
+)
+const neighbors = connected(1900)
+const crest = neighbors.indexOf(Math.max(...neighbors))
+assert(crest > 0 && crest < neighbors.length - 1)
+assert(
+  neighbors[crest - 1] > 0.5 && neighbors[crest + 1] > 0.1,
+  'a common crest raises adjacent glyphs as a connected wave'
+)
+const slow = makeWave([
+  { start: 1000, duration: 1800 },
+  { start: 2800, duration: 100 },
+  { start: 2900, duration: 500 }
+])
+assert(
+  slow(2100)[1] > 0.05,
+  'the next glyph joins the leading slope before its own syllable starts'
+)
+const boundary = makeWave([
+  { start: 1000, duration: 100 },
+  { start: 1100, duration: 2000 },
+  { start: 3100, duration: 50 },
+  { start: 3150, duration: 250 }
+])
+for (const time of [1100, 3100, 3150, 3400]) {
+  const before = boundary(time - 1),
+    after = boundary(time + 1)
+  assert(
+    after.every((value, index) => Math.abs(value - before[index]) < 0.03),
+    'source timing boundaries must not jump the wave'
+  )
+}
+for (const duration of [1, 40, 100, 250, 800, 2500, 6000]) {
+  const wave = makeWave([{ start: 1000, duration }])
+  assert(wave(999)[0] < 1e-10, 'an opening glyph starts from rest')
+  assert(
+    wave(1000 + duration + LYRIC_WAVE_TAIL_MS)[0] < 1e-10,
+    'the crest fully exits within the outgoing row lifetime'
+  )
+  for (const fps of [30, 60, 144]) {
+    let previous = 0
+    for (let time = 1000; time <= 1000 + duration + LYRIC_WAVE_TAIL_MS; time += 1000 / fps) {
+      const value = wave(time)[0]
+      assert(Number.isFinite(value) && value >= 0 && value <= 1)
+      assert(
+        Math.abs(value - previous) < 0.4,
+        'the smoothed crest never pops even on a short syllable'
+      )
+      previous = value
+    }
+  }
+}
+const paused = connected(1900)
+connected(9000)
+assert.deepEqual(
+  connected(1900),
+  paused,
+  'pause and backward seeks reproduce the same connected wave without frame history'
+)
+const separated = makeWave([
+  { start: 1000, duration: 80 },
+  { start: 3000, duration: 80 }
+])
+assert(
+  separated(2500).every((value) => value < 1e-10),
+  'explicit pauses release the preceding wave without lifting future syllables'
+)
+console.log(
+  'PASS: shared crest, neighboring slopes, smooth timing boundaries, short/long notes, gaps, FPS and seeks'
+)
 for (const fps of [30, 60, 144]) {
   const spring = new LyricSpring()
   spring.target = 200

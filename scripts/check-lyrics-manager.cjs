@@ -38,6 +38,11 @@ async function runFixture() {
     instrumental: false
   })
   const databaseLyrics = (id) => {
+    if (id === 9)
+      return {
+        lrc: '[0,1600](0,1200,0)长(1200,100,0)短(1300,300,0)尾\n[1600,1400](1600,700,0)后(2300,700,0)句',
+        lyricFormat: 'yrc'
+      }
     if (id === 4)
       return {
         lrc: '[00:00.00]<00:00.00>First <00:00.50>line\n[00:02.00]Second line\n[00:05.00]Third line',
@@ -467,6 +472,54 @@ async function runFixture() {
       window.managerUi.lyricsFontSize = 2.4
       window.managerUi.karaokeAnimation = 'wave'
       host.style.setProperty('--lrc-size', '24px')
+      window.managerUi.reduceMotion = false
+      lyricState.song = song(9)
+      lyricState.currentTime = 600
+      await wait(200)
+      const outgoing = [...host.querySelectorAll('.lyric-line')].find((row) =>
+        row.textContent.includes('长短尾')
+      )
+      const tail = () => outgoing.querySelectorAll('.lyric-karaoke-char')[2]
+      const leadingNeighbor = outgoing.querySelectorAll('.lyric-karaoke-char')[1]
+      check(
+        Number(leadingNeighbor.style.getPropertyValue('--lift')) > 0.05 &&
+          Number(leadingNeighbor.style.getPropertyValue('--progress')) === 0,
+        'the shared wave raises the leading neighbor before its own highlight starts'
+      )
+      lyricState.currentTime = 1500
+      await wait(200)
+      check(
+        Number(tail()?.style.getPropertyValue('--lift')) > 0.4,
+        'final syllable rises before the sentence boundary'
+      )
+      lyricState.currentTime = 1601
+      await wait(240)
+      check(
+        !!tail() && Number(tail().style.getPropertyValue('--lift')) > 0.8,
+        'outgoing timed glyphs survive the sentence boundary to release naturally'
+      )
+      lyricState.currentTime = 1900
+      await wait(360)
+      const released = Number(tail()?.style.getPropertyValue('--lift'))
+      check(
+        released > 0 && released < 0.8,
+        'final glyph eases down while the next sentence is already active'
+      )
+      await wait(150)
+      check(
+        Number(tail().style.getPropertyValue('--lift')) === released,
+        'paused playback freezes the release at its media-time position'
+      )
+      lyricState.currentTime = 2300
+      await wait(550)
+      check(!tail(), 'completed release returns the outgoing sentence to static text')
+      lyricState.currentTime = 1500
+      await wait(180)
+      check(
+        Number(tail()?.style.getPropertyValue('--lift')) > 0.4,
+        'seeking backward restores the expected wave pose'
+      )
+      window.managerUi.reduceMotion = true
     }
     lyricState.song = song(5)
     await wait()
