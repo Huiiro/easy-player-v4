@@ -217,6 +217,10 @@ install(FILES "${SOUNDTOUCH_DLL}" DESTINATION bin)
 if(WIN32)
 add_library(easy_player_smtc SHARED "${CMAKE_CURRENT_LIST_DIR}/../../engine-windows/src/smtc.cpp" ${CMAKE_JS_SRC})
 add_executable(easy_player_smtc_probe EXCLUDE_FROM_ALL "${CMAKE_CURRENT_LIST_DIR}/../../engine-windows/tests/smtc_probe.cpp")
+# C++/WinRT needs standard coroutines: C++17 selects experimental/coroutine,
+# which MSVC 14.51 and newer reject with STL1011.
+target_compile_features(easy_player_smtc PRIVATE cxx_std_20)
+target_compile_features(easy_player_smtc_probe PRIVATE cxx_std_20)
 target_link_libraries(easy_player_smtc_probe PRIVATE windowsapp ole32)
 target_compile_options(easy_player_smtc_probe PRIVATE /EHsc /permissive-)
 target_include_directories(easy_player_smtc PRIVATE ${CMAKE_JS_INC} "${NODE_ADDON_API_DIR}")
