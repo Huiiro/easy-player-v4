@@ -52,7 +52,7 @@ win:
       to: 'native/'
       filter:
         # Package the runtime at the root only. Release/ contains the same
-        # addon as a DLL; development/test .node modules are not used by the app.
+        # audio addon as a DLL. Include the three runtime modules explicitly.
         - 'easy_player_native.node'
         - 'easy_player_window.node'
         - 'easy_player_smtc.node'

@@ -35,6 +35,14 @@ module.exports = async (context) => {
     'resources/lib/yt-dlp/win/yt-dlp.exe',
     'resources/lib/yt-dlp/win/yt-dlp.exe.manifest.json',
     'build/native-addon/easy_player_native.node',
+    'build/native-addon/easy_player_smtc.node',
+    'build/native-addon/easy_player_window.node',
+    'build/taskbar-controls/bin/Release/easy_player_taskbar.exe',
+    'resources/lib/fpcalc/win32-x64/fpcalc.exe',
+    'resources/lib/fpcalc/win32-x64/manifest.json',
+    'resources/lib/fpcalc/win32-x64/LICENSE.md',
+    'resources/lib/fpcalc/win32-x64/LGPL-2.1.txt',
+    'resources/lib/fpcalc/win32-x64/SOURCES.txt',
     'build/native-addon/samplerate.dll',
     'build/native-addon/SoundTouch.dll',
     'build/native-addon/FFmpeg-LICENSE.txt',
@@ -42,7 +50,7 @@ module.exports = async (context) => {
   ]) {
     if (!fs.existsSync(path.join(root, relative))) {
       throw new Error(
-        `Missing base package resource: ${relative}. Run npm run build:native and npm run prepare:ffmpeg first.`
+        `Missing base package resource: ${relative}. Run npm run build:native, npm run build:taskbar, npm run prepare:fpcalc, npm run prepare:ytdlp and npm run prepare:ffmpeg first.`
       )
     }
   }

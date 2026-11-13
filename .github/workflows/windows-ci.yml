@@ -33,6 +33,10 @@ jobs:
           python-version: '3.12.10'
       - name: Prepare yt-dlp
         run: npm run prepare:ytdlp
+      - name: Prepare audio fingerprint tool
+        run: npm run prepare:fpcalc
+      - name: Build taskbar controls
+        run: npm run build:taskbar
       - name: Install native dependencies
         run: npm run prepare:native
       - name: Build native addon

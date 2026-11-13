@@ -59,6 +59,8 @@ const unexpectedNativeFiles = nativeEntries.filter(
     !entry.isFile() ||
     (![
       'easy_player_native.node',
+      'easy_player_smtc.node',
+      'easy_player_window.node',
       'easy_player_taskbar.exe',
       'ffmpeg.exe',
       'ffmpeg-runtime.json',
@@ -75,6 +77,9 @@ if (unexpectedNativeFiles.length) {
 }
 for (const name of [
   'easy_player_native.node',
+  'easy_player_smtc.node',
+  'easy_player_window.node',
+  'easy_player_taskbar.exe',
   'samplerate.dll',
   'SoundTouch.dll',
   'ffmpeg.exe',
@@ -161,6 +166,27 @@ if (
 )
   throw new Error('Packaged yt-dlp version smoke test failed')
 console.log(`yt-dlp ${ytdlpLock.version}: official SHA-256 and executable verified`)
+const fpcalcDirectory = path.join(path.dirname(archive), 'lib/fpcalc')
+for (const name of ['fpcalc.exe', 'manifest.json', 'LICENSE.md', 'LGPL-2.1.txt', 'SOURCES.txt']) {
+  if (!fs.existsSync(path.join(fpcalcDirectory, name)))
+    throw new Error(`Required fingerprint resource is missing: ${name}`)
+}
+const fpcalcLock = JSON.parse(
+  fs.readFileSync(path.resolve(__dirname, '../resources/lib/fpcalc-release.json'), 'utf8')
+)
+const fpcalcManifest = JSON.parse(
+  fs.readFileSync(path.join(fpcalcDirectory, 'manifest.json'), 'utf8')
+)
+if (
+  fpcalcManifest.version !== fpcalcLock.version ||
+  fpcalcManifest.archiveSha256 !== fpcalcLock.targets['win32-x64'].sha256 ||
+  crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(path.join(fpcalcDirectory, 'fpcalc.exe')))
+    .digest('hex') !== fpcalcManifest.executableSha256
+)
+  throw new Error('Packaged fpcalc does not match the locked release and executable SHA-256')
+console.log(`Chromaprint ${fpcalcLock.version}: fingerprint runtime verified`)
 for (const relative of ['resources/auto-mix/stem_worker.py']) {
   if (!fs.existsSync(path.join(path.dirname(archive), relative))) {
     throw new Error(`Bundled stem runtime resource is missing: ${relative}`)
