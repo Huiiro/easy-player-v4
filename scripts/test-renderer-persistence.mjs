@@ -55,6 +55,7 @@ vm.runInNewContext(compile(readFileSync('src/renderer/src/stores/persistence.ts'
 })
 const stored = JSON.stringify({
   songPlayTrigger: 'single',
+  playerCoverEffect: 'none',
   genreSeparator: ';，',
   normalizeMetadataSeparator: true,
   albumGroupByName: true,
@@ -104,6 +105,11 @@ assert.equal(
   'Separate lyrics font survives a renderer restart'
 )
 const restoredHeaders = JSON.parse(exports.playerDataStorage.getItem('ui.preferences.v1'))
+assert.equal(
+  restoredHeaders.playerCoverEffect,
+  'none',
+  'Disabled cover glow survives a renderer restart'
+)
 assert.equal(restoredHeaders.genreSeparator, ';，', 'genre separators survive a renderer restart')
 assert.equal(
   restoredHeaders.normalizeMetadataSeparator,

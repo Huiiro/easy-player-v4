@@ -29,11 +29,14 @@ import { computed, nextTick, onScopeDispose, reactive, ref, shallowRef, watch } 
 import {
   DEFAULT_PLAYER_BG_TYPE,
   DEFAULT_PLAYER_COVER_STYLE,
+  DEFAULT_PLAYER_COVER_EFFECT,
   PlayerBgType,
   PlayerCoverStyle,
+  PlayerCoverEffect,
   PlayerDisplayMode,
   resolvePlayerBgType,
   resolvePlayerCoverStyle,
+  resolvePlayerCoverEffect,
   TagStyle
 } from '@/constants'
 import type { LyricSource } from '@/services/lyrics'
@@ -125,6 +128,7 @@ export const UI_PREFERENCE_KEYS = [
   'lyricSourceOrder',
   'playerBgType',
   'playerCoverStyle',
+  'playerCoverEffect',
   'playerDisplayMode',
   'showPlayerSpectrum',
   'playerSpectrumStyle',
@@ -498,6 +502,7 @@ export const useUIStore = defineStore(
     // ========== 播放器设置 ==========
     const playerBgType = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
     const playerCoverStyle = ref<PlayerCoverStyle>(DEFAULT_PLAYER_COVER_STYLE)
+    const playerCoverEffect = ref<PlayerCoverEffect>(DEFAULT_PLAYER_COVER_EFFECT)
     const playerDisplayMode = ref(PlayerDisplayMode.Normal)
     const allowSwitchCoverStyle = ref(true)
     const isCircularCover = ref(false)
@@ -814,6 +819,7 @@ export const useUIStore = defineStore(
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       setPlayerBgType(saved.playerBgType)
       setPlayerCoverStyle(saved.playerCoverStyle)
+      setPlayerCoverEffect(saved.playerCoverEffect)
       if (
         ['auto', 'embedded', 'database', 'local', 'network'].includes(
           saved.lyricSourceMode as string
@@ -868,6 +874,9 @@ export const useUIStore = defineStore(
     }
     function setPlayerCoverStyle(value: unknown): void {
       playerCoverStyle.value = resolvePlayerCoverStyle(value)
+    }
+    function setPlayerCoverEffect(value: unknown): void {
+      playerCoverEffect.value = resolvePlayerCoverEffect(value)
     }
     async function setMicaEnabled(enabled: boolean): Promise<void> {
       await setNativeWindowMaterial(enabled ? 'mica' : 'none')
@@ -986,6 +995,14 @@ export const useUIStore = defineStore(
       systemThemeQuery.addEventListener('change', syncFollowSystemTheme)
       onScopeDispose(() => systemThemeQuery.removeEventListener('change', syncFollowSystemTheme))
     }
+    watch(
+      playerCoverEffect,
+      (value) => {
+        const resolved = resolvePlayerCoverEffect(value)
+        if (value !== resolved) playerCoverEffect.value = resolved
+      },
+      { immediate: true }
+    )
     const state = {
       customThemes,
       appearancePreferences,
@@ -1089,6 +1106,8 @@ export const useUIStore = defineStore(
       setPlayerBgType,
       playerCoverStyle,
       setPlayerCoverStyle,
+      playerCoverEffect,
+      setPlayerCoverEffect,
       playerDisplayMode,
       allowSwitchCoverStyle,
       isCircularCover,

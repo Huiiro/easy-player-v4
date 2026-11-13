@@ -7,7 +7,7 @@ import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import FooterLayoutSettings from './FooterLayoutSettings.vue'
-import { PlayerBgType, PlayerCoverStyle } from '@/constants'
+import { PlayerBgType, PlayerCoverStyle, PlayerCoverEffect } from '@/constants'
 import { useUIStore } from '@/stores/ui/uiStore'
 
 const ui = useUIStore()
@@ -20,6 +20,14 @@ const karaokeAnimationOptions = computed(() => [
   { label: t('settings.karaokeAnimationWave'), value: 'wave' },
   { label: t('settings.karaokeAnimationFloat'), value: 'float' }
 ])
+const coverEffectOptions = computed(() => [
+  { label: t('settings.playerCoverEffectNone'), value: PlayerCoverEffect.NONE },
+  { label: t('settings.playerCoverEffectGlow'), value: PlayerCoverEffect.GLOW }
+])
+const playerCoverEffect = computed<PlayerCoverEffect>({
+  get: () => ui.playerCoverEffect,
+  set: (value) => ui.setPlayerCoverEffect(value)
+})
 const playerBackground = computed<PlayerBgType>({
   get: () => ui.playerBgType,
   set: (value) => {
@@ -150,6 +158,18 @@ const openFooterAnywhere = computed({
           </button>
         </div>
       </div>
+      <SettingRow
+        :label="t('settings.playerCoverEffect')"
+        :description="t('settings.playerCoverEffectDescription')"
+      >
+        <BaseSelect
+          v-model="playerCoverEffect"
+          :aria-label="t('settings.playerCoverEffect')"
+          :options="coverEffectOptions"
+          teleport
+          class="w-48"
+        />
+      </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.lyricVisuals')">
       <SettingRow

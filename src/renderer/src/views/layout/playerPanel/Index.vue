@@ -635,6 +635,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           <!-- cover -->
           <PlayerCover
             :cover-style="ui.playerCoverStyle"
+            :effect="ui.playerCoverEffect"
             :cover-url="coverFailed ? null : displayedCoverUrl"
             :title="trackTitle"
             :primary="coverColors.primary"

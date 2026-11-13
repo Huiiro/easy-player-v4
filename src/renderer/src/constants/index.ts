@@ -39,6 +39,17 @@ export enum PlayerCoverStyle {
 
 export const DEFAULT_PLAYER_COVER_STYLE = PlayerCoverStyle.STANDARD
 
+export enum PlayerCoverEffect {
+  NONE = 'none',
+  GLOW = 'glow'
+}
+
+export const DEFAULT_PLAYER_COVER_EFFECT = PlayerCoverEffect.GLOW
+
+export function resolvePlayerCoverEffect(value: unknown): PlayerCoverEffect {
+  return value === PlayerCoverEffect.NONE ? PlayerCoverEffect.NONE : DEFAULT_PLAYER_COVER_EFFECT
+}
+
 export function resolvePlayerCoverStyle(value: unknown): PlayerCoverStyle {
   return value === PlayerCoverStyle.VINYL ? PlayerCoverStyle.VINYL : DEFAULT_PLAYER_COVER_STYLE
 }

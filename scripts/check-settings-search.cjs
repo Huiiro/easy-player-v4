@@ -41,7 +41,7 @@ app.whenReady().then(async () => {
             build.onLoad(
               {
                 filter:
-                  /(PlaybackSettings|PlayerAppearanceSettings|LyricsSettings|DesktopLyricsSettings|ThemeSettings|OfficialPluginSettings|PluginProxySettings|NetworkSourceSettings|CacheSettings|LibrarySettings|StatisticsSettings|ResetPreferencesSettings)\.vue$/
+                  /(PlaybackSettings|LyricsSettings|DesktopLyricsSettings|ThemeSettings|OfficialPluginSettings|PluginProxySettings|NetworkSourceSettings|CacheSettings|LibrarySettings|StatisticsSettings|ResetPreferencesSettings)\.vue$/
               },
               () => ({ contents: 'export default {render(){return null}}', loader: 'js' })
             )
@@ -128,12 +128,26 @@ app.whenReady().then(async () => {
       let ui;const instance=Vue.createApp({setup(){ui=useUIStore();ui.platform='linux';ui.reduceMotion=true;return()=>Vue.h(Page)}}).use(createPinia()).use(i18n);
       document.documentElement.classList.add('dark');document.body.style.cssText='height:100vh;margin:0';document.getElementById('app').style.height='100%';
       instance.mount('#app');await wait(300);
+      const effectRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent===zh.settings.playerCoverEffect);
+      check(effectRow,'Cover rhythm effect appears in player settings');
+      effectRow.scrollIntoView({block:'center'});await wait();
+      const effectTrigger=()=>effectRow.querySelector('button[aria-haspopup="listbox"]');
+      check(ui.playerCoverEffect==='glow'&&effectTrigger().textContent.includes('辉光'),'Existing users retain glow by default');
+      effectTrigger().click();await wait();
+      const effectChoices=[...document.querySelectorAll('[role="option"]')];
+      check(effectChoices.length===2&&effectChoices.some(option=>option.textContent.trim()==='关闭')&&effectChoices.some(option=>option.textContent.trim()==='辉光'),'Cover effect dropdown offers Off and Glow');
+      effectChoices.find(option=>option.textContent.trim()==='关闭').click();await wait();
+      check(ui.playerCoverEffect==='none'&&effectTrigger().textContent.includes('关闭'),'Selecting Off updates the player preference');
+      effectTrigger().click();await wait();
+      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()==='辉光').click();await wait();
+      check(ui.playerCoverEffect==='glow','Selecting Glow restores the player preference');
       const trigger=()=>document.querySelector('.settings-nav button');
       check(trigger()?.textContent.includes('搜索设置'),'Search is the first settings sidebar entry');
       const open=async()=>{trigger().click();await wait(350)};
       const input=()=>document.querySelector('.ep-dialog input[type=search]');
       const search=async(query)=>{input().value=query;input().dispatchEvent(new Event('input',{bubbles:true}));await wait(150);return [...document.querySelectorAll('.settings-search-result')]};
       await open();check(document.activeElement===input(),'Opening search focuses the input');
+      check((await search('封面律动效果')).some(button=>button.textContent.includes('封面律动效果')),'Cover rhythm effect is searchable');
       check((await search('系统 更新 启动')).some(button=>button.textContent.includes('启动时自动检查更新')),'Matches section, group and setting title terms together');
       check((await search('SYSTEM updates startup')).some(button=>button.textContent.includes('启动时自动检查更新')),'English hierarchy queries find Chinese settings');
       check((await search(en.settings.autoCheckUpdatesDescription)).some(button=>button.textContent.includes('启动时自动检查更新')),'Search matches translated descriptions');

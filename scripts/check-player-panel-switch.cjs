@@ -89,7 +89,12 @@ app.whenReady().then(async () => {
             }))
             build.onLoad(
               { filter: /components[\\/]background[\\/](?:themes[\\/].+|CoverAuraCanvas)\.vue$/ },
-              () => ({ contents: 'export default {render(){return null}}', loader: 'js' })
+              ({ path: filename }) => ({
+                contents: filename.includes('CoverAuraCanvas')
+                  ? "import {h} from 'vue';export default {render(){return h('canvas',{'data-cover-aura-fixture':''})}}"
+                  : 'export default {render(){return null}}',
+                loader: 'js'
+              })
             )
             build.onLoad(
               {
@@ -171,6 +176,18 @@ app.whenReady().then(async () => {
     if(restored.primary!==restored.secondary||restored.primary!==restored.tertiary)throw Error('Switching from album to ambient must restore the complete artwork palette');
    }
    let moreMenuMotionChecked=false;
+   const coverImage=document.querySelector('.cover-frame img');
+   const originalReduced=ui.reduceMotion,originalPauseOnBlur=ui.pauseAnimationsOnBlur;ui.reduceMotion=false;ui.pauseAnimationsOnBlur=false;
+   window.panelPlayer.rhythmVisualConfig.enabled=true;window.panelPlayer.audioAnalysis.rms=0.6;
+   ui.setPlayerCoverEffect('glow');await Vue.nextTick();await window.panelWait(100);
+   if(!document.querySelector('.cover-aura')||document.querySelectorAll('.beat-particle').length!==24||document.querySelector('.player-cover-glow').style.transform==='scale(1)')throw Error('Glow mounts independent aura, particles and audio scaling');
+   ui.setPlayerCoverEffect('none');await Vue.nextTick();
+   if(document.querySelector('.cover-aura')||document.querySelector('.beat-particle')||document.querySelector('.player-cover-glow').style.transform!=='scale(1)')throw Error('Off removes glow, particles and scaling immediately');
+   if(document.querySelector('.cover-frame img')!==coverImage)throw Error('Effect switching must preserve the loaded artwork');
+   ui.setPlayerCoverEffect('glow');ui.reduceMotion=true;await Vue.nextTick();
+   if(!document.querySelector('.cover-aura')||document.querySelector('.beat-particle')||document.querySelector('.player-cover-glow').style.transform!=='scale(1)')throw Error('Reduced motion keeps static glow without particles or scaling');
+   ui.setPlayerCoverEffect('invalid');await Vue.nextTick();if(ui.playerCoverEffect!=='glow')throw Error('Invalid effect preference must recover to the default');
+   window.panelPlayer.rhythmVisualConfig.enabled=false;ui.reduceMotion=originalReduced;ui.pauseAnimationsOnBlur=originalPauseOnBlur;await Vue.nextTick();
    async function chooseLyricOption(prefix,label,verify){
     const trigger=[...document.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label').startsWith(prefix));
     if(!trigger)throw Error('Missing lyric option trigger: '+prefix);
