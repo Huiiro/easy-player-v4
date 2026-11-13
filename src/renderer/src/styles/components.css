@@ -45,10 +45,10 @@ html.mica-enabled:not(.dark)[data-window-material='mica'] .ep-footer {
   position: relative;
   width: 100%;
   max-width: var(--ep-footer-max-width, 1320px);
-  gap: var(--ep-footer-gap, 20px);
+  gap: var(--ep-footer-gap, 16px);
   grid-template-columns: var(
     --ep-footer-columns,
-    32px minmax(0, 1fr) minmax(180px, 2.2fr) minmax(0, 1fr) 32px
+    32px minmax(0, 1fr) minmax(180px, 1.8fr) minmax(0, 1fr) 32px
   );
   grid-template-areas: var(--ep-footer-areas, 'info info playback actions toggle');
 }
@@ -107,8 +107,20 @@ html.mica-enabled:not(.dark)[data-window-material='mica'] .ep-footer {
 .app-footer--expanded > .ep-footer-toggle {
   grid-area: toggle;
 }
+/* Overflow one action at a time instead of hiding all optional controls together.
+ * Each 32px button needs another 8px gap after the always-visible More button. */
 @container footer-actions (width < 272px) {
-  .ep-footer-action-secondary {
+  .ep-footer-action-dislike {
+    display: none;
+  }
+}
+@container footer-actions (width < 232px) {
+  .ep-footer-action-lyrics {
+    display: none;
+  }
+}
+@container footer-actions (width < 192px) {
+  .ep-footer-action-like {
     display: none;
   }
 }

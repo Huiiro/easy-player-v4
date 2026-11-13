@@ -318,6 +318,55 @@ async function runChecks() {
   )
   document.body.click()
   await wait()
+  const toolbar = document.querySelector('.ep-footer-actions')
+  const categories = ['volume', 'queue', 'mode', 'like', 'lyrics', 'dislike']
+  const thresholds = { volume: 72, queue: 112, mode: 152, like: 192, lyrics: 232, dislike: 272 }
+  const visible = (element) => getComputedStyle(element).display !== 'none'
+  check(
+    categories.every((category) =>
+      visible(document.querySelector('.ep-footer-action-' + category))
+    ),
+    'default layout exposes all action icons at 1280px, including likes and desktop lyrics'
+  )
+  more().click()
+  await wait()
+  for (const width of [71, 72, 111, 112, 151, 152, 191, 192, 231, 232, 271, 272]) {
+    toolbar.style.maxWidth = width + 'px'
+    await wait()
+    const available = toolbar.clientWidth
+    for (const category of categories) {
+      const shown = visible(document.querySelector('.ep-footer-action-' + category))
+      check(
+        shown === available >= thresholds[category],
+        category + ' fits its own width threshold at ' + width
+      )
+      check(
+        visible(action('.ep-footer-menu-' + category)) === !shown,
+        category + ' remains available exactly once across toolbar and menu at ' + width
+      )
+    }
+    const boxes = [...toolbar.children]
+      .filter(visible)
+      .map((e) => e.getBoundingClientRect())
+      .sort((a, b) => a.left - b.left)
+    const bounds = toolbar.getBoundingClientRect()
+    check(
+      boxes.every(
+        (box, index) =>
+          box.left >= bounds.left - 1 &&
+          box.right <= bounds.right + 1 &&
+          (!index || boxes[index - 1].right <= box.left)
+      ),
+      'toolbar icons fit without overlap at ' + width
+    )
+    check(
+      boxes.length === Math.min(7, Math.floor((available + 8) / 40)),
+      'toolbar uses every available icon slot at ' + width
+    )
+  }
+  toolbar.style.maxWidth = ''
+  document.body.click()
+  await wait()
   const volumeTrigger = document.querySelector('.ep-footer-action-volume button')
   const actions = document.querySelector('.ep-footer-actions')
   actions.style.maxWidth = '60px'
@@ -462,7 +511,7 @@ app.whenReady().then(async () => {
     })
     win = new BrowserWindow({
       show: false,
-      width: 900,
+      width: 1280,
       height: 800,
       webPreferences: { offscreen: true, backgroundThrottling: false }
     })

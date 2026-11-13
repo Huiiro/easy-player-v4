@@ -555,7 +555,7 @@ onBeforeUnmount(() => {
             <SvgIcon :name="playModeIcon" class-name="size-5" />
           </button>
           <button
-            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+            class="ep-footer-action-like grid size-8 place-items-center rounded-full transition hover:bg-text/10"
             :class="currentPreference === 1 ? 'text-primary' : 'text-text'"
             :disabled="!player.currentQueueSong"
             :title="t('recommendation.like')"
@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
             />
           </button>
           <button
-            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full transition hover:bg-text/10"
+            class="ep-footer-action-dislike grid size-8 place-items-center rounded-full transition hover:bg-text/10"
             :class="currentPreference === -1 ? 'text-danger' : 'text-text'"
             :disabled="!player.currentQueueSong"
             :title="t('recommendation.dislike')"
@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
             <SvgIcon name="control-playlist" class-name="size-5" />
           </button>
           <button
-            class="ep-footer-action-secondary grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
+            class="ep-footer-action-lyrics grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10"
             :title="t('footer.desktopLyrics')"
             @click.stop="openDesktopLyrics"
           >
@@ -651,8 +651,8 @@ onBeforeUnmount(() => {
                   {{ t('queue.title') }}
                 </button>
                 <button
-                  v-show="collapsed || footerActionsWidth < 272"
-                  class="ep-footer-menu-secondary menu-item"
+                  v-show="collapsed || footerActionsWidth < 192"
+                  class="ep-footer-menu-secondary ep-footer-menu-like menu-item"
                   :class="currentPreference === 1 && 'text-primary'"
                   :disabled="!player.currentQueueSong"
                   @click="markCurrent(1)"
@@ -665,7 +665,7 @@ onBeforeUnmount(() => {
                 </button>
                 <button
                   v-show="collapsed || footerActionsWidth < 272"
-                  class="ep-footer-menu-secondary menu-item"
+                  class="ep-footer-menu-secondary ep-footer-menu-dislike menu-item"
                   :class="currentPreference === -1 && 'text-danger'"
                   :disabled="!player.currentQueueSong"
                   @click="markCurrent(-1)"
@@ -674,8 +674,8 @@ onBeforeUnmount(() => {
                   {{ t('recommendation.dislike') }}
                 </button>
                 <button
-                  v-show="collapsed || footerActionsWidth < 272"
-                  class="ep-footer-menu-secondary menu-item"
+                  v-show="collapsed || footerActionsWidth < 232"
+                  class="ep-footer-menu-secondary ep-footer-menu-lyrics menu-item"
                   @click="openDesktopLyricsFromMenu"
                 >
                   <SvgIcon name="common-lyrics2" class-name="size-4 shrink-0" />
