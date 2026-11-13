@@ -459,7 +459,7 @@ onBeforeUnmount(() => {
           :class="
             selected === extra.id
               ? 'bg-primary/10 text-primary'
-              : 'text-text-l hover:bg-bg-l hover:text-text'
+              : 'text-text-l hover:bg-text/5 hover:text-text'
           "
           type="button"
           :aria-current="selected === extra.id ? 'true' : undefined"
@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
           :class="
             selected === node.id
               ? 'border-primary bg-primary/10'
-              : 'border-transparent hover:bg-bg-l'
+              : 'border-transparent hover:bg-text/5'
           "
           @dragover.prevent
           @drop.prevent="moveNode(index)"
@@ -532,7 +532,7 @@ onBeforeUnmount(() => {
             <h3 class="text-xs font-semibold">{{ t('ap.audioPipeline') }}</h3>
             <button
               type="button"
-              class="inline-flex size-6 items-center justify-center rounded text-text-l hover:bg-bg-l hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+              class="inline-flex size-6 items-center justify-center rounded text-text-l hover:bg-text/5 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
               :title="t(pipelineExpanded ? 'ap.collapsePipeline' : 'ap.expandPipeline')"
               :aria-label="t(pipelineExpanded ? 'ap.collapsePipeline' : 'ap.expandPipeline')"
               :aria-expanded="pipelineExpanded"
@@ -583,7 +583,7 @@ onBeforeUnmount(() => {
                 <span
                   v-for="(node, index) in player.audioChain.bypassedNodes"
                   :key="`bypassed-${index}`"
-                  class="rounded bg-bg-l px-1.5 py-0.5 text-[11px] text-text-l"
+                  class="rounded bg-text/5 px-1.5 py-0.5 text-[11px] text-text-l"
                 >
                   {{ pipelineLabel(node) }}
                 </span>
