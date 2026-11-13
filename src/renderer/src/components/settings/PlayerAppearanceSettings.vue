@@ -39,13 +39,13 @@ const openFooterAnywhere = computed({
 <template>
   <SettingCard>
     <SettingGroup :title="t('settings.groups.artwork')">
-      <div class="setting-row setting-row-stack">
+      <div class="setting-row theme-background-row">
         <div>
           <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
           <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
         </div>
         <div
-          class="theme-options"
+          class="theme-options system-background-options"
           role="radiogroup"
           :aria-label="t('settings.playerBackgroundStyle')"
         >
@@ -95,12 +95,16 @@ const openFooterAnywhere = computed({
           </button>
         </div>
       </div>
-      <div class="setting-row setting-row-stack">
+      <div class="setting-row theme-background-row">
         <div>
           <h3>{{ t('settings.playerCoverStyle') }}</h3>
           <p>{{ t('settings.playerCoverStyleDescription') }}</p>
         </div>
-        <div class="theme-options" role="radiogroup" :aria-label="t('settings.playerCoverStyle')">
+        <div
+          class="theme-options system-background-options"
+          role="radiogroup"
+          :aria-label="t('settings.playerCoverStyle')"
+        >
           <button
             type="button"
             class="theme-option standard-cover-preview"
@@ -145,7 +149,7 @@ const openFooterAnywhere = computed({
           v-model="ui.playerSpectrumStyle"
           :options="spectrumStyleOptions"
           teleport
-          class="w-32"
+          class="w-48"
         />
       </SettingRow>
       <SettingRow
@@ -156,7 +160,7 @@ const openFooterAnywhere = computed({
           v-model="ui.karaokeAnimation"
           :options="karaokeAnimationOptions"
           teleport
-          class="w-32"
+          class="w-48"
         />
       </SettingRow>
       <SettingRow
@@ -196,9 +200,6 @@ const openFooterAnywhere = computed({
 }
 .mesh-background-preview b {
   background: rgb(255 255 255 / 10%);
-}
-.theme-options {
-  flex-wrap: wrap;
 }
 .album-background-preview .preview-window {
   background: linear-gradient(135deg, #6e4467, #171524);

@@ -233,26 +233,29 @@ onBeforeUnmount(() => {
       :label="t('settings.importSongs')"
       :description="t('settings.importSongsDescription')"
     >
-      <button
-        class="btn-hover-base text-sm"
+      <BaseButton
+        size="sm"
+        variant="ghost"
         type="button"
         @click="eventBus.emit('importLocalMusic')"
       >
         {{ t('settings.importSongs') }}
-      </button>
+      </BaseButton>
     </SettingRow>
     <SettingRow
       :label="t('settings.importSingleSong')"
       :description="t('settings.importSingleSongDescription')"
     >
-      <button
-        class="btn-hover-base text-sm disabled:cursor-wait disabled:opacity-50"
+      <BaseButton
+        size="sm"
+        variant="ghost"
+        class="disabled:cursor-wait disabled:opacity-50"
         type="button"
         :disabled="importingSong"
         @click="importSingleSong"
       >
         {{ t('settings.importSingleSong') }}
-      </button>
+      </BaseButton>
     </SettingRow>
     <SettingRow
       :label="t('settings.ignoreShortSongs')"
@@ -314,29 +317,29 @@ onBeforeUnmount(() => {
       :description="t('settings.libraryBackupDescription')"
     >
       <div class="actions">
-        <button class="btn-hover-base text-sm" type="button" @click="run('exportLibrary')">
+        <BaseButton size="sm" variant="ghost" type="button" @click="run('exportLibrary')">
           {{ t('settings.exportLibrary') }}
-        </button>
-        <button class="btn-hover-base text-sm" type="button" @click="run('importLibrary')">
+        </BaseButton>
+        <BaseButton size="sm" variant="ghost" type="button" @click="run('importLibrary')">
           {{ t('settings.importLibrary') }}
-        </button>
+        </BaseButton>
       </div>
     </SettingRow>
     <SettingRow
       :label="t('settings.recoverMovedFiles')"
       :description="t('settings.recoverMovedFilesDescription')"
     >
-      <button class="btn-hover-base text-sm" type="button" @click="run('recoverMovedSongs')">
+      <BaseButton size="sm" variant="ghost" type="button" @click="run('recoverMovedSongs')">
         {{ t('settings.recover') }}
-      </button>
+      </BaseButton>
     </SettingRow>
     <SettingRow
       :label="t('settings.checkMissingSongs')"
       :description="t('settings.checkMissingSongsDescription')"
     >
-      <button class="btn-hover-base text-sm" type="button" @click="checkMissingSongs">
+      <BaseButton size="sm" variant="ghost" type="button" @click="checkMissingSongs">
         {{ t('settings.check') }}
-      </button>
+      </BaseButton>
     </SettingRow>
     <div v-if="importProgress" class="progress">
       <div>

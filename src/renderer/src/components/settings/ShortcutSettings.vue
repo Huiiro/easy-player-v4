@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
 import { useI18n } from 'vue-i18n'
@@ -36,9 +37,9 @@ function reset(): void {
         :description="t('settings.globalShortcutsDescription')"
       >
         <div class="flex items-center gap-3">
-          <button class="btn-hover-base text-sm" type="button" @click="reset">
+          <BaseButton size="sm" variant="ghost" type="button" @click="reset">
             {{ t('settings.resetShortcutDefaults') }}
-          </button>
+          </BaseButton>
           <BaseSwitch v-model="ui.useGlobalShortcutKeys" size="md" />
         </div>
       </SettingRow>

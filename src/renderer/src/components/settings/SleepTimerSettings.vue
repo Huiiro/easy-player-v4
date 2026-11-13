@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -61,9 +62,9 @@ onBeforeUnmount(clearTimer)
         max="720"
       />
       <span class="text-xs text-text-l mx-1">{{ t('settings.minutes') }}</span>
-      <button class="secondary-button" @click="deadline ? clearTimer() : startTimer()">
+      <BaseButton size="sm" variant="ghost" @click="deadline ? clearTimer() : startTimer()">
         {{ deadline ? t('settings.cancelSleepTimer') : t('settings.startSleepTimer') }}
-      </button>
+      </BaseButton>
     </div>
   </SettingRow>
   <SettingRow

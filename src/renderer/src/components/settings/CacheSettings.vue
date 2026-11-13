@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -109,13 +110,9 @@ onBeforeUnmount(() => unsubscribe?.())
       </div>
       <div class="file-path-control">
         <input :value="cacheDirectory" readonly class="input-base" />
-        <button
-          class="btn-hover-base text-sm text-nowrap"
-          type="button"
-          @click="chooseCacheDirectory"
-        >
+        <BaseButton size="sm" variant="ghost" type="button" @click="chooseCacheDirectory">
           {{ t('remote.chooseDirectory') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
     <SettingRow :label="t('remote.cacheLimit')" :description="t('remote.cacheDescription')">
@@ -139,22 +136,24 @@ onBeforeUnmount(() => unsubscribe?.())
             ? t('ap.stemCacheUsage', { size: formatBytes(stemCache.bytes), count: stemCache.files })
             : '—'
         }}</span>
-        <button
+        <BaseButton
+          size="sm"
+          variant="ghost"
           type="button"
-          class="btn-hover-base px-2 py-1 text-sm"
           :disabled="stemBusy"
           @click="loadStemCache"
         >
           {{ t('ap.stemCacheRefresh') }}
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
+          size="sm"
+          variant="danger"
           type="button"
-          class="btn-hover-base px-2 py-1 text-sm text-red-400"
           :disabled="stemBusy || !stemCache?.files"
           @click="clearStemVisible = true"
         >
           {{ t('ap.stemCacheClear') }}
-        </button>
+        </BaseButton>
       </div>
     </SettingRow>
     <p v-if="stemError" class="text-sm text-red-400" role="alert">

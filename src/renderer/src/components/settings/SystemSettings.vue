@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingRow from './SettingRow.vue'
 import SystemMediaControlsSettings from './SystemMediaControlsSettings.vue'
@@ -176,13 +177,9 @@ watch(
         <h3>{{ t('settings.fileAssociation') }}</h3>
         <p>{{ t('settings.fileAssociationDescription') }}</p>
       </div>
-      <button
-        class="btn-hover-base text-sm text-nowrap"
-        :disabled="associationBusy"
-        @click="openDefaultApps"
-      >
+      <BaseButton size="sm" variant="ghost" :disabled="associationBusy" @click="openDefaultApps">
         {{ t('settings.configureFileAssociation') }}
-      </button>
+      </BaseButton>
     </div>
     <SystemMediaControlsSettings v-if="ui.platform === 'win'" />
     <SettingRow
@@ -245,42 +242,46 @@ watch(
         <p v-else-if="updateStatus.state === 'error'">{{ updateStatus.message }}</p>
         <p v-else>{{ t('settings.appUpdateDescription') }}</p>
       </div>
-      <button
+      <BaseButton
         v-if="updateStatus.state === 'available'"
-        class="btn-hover-base text-sm text-nowrap"
+        size="sm"
+        variant="ghost"
         :disabled="updateBusy"
         @click="downloadUpdate"
       >
         {{ t('settings.downloadUpdate') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
         v-else-if="updateStatus.state === 'downloaded'"
-        class="btn-hover-base text-sm text-nowrap"
+        size="sm"
+        variant="ghost"
         @click="installUpdate"
       >
         {{ t('settings.restartAndInstall') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
         v-else
-        class="btn-hover-base text-sm text-nowrap"
+        size="sm"
+        variant="ghost"
         :disabled="
           updateBusy || updateStatus.state === 'checking' || updateStatus.state === 'downloading'
         "
         @click="checkForUpdate"
       >
         {{ t('settings.checkForUpdates') }}
-      </button>
+      </BaseButton>
     </div>
     <SettingRow :label="t('settings.changelog')" :description="t('settings.changelogDescription')">
-      <button
-        class="btn-hover-base text-sm text-nowrap"
+      <BaseButton
+        size="sm"
+        variant="ghost"
         type="button"
         aria-haspopup="dialog"
         :aria-expanded="changelogOpen"
         @click="changelogOpen = true"
       >
         {{ t('settings.viewChangelog') }}
-      </button>
+      </BaseButton>
     </SettingRow>
     <ChangelogDialog v-model="changelogOpen" />
   </SettingGroup>

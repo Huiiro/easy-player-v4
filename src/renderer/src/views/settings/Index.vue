@@ -5,6 +5,7 @@ import type { SettingsSearchEntry } from '@/utils/settingsSearch'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -266,16 +267,12 @@ onBeforeUnmount(() => {
                   <p>{{ t('settings.interfaceFontDescription') }}</p>
                 </div>
                 <div class="flex items-center gap-2">
-                  <button
-                    class="secondary-button text-nowrap"
-                    type="button"
-                    @click="openFontDirectory"
-                  >
+                  <BaseButton size="sm" variant="ghost" type="button" @click="openFontDirectory">
                     {{ t('settings.openFontDirectory') }}
-                  </button>
-                  <button class="secondary-button text-nowrap" type="button" @click="refreshFonts">
+                  </BaseButton>
+                  <BaseButton size="sm" variant="ghost" type="button" @click="refreshFonts">
                     {{ t('settings.refreshFonts') }}
-                  </button>
+                  </BaseButton>
                   <BaseSelect
                     v-model="ui.customFontFamily"
                     :options="fontOptions"
@@ -335,9 +332,9 @@ onBeforeUnmount(() => {
               </h2>
               <p>{{ t('settings.themeDescription') }}</p>
             </div>
-            <button class="reset-button" type="button" @click="resetThemeVisible = true">
+            <BaseButton size="sm" variant="ghost" type="button" @click="resetThemeVisible = true">
               {{ t('settings.restoreDefault') }}
-            </button>
+            </BaseButton>
           </div>
           <ThemeSettings @navigate="navigateTo" />
         </section>
@@ -557,7 +554,7 @@ onBeforeUnmount(() => {
                     :href="musicTagUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="common-link" class-name="size-4 shrink-0" />
                     musicTag
@@ -566,7 +563,7 @@ onBeforeUnmount(() => {
                     :href="tagScannerUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="common-link" class-name="size-4 shrink-0" />
                     tagScanner
@@ -575,7 +572,7 @@ onBeforeUnmount(() => {
                     :href="mp3tagUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="common-link" class-name="size-4 shrink-0" />
                     mp3Tag
@@ -589,7 +586,7 @@ onBeforeUnmount(() => {
                     :href="repositoryUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="third-github" class-name="size-4 shrink-0" />
                     {{ t('settings.repository') }}
@@ -598,7 +595,7 @@ onBeforeUnmount(() => {
                     :href="themeDocumentationUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="third-github" class-name="size-4 shrink-0" />
                     {{ t('settings.themeDocumentation') }}
@@ -607,7 +604,7 @@ onBeforeUnmount(() => {
                     :href="lyricsUtilUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="secondary-button"
+                    class="ep-button ep-button--ghost ep-control--sm"
                   >
                     <SvgIcon name="third-github" class-name="size-4 shrink-0" />
                     {{ t('settings.lyricsUtil') }}

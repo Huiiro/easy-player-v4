@@ -271,8 +271,8 @@
   }
 }
 
-/* Match the theme plugin action across BaseButton and legacy settings actions. */
-.settings-page :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button) {
+/* Settings actions share a quiet treatment across all button variants and themes. */
+.settings-page .ep-button {
   --settings-action-color: var(--color-text-l);
   display: inline-flex;
   height: var(--ep-control-height-sm);
@@ -284,6 +284,7 @@
   border: 0;
   border-radius: 7px;
   background: transparent;
+  box-shadow: none;
   padding: 0.35rem 0.5rem;
   color: var(--settings-action-color);
   font-size: 0.78rem;
@@ -295,35 +296,31 @@
     opacity var(--motion-duration-standard) var(--motion-ease-standard);
 }
 
-.settings-page
-  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):enabled {
+.settings-page .ep-button:where(:enabled, a[href]) {
   cursor: pointer;
 }
 
-.settings-page
-  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):enabled:hover {
+.settings-page .ep-button:where(:enabled, a[href]):hover {
   background: var(--color-hover);
   color: var(--settings-action-color);
 }
 
-.settings-page
-  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):focus-visible {
+.settings-page .ep-button:focus-visible {
   outline: 2px solid var(--ep-focus-ring);
   outline-offset: 2px;
   box-shadow: none;
 }
 
-.settings-page
-  :is(.ep-button, .btn-hover-base, .secondary-button, .reset-button, .icon-button):disabled {
+.settings-page .ep-button:disabled {
   opacity: var(--ep-disabled-opacity);
   cursor: not-allowed;
 }
 
-.settings-page :is(.ep-button--danger, button.text-red-400) {
+.settings-page .ep-button--danger {
   --settings-action-color: var(--color-danger);
 }
 
-.settings-page :is(.ep-button, .reset-button)[aria-pressed='true'] {
+.settings-page .ep-button[aria-pressed='true'] {
   background: var(--color-hover);
   color: var(--color-text);
 }

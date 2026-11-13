@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
@@ -45,9 +46,9 @@ function setSmartShuffle(value: boolean | string | number): void {
         :label="t('settings.audioControlPanel')"
         :description="t('settings.audioControlPanelDescription')"
       >
-        <button class="secondary-button" type="button" @click="openAudioControls">
+        <BaseButton size="sm" variant="ghost" type="button" @click="openAudioControls">
           {{ t('settings.openAudioControlPanel') }}
-        </button>
+        </BaseButton>
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.timer')">

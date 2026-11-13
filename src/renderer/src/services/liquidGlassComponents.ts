@@ -78,17 +78,18 @@ ${scope} .ep-select-option[data-headlessui-state~='active']:not([aria-disabled='
   background: color-mix(in srgb, var(--color-text) 8%, transparent);
   color: var(--color-text);
 }
-${scope} .ep-button--secondary {
+/* Settings actions keep their shared lightweight appearance. */
+${scope} .ep-button--secondary:not(:where(.settings-page *)) {
   background-color: ${token('--ep-glass-control-bg')};
   background-image: ${token('--ep-glass-control-highlight')};
   border-color: ${token('--ep-glass-control-border')};
   box-shadow: ${token('--ep-glass-control-shadow')};
 }
-${scope} .ep-button--secondary:enabled:hover {
+${scope} .ep-button--secondary:not(:where(.settings-page *)):enabled:hover {
   background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
   border-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
-${scope} .ep-button--primary {
+${scope} .ep-button--primary:not(:where(.settings-page *)) {
   box-shadow: ${token('--ep-glass-control-shadow', 'inset 0 1px 0 rgb(255 255 255 / 32%), 0 4px 16px color-mix(in srgb, var(--color-primary) 14%, transparent)')};
 }
 ${scope} :is(.ep-input, .input-base) {

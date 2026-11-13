@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -91,23 +92,28 @@ function clearBackground(): void {
           <p>{{ ui.customBg.path || t('settings.noBackgroundSelected') }}</p>
         </div>
         <div class="flex shrink-0 gap-2">
-          <button
-            class="secondary-button"
+          <BaseButton
+            size="sm"
+            variant="ghost"
             type="button"
             :disabled="importingBackground"
             @click="chooseBackground"
           >
             {{ t('settings.selectBackground') }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             v-if="ui.customBg.url"
+            size="sm"
+            variant="ghost"
+            icon-only
             class="icon-button"
             type="button"
             :title="t('settings.removeBackground')"
+            :aria-label="t('settings.removeBackground')"
             @click="clearBackground"
           >
             ×
-          </button>
+          </BaseButton>
         </div>
         <input
           ref="backgroundInput"

@@ -12,6 +12,7 @@ app.whenReady().then(async () => {
     const styles = ['components', 'controls'].map((name) =>
       fs.readFileSync(`src/renderer/src/styles/${name}.css`, 'utf8')
     )
+    styles.push(fs.readFileSync('src/renderer/src/styles/settings.css', 'utf8'))
     const bundle = await esbuild.build({
       stdin: {
         contents: `export * as Vue from 'vue';export {createI18n} from 'vue-i18n';
@@ -114,11 +115,13 @@ app.whenReady().then(async () => {
       fixture,
       `<!doctype html><html><head><style>${styles.join('\n')}
       :root{--ep-button-radius:5px!important;--ep-dialog-radius:14px!important;--ep-floating-radius:9px!important}
-      *{box-sizing:border-box}body{margin:0;background:var(--color-bg);color:var(--color-text);font:14px sans-serif}.fixture{display:grid;gap:14px;padding:24px}.row{display:flex;gap:12px;align-items:center}.ep-button{padding:0 16px}.ep-menu,.ep-select-options,.ep-popover{min-width:220px;padding:12px;border:1px solid}.ep-menu-item,.ep-select-option{display:block;width:100%;padding:8px}.ep-sidebar{padding:16px}.ep-sidebar-item{padding:8px;border:0}.ep-dialog-panel{padding:16px;min-width:300px}.ep-drawer-panel{padding:16px}.ep-select{padding:0 12px;min-width:220px}.ep-progress-track{height:4px}.ep-progress-thumb{width:10px;height:10px;border-radius:50%}.ep-overlay{position:fixed;inset:0}.ep-dialog{position:fixed;inset:0}.ep-dialog-panel{position:relative;margin:100px auto;max-width:500px}
+      #settings-actions .ep-button{transition:none}*{box-sizing:border-box}body{margin:0;background:var(--color-bg);color:var(--color-text);font:14px sans-serif}.fixture{display:grid;gap:14px;padding:24px}.row{display:flex;gap:12px;align-items:center}.ep-button{padding:0 16px}.ep-menu,.ep-select-options,.ep-popover{min-width:220px;padding:12px;border:1px solid}.ep-menu-item,.ep-select-option{display:block;width:100%;padding:8px}.ep-sidebar{padding:16px}.ep-sidebar-item{padding:8px;border:0}.ep-dialog-panel{padding:16px;min-width:300px}.ep-drawer-panel{padding:16px}.ep-select{padding:0 12px;min-width:220px}.ep-progress-track{height:4px}.ep-progress-thumb{width:10px;height:10px;border-radius:50%}.ep-overlay{position:fixed;inset:0}.ep-dialog{position:fixed;inset:0}.ep-dialog-panel{position:relative;margin:100px auto;max-width:500px}
     </style></head><body><div id="app"></div></body></html>`
     )
     await win.loadFile(fixture)
     win.webContents.debugger.attach('1.3')
+    await win.webContents.debugger.sendCommand('DOM.enable')
+    await win.webContents.debugger.sendCommand('CSS.enable')
     await win.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled', {
       enabled: true
     })
@@ -127,6 +130,7 @@ app.whenReady().then(async () => {
       const {h,ref}=Components.Vue;window.state=Components.Vue.reactive({switch:true,level:45,color:'#4080c0',value:'',selected:'a',menu:'a',dialog:false,drawer:false});
       window.fixtureApp=Components.Vue.createApp({render:()=>h('div',{class:'fixture'},[
         h('div',{class:'row'},['primary','secondary','ghost','danger'].map(variant=>h(Components.Button,{id:variant,variant},()=>variant)).concat(h(Components.Button,{id:'disabled',variant:'secondary',disabled:true},()=> 'Disabled'))),
+        h('section',{id:'settings-actions',class:'settings-page row'},['primary','secondary','ghost','danger'].map(variant=>h(Components.Button,{variant},()=>variant)).concat([h(Components.Button,{variant:'secondary',disabled:true},()=> 'Disabled'),h(Components.Button,{variant:'ghost',iconOnly:true,'aria-label':'Remove background'},()=> '×')])),
         h(Components.Input,{id:'field',modelValue:state.value,'onUpdate:modelValue':v=>state.value=v,placeholder:'Search'}),h(Components.Input,{id:'invalid',invalid:true,placeholder:'Invalid'}),h('input',{id:'legacy-input',class:'input-base',value:'Legacy input'}),
         h('aside',{class:'ep-sidebar'},[h('button',{class:'ep-sidebar-item ep-sidebar-item--active'},'Active library item')]),
         h('div',{class:'row'},[
@@ -152,6 +156,32 @@ app.whenReady().then(async () => {
       };void 0;
     }`)
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    const readSettingsStates = async () => {
+      const { root } = await win.webContents.debugger.sendCommand('DOM.getDocument')
+      const { nodeIds } = await win.webContents.debugger.sendCommand('DOM.querySelectorAll', {
+        nodeId: root.nodeId,
+        selector: '#settings-actions .ep-button'
+      })
+      const states = {}
+      for (const state of ['', 'hover', 'active', 'focus-visible']) {
+        for (const nodeId of nodeIds)
+          await win.webContents.debugger.sendCommand('CSS.forcePseudoState', {
+            nodeId,
+            forcedPseudoClasses: state ? [state] : []
+          })
+        states[state || 'normal'] = await win.webContents
+          .executeJavaScript(`Array.from(document.querySelectorAll('#settings-actions .ep-button'), e => {
+          const c = getComputedStyle(e)
+          return Object.fromEntries(['height','minHeight','padding','borderRadius','backgroundColor','backgroundImage','boxShadow','color','fontSize','fontWeight','opacity','outlineStyle','outlineColor'].map(key => [key, c[key]]))
+        })`)
+      }
+      for (const nodeId of nodeIds)
+        await win.webContents.debugger.sendCommand('CSS.forcePseudoState', {
+          nodeId,
+          forcedPseudoClasses: []
+        })
+      return states
+    }
     const reports = []
     for (const dark of [true, false]) {
       const palette = dark
@@ -178,13 +208,45 @@ app.whenReady().then(async () => {
             '--btn-primary-text': '#ffffff'
           }
       await win.webContents.executeJavaScript(
-        `{for(const [key,value] of Object.entries(${JSON.stringify({ ...palette, '--color-border': '#778899', '--color-danger': '#ef3049', '--btn-danger-bg': '#b51931', '--btn-danger-text': '#ffffff', '--color-hover-bg': '#778899' })}))document.documentElement.style.setProperty(key,value);document.documentElement.classList.toggle('dark',${dark});document.activeElement?.blur();void 0}`
+        `{for(const [key,value] of Object.entries(${JSON.stringify({ ...palette, '--color-border': '#778899', '--color-danger': '#ef3049', '--btn-danger-bg': '#b51931', '--btn-danger-text': '#ffffff', '--color-hover-bg': '#778899', '--color-hover': '#778899' })}))document.documentElement.style.setProperty(key,value);document.documentElement.classList.toggle('dark',${dark});document.activeElement?.blur();void 0}`
       )
       const before = await win.webContents.executeJavaScript('snapshot()')
+      const settingsBefore = await readSettingsStates()
+      assert.notEqual(
+        settingsBefore.hover[0].backgroundColor,
+        settingsBefore.normal[0].backgroundColor,
+        'Settings actions retain visible hover feedback'
+      )
+      assert.deepEqual(
+        settingsBefore.hover[4],
+        settingsBefore.normal[4],
+        'Disabled settings buttons ignore hover feedback'
+      )
+      assert(
+        settingsBefore.normal.every(
+          (c) => c.height === '28px' && c.backgroundImage === 'none' && c.boxShadow === 'none'
+        ),
+        'Settings actions share compact, lightweight geometry'
+      )
+      assert.equal(
+        settingsBefore.normal[3].color,
+        'rgb(239, 48, 73)',
+        'Destructive settings actions retain danger color'
+      )
+      assert.equal(
+        settingsBefore.normal[4].opacity,
+        '0.5',
+        'Disabled settings actions remain visibly disabled'
+      )
       await win.webContents.executeJavaScript(
         'window.disposeEffects=Components.mountGlassComponentEffects();void 0'
       )
       const enabled = await win.webContents.executeJavaScript('snapshot()')
+      assert.deepEqual(
+        await readSettingsStates(),
+        settingsBefore,
+        'Settings button geometry, colors and feedback survive enabling Liquid Glass'
+      )
       assert.equal(enabled.secondary.radius, '999px')
       assert.equal(enabled.field.radius, '10px')
       assert(
@@ -402,6 +464,11 @@ app.whenReady().then(async () => {
         'document.activeElement?.blur();snapshot()'
       )
       assert.deepEqual(after, before, 'Disabling restores component styles of the selected theme')
+      assert.deepEqual(
+        await readSettingsStates(),
+        settingsBefore,
+        'Settings buttons remain consistent after disabling Liquid Glass'
+      )
       assert.equal(
         await win.webContents.executeJavaScript(
           `document.documentElement.hasAttribute('data-ep-glass-components')`
