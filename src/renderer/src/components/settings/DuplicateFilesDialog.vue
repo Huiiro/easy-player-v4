@@ -578,7 +578,7 @@ onBeforeUnmount(() => {
           <div
             v-for="stat in summaryStats"
             :key="stat.label"
-            class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg border border-border bg-bg-l/30 px-3 py-2"
+            class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg border border-border bg-text/5 px-3 py-2"
           >
             <p class="text-xs text-text-l">{{ t(`duplicates.${stat.label}`) }}</p>
             <p class="text-base font-semibold tabular-nums">{{ stat.value }}</p>
@@ -734,7 +734,7 @@ onBeforeUnmount(() => {
             class="duplicate-group overflow-hidden rounded-xl border border-border"
           >
             <div
-              class="duplicate-group-header flex items-center gap-2 bg-bg-l/50 px-3 py-1.5 text-xs"
+              class="duplicate-group-header flex items-center gap-2 bg-text/5 px-3 py-1.5 text-xs"
             >
               <h3
                 class="min-w-0 truncate font-medium"
@@ -1087,7 +1087,7 @@ onBeforeUnmount(() => {
 .duplicate-table th {
   padding: 0.4rem 0.75rem;
   font-weight: 500;
-  background: var(--color-bg-l);
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
 }
 .duplicate-group {
   position: relative;
