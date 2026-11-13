@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -68,13 +69,9 @@ watch(
       >
         {{ t('tags.remove') }}
       </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-40"
-        :disabled="!selectedId"
-        @click="apply(true)"
-      >
+      <BaseButton :disabled="!selectedId" @click="apply(true)">
         {{ t('tags.add') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

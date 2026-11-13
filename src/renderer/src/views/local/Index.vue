@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import FolderTree, { type FolderTreeNode } from '@/components/local/FolderTree.vue'
@@ -356,20 +357,12 @@ onBeforeUnmount(() => {
       }}
     </p>
     <template #footer>
-      <button
-        class="btn-hover rounded-lg px-3 py-1.5 text-sm"
-        :disabled="deleting"
-        @click="deleteDialogOpen = false"
-      >
+      <BaseButton variant="cancel" :disabled="deleting" @click="deleteDialogOpen = false">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm disabled:opacity-50"
-        :disabled="deleting"
-        @click="deleteFolderSongs"
-      >
+      </BaseButton>
+      <BaseButton variant="danger" :disabled="deleting" @click="deleteFolderSongs">
         {{ t('localFiles.deleteSongs') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

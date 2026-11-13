@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -806,16 +807,12 @@ onBeforeUnmount(() => {
     <BaseDialog v-model="resetDialogOpen" :title="t('ap.resetAudioSettings')" width="max-w-sm">
       <p class="text-sm">{{ t('ap.resetAudioSettingsConfirm') }}</p>
       <template #footer>
-        <button class="btn-hover px-3 py-1.5 text-sm" @click="resetDialogOpen = false">
+        <BaseButton variant="cancel" @click="resetDialogOpen = false">
           {{ t('common.cancel') }}
-        </button>
-        <button
-          class="rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-50"
-          :disabled="resetting"
-          @click="restoreDefaults"
-        >
+        </BaseButton>
+        <BaseButton :disabled="resetting" @click="restoreDefaults">
           {{ t('ap.resetAudioSettings') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseDialog>
     <BaseDialog
@@ -834,12 +831,12 @@ onBeforeUnmount(() => {
         />
       </label>
       <template #footer>
-        <button class="btn-hover px-3 py-1.5 text-sm" @click="savePresetDialogOpen = false">
+        <BaseButton variant="cancel" @click="savePresetDialogOpen = false">
           {{ t('common.cancel') }}
-        </button>
-        <button class="rounded-lg ep-button--primary px-3 py-1.5 text-sm" @click="savePreset">
+        </BaseButton>
+        <BaseButton @click="savePreset">
           {{ t(editingPresetId ? 'ap.updateEqPreset' : 'ap.saveEqPreset') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseDialog>
   </div>

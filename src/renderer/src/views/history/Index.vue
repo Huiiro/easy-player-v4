@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -48,12 +49,12 @@ async function clearHistory(): Promise<void> {
   <BaseDialog v-model="clearDialogOpen" :title="t('history.clear')" width="max-w-sm">
     <p class="text-sm text-text-l">{{ t('history.clearConfirm') }}</p>
     <template #footer>
-      <button class="btn-hover px-3 py-1.5 text-sm" @click="clearDialogOpen = false">
+      <BaseButton variant="cancel" @click="clearDialogOpen = false">
         {{ t('common.cancel') }}
-      </button>
-      <button class="rounded-lg ep-button--danger px-3 py-1.5 text-sm" @click="clearHistory">
+      </BaseButton>
+      <BaseButton variant="danger" @click="clearHistory">
         {{ t('history.clear') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

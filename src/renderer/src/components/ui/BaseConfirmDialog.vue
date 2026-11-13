@@ -52,7 +52,7 @@ async function confirm(): Promise<void> {
     <p class="break-words text-sm leading-relaxed text-text-l">{{ message }}</p>
     <template #footer>
       <BaseButton
-        variant="secondary"
+        variant="cancel"
         :disabled="pending || loading"
         @click="emit('update:modelValue', false)"
       >

@@ -926,7 +926,7 @@ onBeforeUnmount(() => {
             />
           </div>
           <div class="flex justify-end gap-2">
-            <BaseButton variant="ghost" size="sm" :disabled="cleaning" @click="confirmOpen = false">
+            <BaseButton variant="cancel" :disabled="cleaning" @click="confirmOpen = false">
               {{ t('common.cancel') }}
             </BaseButton>
             <BaseButton variant="danger" size="sm" :loading="cleaning" @click="cleanup">

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -57,18 +58,12 @@ async function confirm(): Promise<void> {
       {{ t('songList.deleteLocalFile') }}
     </label>
     <template #footer>
-      <button
-        class="btn-hover rounded-lg px-3 py-1.5 text-sm"
-        @click="emit('update:modelValue', false)"
-      >
+      <BaseButton variant="cancel" @click="emit('update:modelValue', false)">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
-        @click="confirm"
-      >
+      </BaseButton>
+      <BaseButton variant="danger" @click="confirm">
         {{ t('songList.delete') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

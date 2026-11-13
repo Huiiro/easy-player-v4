@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import {
   computed,
   onActivated,
@@ -522,12 +523,9 @@ onBeforeUnmount(() => {
         <button class="btn-hover px-3 py-2 text-sm" @click="resetLayout">
           {{ t('home.layout.reset') }}
         </button>
-        <button
-          class="rounded-lg ep-button--primary px-4 py-2 text-sm"
-          @click="uiStore.homeLayoutOpen = false"
-        >
+        <BaseButton @click="uiStore.homeLayoutOpen = false">
           {{ t('home.layout.done') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseDialog>
   </main>

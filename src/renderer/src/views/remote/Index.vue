@@ -479,20 +479,15 @@ onMounted(() => void load())
       </p>
     </div>
     <template #footer>
-      <button class="btn-hover px-3 py-1.5 text-sm" @click="dialogOpen = false">
+      <BaseButton variant="cancel" @click="dialogOpen = false">
         {{ t('common.cancel') }}
-      </button>
+      </BaseButton>
       <button class="btn-hover px-3 py-1.5 text-sm" :disabled="testing" @click="test()">
         {{ t('remote.testConnection') }}
       </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm"
-        :disabled="saving"
-        :aria-busy="saving"
-        @click="saveSource"
-      >
+      <BaseButton :disabled="saving" :aria-busy="saving" @click="saveSource">
         {{ t('common.save') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
   <BaseDialog
@@ -505,15 +500,12 @@ onMounted(() => void load())
       {{ t('remote.confirmDelete', { name: deleteTarget?.name || '' }) }}
     </p>
     <template #footer>
-      <button class="btn-hover px-3 py-1.5 text-sm" @click="deleteTarget = null">
+      <BaseButton variant="cancel" @click="deleteTarget = null">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
-        @click="remove"
-      >
+      </BaseButton>
+      <BaseButton variant="danger" @click="remove">
         {{ t('remote.delete') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

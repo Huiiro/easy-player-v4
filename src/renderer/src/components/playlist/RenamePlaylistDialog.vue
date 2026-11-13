@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
@@ -93,22 +94,12 @@ async function submit(): Promise<void> {
       <p v-if="error" class="text-xs text-danger">{{ error }}</p>
     </div>
     <template #footer>
-      <button
-        type="button"
-        class="btn-hover px-3 py-1.5 text-sm"
-        :disabled="submitting"
-        @click="close"
-      >
+      <BaseButton variant="cancel" type="button" :disabled="submitting" @click="close">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        type="button"
-        class="btn-hover-base rounded-lg ep-button--primary px-3 py-1.5 text-sm disabled:opacity-50"
-        :disabled="submitting"
-        @click="submit"
-      >
+      </BaseButton>
+      <BaseButton type="button" :disabled="submitting" @click="submit">
         {{ t('playlist.rename') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

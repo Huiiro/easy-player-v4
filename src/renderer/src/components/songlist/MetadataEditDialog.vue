@@ -479,7 +479,7 @@ const inputLabelClass = 'mb-1 text-xs text-text-l'
       </div>
     </BaseDialog>
     <template #footer>
-      <BaseButton variant="secondary" @click="emit('update:modelValue', false)">
+      <BaseButton variant="cancel" @click="emit('update:modelValue', false)">
         {{ t('metadataEdit.cancel') }}
       </BaseButton>
       <BaseButton :disabled="saving || loading" @click="handleSave">

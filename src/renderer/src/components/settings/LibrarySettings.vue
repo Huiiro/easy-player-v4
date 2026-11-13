@@ -365,15 +365,12 @@ onBeforeUnmount(() => {
         {{ t('settings.removeMissingSongsConfirm', { count: missingSongIds.length }) }}
       </p>
       <template #footer>
-        <button class="btn-hover px-3 py-1.5 text-sm" @click="removeMissingDialogOpen = false">
+        <BaseButton variant="cancel" @click="removeMissingDialogOpen = false">
           {{ t('common.cancel') }}
-        </button>
-        <button
-          class="rounded-lg ep-button--danger px-3 py-1.5 text-sm"
-          @click="removeMissingSongs"
-        >
+        </BaseButton>
+        <BaseButton variant="danger" @click="removeMissingSongs">
           {{ t('settings.remove') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseDialog>
   </SettingGroup>

@@ -309,13 +309,13 @@ async function save(): Promise<void> {
             class="lyric-input"
             :placeholder="t('playerPanel.lyricAlbum')"
           />
-          <button
-            class="manager-button w-full rounded-lg ep-button--primary px-3 py-2 text-sm disabled:opacity-50"
+          <BaseButton
+            class="w-full"
             :disabled="loading || saving || !editingSong || !settingsReady || !query.title.trim()"
             @click="search"
           >
             {{ loading ? t('playerPanel.lyricSearching') : t('playerPanel.lyricSearch') }}
-          </button>
+          </BaseButton>
           <BaseButton v-if="loading" variant="secondary" class="w-full" @click="cancelRequest">
             {{ t('common.cancelRequest') }}
           </BaseButton>
@@ -352,21 +352,16 @@ async function save(): Promise<void> {
         {{ editingSong.title }}
         <template v-if="editingSong.artist"> — {{ editingSong.artist }}</template>
       </p>
-      <button
-        class="manager-button text-sm pr-4"
-        type="button"
-        @click="emit('update:modelValue', false)"
-      >
+      <BaseButton variant="cancel" type="button" @click="emit('update:modelValue', false)">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--primary px-4 py-2 text-sm disabled:opacity-50"
+      </BaseButton>
+      <BaseButton
         type="button"
         :disabled="draftLoading || saving || !editingSong || !settingsReady"
         @click="save"
       >
         {{ t('playerPanel.lyricSaveDatabase') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

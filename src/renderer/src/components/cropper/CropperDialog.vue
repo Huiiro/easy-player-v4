@@ -106,7 +106,7 @@ function close(value: boolean): void {
       <img ref="image" :src="displayImageUrl || ''" class="block max-h-full max-w-full" alt="" />
     </div>
     <template #footer>
-      <BaseButton variant="secondary" @click="close(false)">
+      <BaseButton variant="cancel" @click="close(false)">
         {{ t('metadataEdit.cancel') }}
       </BaseButton>
       <BaseButton :disabled="!cropperReady" @click="confirm">{{

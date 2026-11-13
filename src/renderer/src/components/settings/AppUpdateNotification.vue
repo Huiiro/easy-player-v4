@@ -69,7 +69,7 @@ function updateNow(): void {
       {{ t('settings.ignoreUpdateVersion') }}
     </label>
     <template #footer>
-      <BaseButton variant="secondary" @click="open = false">
+      <BaseButton variant="cancel" @click="open = false">
         {{ t('settings.updateLater') }}
       </BaseButton>
       <BaseButton :disabled="updates.busy" @click="updateNow">

@@ -299,15 +299,12 @@ watch(playlistId, () => {
       {{ t('playlist.confirmDelete', { name: playlist?.name ?? '' }) }}
     </p>
     <template #footer>
-      <button class="btn-hover rounded-lg px-3 py-1.5 text-sm" @click="deleteDialogOpen = false">
+      <BaseButton variant="cancel" @click="deleteDialogOpen = false">
         {{ t('common.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
-        @click="deletePlaylist"
-      >
+      </BaseButton>
+      <BaseButton variant="danger" @click="deletePlaylist">
         {{ t('playlist.delete') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -448,22 +449,22 @@ onBeforeUnmount(() => {
       {{ t('playlist.confirmDelete', { name: deletePlaylistTarget?.name ?? '' }) }}
     </p>
     <template #footer>
-      <button
+      <BaseButton
+        variant="cancel"
         type="button"
-        class="btn-hover rounded-lg px-3 py-1.5 text-sm"
         :disabled="deletingPlaylist"
         @click="deleteDialogOpen = false"
       >
         {{ t('common.cancel') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
+        variant="danger"
         type="button"
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
         :disabled="deletingPlaylist"
         @click="deletePlaylist"
       >
         {{ t('playlist.delete') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

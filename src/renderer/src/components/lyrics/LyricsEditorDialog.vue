@@ -1151,7 +1151,7 @@ function keyboard(event: KeyboardEvent): void {
         <template v-if="target?.artist"> — {{ target.artist }}</template>
         <span v-if="dirty"> · {{ t('lyricEditor.unsaved') }}</span>
       </p>
-      <BaseButton variant="secondary" :disabled="saving" @click="requestClose">
+      <BaseButton variant="cancel" :disabled="saving" @click="requestClose">
         {{ t('common.cancel') }}
       </BaseButton>
       <BaseButton :loading="saving" :disabled="busy || !dirty" @click="save">

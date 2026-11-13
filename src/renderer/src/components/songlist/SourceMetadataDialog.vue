@@ -333,11 +333,7 @@ function toggleAll(event: Event): void {
       <div class="flex w-full flex-wrap items-center justify-between gap-3">
         <p class="text-xs text-text-l">{{ t('metadataEdit.networkWriteHint') }}</p>
         <div class="ml-auto flex shrink-0 gap-2">
-          <BaseButton
-            variant="secondary"
-            :disabled="saving"
-            @click="emit('update:modelValue', false)"
-          >
+          <BaseButton variant="cancel" :disabled="saving" @click="emit('update:modelValue', false)">
             {{ t('metadataEdit.cancel') }}
           </BaseButton>
           <BaseButton :disabled="!canSave" :loading="saving" @click="save">

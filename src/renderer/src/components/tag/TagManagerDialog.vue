@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import BaseButton from '@/components/ui/BaseButton.vue'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Draggable from 'vuedraggable'
@@ -228,15 +229,12 @@ watch(
       {{ t('tags.confirmDelete', { name: tagPendingDelete?.name ?? '' }) }}
     </p>
     <template #footer>
-      <button class="btn-hover rounded-lg px-3 py-1.5 text-sm" @click="tagPendingDelete = null">
+      <BaseButton variant="cancel" @click="tagPendingDelete = null">
         {{ t('tags.cancel') }}
-      </button>
-      <button
-        class="btn-hover-base rounded-lg ep-button--danger px-3 py-1.5 text-sm"
-        @click="confirmRemove"
-      >
+      </BaseButton>
+      <BaseButton variant="danger" @click="confirmRemove">
         {{ t('tags.delete') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseDialog>
 </template>

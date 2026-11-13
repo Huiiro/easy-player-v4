@@ -7,7 +7,7 @@ defineOptions({
   inheritAttrs: false
 })
 
-type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'cancel'
 type ButtonType = 'button' | 'submit' | 'reset'
 
 const props = withDefaults(
@@ -88,3 +88,22 @@ function handleClick(e: MouseEvent): void {
     </span>
   </button>
 </template>
+
+<style scoped>
+/* Keep cancellation quiet, with the same geometry as the adjacent action. */
+.ep-button--cancel {
+  border-color: transparent;
+  background: transparent;
+  color: var(--color-text-l);
+  font-weight: 400;
+  transition-duration: var(--motion-duration-fast);
+  transition-timing-function: var(--motion-ease-standard);
+}
+.ep-button--cancel:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 5%, transparent);
+  color: var(--color-text);
+}
+.ep-button--cancel:active:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+</style>
