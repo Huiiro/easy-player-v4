@@ -93,6 +93,17 @@ const openFooterAnywhere = computed({
             <span class="preview-window"><i /><b /></span>
             <span>{{ t('settings.playerBackgroundMesh') }}</span>
           </button>
+          <button
+            type="button"
+            class="theme-option particles-background-preview"
+            :class="{ selected: playerBackground === PlayerBgType.PARTICLES }"
+            :aria-checked="playerBackground === PlayerBgType.PARTICLES"
+            role="radio"
+            @click="playerBackground = PlayerBgType.PARTICLES"
+          >
+            <span class="preview-window"><i /><b /></span>
+            <span>{{ t('settings.playerBackgroundParticles') }}</span>
+          </button>
         </div>
       </div>
       <div class="setting-row theme-background-row">
@@ -189,6 +200,17 @@ const openFooterAnywhere = computed({
 </template>
 
 <style scoped>
+.particles-background-preview .preview-window {
+  background:
+    radial-gradient(circle, rgb(115 188 225 / 75%) 0.8px, transparent 1.3px) center / 6px 6px,
+    radial-gradient(ellipse at 35% 50%, #1c2540, #06080c 80%);
+}
+.particles-background-preview i {
+  background: rgb(95 160 200 / 18%);
+}
+.particles-background-preview b {
+  background: rgb(200 186 240 / 18%);
+}
 .mesh-background-preview .preview-window {
   background:
     radial-gradient(ellipse at 15% 65%, #c46485, transparent 68%),

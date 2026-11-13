@@ -1300,6 +1300,7 @@ export default {
     playerBackgroundAmbient: 'Ambient glow',
     playerBackgroundLiquid: 'Liquid flow',
     playerBackgroundMesh: 'Flowing mesh',
+    playerBackgroundParticles: 'Particle gravity',
     systemBackgroundSolid: 'Follow song',
     playerCoverStyle: 'Cover style',
     playerCoverStyleDescription: 'Choose how the cover appears in the player.',

@@ -18,6 +18,7 @@ export function usePlayerBackdrop(
 ) {
   const liquidUnavailable = ref(false)
   const meshUnavailable = ref(false)
+  const particlesUnavailable = ref(false)
   const coverColorSource = ref<'idle' | 'loading' | 'cache' | 'sampled' | 'failed'>('idle')
   const defaultLiquidColors = {
     primary: '77 136 220',
@@ -29,7 +30,8 @@ export function usePlayerBackdrop(
     resolvePlayerBgType(selectedPlayerBackground.value, {
       coverAvailable: Boolean(coverUrl.value && !coverFailed.value),
       liquidAvailable: !liquidUnavailable.value,
-      meshAvailable: !meshUnavailable.value
+      meshAvailable: !meshUnavailable.value,
+      particlesAvailable: !particlesUnavailable.value
     })
   )
   const useAlbumArtwork = computed(() => effectivePlayerBackground.value === PlayerBgType.ALBUM)
@@ -46,6 +48,9 @@ export function usePlayerBackdrop(
     coverColorSource.value === 'failed' ? null : coverUrl.value
   )
   const useMeshBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.MESH)
+  const useParticleBackground = computed(
+    () => effectivePlayerBackground.value === PlayerBgType.PARTICLES
+  )
   const backgroundSource = computed(() => {
     if (useAlbumArtwork.value && displayedCoverUrl.value && !coverFailed.value)
       return displayedCoverUrl.value
@@ -54,6 +59,7 @@ export function usePlayerBackdrop(
   watch(selectedPlayerBackground, (background) => {
     liquidUnavailable.value = false
     meshUnavailable.value = false
+    particlesUnavailable.value = false
     if (background === PlayerBgType.LIQUID)
       coverColorSource.value = coverUrl.value ? 'loading' : 'idle'
     else coverColorSource.value = 'idle'
@@ -245,6 +251,7 @@ export function usePlayerBackdrop(
   return {
     liquidUnavailable,
     meshUnavailable,
+    particlesUnavailable,
     coverColorSource,
     selectedPlayerBackground,
     effectivePlayerBackground,
@@ -252,6 +259,7 @@ export function usePlayerBackdrop(
     useAmbientBackground,
     useLiquidBackground,
     useMeshBackground,
+    useParticleBackground,
     ambientIntensity,
     liquidCoverSource,
     backgroundSource,

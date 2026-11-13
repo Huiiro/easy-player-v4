@@ -21,6 +21,7 @@ import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDi
 import LyricsColorDialog from '@/components/lyrics/LyricsColorDialog.vue'
 import LiquidBackground from '@/components/background/player/LiquidBackground.vue'
 import MeshFlowBackground from '@/components/background/player/MeshFlowBackground.vue'
+import ParticleFlowBackground from '@/components/background/player/ParticleFlowBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/player/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
 import { usePlayerRhythm } from '@/components/player/usePlayerRhythm'
@@ -169,6 +170,11 @@ async function setLyricPolicy(
   }
 }
 const moreOptions = computed(() => [
+  {
+    label: t('footer.audioControls'),
+    icon: 'common-equalizer',
+    onClick: () => eventBus.emit('openAudioControls')
+  },
   {
     label: t('playerPanel.adjustLyricsDisplay'),
     icon: 'common-refresh',
@@ -322,10 +328,12 @@ onUnmounted(() => {
 const {
   liquidUnavailable,
   meshUnavailable,
+  particlesUnavailable,
   useAlbumArtwork,
   useAmbientBackground,
   useLiquidBackground,
   useMeshBackground,
+  useParticleBackground,
   ambientIntensity,
   liquidCoverSource,
   backgroundSource,
@@ -565,6 +573,18 @@ function changeLyricsOffset(event: WheelEvent): void {
           :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
           :energy="player.isPlaying ? liquidBass : 0"
           @unavailable="meshUnavailable = true"
+        />
+      </Transition>
+      <Transition name="panel-background">
+        <ParticleFlowBackground
+          v-if="useParticleBackground && !particlesUnavailable"
+          :active="shouldAnimate"
+          :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
+          :energy="liquidEnergy"
+          :bass="liquidBass"
+          :beat="liquidBeat"
+          :beat-sequence="player.audioAnalysis.beatSequence"
+          @unavailable="particlesUnavailable = true"
         />
       </Transition>
     </div>

@@ -9,6 +9,7 @@ const esbuild = require('esbuild')
 const { parse, compileScript } = require('@vue/compiler-sfc')
 const baseline = process.argv.includes('--baseline')
 const mesh = process.argv.includes('--mesh')
+const particles = process.argv.includes('--particles')
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'ep-panel-switch-')))
 protocol.registerSchemesAsPrivileged([
   {
@@ -154,9 +155,10 @@ app.whenReady().then(async () => {
    }},fonts:{list:async()=>({success:true,data:[]})}};
    const app=Vue.createApp({render:()=>Vue.h(Panel)});app.use(createPinia());app.use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));
    const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
-   const ui=useUIStore();ui.showPlayer=true;ui.playerBgType=${JSON.stringify(mesh ? 'mesh' : 'album')};ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
+   const ui=useUIStore();ui.showPlayer=true;ui.playerBgType=${JSON.stringify(particles ? 'particles' : mesh ? 'mesh' : 'album')};ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
    if(${mesh} && (ui.playerBgType!=='mesh'||!document.querySelector('.mesh-flow-background')))throw Error('Mesh background must remain selected and render inside the player');
+   if(${particles} && (ui.playerBgType!=='particles'||!document.querySelector('.particle-flow-background')))throw Error('Particle background must remain selected and render inside the player');
    let moreMenuMotionChecked=false;
    async function chooseLyricOption(prefix,label,verify){
     const trigger=[...document.querySelectorAll('button[aria-label]')].find(button=>button.getAttribute('aria-label').startsWith(prefix));
@@ -236,7 +238,7 @@ app.whenReady().then(async () => {
    active=false;observer.disconnect();return {switchRenderMs:durations,maxFrameSchedulingGapMs:Math.max(...gaps),longTasksMs:longTasks,coverAnalysisMs:window.panelAnalysis,lyricRows:document.querySelectorAll('.lyric-line').length};
   })()`)
     const report = {
-      scope: `Actual playback panel, cover analysis, ${mesh ? 'mesh' : 'album'} background and 100 lyric lines; isolated reactive player, no decoder or persistence`,
+      scope: `Actual playback panel, cover analysis, ${particles ? 'particles' : mesh ? 'mesh' : 'album'} background and 100 lyric lines; isolated reactive player, no decoder or persistence`,
       ...result
     }
     assert.equal(
