@@ -96,6 +96,69 @@ async function runChecks() {
     .use(createI18n({ legacy: false, locale: 'zh', messages: { zh } }))
     .mount('#app')
   await wait()
+  const footer = document.querySelector('.ep-footer')
+  const playback = () => footer.querySelector('.playback-button')
+  const sample = document.createElement('canvas').getContext('2d', { willReadFrequently: true })
+  const channels = (color) => {
+    sample.clearRect(0, 0, 1, 1)
+    sample.fillStyle = color
+    sample.fillRect(0, 0, 1, 1)
+    return [...sample.getImageData(0, 0, 1, 1).data].slice(0, 3)
+  }
+  for (const [surface, expected] of [
+    ['#101416', 255],
+    ['#ffffff', 0],
+    ['#f5f5f5', 0],
+    ['#e0e0e0', 0],
+    ['#f0e8df', 0],
+    ['#e8eef7', 0],
+    ['#b0b0b0', 255],
+    ['#28b5f0', 255],
+    ['#ffdf67', 255]
+  ]) {
+    playback().style.setProperty('--btn-primary-bg', surface)
+    playback().style.setProperty('--btn-primary-bg-hover', surface)
+    footer.style.setProperty('--app-footer-bg', expected ? '#fff' : '#101416')
+    await wait()
+    const style = getComputedStyle(playback())
+    check(
+      channels(style.backgroundColor).every(
+        (value, index) => Math.abs(value - channels(surface)[index]) < 2
+      ),
+      'Theme playback fill remains ' + surface
+    )
+    check(
+      channels(style.color).every((value) => Math.abs(value - expected) < 2),
+      'Contrasting playback icon on ' + surface
+    )
+  }
+  footer.style.removeProperty('--app-footer-bg')
+  playback().style.removeProperty('--btn-primary-bg')
+  playback().style.removeProperty('--btn-primary-bg-hover')
+  const initialButton = playback().getBoundingClientRect()
+  const initialIcon = playback().querySelector('svg').getBoundingClientRect()
+  check(
+    playback().querySelector('use')?.getAttribute('xlink:href') === '#icon-play-play',
+    'Playback reuses the existing play SVG'
+  )
+  for (let index = 0; index < 12; index++) {
+    playback().click()
+    await wait(20)
+    check(
+      playback().querySelector('use')?.getAttribute('xlink:href') ===
+        (window.footerPlayer.isPlaying ? '#icon-play-pause' : '#icon-play-play'),
+      'Playback state selects the existing SVG asset'
+    )
+    check(!window.footerUi.showPlayer, 'Playback click does not open the player')
+    for (const [rect, initial] of [
+      [playback().getBoundingClientRect(), initialButton],
+      [playback().querySelector('svg').getBoundingClientRect(), initialIcon]
+    ])
+      check(
+        ['x', 'y', 'width', 'height'].every((key) => Math.abs(rect[key] - initial[key]) < 0.1),
+        'Footer playback geometry stays fixed while toggling'
+      )
+  }
   const more = () => document.querySelector('button[aria-label="更多"]')
   const menu = () => document.querySelector('.ep-footer-more-menu')
   const action = (selector) => menu().querySelector(selector)
@@ -105,6 +168,10 @@ async function runChecks() {
   check(
     !!document.querySelector('.app-footer--collapsed') && !!more(),
     'collapsed footer retains one more-menu trigger'
+  )
+  check(
+    playback()?.classList.contains('playback-button--compact'),
+    'Collapsed footer uses the same themed playback control'
   )
   check(
     document.querySelector('.ep-footer').getBoundingClientRect().height === expandedHeight,

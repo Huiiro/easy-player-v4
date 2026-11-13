@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PlaybackButton from '@/components/player/PlaybackButton.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseRange from '@/components/ui/BaseRange.vue'
@@ -452,14 +453,12 @@ onBeforeUnmount(() => {
             >
               <SvgIcon name="play-prev" class-name="size-4" />
             </button>
-            <button
-              class="ep-button--primary grid size-10 place-items-center rounded-full shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+            <PlaybackButton
+              :playing="player.isPlaying"
               :disabled="!player.currentFile"
-              :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
+              :label="player.isPlaying ? t('footer.pause') : t('footer.play')"
               @click.stop="togglePlayback"
-            >
-              <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-5" />
-            </button>
+            />
             <button
               class="grid size-8 place-items-center rounded-full text-text transition hover:scale-105 hover:bg-text/10 disabled:cursor-not-allowed disabled:opacity-35"
               :title="t('footer.next')"
@@ -508,14 +507,13 @@ onBeforeUnmount(() => {
           class="collapsed-footer-controls flex items-center gap-2 text-[11px] tabular-nums text-text-l"
         >
           <span>{{ player.positionFormatted }} / {{ player.durationFormatted }}</span>
-          <button
-            class="ep-button--primary grid size-7 place-items-center rounded-full"
+          <PlaybackButton
+            size="compact"
+            :playing="player.isPlaying"
             :disabled="!player.currentFile"
-            :title="player.isPlaying ? t('footer.pause') : t('footer.play')"
+            :label="player.isPlaying ? t('footer.pause') : t('footer.play')"
             @click.stop="togglePlayback"
-          >
-            <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-3.5" />
-          </button>
+          />
         </div>
         <template v-if="!collapsed">
           <BaseTooltip

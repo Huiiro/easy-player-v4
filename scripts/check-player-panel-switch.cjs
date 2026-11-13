@@ -181,6 +181,15 @@ app.whenReady().then(async () => {
    window.panelPlayer.rhythmVisualConfig.enabled=true;window.panelPlayer.audioAnalysis.rms=0.6;
    ui.setPlayerCoverEffect('glow');await Vue.nextTick();await window.panelWait(100);
    if(!document.querySelector('.cover-aura')||document.querySelectorAll('.beat-particle').length!==24||document.querySelector('.player-cover-glow').style.transform==='scale(1)')throw Error('Glow mounts independent aura, particles and audio scaling');
+   const playback=document.querySelector('.playback-button');
+   const playbackRect=playback.getBoundingClientRect(),iconRect=playback.querySelector('svg').getBoundingClientRect();
+   for(let state=0;state<16;state++){
+    window.panelPlayer.isPlaying=state%2===0;window.panelPlayer.audioAnalysis.rms=state%3/3;
+    await Vue.nextTick();await new Promise(requestAnimationFrame);
+    for(const [rect,initial] of [[playback.getBoundingClientRect(),playbackRect],[playback.querySelector('svg').getBoundingClientRect(),iconRect]])
+      if(['x','y','width','height'].some(key=>Math.abs(rect[key]-initial[key])>0.1))throw Error('Player playback button must stay fixed across playback and rhythm changes');
+   }
+   window.panelPlayer.isPlaying=true;await Vue.nextTick();
    ui.setPlayerCoverEffect('none');await Vue.nextTick();
    if(document.querySelector('.cover-aura')||document.querySelector('.beat-particle')||document.querySelector('.player-cover-glow').style.transform!=='scale(1)')throw Error('Off removes glow, particles and scaling immediately');
    if(document.querySelector('.cover-frame img')!==coverImage)throw Error('Effect switching must preserve the loaded artwork');

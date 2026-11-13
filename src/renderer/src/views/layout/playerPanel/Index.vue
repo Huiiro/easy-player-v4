@@ -24,6 +24,7 @@ import MeshFlowBackground from '@/components/background/player/MeshFlowBackgroun
 import ParticleFlowBackground from '@/components/background/player/ParticleFlowBackground.vue'
 import AmbientBubbleCanvas from '@/components/background/player/AmbientBubbleCanvas.vue'
 import PlayerCover from '@/components/player/PlayerCover.vue'
+import PlaybackButton from '@/components/player/PlaybackButton.vue'
 import { usePlayerRhythm } from '@/components/player/usePlayerRhythm'
 import { formatArtists, splitArtists } from '@/utils/artists'
 import type { SongDetails } from '@/types/library'
@@ -1050,14 +1051,13 @@ function changeLyricsOffset(event: WheelEvent): void {
             >
               <SvgIcon name="play-prev" class-name="size-6" />
             </button>
-            <button
-              class="grid size-[3.2rem] place-items-center rounded-full ep-button--primary shadow-[0_0_20px_color-mix(in_srgb,var(--color-primary)_45%,transparent)] transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 disabled:shadow-none"
+            <PlaybackButton
+              size="large"
+              :playing="player.isPlaying"
               :disabled="!player.currentFile"
-              :title="player.isPlaying ? t('playerPanel.pause') : t('playerPanel.play')"
+              :label="player.isPlaying ? t('playerPanel.pause') : t('playerPanel.play')"
               @click="togglePlayback"
-            >
-              <SvgIcon :name="player.isPlaying ? 'play-pause' : 'play-play'" class-name="size-8" />
-            </button>
+            />
             <button
               class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-35"
               :disabled="!player.queue.length"
