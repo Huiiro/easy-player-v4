@@ -36,5 +36,5 @@
 - `npm run test:genres`：真实 SQLite 的拆分聚合、计数、未知分组、完整名称匹配、详情搜索、前端查询参数、多值读取及清空同步。
 - 安装 FFmpeg 并运行 `npm run build:native` 后，上述测试额外生成中文文件名的 MP3 / FLAC / M4A，验证真实写入、读取、清空，以及修改其他字段时保留已有流派；FLAC 包含独立重复 GENRE 标签。
 - `npm run test:native-metadata`：带 JPEG / PNG 封面的 M4A / FLAC 连续修改标签、更换封面、失败清理，核对封面字节及压缩音频哈希。可追加真实下载文件路径，仅操作临时副本，并核对原文件 SHA-256 未变化。
-- `node scripts/test-preference-defaults.mjs`、`node scripts/test-renderer-persistence.mjs`：默认值、重置与设置持久化。
+- `node scripts/tests/library/test-preference-defaults.mjs`、`node scripts/tests/system/test-renderer-persistence.mjs`：默认值、重置与设置持久化。
 - `npm run test:song-search`、`npm run test:ui`、`npm run build`：现有搜索、组件与完整构建回归。

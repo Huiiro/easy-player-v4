@@ -15,7 +15,7 @@ Windows 默认启用，在「设置 → 系统 → Windows 系统媒体控制」
 
 - `npm run build:native`：配置并构建原生模块。
 - `npm run test:smtc`：使用现有 CMake 构建目录编译模块和测试探针，验证真实 Windows 会话、按钮回调、无 seek、封面、窗口替换、命令确认与设置界面。
-- `npm run typecheck`、`npm run test:shortcuts`、`node scripts/test-playback-events.mjs`、`npm run test:shuffle`：类型及已有播放器行为回归。
+- `npm run typecheck`、`npm run test:shortcuts`、`node scripts/tests/audio/test-playback-events.mjs`、`npm run test:shuffle`：类型及已有播放器行为回归。
 
 当前工作机已完成 Windows 11 原生会话验收；Windows 10、正式安装包显示身份及休眠恢复仍需在相应环境实测。
 

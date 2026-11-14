@@ -64,7 +64,7 @@ npm run test:packaging-deps
 
 ```powershell
 npm run build:win -- --publish never
-node scripts/verify-windows-package.cjs
+node scripts/package/verify-windows-package.cjs
 ```
 
 Windows 安装内容：

@@ -1,7 +1,7 @@
 appId: com.huiiro.easyplayer
 productName: EasyPlayer
 compression: maximum
-beforePack: scripts/verify-auto-mix-package.cjs
+beforePack: scripts/package/verify-auto-mix-package.cjs
 directories:
   buildResources: build
 files:
@@ -81,7 +81,7 @@ win:
         - 'concrt*.dll'
         - 'vccorlib*.dll'
 nsis:
-  include: scripts/file-associations.nsh
+  include: scripts/package/file-associations.nsh
   artifactName: ${name}-${version}-setup.${ext}
   # Prefer a compact solid archive for the full installer.
   differentialPackage: false

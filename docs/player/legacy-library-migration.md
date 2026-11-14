@@ -38,5 +38,5 @@
 npm run test:legacy-migration
 npm run test:shortcuts
 npm run build
-npx electron scripts/check-playback-view.cjs
+npx electron scripts/tests/ui/check-playback-view.cjs
 ```

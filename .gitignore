@@ -10,6 +10,9 @@ out
 
 # Native addon build
 build/
+# Build orchestration sources are not generated artifacts.
+!scripts/build/
+!scripts/build/**
 *.node
 *.dll
 *.dylib

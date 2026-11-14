@@ -66,8 +66,8 @@ The Windows command runs both TypeScript checks and prepares yt-dlp/FFmpeg:
 npm ci
 npm run prepare:native
 npm run build:win -- --publish never
-node scripts/verify-windows-package.cjs
-node scripts/test-native-runtime-paths.cjs
+node scripts/package/verify-windows-package.cjs
+node scripts/tests/audio/test-native-runtime-paths.cjs
 npm run test:audio-core
 npm run test:packaging-deps
 npm run test:auto-mix-runtime

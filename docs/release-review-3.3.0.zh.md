@@ -26,7 +26,7 @@
 
 - `npm run typecheck`：通过。
 - `npm run build:nocheck`：通过；有插件模块同时静态/动态导入的构建提示，不影响此次构建。
-- `node scripts/test-changelog.mjs`：通过；中英文版本及条目数量一致。
+- `node scripts/tests/system/test-changelog.mjs`：通过；中英文版本及条目数量一致。
 - 15 项现有回归脚本全部通过：`test-source-runtime`、`test-source-management`、`test-source-metadata`、`test-remote-sources`、`test-file-transfer`、`test-remote-source-storage`、`test-song-lyrics`、`test-lyric-editor`、`test-theme-plugins`、`test-plugin-logs`、`test-official-plugins`、`test-auto-mix-stems`、`test-download-audio`、`test-window-presentation`、`test-window-material`。
 - 版本及双语更新日志格式检查通过；锁文件结构比较确认仅应用版本变化，依赖版本未变。
 - 基线升级专项复现：上述两项风险均确认；现有回归通过不代表升级兼容性通过。

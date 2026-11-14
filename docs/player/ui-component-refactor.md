@@ -119,8 +119,8 @@ Menu 支持相同的 `size` 参数（默认 `md`），普通项、分组项与 S
 - `npm run build`：完整类型检查和构建。
 - `npm run test:ui`：隐藏 Electron 真实 DOM 回归；先构建以提供实际 CSS。
 - `npm run test:song-search`：搜索排序、IME、请求竞态、数据查询和 worker。
-- `node scripts/test-custom-theme.mjs`、`node scripts/test-theme-package.mjs`：主题验证与资源包兼容。
-- `node scripts/test-idle-work.mjs`、`node scripts/test-lyrics-motion.mjs`：可见性/空闲任务及歌词动效回归。
+- `node scripts/tests/appearance/test-custom-theme.mjs`、`node scripts/tests/appearance/test-theme-package.mjs`：主题验证与资源包兼容。
+- `node scripts/tests/system/test-idle-work.mjs`、`node scripts/tests/lyrics/test-lyrics-motion.mjs`：可见性/空闲任务及歌词动效回归。
 
 组件集成测试不是完整播放会话验收。Mica、真实播放状态、动态背景和不同主题的整页观感仍需在实际应用中做人工验收。
 

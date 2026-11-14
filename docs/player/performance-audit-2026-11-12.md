@@ -61,15 +61,15 @@ Electron CPU 口径与上文原生进程单核口径不同，不直接比较。�
 完整 TypeScript 检查、应用构建、本轮文件 ESLint、以下回归通过：
 
 ```powershell
-node scripts/test-idle-work.mjs
-node scripts/test-resource-lifecycle.mjs
-node scripts/test-application-shutdown.mjs
-node scripts/test-plugin-logs.mjs
-node scripts/test-source-runtime.mjs
-node scripts/test-media-image-lifecycle.mjs
-node scripts/test-playback-events.mjs
-node scripts/test-playback-mode.mjs
-node scripts/check-playback-performance.cjs
+node scripts/tests/system/test-idle-work.mjs
+node scripts/tests/system/test-resource-lifecycle.mjs
+node scripts/tests/system/test-application-shutdown.mjs
+node scripts/tests/plugins/test-plugin-logs.mjs
+node scripts/tests/plugins/test-source-runtime.mjs
+node scripts/tests/system/test-media-image-lifecycle.mjs
+node scripts/tests/audio/test-playback-events.mjs
+node scripts/tests/library/test-playback-mode.mjs
+node scripts/performance/check-playback-performance.cjs
 ```
 
 完整应用采样使用独立数据目录和两个合成音频，测试音量为 0。报告位于构建目录，不纳入 Git：

@@ -36,7 +36,7 @@ npm run pack:theme -- ../easy-player/docs/themes/gi-columbina ../easy-player/bui
 主机侧验证入口：
 
 ```sh
-npx electron scripts/check-columbina-theme.cjs
+npx electron scripts/tests/appearance/check-columbina-theme.cjs
 ```
 
 验证检查实际 `.epp` 安装、原图资源、明暗回退、按钮和弹层配色，并生成预览图。规则与兼容边界见 [第三方主题适配指南](../../theme-authoring.md)。

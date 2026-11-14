@@ -333,7 +333,7 @@ npm run pack:theme -- examples/nyan-cat dist/examples
 | SDK Schema 与宿主规则同步         | npm run test:theme-contract                                                                        |
 | 真实界面、CSS、字体、shader、重名 | npm run test:appearance                                                                            |
 | 来源调用、错误、取消及管理        | test:source-runtime、test:source-management、test:builtin-plugins                                  |
-| 原主题兼容                        | scripts/test-theme-package.mjs、test-custom-theme.mjs、test-theme-preview.mjs 及对应 Electron 检查 |
+| 原主题兼容                        | scripts/tests/appearance/test-theme-package.mjs、test-custom-theme.mjs、test-theme-preview.mjs 及对应 Electron 检查 |
 | 独立插件工程                      | 插件仓库 npm run build、npm test、npm run build:examples                                           |
 | 脱离应用目录的独立构建            | 宿主 npm run test:plugin-project                                                                   |
 

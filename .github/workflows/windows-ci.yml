@@ -28,6 +28,8 @@ jobs:
           cache: npm
       - name: Install JavaScript dependencies
         run: npm ci
+      - name: Verify script layout
+        run: npm run test:script-layout
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12.10'
@@ -56,9 +58,9 @@ jobs:
           $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '9'
           npm run build:nocheck
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/package-windows.mjs --dir --publish never
+          node scripts/package/package-windows.mjs --dir --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/verify-windows-package.cjs
+          node scripts/package/verify-windows-package.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:bundled-auto-mix
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

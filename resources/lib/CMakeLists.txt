@@ -193,7 +193,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # Development loads the addon directly from build/native-addon. cmake-js
-# normally invokes scripts/copy-native-assets.js, but a direct CMake build
+# normally invokes scripts/build/copy-native-assets.js, but a direct CMake build
 # does not. Copy the module and libsamplerate runtime for both workflows.
 find_program(EASY_PLAYER_NODE_EXECUTABLE NAMES node)
 if(NOT EASY_PLAYER_NODE_EXECUTABLE)
@@ -201,7 +201,7 @@ if(NOT EASY_PLAYER_NODE_EXECUTABLE)
 endif()
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND "${EASY_PLAYER_NODE_EXECUTABLE}"
-        "${CMAKE_CURRENT_LIST_DIR}/../../scripts/copy-native-assets.js"
+        "${CMAKE_CURRENT_LIST_DIR}/../../scripts/build/copy-native-assets.js"
         "${CMAKE_BINARY_DIR}" "$<CONFIG>"
     VERBATIM)
 

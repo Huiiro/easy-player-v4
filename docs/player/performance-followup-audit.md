@@ -22,7 +22,7 @@
 
 ## 验证
 
-- `node scripts/test-idle-work.mjs`：验证缓存页与隐藏窗口停表、恢复立即更新、不重复启动和卸载清理；空频谱停绘、稳定频谱收敛停绘、新数据恢复、隐藏/停用及卸载停止。
+- `node scripts/tests/system/test-idle-work.mjs`：验证缓存页与隐藏窗口停表、恢复立即更新、不重复启动和卸载清理；空频谱停绘、稳定频谱收敛停绘、新数据恢复、隐藏/停用及卸载停止。
 - `npm run test:song-search`：通过 UI 查询/状态、真实 SQLite、日语读音、FTS、队列竞争和实际 worker 回归。新增计数缓存重复读取不聚合、本连接和外部连接写入失效、重试时间失效用例。修复现有 UI 测试缺失的 statisticsStore mock。
 - 完整应用构建、TypeScript 检查及本轮修改文件 ESLint 通过。
 

@@ -10,14 +10,8 @@
         {
           "id": "youtube",
           "displayName": "YouTube",
-          "capabilities": [
-            "download"
-          ],
-          "downloadDomains": [
-            "youtube.com",
-            "youtu.be",
-            "youtube-nocookie.com"
-          ]
+          "capabilities": ["download"],
+          "downloadDomains": ["youtube.com", "youtu.be", "youtube-nocookie.com"]
         }
       ],
       "size": 9136,

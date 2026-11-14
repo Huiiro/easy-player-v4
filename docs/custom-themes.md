@@ -181,9 +181,9 @@ JSON 不支持注释、尾逗号或原始 CSS 文本。文件最多 **128 KiB（
 仓库内的解析与资源回归检查可在项目根目录运行：
 
 ```sh
-node scripts/test-custom-theme.mjs
-node scripts/test-theme-package.mjs
-node scripts/test-theme-preview.mjs
+node scripts/tests/appearance/test-custom-theme.mjs
+node scripts/tests/appearance/test-theme-package.mjs
+node scripts/tests/appearance/test-theme-preview.mjs
 ```
 
 这些脚本不替代实际界面检查。修改实现后再运行 `npm run typecheck` 等对应检查。遇到“修改无效”，先确认应用连接的开发服务器和源代码目录一致，再检查导入错误、公开类是否实际存在、变量消费位置及局部内联样式。

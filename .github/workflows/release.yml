@@ -64,7 +64,7 @@ jobs:
           $env:ELECTRON_BUILDER_COMPRESSION_LEVEL = '9'
           npm run build:win -- --publish never
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/verify-windows-package.cjs
+          node scripts/package/verify-windows-package.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:audio-core
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -76,7 +76,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:auto-mix-runtime
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          node scripts/test-native-runtime-paths.cjs
+          node scripts/tests/audio/test-native-runtime-paths.cjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run test:auto-mix-component-install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

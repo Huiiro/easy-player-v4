@@ -116,7 +116,7 @@ npm run dev
 
 构建移除 pip、SciPy、测试、头文件、静态库和字节码，保留运行所需的动态库、元数据
 与许可证；符号链接在打包前实体化。每个 Mach-O 检查 ARM64、最低系统和外部库引用，
-使用 ad-hoc 签名。源码见 `scripts/prepare-auto-mix-macos.py`。
+使用 ad-hoc 签名。源码见 `scripts/prepare/prepare-auto-mix-macos.py`。
 Python 来源：[Astral 独立发行版](https://github.com/astral-sh/python-build-standalone)。
 
 2026-10-31 已通过 [GitHub Actions ARM64 验证](https://github.com/Huiiro/easy-player-v4/actions/runs/41198019383)：

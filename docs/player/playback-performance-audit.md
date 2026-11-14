@@ -77,7 +77,7 @@ npm run build
 npm run test:playback-mode
 npm run perf:playback
 npm run perf:app
-cmake -S scripts/native-performance -B build/performance-tests
+cmake -S scripts/performance/native -B build/performance-tests
 cmake --build build/performance-tests --config Release
 ctest --test-dir build/performance-tests -C Release --output-on-failure
 ```
@@ -98,10 +98,10 @@ ctest --test-dir build/performance-tests -C Release --output-on-failure
 
 独立窗口事件追踪复现进入极致模式时旧窗口先关闭、新窗口约 45 毫秒后才显示；普通页面也会在窗口切换前先挂载极致页面。现在仅在替换窗口 `ready-to-show` 并执行 `show()` 后立即销毁旧窗口，不再使用 `did-finish-load` 触发销毁，也不引入额外动画帧或播放器恢复等待。旧页面保持原布局，沉浸播放页不提前收起；极致窗口的底色与页面统一为 `#151515`。
 
-新增独立回归脚本 `scripts/check-playback-view.cjs`，通过普通和最大化状态下的四次交接，验证新窗口显示时旧窗口仍可见、旧窗口销毁时新窗口已可见、旧页面不提前改变布局，以及尺寸位置保持。此次隔离空库测得显示耗时 126–144 毫秒，仅代表当前测试环境。报告写入 `build/playback-view-check.json`。测试不播放音频，不替代完整播放性能回归。
+新增独立回归脚本 `scripts/tests/ui/check-playback-view.cjs`，通过普通和最大化状态下的四次交接，验证新窗口显示时旧窗口仍可见、旧窗口销毁时新窗口已可见、旧页面不提前改变布局，以及尺寸位置保持。此次隔离空库测得显示耗时 126–144 毫秒，仅代表当前测试环境。报告写入 `build/playback-view-check.json`。测试不播放音频，不替代完整播放性能回归。
 
 ```powershell
 npm run build
 npm run test:playback-mode
-node_modules/.bin/electron.cmd scripts/check-playback-view.cjs
+node_modules/.bin/electron.cmd scripts/tests/ui/check-playback-view.cjs
 ```

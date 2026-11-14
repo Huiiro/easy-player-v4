@@ -17,7 +17,7 @@ Easy Player。开发模式不会向注册表注册 Electron。
 
 ## 验证
 
-自动检查：`node scripts/check-file-associations.cjs`。
+自动检查：`node scripts/tests/system/check-file-associations.cjs`。
 
 安装后的人工检查：
 

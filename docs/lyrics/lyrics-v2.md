@@ -20,7 +20,7 @@
 
 ## 验证
 
-独立浏览器测试页：运行 `node scripts/lyrics-v2-preview.mjs`，访问 `http://127.0.0.1:5197`。它只替换 UI store 和歌词数据接口，挂载实际 v2 组件及现有歌词解析器，不读取或修改音乐库。
+独立浏览器测试页：运行 `node scripts/dev/lyrics-v2-preview.mjs`，访问 `http://127.0.0.1:5197`。它只替换 UI store 和歌词数据接口，挂载实际 v2 组件及现有歌词解析器，不读取或修改音乐库。
 
 测试页使用播放页的 Grid/Flex 嵌套，并从播放页读取布局 CSS，歌词组件不再单独设置固定像素高度。回归验证：外层高度 560px、歌词区域 496px、滚动视口 432px，长歌词只增加内部 scrollHeight；跳转及翻译切换后外层高度不变。
 
@@ -28,7 +28,7 @@
 
 已验证：中段跳转居中（误差 < 1px）、翻译切换重排、减弱动画、点击 seek 的毫秒值、键盘滚动接管及恢复、纯文本展示。弹簧验证了 30/60/144 FPS 收敛与反向改目标。
 
-运行 `node scripts/test-lyrics-motion.mjs` 检查弹簧回弹、不同帧率收敛、扫字插值、暂停与前后跳转。测试页提供 Play/Pause、Timed lyrics（YRC）及 Measure motion：以 100ms 进度样本进行 1.4 秒采样，普通歌词测得 85 帧、39 种填充状态、最大行间位移差约 94px；YRC 测得 85 帧、40 种填充状态、位移差约 50px。计数随浏览器调度变化，不代表真实音频播放的性能基准。
+运行 `node scripts/tests/lyrics/test-lyrics-motion.mjs` 检查弹簧回弹、不同帧率收敛、扫字插值、暂停与前后跳转。测试页提供 Play/Pause、Timed lyrics（YRC）及 Measure motion：以 100ms 进度样本进行 1.4 秒采样，普通歌词测得 85 帧、39 种填充状态、最大行间位移差约 94px；YRC 测得 85 帧、40 种填充状态、位移差约 50px。计数随浏览器调度变化，不代表真实音频播放的性能基准。
 
 新增组件和弹簧文件通过 ESLint；`typecheck:web` 未报告新增文件错误，但全项目仍有旧组件、playerStore、下载页等既有类型错误。尚未进行真实音频播放及超长歌词性能测试。
 

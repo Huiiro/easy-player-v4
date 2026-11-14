@@ -44,6 +44,6 @@ requested resume point for both PCM and DoP.
 Checkpoint persistence is also flushed synchronously before engine stop/database
 shutdown on explicit quit, final-window close and normal will-quit. Repeated
 cleanup after stop preserves the snapshot instead of saving idle position zero.
-Run `node scripts/test-playback-checkpoint.mjs` for exit/restart persistence tests;
+Run `node scripts/tests/system/test-playback-checkpoint.mjs` for exit/restart persistence tests;
 the native engine recovery test covers startup device selection followed by a
 restore seek, and overriding an earlier device snapshot with a newer seek.
