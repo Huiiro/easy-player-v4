@@ -44,22 +44,34 @@ export function rebuildLocalFolders(): number {
   const insertFolder = db.prepare(
     'INSERT INTO folder (pid, name, full_path, is_root_path, import_time) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)'
   )
+  const updateFolder = db.prepare(
+    'UPDATE folder SET pid = ?, name = ?, is_root_path = ? WHERE id = ?'
+  )
   const updateSong = db.prepare('UPDATE song SET folder_id = ? WHERE id = ?')
+  const folderIds = new Map<string, number>()
   const getFolder = (fullPath: string): number => {
-    const existing = findFolder.get(fullPath) as { id: number } | undefined
-    if (existing) return existing.id
+    const cached = folderIds.get(fullPath)
+    if (cached !== undefined) return cached
+    // Recompute ancestors even for existing rows: an earlier import may have
+    // stored this directory as a root before its parent was imported.
     const parentPath = dirname(fullPath)
     const parentId = parentPath === fullPath ? null : getFolder(parentPath)
-    return Number(
-      insertFolder.run(
-        parentId,
-        basename(fullPath) || fullPath,
-        fullPath,
-        parentId === null ? 1 : 0
-      ).lastInsertRowid
-    )
+    const name = basename(fullPath) || fullPath
+    const isRootPath = parentId === null ? 1 : 0
+    const existing = findFolder.get(fullPath) as { id: number } | undefined
+    const id = existing
+      ? existing.id
+      : Number(insertFolder.run(parentId, name, fullPath, isRootPath).lastInsertRowid)
+    if (existing) updateFolder.run(parentId, name, isRootPath, id)
+    folderIds.set(fullPath, id)
+    return id
   }
   db.transaction(() => {
+    // Empty local directories also appear in the tree and need the same repair.
+    const folders = db
+      .prepare("SELECT full_path AS fullPath FROM folder WHERE full_path NOT LIKE 'remote://%'")
+      .all() as Array<{ fullPath: string }>
+    for (const folder of folders) getFolder(folder.fullPath)
     for (const song of songs) updateSong.run(getFolder(dirname(song.audio)), song.id)
   })()
   return songs.length

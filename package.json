@@ -70,6 +70,7 @@
     "test:file-drop-import": "node scripts/tests/library/test-file-drop-import.mjs",
     "test:library-auto-import:ui": "electron scripts/tests/library/check-library-settings.cjs",
     "test:recover-moved-songs": "node scripts/tests/library/test-recover-moved-songs.mjs",
+    "test:rebuild-folders": "node scripts/tests/library/test-rebuild-folders.mjs",
     "test:fingerprint-diagnostics": "node scripts/tests/library/test-fingerprint-diagnostics.mjs",
     "test:duplicate-checking": "node scripts/tests/library/test-duplicate-checking.mjs",
     "test:duplicate-task": "node scripts/tests/library/test-duplicate-task.mjs",
