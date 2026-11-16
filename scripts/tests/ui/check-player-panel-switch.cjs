@@ -163,6 +163,17 @@ app.whenReady().then(async () => {
    const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
    const ui=useUIStore();ui.showPlayer=true;ui.playerBgType=${JSON.stringify(ambient ? 'ambient' : particles ? 'particles' : mesh ? 'mesh' : 'album')};ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
+   for(const label of [zh.footer.volume,zh.playerPanel.speed,zh.playerPanel.lyricTiming,zh.playerPanel.lyricFontSize,zh.playerPanel.lyricSpacing]){
+    const trigger=[...document.querySelectorAll('.ep-tooltip-trigger button')].find(button=>button.getAttribute('aria-label')===label);
+    if(!trigger||trigger.title!==label)throw Error('Player control must expose a visible hover hint: '+label);
+    const anchor=trigger.closest('.ep-tooltip-trigger');
+    anchor.dispatchEvent(new PointerEvent('pointerenter'));await Vue.nextTick();await window.panelWait(180);
+    const tooltip=document.querySelector('.ep-tooltip');
+    if(!tooltip||!tooltip.querySelector('input[type="range"]')||getComputedStyle(tooltip).visibility!=='visible')throw Error('Hover hint must preserve the interactive control popup: '+label);
+    anchor.dispatchEvent(new PointerEvent('pointerleave'));
+    document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
+    await Vue.nextTick();await window.panelWait(200);
+   }
    if(${mesh} && (ui.playerBgType!=='mesh'||!document.querySelector('.mesh-flow-background')))throw Error('Mesh background must remain selected and render inside the player');
    if(${particles} && (ui.playerBgType!=='particles'||!document.querySelector('.particle-flow-background')))throw Error('Particle background must remain selected and render inside the player');
    if(${ambient}) {

@@ -710,6 +710,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                   v-bind="triggerProps"
                   class="panel-tool"
                   :class="player.playbackSpeedConfig.speed !== 1 && 'active'"
+                  :title="t('playerPanel.speed')"
                   :aria-label="t('playerPanel.speed')"
                 >
                   <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
@@ -760,6 +761,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                   v-bind="triggerProps"
                   class="panel-tool"
                   :class="player.lyricsOffsetMs !== 0 && 'active'"
+                  :title="t('playerPanel.lyricTiming')"
                   :aria-label="t('playerPanel.lyricTiming')"
                 >
                   <svg-icon name="common-time" class-name="w-[16px] h-[16px]" />
@@ -819,6 +821,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                   type="button"
                   v-bind="triggerProps"
                   class="panel-tool"
+                  :title="t('playerPanel.lyricFontSize')"
                   :aria-label="t('playerPanel.lyricFontSize')"
                 >
                   <span class="w-[16px] h-[16px] flex items-center justify-center">
@@ -852,6 +855,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                   type="button"
                   v-bind="triggerProps"
                   class="panel-tool"
+                  :title="t('playerPanel.lyricSpacing')"
                   :aria-label="t('playerPanel.lyricSpacing')"
                 >
                   <span class="w-[16px] h-[16px] flex items-center justify-center">
@@ -1021,6 +1025,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                   type="button"
                   v-bind="triggerProps"
                   class="panel-secondary-text grid size-6 place-items-center rounded-full transition hover:scale-105"
+                  :title="t('footer.volume')"
                   :aria-label="t('footer.volume')"
                 >
                   <SvgIcon :name="volumeIcon" class-name="size-6" />
