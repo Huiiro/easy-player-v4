@@ -15,8 +15,45 @@ function load(file, globals = {}) {
   )
   return exports
 }
-const { createWindowPresentation } = load('src/main/service/windowPresentation.ts')
-function fixture() {
+const { createWindowPresentation, revealPaintedWindow } = load(
+  'src/main/service/windowPresentation.ts'
+)
+let finishPaint
+let finishNativeCapture
+let nativeOpacity = 0
+let nativeCaptures = 0
+const nativeWindow = {
+  isDestroyed: () => false,
+  setOpacity: (opacity) => {
+    nativeOpacity = opacity
+  },
+  webContents: {
+    executeJavaScript: () =>
+      new Promise((resolve) => {
+        finishPaint = resolve
+      }),
+    capturePage: () => {
+      nativeCaptures++
+      return new Promise((resolve) => {
+        finishNativeCapture = resolve
+      })
+    }
+  }
+}
+const reveal = revealPaintedWindow(nativeWindow)
+assert.equal(nativeOpacity, 0, 'keep the native show/maximize surface transparent')
+finishPaint()
+for (let i = 0; i < 5; i++) await Promise.resolve()
+assert.equal(nativeCaptures, 1)
+assert.equal(
+  nativeOpacity,
+  0,
+  'do not expose the window until its resized compositor frame is ready'
+)
+finishNativeCapture()
+await reveal
+assert.equal(nativeOpacity, 1)
+function fixture(showStartupScreen = false) {
   const window = new EventEmitter()
   let destroyed = false
   let throttling = true
@@ -31,7 +68,7 @@ function fixture() {
   let shown = 0
   return {
     window,
-    presentation: createWindowPresentation(window, () => shown++),
+    presentation: createWindowPresentation(window, () => shown++, true, showStartupScreen),
     count: () => shown,
     close: () => {
       destroyed = true
@@ -39,6 +76,59 @@ function fixture() {
     }
   }
 }
+const startup = fixture(true)
+startup.presentation.show()
+assert.equal(startup.count(), 0, 'wait for the static logo frame before showing the main window')
+startup.window.emit('ready-to-show')
+assert.equal(startup.count(), 0, 'native readiness cannot expose an unpainted startup page')
+let captureStartup
+startup.window.webContents.capturePage = () =>
+  new Promise((resolve) => {
+    captureStartup = resolve
+  })
+const startupPresented = startup.presentation.startupReady()
+assert.equal(startup.count(), 0, 'wait for the decoded logo frame to be captured')
+captureStartup()
+await startupPresented
+assert.equal(startup.count(), 1, 'show the logo while application initialization is pending')
+startup.window.webContents.capturePage = async () => {}
+startup.presentation.rendererReady()
+for (let i = 0; i < 5; i++) await Promise.resolve()
+assert.equal(startup.count(), 1, 'application readiness must not refocus the startup window')
+assert.equal(startup.window.webContents.getBackgroundThrottling(), true)
+const canceledStartup = fixture(true)
+canceledStartup.presentation.show()
+canceledStartup.presentation.cancel()
+canceledStartup.window.emit('ready-to-show')
+assert.equal(canceledStartup.count(), 0, 'a canceled startup must remain hidden')
+const canceledStartupReady = canceledStartup.presentation.startupReady()
+for (let i = 0; i < 5; i++) await Promise.resolve()
+assert.equal(canceledStartup.count(), 0)
+canceledStartup.close()
+assert.equal(await canceledStartupReady, false)
+assert.equal(await fixture().presentation.startupReady(), false, 'replacement windows skip startup')
+const asynchronous = fixture()
+let finishPresentation
+const nativePresentation = createWindowPresentation(
+  asynchronous.window,
+  () =>
+    new Promise((resolve) => {
+      finishPresentation = resolve
+    }),
+  true,
+  true
+)
+nativePresentation.show()
+asynchronous.window.emit('ready-to-show')
+let startupAcknowledged = false
+const acknowledgement = nativePresentation.startupReady().then(() => {
+  startupAcknowledged = true
+})
+for (let i = 0; i < 5; i++) await Promise.resolve()
+assert.equal(startupAcknowledged, false, 'bootstrap must wait for the native opacity guard')
+finishPresentation()
+await acknowledgement
+assert.equal(startupAcknowledged, true)
 for (const rendererFirst of [false, true]) {
   const f = fixture()
   assert.equal(f.window.webContents.getBackgroundThrottling(), false)
@@ -122,6 +212,35 @@ assert.equal(document.documentElement.dataset.windowReady, 'true')
 assert.equal(sent, 1)
 await notifyWindowReady()
 assert.equal(sent, 1, 'notify the host once per renderer')
+const paintCallbacks = []
+const visibleRoot = {
+  dataset: { startupPresented: 'true' },
+  getBoundingClientRect: () => ({})
+}
+let visibleSent = false
+const { notifyWindowReady: visibleReady } = load('src/renderer/src/services/windowReady.ts', {
+  require: () => ({ nextTick: () => Promise.resolve() }),
+  document: { documentElement: visibleRoot, hidden: false },
+  window: {
+    requestAnimationFrame: (callback) => paintCallbacks.push(callback),
+    api: {
+      window: {
+        ready: () => {
+          visibleSent = true
+        }
+      }
+    }
+  }
+})
+const painted = visibleReady()
+for (let i = 0; i < 5; i++) await Promise.resolve()
+assert.equal(visibleSent, false)
+assert.equal(visibleRoot.dataset.windowReady, undefined)
+paintCallbacks.shift()()
+assert.equal(visibleSent, false, 'do not fade the splash before the underlying app is painted')
+paintCallbacks.shift()()
+await painted
+assert.equal(visibleSent, true)
 console.log(
   'Window presentation: readiness ordering, captured frame, cancel/close, reopen and layout notification passed.'
 )

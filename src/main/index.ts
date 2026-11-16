@@ -83,7 +83,7 @@ import { beginApplicationShutdown, onApplicationShutdown } from './service/appli
 import type { SystemMediaPlaybackState } from '../shared/systemMediaControls'
 import { createTaskbarCoverPreview } from './service/taskbarCoverPreview'
 import { createWindowMaterialManager } from './service/windowMaterialService'
-import { createWindowPresentation } from './service/windowPresentation'
+import { createWindowPresentation, revealPaintedWindow } from './service/windowPresentation'
 import { Logger } from './service/loggerService'
 import sharp from 'sharp'
 import {
@@ -208,9 +208,10 @@ const windowPresentations = new WeakMap<
 
 function prepareWindow(
   window: BrowserWindow,
-  present: () => void
+  present: () => void | Promise<void>,
+  showStartupScreen = false
 ): ReturnType<typeof createWindowPresentation> {
-  const presentation = createWindowPresentation(window, present)
+  const presentation = createWindowPresentation(window, present, true, showStartupScreen)
   windowPresentations.set(window, presentation)
   return presentation
 }
@@ -219,6 +220,12 @@ ipcMain.on('window:ready', (event) => {
   if (event.senderFrame !== event.sender.mainFrame) return
   const window = BrowserWindow.fromWebContents(event.sender)
   if (window) windowPresentations.get(window)?.rendererReady()
+})
+
+ipcMain.handle('window:startup-ready', (event) => {
+  if (event.senderFrame !== event.sender.mainFrame) return false
+  const window = BrowserWindow.fromWebContents(event.sender)
+  return window ? (windowPresentations.get(window)?.startupReady() ?? false) : false
 })
 
 function showMainWindow(): void {
@@ -660,6 +667,7 @@ function createWindow(
   restoredState = loadWindowState(),
   onShown?: () => void
 ): void {
+  const guardStartup = process.platform === 'win32' && !onShown
   // Create the browser window.
   mainWindow = new BrowserWindow({
     x: restoredState.x,
@@ -669,6 +677,8 @@ function createWindow(
     minWidth: 1280,
     minHeight: 780,
     show: false,
+    // Hide the native first-show/maximize surfaces as well as the web contents.
+    ...(guardStartup ? { opacity: 0 } : {}),
     // Use renderer-owned caption buttons. Window Controls Overlay retains
     // native hit targets even when hidden, which conflicts with player UI.
     // Both macOS views use hiddenInset and renderer drag regions. Changing the
@@ -711,17 +721,27 @@ function createWindow(
   )
 
   let firstPresentation = true
-  const presentation = prepareWindow(createdWindow, () => {
-    // On macOS show() can return before the native window emits "show".
-    // Keep the outgoing renderer alive until that event, including maximize().
-    if (firstPresentation) {
-      firstPresentation = false
-      if (onShown) createdWindow.once('show', onShown)
-      if (restoredState.maximized) createdWindow.maximize()
-    }
-    createdWindow.show()
-    createdWindow.focus()
-  })
+  const presentation = prepareWindow(
+    createdWindow,
+    async () => {
+      // On macOS show() can return before the native window emits "show".
+      // Keep the outgoing renderer alive until that event, including maximize().
+      const revealStartup = firstPresentation && guardStartup
+      if (firstPresentation) {
+        firstPresentation = false
+        if (onShown) createdWindow.once('show', onShown)
+        if (restoredState.maximized) createdWindow.maximize()
+      }
+      createdWindow.show()
+      if (revealStartup) {
+        await revealPaintedWindow(createdWindow).catch((error) => {
+          Logger.warn('[Window] startup repaint failed', { error: String(error) })
+        })
+      }
+      if (!createdWindow.isDestroyed()) createdWindow.focus()
+    },
+    !onShown
+  )
   presentation.show()
 
   let saveWindowStateTimer: ReturnType<typeof setTimeout> | undefined

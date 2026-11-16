@@ -12,6 +12,49 @@
         margin: 0;
         background: inherit;
       }
+      #startup-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: grid;
+        place-items: center;
+        background: #151515;
+        opacity: 1;
+        visibility: visible;
+        transition:
+          opacity 640ms cubic-bezier(0.4, 0, 0.2, 1),
+          visibility 0s linear 640ms;
+        user-select: none;
+        -webkit-app-region: drag;
+      }
+      #startup-screen img {
+        display: block;
+        width: 88px;
+        height: 88px;
+        object-fit: contain;
+        -webkit-user-drag: none;
+      }
+      html[data-startup-hidden] #startup-screen {
+        transition: none;
+      }
+      html[data-window-ready] #startup-screen {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        -webkit-app-region: no-drag;
+      }
+      html.reduce-motion #startup-screen,
+      html.reduce-motion #startup-screen img {
+        animation: none;
+        transition: none;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #startup-screen,
+        #startup-screen img {
+          animation: none;
+          transition: none;
+        }
+      }
     </style>
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
@@ -21,7 +64,10 @@
   </head>
 
   <body>
+    <div id="startup-screen" role="status" aria-label="Easy Player">
+      <img src="__STARTUP_LOGO__" alt="" width="88" height="88" />
+    </div>
     <div id="app"></div>
-    <script type="module" src="/src/extreme.ts"></script>
+    <script type="module" src="/src/startup.ts"></script>
   </body>
 </html>

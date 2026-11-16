@@ -5,6 +5,7 @@ import { createSvgIconsPlugin } from 'vite-plugin-svg-icons'
 import tailwindcss from '@tailwindcss/vite'
 import pkg from './package.json'
 import path from 'path'
+import { readFileSync } from 'node:fs'
 
 // Evaluate once per Vite invocation so the main and renderer bundles share a fixed build ID.
 const buildNumber = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
@@ -55,6 +56,17 @@ export default defineConfig({
       }
     },
     plugins: [
+      {
+        name: 'inline-startup-logo',
+        transformIndexHtml: {
+          order: 'pre',
+          handler: (html) =>
+            html.replaceAll(
+              '__STARTUP_LOGO__',
+              `data:image/png;base64,${readFileSync(resolve('resources/icons/easy-player.png')).toString('base64')}`
+            )
+        }
+      },
       vue(),
       tailwindcss(),
       createSvgIconsPlugin({

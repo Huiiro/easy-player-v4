@@ -444,6 +444,7 @@ const filesAPI = {
 
 const windowAPI = {
   ready: (): void => ipcRenderer.send('window:ready'),
+  startupReady: (): Promise<boolean> => ipcRenderer.invoke('window:startup-ready'),
   command: (command: 'minimize' | 'toggle-maximize' | 'close') =>
     ipcRenderer.invoke('window:command', command) as Promise<{ maximized: boolean }>,
   setTrafficLightVisible: (visible: boolean): void =>
