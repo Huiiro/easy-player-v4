@@ -51,7 +51,7 @@ onBeforeUnmount(clearTimer)
 </script>
 
 <template>
-  <SettingRow :label="t('settings.sleepTimer')" :description="t('settings.sleepTimerDescription')">
+  <SettingRow :label="t('settings.sleepTimer')">
     <div class="flex items-center gap-2 text-nowrap">
       <span v-if="deadline" class="tabular-nums text-sm text-primary">{{ remainingLabel }}</span>
       <input
@@ -67,10 +67,7 @@ onBeforeUnmount(clearTimer)
       </BaseButton>
     </div>
   </SettingRow>
-  <SettingRow
-    :label="t('settings.stopAfterCurrent')"
-    :description="t('settings.stopAfterCurrentDescription')"
-  >
+  <SettingRow :label="t('settings.stopAfterCurrent')">
     <BaseSwitch v-model="finishCurrentTrack" size="md" />
   </SettingRow>
 </template>

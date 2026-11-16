@@ -4,13 +4,11 @@ import SettingsSearch from '@/components/settings/SettingsSearch.vue'
 import type { SettingsSearchEntry } from '@/utils/settingsSearch'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
-import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/constants'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
 import PlayerAppearanceSettings from '@/components/settings/PlayerAppearanceSettings.vue'
 import LyricsSettings from '@/components/settings/LyricsSettings.vue'
@@ -48,7 +46,6 @@ let sidebarScrollTimer: number | undefined
 // Heading sizes follow the playback icon's 26 / 20 ratio; nav sizes compensate for SVG whitespace.
 const sectionIcons = {
   playback: { name: 'common-headphone', size: 26, navSize: 20 },
-  fonts: { name: 'menu-font', size: 15.6, navSize: 12 },
   background: { name: 'menu-display', size: 19.5, navSize: 15 },
   theme: { name: 'common-dark-sun', size: 36.4, navSize: 28 },
   customBackground: { name: 'common-theme', size: 28.6, navSize: 22 },
@@ -65,7 +62,6 @@ const sectionIcons = {
 const navigationSections = computed(() =>
   [
     { id: 'playback', label: t('settings.playback') },
-    { id: 'fonts', label: t('settings.fonts') },
     { id: 'background', label: t('settings.playerBackground') },
     { id: 'theme', label: t('settings.theme') },
     { id: 'customBackground', label: t('settings.customBackground') },
@@ -96,10 +92,6 @@ const fontOptions = computed(() => [
   { label: t('settings.fontSourceHanSans'), value: 'Source Han Sans SC' },
   { label: t('settings.fontNotoSans'), value: 'Noto Sans SC' },
   ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
-])
-const playerLyricsFontOptions = computed(() => [
-  { label: t('settings.playerLyricsFontInherit'), value: '' },
-  ...fontOptions.value.filter((option) => option.value !== '')
 ])
 function navigateTo(sectionId: string): void {
   activeSection.value = sectionId
@@ -147,13 +139,6 @@ function selectSearchResult(entry: SettingsSearchEntry): void {
   }
 }
 
-async function refreshFonts(): Promise<void> {
-  await ui.loadCustomFonts()
-}
-
-async function openFontDirectory(): Promise<void> {
-  await window.api.fonts.openDirectory()
-}
 onMounted(() => {
   sectionObserver = new IntersectionObserver(
     (entries) => {
@@ -244,63 +229,6 @@ onBeforeUnmount(() => {
           </div>
           <PlaybackSettings />
         </section>
-        <!-- font -->
-        <section id="fonts" class="settings-section">
-          <div class="section-heading">
-            <div>
-              <h2>
-                <SvgIcon
-                  :name="sectionIcons.fonts.name"
-                  :size="sectionIcons.fonts.size"
-                  class-name="settings-heading-icon"
-                />
-                <span>{{ t('settings.fonts') }}</span>
-              </h2>
-              <p>{{ t('settings.fontsDescription') }}</p>
-            </div>
-          </div>
-          <div class="settings-card">
-            <SettingGroup :title="t('settings.groups.fonts')">
-              <div class="setting-row">
-                <div>
-                  <h3>{{ t('settings.interfaceFont') }}</h3>
-                  <p>{{ t('settings.interfaceFontDescription') }}</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <BaseButton size="sm" variant="ghost" type="button" @click="openFontDirectory">
-                    {{ t('settings.openFontDirectory') }}
-                  </BaseButton>
-                  <BaseButton size="sm" variant="ghost" type="button" @click="refreshFonts">
-                    {{ t('settings.refreshFonts') }}
-                  </BaseButton>
-                  <BaseSelect
-                    v-model="ui.customFontFamily"
-                    :options="fontOptions"
-                    :placeholder="t('settings.fontSystemDefault')"
-                    teleport
-                    class="w-64"
-                  />
-                </div>
-              </div>
-              <div class="setting-row">
-                <div>
-                  <h3>{{ t('settings.playerLyricsFont') }}</h3>
-                  <p>{{ t('settings.playerLyricsFontDescription') }}</p>
-                </div>
-                <BaseSelect
-                  v-model="ui.playerLyricsFontFamily"
-                  :options="playerLyricsFontOptions"
-                  :placeholder="t('settings.playerLyricsFontInherit')"
-                  :aria-label="t('settings.playerLyricsFont')"
-                  teleport
-                  class="w-64"
-                />
-              </div>
-            </SettingGroup>
-          </div>
-        </section>
-        <!-- language -->
-
         <!-- player theme -->
         <section id="background" class="settings-section">
           <div class="section-heading">
@@ -316,7 +244,7 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.playerBackgroundDescription') }}</p>
             </div>
           </div>
-          <PlayerAppearanceSettings />
+          <PlayerAppearanceSettings :font-options="fontOptions" />
         </section>
         <!-- theme -->
         <section id="theme" class="settings-section">
@@ -505,7 +433,9 @@ onBeforeUnmount(() => {
               <p>{{ t('settings.systemDescription') }}</p>
             </div>
           </div>
-          <div class="settings-card"><SystemSettings :key="preferencesRevision" /></div>
+          <div class="settings-card">
+            <SystemSettings :key="preferencesRevision" :font-options="fontOptions" />
+          </div>
         </section>
         <!-- other -->
         <section id="other" class="settings-section">
@@ -523,23 +453,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="settings-card">
-            <SettingGroup :title="t('settings.groups.version')">
-              <div class="setting-row">
-                <div>
-                  <h3>{{ t('settings.version') }}</h3>
-                </div>
-                <div class="flex items-center gap-2 cursor-pointer">
-                  <span class="text-text">v{{ VERSION }}</span>
-                  <p>Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
-                </div>
-              </div>
-              <div class="setting-row">
-                <div>
-                  <h3>{{ t('settings.buildNumber') }}</h3>
-                </div>
-                <span class="select-text font-mono text-text">{{ BUILD_NUMBER }}</span>
-              </div>
-            </SettingGroup>
             <SettingGroup :title="t('settings.groups.statistics')">
               <StatisticsSettings />
             </SettingGroup>

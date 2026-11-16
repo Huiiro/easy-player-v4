@@ -128,6 +128,12 @@ assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
 assert.equal(ui.playerLyricsFontFamily, '', 'lyrics follow interface fonts by default')
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontWeight'))
+assert.equal(ui.playerLyricsFontWeight, 700, 'existing lyrics keep their bold default')
+ui.playerLyricsFontWeight = 400
+assert.equal(ui.getPlayerLyricsFontStyle['--player-lyrics-font-weight'], 400)
+ui.resetPreferences()
+assert.equal(ui.playerLyricsFontWeight, 700, 'reset restores the original lyrics weight')
 ui.customFontFamily = 'MiSans'
 assert.equal(
   ui.getPlayerLyricsFontStyle.fontFamily,
@@ -280,6 +286,23 @@ for (const [preferences, expectedNormalization] of [
 }
 console.log(
   'Shared separator preference: legacy hydration, explicit value precedence, persistence and reset passed'
+)
+for (const weight of [undefined, 300, 400, 500, 600, 700, 800, 0, 9999, 'bold', null]) {
+  savedUiPreferences = JSON.stringify({ playerLyricsFontWeight: weight })
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  const expected = [300, 400, 500, 600, 700, 800].includes(weight) ? weight : 700
+  assert.equal(hydrated.playerLyricsFontWeight, expected)
+  assert.equal(hydrated.getPlayerLyricsFontStyle['--player-lyrics-font-weight'], expected)
+  hydrated.$persist()
+  assert.equal(JSON.parse(savedUiPreferences).playerLyricsFontWeight, expected)
+  hydrated.resetPreferences()
+  assert.equal(hydrated.playerLyricsFontWeight, 700)
+  Pinia.disposePinia(pinia)
+}
+console.log(
+  'Lyrics weight: defaults, hydration, invalid-value fallback, persistence and reset passed'
 )
 for (const background of [
   'aurora',

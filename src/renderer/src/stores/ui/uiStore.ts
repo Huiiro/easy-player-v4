@@ -107,6 +107,7 @@ export const UI_PREFERENCE_KEYS = [
   'recommendationPlaylistHeaderCollapsed',
   'customFontFamily',
   'playerLyricsFontFamily',
+  'playerLyricsFontWeight',
   'customThemeColor',
   'systemBackground',
   'customBg',
@@ -353,6 +354,7 @@ export const useUIStore = defineStore(
     const recommendationPlaylistHeaderCollapsed = ref(false)
     const customFontFamily = ref('')
     const playerLyricsFontFamily = ref('')
+    const playerLyricsFontWeight = ref(700)
     const customFonts = ref<Array<{ family: string; file: string; url: string }>>([])
     const loadedCustomFontUrls = new Set<string>()
     let themeInitialized = false
@@ -588,6 +590,7 @@ export const useUIStore = defineStore(
     }
     const getCustomFontStyle = computed(() => ({ fontFamily: fontStack.value }))
     const getPlayerLyricsFontStyle = computed(() => ({
+      '--player-lyrics-font-weight': playerLyricsFontWeight.value,
       fontFamily: playerLyricsFontFamily.value
         ? resolveFontStack(playerLyricsFontFamily.value)
         : undefined
@@ -1076,6 +1079,7 @@ export const useUIStore = defineStore(
       recommendationPlaylistHeaderCollapsed,
       customFontFamily,
       playerLyricsFontFamily,
+      playerLyricsFontWeight,
       getPlayerLyricsFontStyle,
       customFonts,
       customThemeColor,

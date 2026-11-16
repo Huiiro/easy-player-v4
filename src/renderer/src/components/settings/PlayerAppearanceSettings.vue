@@ -10,8 +10,21 @@ import FooterLayoutSettings from './FooterLayoutSettings.vue'
 import { PlayerBgType, PlayerCoverStyle, PlayerCoverEffect } from '@/constants'
 import { useUIStore } from '@/stores/ui/uiStore'
 
+const props = defineProps<{ fontOptions: { label: string; value: string }[] }>()
 const ui = useUIStore()
 const { t } = useI18n()
+const playerLyricsFontOptions = computed(() => [
+  { label: t('settings.playerLyricsFontInherit'), value: '' },
+  ...props.fontOptions.filter((option) => option.value !== '')
+])
+const playerLyricsFontWeightOptions = computed(() => [
+  { label: t('settings.lyricsFontWeightLight'), value: 300 },
+  { label: t('settings.lyricsFontWeightRegular'), value: 400 },
+  { label: t('settings.lyricsFontWeightMedium'), value: 500 },
+  { label: t('settings.lyricsFontWeightSemibold'), value: 600 },
+  { label: t('settings.lyricsFontWeightBold'), value: 700 },
+  { label: t('settings.lyricsFontWeightExtraBold'), value: 800 }
+])
 const spectrumStyleOptions = computed(() => [
   { label: t('settings.playerSpectrumBars'), value: 'bars' },
   { label: t('settings.playerSpectrumDots'), value: 'dots' }
@@ -50,7 +63,6 @@ const openFooterAnywhere = computed({
       <div class="setting-row theme-background-row">
         <div>
           <h3>{{ t('settings.playerBackgroundStyle') }}</h3>
-          <p>{{ t('settings.playerBackgroundStyleDescription') }}</p>
         </div>
         <div
           class="theme-options system-background-options"
@@ -117,7 +129,6 @@ const openFooterAnywhere = computed({
       <div class="setting-row theme-background-row">
         <div>
           <h3>{{ t('settings.playerCoverStyle') }}</h3>
-          <p>{{ t('settings.playerCoverStyleDescription') }}</p>
         </div>
         <div
           class="theme-options system-background-options"
@@ -158,46 +169,53 @@ const openFooterAnywhere = computed({
           </button>
         </div>
       </div>
-      <SettingRow
-        :label="t('settings.playerCoverEffect')"
-        :description="t('settings.playerCoverEffectDescription')"
-      >
+      <SettingRow :label="t('settings.playerCoverEffect')">
         <BaseSelect
           v-model="playerCoverEffect"
           :aria-label="t('settings.playerCoverEffect')"
           :options="coverEffectOptions"
           teleport
-          class="w-48"
+          class="w-56"
         />
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.lyricVisuals')">
-      <SettingRow
-        :label="t('settings.playerSpectrumStyle')"
-        :description="t('settings.playerSpectrumStyleDescription')"
-      >
+      <SettingRow :label="t('settings.playerLyricsFont')">
         <BaseSelect
-          v-model="ui.playerSpectrumStyle"
-          :options="spectrumStyleOptions"
+          v-model="ui.playerLyricsFontFamily"
+          :options="playerLyricsFontOptions"
+          :placeholder="t('settings.playerLyricsFontInherit')"
+          :aria-label="t('settings.playerLyricsFont')"
           teleport
-          class="w-48"
+          class="w-56"
         />
       </SettingRow>
-      <SettingRow
-        :label="t('settings.karaokeAnimation')"
-        :description="t('settings.karaokeAnimationDescription')"
-      >
+      <SettingRow :label="t('settings.playerLyricsFontWeight')">
+        <BaseSelect
+          v-model="ui.playerLyricsFontWeight"
+          :options="playerLyricsFontWeightOptions"
+          :aria-label="t('settings.playerLyricsFontWeight')"
+          teleport
+          class="w-56"
+        />
+      </SettingRow>
+      <SettingRow :label="t('settings.karaokeAnimation')">
         <BaseSelect
           v-model="ui.karaokeAnimation"
           :options="karaokeAnimationOptions"
           teleport
-          class="w-48"
+          class="w-56"
         />
       </SettingRow>
-      <SettingRow
-        :label="t('settings.autoAdjustLyricsDisplay')"
-        :description="t('settings.autoAdjustLyricsDisplayDescription')"
-      >
+      <SettingRow :label="t('settings.playerSpectrumStyle')">
+        <BaseSelect
+          v-model="ui.playerSpectrumStyle"
+          :options="spectrumStyleOptions"
+          teleport
+          class="w-56"
+        />
+      </SettingRow>
+      <SettingRow :label="t('settings.autoAdjustLyricsDisplay')">
         <BaseSwitch v-model="ui.autoAdjustLyricsDisplay" size="md" />
       </SettingRow>
     </SettingGroup>

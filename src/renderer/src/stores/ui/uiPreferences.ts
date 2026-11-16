@@ -10,6 +10,11 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    playerLyricsFontWeight:
+      typeof preferences.playerLyricsFontWeight === 'number' &&
+      [300, 400, 500, 600, 700, 800].includes(preferences.playerLyricsFontWeight)
+        ? preferences.playerLyricsFontWeight
+        : 700,
     interfaceEffect:
       preferences.interfaceEffect === 'liquid-glass-studio' ? 'liquid-glass-studio' : 'none',
     autoCheckUpdates:

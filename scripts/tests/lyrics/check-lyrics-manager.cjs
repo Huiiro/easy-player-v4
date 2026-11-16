@@ -434,6 +434,24 @@ async function runFixture() {
       'leaving a lyric restores its timed word highlighting'
     )
     if (component === PlayerLyricsV2) {
+      check(
+        getComputedStyle(first.querySelector('.lyric-main')).fontWeight === '700',
+        'player lyrics retain the existing bold default'
+      )
+      for (const weight of [300, 400, 600, 800]) {
+        window.managerUi.playerLyricsFontWeight = weight
+        window.managerUi.getPlayerLyricsFontStyle = { '--player-lyrics-font-weight': weight }
+        await wait()
+        check(
+          getComputedStyle(first.querySelector('.lyric-main')).fontWeight === String(weight) &&
+            getComputedStyle(first.querySelector('.lyric-karaoke-char')).fontWeight ===
+              String(weight),
+          'main and timed lyrics apply font weight ' + weight
+        )
+      }
+      window.managerUi.playerLyricsFontWeight = 700
+      window.managerUi.getPlayerLyricsFontStyle = {}
+      await wait()
       window.managerUi.reduceMotion = false
       for (const animation of ['wave', 'float']) {
         window.managerUi.karaokeAnimation = animation

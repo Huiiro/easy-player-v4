@@ -73,10 +73,7 @@ const previewBackgroundVisible = computed(
       </div>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.visibility')">
-      <SettingRow
-        :label="t('settings.desktopLyricsEnabled')"
-        :description="t('settings.desktopLyricsEnabledDescription')"
-      >
+      <SettingRow :label="t('settings.desktopLyricsEnabled')">
         <BaseSwitch v-model="ui.useDesktopLyrics" size="md" />
       </SettingRow>
     </SettingGroup>
@@ -87,11 +84,12 @@ const previewBackgroundVisible = computed(
           :options="desktopLyricsFontOptions"
           :placeholder="t('settings.desktopLyricsFontInherit')"
           teleport
-          class="desktop-lyrics-font-select w-64"
+          class="desktop-lyrics-font-select w-56"
         />
       </SettingRow>
       <SettingRow :label="t('settings.desktopLyricsFontSize')">
         <div class="desktop-lyrics-size-control">
+          <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
           <BaseSlider
             v-model="ui.desktopLyricsStyles.fontSize"
             :min="24"
@@ -100,7 +98,6 @@ const previewBackgroundVisible = computed(
             size="sm"
             :aria-label="t('settings.desktopLyricsFontSize')"
           />
-          <strong>{{ ui.desktopLyricsStyles.fontSize }}px</strong>
         </div>
       </SettingRow>
       <div class="desktop-lyrics-colors setting-row-group">
@@ -176,7 +173,7 @@ const previewBackgroundVisible = computed(
 .desktop-lyrics-size-control {
   display: flex;
   min-width: 0;
-  width: min(100%, 16rem);
+  width: min(100%, 18rem);
   align-items: center;
   gap: 0.75rem;
 }

@@ -12,9 +12,17 @@ import ChangelogDialog from './ChangelogDialog.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { LogEntry } from '@/types/audio'
+import { BUILD_NUMBER, ENGINE_VERSION, VERSION } from '@/constants'
 
+defineProps<{ fontOptions: { label: string; value: string }[] }>()
 const ui = useUIStore()
 const { locale, t } = useI18n()
+async function refreshFonts(): Promise<void> {
+  await ui.loadCustomFonts()
+}
+async function openFontDirectory(): Promise<void> {
+  await window.api.fonts.openDirectory()
+}
 const language = computed<'zh' | 'en'>({
   get: () => (locale.value === 'en' ? 'en' : 'zh'),
   set: (value) => {
@@ -145,9 +153,27 @@ watch(
 <template>
   <SettingGroup :title="t('settings.groups.personalization')">
     <SettingRow
-      :label="t('settings.interfaceLanguage')"
-      :description="t('settings.interfaceLanguageDescription')"
+      :label="t('settings.interfaceFont')"
+      :description="t('settings.interfaceFontDescription')"
     >
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <BaseButton size="sm" variant="ghost" type="button" @click="openFontDirectory">
+          {{ t('settings.openFontDirectory') }}
+        </BaseButton>
+        <BaseButton size="sm" variant="ghost" type="button" @click="refreshFonts">
+          {{ t('settings.refreshFonts') }}
+        </BaseButton>
+        <BaseSelect
+          v-model="ui.customFontFamily"
+          :options="fontOptions"
+          :placeholder="t('settings.fontSystemDefault')"
+          :aria-label="t('settings.interfaceFont')"
+          teleport
+          class="w-64"
+        />
+      </div>
+    </SettingRow>
+    <SettingRow :label="t('settings.interfaceLanguage')">
       <BaseSelect
         v-model="language"
         :options="languageOptions"
@@ -159,14 +185,12 @@ watch(
     <div class="setting-row welcome-row">
       <div>
         <h3 id="home-welcome-label">{{ t('settings.homeWelcomeText') }}</h3>
-        <p id="home-welcome-description">{{ t('settings.homeWelcomeTextDescription') }}</p>
       </div>
       <BaseInput
         v-model="ui.homeWelcomeText"
         :placeholder="t('settings.homeWelcomeTextPlaceholder')"
         :maxlength="120"
         aria-labelledby="home-welcome-label"
-        aria-describedby="home-welcome-description"
         class="w-full sm:w-72 sm:shrink-0"
       />
     </div>
@@ -205,7 +229,7 @@ watch(
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.logs')">
-    <SettingRow :label="t('settings.logLevel')" :description="t('settings.logLevelDescription')">
+    <SettingRow :label="t('settings.logLevel')">
       <BaseSelect
         :model-value="logLevel"
         :options="logLevelOptions"
@@ -218,10 +242,13 @@ watch(
     </SettingRow>
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.updates')">
-    <SettingRow
-      :label="t('settings.autoCheckUpdates')"
-      :description="t('settings.autoCheckUpdatesDescription')"
-    >
+    <SettingRow :label="t('settings.version')">
+      <div class="min-w-0 select-text text-right">
+        <span class="break-all font-mono text-text">v{{ VERSION }} (Build {{ BUILD_NUMBER }})</span>
+        <p class="text-xs text-text-l">Powered by Easy Player Audio Engine v{{ ENGINE_VERSION }}</p>
+      </div>
+    </SettingRow>
+    <SettingRow :label="t('settings.autoCheckUpdates')">
       <BaseSwitch v-model="ui.autoCheckUpdates" size="md" />
     </SettingRow>
     <div class="setting-row">

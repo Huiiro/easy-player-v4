@@ -125,7 +125,6 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
       <div v-if="ui.availableWindowMaterials.length > 1" class="setting-row">
         <div>
           <h3>{{ t('settings.windowMaterial') }}</h3>
-          <p>{{ t('settings.windowMaterialDescription') }}</p>
         </div>
         <BaseSelect
           :model-value="ui.nativeWindowMaterial"
@@ -137,10 +136,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           @update:model-value="selectWindowMaterial"
         />
       </div>
-      <SettingRow
-        :label="t('settings.appearanceMode')"
-        :description="t('settings.followSystemThemeDescription')"
-      >
+      <SettingRow :label="t('settings.appearanceMode')">
         <BaseSelect
           v-model="selectedMode"
           :options="modeOptions"
@@ -149,10 +145,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           teleport
         />
       </SettingRow>
-      <SettingRow
-        :label="t('settings.accentSource')"
-        :description="t('settings.accentSourceDescription')"
-      >
+      <SettingRow :label="t('settings.accentSource')">
         <BaseSelect
           v-model="ui.accentSource"
           :options="accentOptions"
@@ -161,10 +154,7 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           teleport
         />
       </SettingRow>
-      <SettingRow
-        :label="t('settings.themeColor')"
-        :description="t('settings.themeColorDescription')"
-      >
+      <SettingRow :label="t('settings.themeColor')">
         <div>
           <BaseColorPicker v-model="ui.customThemeColor" :presets="presetColors" teleport />
         </div>
@@ -194,7 +184,6 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
               {{ t('plugins.manageThemes') }}
             </BaseButton>
           </div>
-          <p>{{ t('settings.themeBackgroundDescription') }}</p>
         </div>
         <div
           class="theme-options system-background-options"

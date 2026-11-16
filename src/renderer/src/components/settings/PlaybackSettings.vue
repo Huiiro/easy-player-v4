@@ -55,25 +55,19 @@ function setSmartShuffle(value: boolean | string | number): void {
       <SleepTimerSettings />
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.playback')">
-      <SettingRow
-        :label="t('settings.songPlayTrigger')"
-        :description="t('settings.songPlayTriggerDescription')"
-      >
+      <SettingRow :label="t('settings.songPlayTrigger')">
         <BaseSelect
           v-model="ui.songPlayTrigger"
-          class="w-48"
+          class="w-56"
           :options="songPlayTriggerOptions"
           :aria-label="t('settings.songPlayTrigger')"
           teleport
         />
       </SettingRow>
-      <SettingRow
-        :label="t('settings.playQueuePosition')"
-        :description="t('settings.playQueuePositionDescription')"
-      >
+      <SettingRow :label="t('settings.playQueuePosition')">
         <BaseSelect
           v-model="ui.playQueuePosition"
-          class="w-48"
+          class="w-56"
           :options="playQueuePositionOptions"
           :aria-label="t('settings.playQueuePosition')"
           teleport
@@ -103,7 +97,7 @@ function setSmartShuffle(value: boolean | string | number): void {
       >
         <BaseSelect
           v-model="player.rhythmVisualConfig.intensity"
-          class="w-48"
+          class="w-56"
           :options="motionIntensityOptions"
           :aria-label="t('settings.motionIntensity')"
           teleport

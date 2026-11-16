@@ -10,6 +10,7 @@ import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import type { LibraryWatchDirectory } from '../../../../shared/libraryAutoImport'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const { t } = useI18n()
 const ui = useUIStore()
@@ -204,9 +205,12 @@ onBeforeUnmount(() => {
       </p>
       <div v-for="folder in watchedFolders" :key="folder.path" class="watch-folder">
         <div class="min-w-0 flex-1">
-          <p class="text-sm text-text" :title="folder.path">
-            {{ folder.path.split(/[\\/]/).pop() || folder.path }}
-          </p>
+          <div class="flex gap-2 items-center">
+            <svg-icon name="common-folder" class-name="size-4" />
+            <p class="text-sm text-text" :title="folder.path">
+              {{ folder.path.split(/[\\/]/).pop() || folder.path }}
+            </p>
+          </div>
           <p class="break-all text-xs text-text-l">{{ folder.path }}</p>
         </div>
         <BaseSwitch

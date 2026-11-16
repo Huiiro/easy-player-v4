@@ -757,7 +757,7 @@ function refreshFontLayout(): void {
   scheduleSnapToCurrent()
 }
 watch(
-  [() => ui.playerLyricsFontFamily, () => ui.customFontFamily],
+  [() => ui.playerLyricsFontFamily, () => ui.customFontFamily, () => ui.playerLyricsFontWeight],
   () => void nextTick(refreshFontLayout),
   { flush: 'post' }
 )
@@ -1017,7 +1017,7 @@ onUnmounted(() => {
 .lyric-line--background .lyric-main {
   padding-inline: calc(var(--lrc-padding) + 72px);
   font-size: calc(var(--lrc-size) * 0.72);
-  font-weight: 600;
+  font-weight: max(100, calc(var(--player-lyrics-font-weight, 700) - 100));
   opacity: 0.82;
 }
 
@@ -1045,7 +1045,7 @@ onUnmounted(() => {
   color: var(--lrc-default);
   font-size: var(--lrc-size);
   line-height: var(--lrc-height);
-  font-weight: 700;
+  font-weight: var(--player-lyrics-font-weight, 700);
   letter-spacing: 0.025em;
   overflow-wrap: anywhere;
   word-break: normal;
@@ -1080,7 +1080,7 @@ onUnmounted(() => {
 .lyric-ruby rt {
   color: color-mix(in srgb, var(--lrc-translate) 88%, var(--lrc-default));
   font-size: 0.42em;
-  font-weight: 600;
+  font-weight: max(100, calc(var(--player-lyrics-font-weight, 700) - 100));
   letter-spacing: 0.025em;
   user-select: text;
 }
