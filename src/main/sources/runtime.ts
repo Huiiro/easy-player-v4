@@ -10,6 +10,7 @@ export type SourceOperation =
   | 'lyrics.search'
   | 'lyrics.get'
   | 'artwork.search'
+  | 'artistArtwork.search'
   | 'metadata.search'
   | 'metadata.get'
   | 'download.search'
@@ -46,6 +47,7 @@ const timeouts: Record<string, number> = {
   'lyrics.search': 20000,
   'lyrics.get': 15000,
   'artwork.search': 15000,
+  'artistArtwork.search': 15000,
   'metadata.search': 15000,
   'metadata.get': 25000,
   'download.search': 60000,
@@ -142,6 +144,7 @@ function validateResult(operation: SourceOperation, value: unknown): void {
     [
       'lyrics.search',
       'artwork.search',
+      'artistArtwork.search',
       'metadata.search',
       'download.search',
       'download.parse'

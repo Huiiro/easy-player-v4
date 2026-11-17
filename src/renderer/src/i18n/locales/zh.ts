@@ -844,7 +844,13 @@ export default {
       bili: '哔哩哔哩',
       youtube: 'YouTube'
     },
-    capabilities: { lyrics: '歌词', artwork: '封面', metadata: '元数据', download: '下载' }
+    capabilities: {
+      artistArtwork: '艺术家封面',
+      lyrics: '歌词',
+      artwork: '封面',
+      metadata: '元数据',
+      download: '下载'
+    }
   },
   duplicates: {
     selectionHelp: '清理选择说明',
@@ -1304,6 +1310,16 @@ export default {
     desktopLyricsPreviewNext: '下一句歌词预览',
     other: '其他',
     otherDescription: '关于此播放器',
+    artistArtworkCache: '网络艺术家头像缓存',
+    artistArtworkCacheDescription: '清除已下载的网络艺术家头像。恢复默认头像。',
+    clearArtistArtworkCache: '清除头像缓存',
+    artistArtworkCacheConfirm: '确定清除所有网络艺术家头像缓存吗？',
+    artistArtworkCacheCleared: '已清除 {count} 个头像缓存文件',
+    artistArtworkCacheFailed: '清除头像缓存失败，请重试',
+    autoSearchArtistArtwork: '获取网络艺术家头像',
+    autoSearchArtistArtworkDescription: '自动匹配艺术家头像并缓存到本地。需安装对应插件获取。',
+    useLocalArtistArtwork: '使用本地头像',
+    useNetworkArtistArtwork: '使用网络头像',
     albumGroupByName: '专辑按名称分类',
     albumGroupByNameDescription: '合并显示同名专辑中的歌曲，不修改文件信息。',
     ignoreShortSongs: '忽略 5 秒以下的歌曲',
@@ -1774,8 +1790,7 @@ export default {
     stemCacheUsage: '{size} · {count} 个文件',
     stemCacheRefresh: '刷新',
     stemCacheClear: '清除分轨缓存',
-    stemCacheConfirm:
-      '清除已生成的人声分轨和旧模型缓存？将先停止分离任务，已安装的组件和模型会保留；需要时会重新计算分轨。',
+    stemCacheConfirm: '确定清除已生成的人声分轨缓存？',
     stemCacheFailed: '无法读取或清理分轨缓存。',
     stemComponent_checking: '正在获取组件信息…',
     stemComponent_downloading: '正在下载…',

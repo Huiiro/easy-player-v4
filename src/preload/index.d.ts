@@ -593,6 +593,12 @@ declare global {
           error?: string
           failure?: import('../shared/networkSources').SourceFailure
         }>
+        clearArtistArtworkCache(): Promise<SourceApiResult<{ files: number }>>
+        onArtistArtworkCacheCleared(callback: () => void): () => void
+        resolveArtistArtwork(
+          name: string,
+          options?: import('../shared/networkSources').SourceRequestOptions
+        ): Promise<SourceApiResult<{ path: string | null }>>
         downloadCover(
           imageUrl: string,
           options?: import('../shared/networkSources').SourceRequestOptions

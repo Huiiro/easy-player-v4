@@ -280,6 +280,7 @@ export class PluginManager {
           lyrics: ['search'],
           metadata: ['search', 'get'],
           artwork: ['search'],
+          artistArtwork: ['search'],
           download: ['matchesUrl', 'search', 'parse', 'resolve']
         }
         for (const capability of capabilities) {

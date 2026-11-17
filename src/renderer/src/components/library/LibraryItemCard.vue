@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
+import { useArtistArtwork } from '@/services/artistArtwork'
 const props = defineProps<{
   name: string
   subtitle?: string
@@ -8,10 +9,29 @@ const props = defineProps<{
   icon: string
   circle?: boolean
   badge?: string
+  artistName?: string
+  loadArtwork?: boolean
 }>()
+const { networkPath } = useArtistArtwork(
+  computed(() => props.artistName || ''),
+  computed(() => !!props.artistName && !!props.loadArtwork)
+)
+const failedNetwork = ref(false)
+watch(networkPath, () => {
+  failedNetwork.value = false
+})
+const displayCover = computed(() =>
+  networkPath.value && !failedNetwork.value
+    ? `easy-player-media://cover?path=${encodeURIComponent(networkPath.value)}`
+    : props.cover
+)
 const failed = ref(false)
+function onCoverError(): void {
+  if (networkPath.value && !failedNetwork.value) failedNetwork.value = true
+  else failed.value = true
+}
 watch(
-  () => props.cover,
+  () => displayCover.value,
   () => {
     failed.value = false
   }
@@ -24,13 +44,13 @@ watch(
   >
     <div class="size-full overflow-hidden" :class="circle ? 'rounded-full' : 'rounded-lg'">
       <img
-        v-if="cover && !failed"
-        :src="cover"
+        v-if="displayCover && !failed"
+        :src="displayCover"
         loading="lazy"
         decoding="async"
         class="size-full object-cover transition-transform duration-[var(--motion-duration-slow)] group-hover:scale-105"
         :alt="name"
-        @error="failed = true"
+        @error="onCoverError"
       />
       <span v-else class="grid size-full place-items-center text-text-l">
         <SvgIcon :name="icon" class-name="size-12" />

@@ -148,6 +148,8 @@ export const UI_PREFERENCE_KEYS = [
   'ignoreShortSongs',
   'autoImportLocalMusic',
   'showAutoImportNotifications',
+  'autoSearchArtistArtwork',
+  'localArtistArtworkNames',
   'albumGroupByName',
   'artistSeparator',
   'genreSeparator',
@@ -533,6 +535,8 @@ export const useUIStore = defineStore(
     const ignoreShortSongs = ref(true)
     const autoImportLocalMusic = ref(false)
     const showAutoImportNotifications = ref(false)
+    const autoSearchArtistArtwork = ref(false)
+    const localArtistArtworkNames = ref<string[]>([])
     const albumGroupByName = ref(false)
     const artistSeparator = ref('/；;、')
     const genreSeparator = ref(DEFAULT_GENRE_SEPARATOR)
@@ -1142,6 +1146,8 @@ export const useUIStore = defineStore(
       ignoreShortSongs,
       autoImportLocalMusic,
       showAutoImportNotifications,
+      autoSearchArtistArtwork,
+      localArtistArtworkNames,
       albumGroupByName,
       artistSeparator,
       genreSeparator,

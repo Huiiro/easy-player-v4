@@ -8,7 +8,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.2",
+      "version": "1.2.0",
       "apiVersion": 2,
       "sources": [
         {
@@ -17,13 +17,14 @@
           "capabilities": [
             "lyrics",
             "artwork",
+            "artistArtwork",
             "metadata"
           ]
         }
       ],
-      "size": 761388,
-      "sha256": "b35abeb9e81203aa58365a78ea0f978126ceb55e0de68c5c237bf8077f0174e7",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.1.2-b35abeb9e812.epp"
+      "size": 763023,
+      "sha256": "407cd9cb53ca8e7a95f0899830b3e1e71cd89fe5f868bdb512fdc0d2857d0c63",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.netease-1.2.0-407cd9cb53ca.epp"
     },
     {
       "id": "builtin.kugou",
@@ -32,7 +33,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.2",
+      "version": "1.2.0",
       "apiVersion": 2,
       "sources": [
         {
@@ -41,13 +42,14 @@
           "capabilities": [
             "lyrics",
             "artwork",
+            "artistArtwork",
             "metadata"
           ]
         }
       ],
-      "size": 321230,
-      "sha256": "bca1a23fd0f1d5009361999b0a8a54d16b6ef3389f5a94850ab7657f6dc99fec",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.1.2-bca1a23fd0f1.epp"
+      "size": 322800,
+      "sha256": "248fb1c481a71374dd391a1d11b7051f70546281856a47d453e00fcd44e0dbdc",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.kugou-1.2.0-248fb1c481a7.epp"
     },
     {
       "id": "builtin.qqmusic",
@@ -56,7 +58,7 @@
         "name": "Easy Player",
         "url": "https://github.com/Huiiro/easy-player-plugin"
       },
-      "version": "1.1.2",
+      "version": "1.2.0",
       "apiVersion": 2,
       "sources": [
         {
@@ -65,13 +67,14 @@
           "capabilities": [
             "lyrics",
             "artwork",
+            "artistArtwork",
             "metadata"
           ]
         }
       ],
-      "size": 47394,
-      "sha256": "8df725cf3023194e58aaf2de2211e2cb1a15931622de93a8d4996b08d6c56ed5",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.1.2-8df725cf3023.epp"
+      "size": 49049,
+      "sha256": "1c8948236be3ab5e2c8fb19116656cb269dcbf2a1c1cf3db105d908ba89a8661",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.qqmusic-1.2.0-1c8948236be3.epp"
     },
     {
       "id": "builtin.bili",
@@ -94,9 +97,9 @@
           ]
         }
       ],
-      "size": 5613,
-      "sha256": "af395fe171d3ecd70c9facf132b45bb6ed5d985d9a89fb64cf56f4a4e26ad4eb",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.bili-1.1.1-af395fe171d3.epp"
+      "size": 7108,
+      "sha256": "0b537d4429efab1b1b414518143e16d6a0595cdef39929d59a79022d1fac841d",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.bili-1.1.1-0b537d4429ef.epp"
     },
     {
       "id": "builtin.youtube",
@@ -121,9 +124,9 @@
           ]
         }
       ],
-      "size": 5632,
-      "sha256": "9ea769876b55ad8ed13e087287012cfeaf312132a2d4cb881f9a6f6c2a6d4969",
-      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.1-9ea769876b55.epp"
+      "size": 7127,
+      "sha256": "1fc249e17c1aa221086cb71c8592feb9d47c38e1b5da52f6b5c72a910eb759ec",
+      "url": "https://github.com/Huiiro/easy-player-plugin/releases/download/plugins/builtin.youtube-1.1.1-1fc249e17c1a.epp"
     },
     {
       "id": "builtin.theme.blackhole",

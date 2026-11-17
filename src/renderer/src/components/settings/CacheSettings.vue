@@ -4,12 +4,29 @@ import SettingRow from './SettingRow.vue'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
+import { useMessage } from '@/components/ui/useMessage'
 import type { AutoMixRuntimeStatus, AutoMixStemCacheInfo } from '../../../../shared/autoMixRuntime'
 
 const { t } = useI18n()
+const { success, error } = useMessage()
 const cacheDirectory = ref('')
 const cacheLimitGb = ref(2)
 const cacheUsed = ref(0)
+const artistClearing = ref(false)
+const clearArtistVisible = ref(false)
+async function clearArtistCache(): Promise<void> {
+  if (artistClearing.value) return
+  artistClearing.value = true
+  try {
+    const result = await window.api.metadata.clearArtistArtworkCache()
+    if (!result.success) throw new Error(result.error)
+    success(t('settings.artistArtworkCacheCleared', { count: result.data?.files ?? 0 }))
+  } catch {
+    error(t('settings.artistArtworkCacheFailed'))
+  } finally {
+    artistClearing.value = false
+  }
+}
 const stemCache = ref<AutoMixStemCacheInfo>()
 const stemStatus = ref<AutoMixRuntimeStatus>()
 const stemError = ref('')
@@ -129,6 +146,19 @@ onBeforeUnmount(() => unsubscribe?.())
         <span>G</span>
       </div>
     </SettingRow>
+    <SettingRow
+      :label="t('settings.artistArtworkCache')"
+      :description="t('settings.artistArtworkCacheDescription')"
+    >
+      <BaseButton
+        size="sm"
+        variant="ghost"
+        :disabled="artistClearing"
+        @click="clearArtistVisible = true"
+      >
+        {{ t('settings.clearArtistArtworkCache') }}
+      </BaseButton>
+    </SettingRow>
     <SettingRow :label="t('ap.stemCacheTitle')" :description="t('ap.stemCacheDescription')">
       <div class="flex items-center gap-3">
         <span class="text-xs text-text-l">{{
@@ -160,6 +190,14 @@ onBeforeUnmount(() => unsubscribe?.())
       {{ t('ap.stemCacheFailed') }} {{ stemError }}
     </p>
   </div>
+  <BaseConfirmDialog
+    v-model="clearArtistVisible"
+    :title="t('settings.clearArtistArtworkCache')"
+    :message="t('settings.artistArtworkCacheConfirm')"
+    :confirm-text="t('settings.clearArtistArtworkCache')"
+    variant="danger"
+    :confirm-action="clearArtistCache"
+  />
   <BaseConfirmDialog
     v-model="clearStemVisible"
     :title="t('ap.stemCacheClear')"

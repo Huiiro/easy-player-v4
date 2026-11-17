@@ -154,7 +154,12 @@ function shouldLoadCover(item: GridItem): boolean {
   return visibleCoverKeys.value.has(itemKey(item))
 }
 function observeCover(element: unknown, item: GridItem): void {
-  if (!(element instanceof Element) || !item.cover || shouldLoadCover(item)) return
+  if (
+    !(element instanceof Element) ||
+    (!item.cover && props.kind !== 'artist') ||
+    shouldLoadCover(item)
+  )
+    return
   const key = itemKey(item)
   element.setAttribute('data-cover-key', key)
   coverObserver?.observe(element)
@@ -411,6 +416,8 @@ onActivated(() => {
         >
           <LibraryItemCard
             :name="item.name"
+            :artist-name="kind === 'artist' ? item.value : undefined"
+            :load-artwork="shouldLoadCover(item)"
             :subtitle="item.subtitle"
             :cover="shouldLoadCover(item) ? coverUrl(item.cover) : null"
             :icon="icon"

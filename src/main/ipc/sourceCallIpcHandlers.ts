@@ -1,6 +1,7 @@
-import { ipcMain } from 'electron'
+import { ipcMain, webContents } from 'electron'
 import type { SourceRequest, MetadataQuery } from '../../shared/networkSources'
 import { searchSourceTracks, getSourceTrack, getSourceTrackLyrics } from '../sources/metadata'
+import { resolveArtistArtwork, clearArtistArtworkCache } from '../sources/artistArtwork'
 import { searchSourceArtwork } from '../sources/artwork'
 import { fetchArtworkDataUrl } from '../sources/artworkFetch'
 import { searchSourceMedia, parseSourceMedia } from '../sources/download'
@@ -47,6 +48,8 @@ async function dispatch(request: SourceRequest, signal: AbortSignal): Promise<un
       )
         throw new SourceCallError('INVALID_REQUEST')
       return searchNetworkLyrics(request.query, options)
+    case 'artistArtwork.resolve':
+      return resolveArtistArtwork(request.name, options)
     case 'artwork.fetch':
       return { dataUrl: await fetchArtworkDataUrl(request.imageUrl, options) }
     case 'artwork.search': {
@@ -95,6 +98,17 @@ export function registerSourceCallIpcHandlers(): void {
     }
     if (entry.status === 'failed') Logger.warn('[Source call]', entry)
     else Logger.debug('[Source call]', entry)
+  })
+  ipcMain.handle('artist-artwork:clear-cache', async () => {
+    try {
+      const data = await clearArtistArtworkCache()
+      return { success: true, data }
+    } catch (reason) {
+      return { success: false, error: String(reason) }
+    } finally {
+      for (const contents of webContents.getAllWebContents())
+        if (!contents.isDestroyed()) contents.send('artist-artwork:cache-cleared')
+    }
   })
   ipcMain.handle('network-sources:invoke', async (event, request: SourceRequest) => {
     try {

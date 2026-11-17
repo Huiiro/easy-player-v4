@@ -103,6 +103,7 @@
     "test:builtin-plugins": "node scripts/tests/plugins/test-builtin-plugins.mjs",
     "test:qqmusic-source": "node scripts/tests/plugins/test-qqmusic-source.mjs",
     "test:kugou-source": "node scripts/tests/plugins/test-kugou-source.mjs",
+    "test:artist-artwork": "node scripts/tests/plugins/test-artist-artwork.mjs",
     "test:source-runtime": "node scripts/tests/plugins/test-source-runtime.mjs",
     "test:source-management": "node scripts/tests/plugins/test-source-management.mjs",
     "test:source-management:ui": "electron scripts/tests/plugins/check-network-sources.cjs",

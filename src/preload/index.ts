@@ -696,6 +696,22 @@ const metadataAPI = {
     sourceRequest<
       Array<import('../shared/networkSources').ArtworkCandidate & { previewUrl: string }>
     >({ operation: 'artwork.search', query, previews: true }, options),
+  clearArtistArtworkCache: () =>
+    ipcRenderer.invoke('artist-artwork:clear-cache') as Promise<{
+      success: boolean
+      data?: { files: number }
+      error?: string
+    }>,
+  onArtistArtworkCacheCleared: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('artist-artwork:cache-cleared', listener)
+    return () => ipcRenderer.removeListener('artist-artwork:cache-cleared', listener)
+  },
+  resolveArtistArtwork: (
+    name: string,
+    options?: import('../shared/networkSources').SourceRequestOptions
+  ) =>
+    sourceRequest<{ path: string | null }>({ operation: 'artistArtwork.resolve', name }, options),
   downloadCover: (
     imageUrl: string,
     options?: import('../shared/networkSources').SourceRequestOptions

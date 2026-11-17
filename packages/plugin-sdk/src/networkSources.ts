@@ -42,6 +42,13 @@ export interface ArtworkCandidate {
   imageUrl: string
   resource: SourceResourceRef
 }
+/** Artist portraits are distinct from album/track artwork. */
+export interface ArtistArtworkCandidate {
+  id: string
+  name: string
+  imageUrl: string
+  resource: SourceResourceRef
+}
 export type DownloadType = 'audio' | 'video'
 export type DownloadQuality = 'best' | 'high' | 'standard' | 'compact'
 export interface MediaSearchItem {
@@ -81,7 +88,13 @@ export interface YtDlpDownloadPlan {
 }
 export type MediaDownloadPlan = HttpMediaDownloadPlan | YtDlpDownloadPlan
 
-export const NETWORK_SOURCE_CAPABILITIES = ['lyrics', 'artwork', 'metadata', 'download'] as const
+export const NETWORK_SOURCE_CAPABILITIES = [
+  'lyrics',
+  'artwork',
+  'artistArtwork',
+  'metadata',
+  'download'
+] as const
 export type NetworkSourceCapability = (typeof NETWORK_SOURCE_CAPABILITIES)[number]
 /** Read-only source descriptors; provider functions and credentials never cross IPC. */
 export interface NetworkSourceInfo {
@@ -133,6 +146,7 @@ export type SourceRequest = SourceRequestOptions &
     | { operation: 'lyrics.search'; query: LyricSearchRequest }
     | { operation: 'artwork.search'; query: MetadataQuery; previews?: boolean }
     | { operation: 'artwork.fetch'; imageUrl: string }
+    | { operation: 'artistArtwork.resolve'; name: string }
     | { operation: 'download.search'; sourceId: string; query: string }
     | { operation: 'download.parse'; url: string }
   )

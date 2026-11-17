@@ -1,6 +1,7 @@
 import type { SourceTrackDetail, SourceTrackSummary } from './sourceMetadata'
 import type {
   ArtworkCandidate,
+  ArtistArtworkCandidate,
   LyricSearchRequest,
   MediaDownloadPlan,
   MediaDownloadQuery,
@@ -41,6 +42,9 @@ export interface NetworkSource {
   }
   artwork?: {
     search(request: MetadataQuery, context?: SourceCallContext): Promise<ArtworkCandidate[]>
+  }
+  artistArtwork?: {
+    search(name: string, context?: SourceCallContext): Promise<ArtistArtworkCandidate[]>
   }
   download?: {
     matchesUrl(url: URL): boolean

@@ -270,6 +270,16 @@ onBeforeUnmount(() => {
   </SettingGroup>
   <SettingGroup :title="t('settings.groups.libraryDisplay')">
     <SettingRow
+      :label="t('settings.autoSearchArtistArtwork')"
+      :description="t('settings.autoSearchArtistArtworkDescription')"
+    >
+      <BaseSwitch
+        v-model="ui.autoSearchArtistArtwork"
+        :aria-label="t('settings.autoSearchArtistArtwork')"
+        size="md"
+      />
+    </SettingRow>
+    <SettingRow
       :label="t('settings.albumGroupByName')"
       :description="t('settings.albumGroupByNameDescription')"
     >

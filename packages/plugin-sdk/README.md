@@ -2,7 +2,7 @@
 
 宿主架构、运行流程及维护分工见 [插件系统总览](../../docs/plugin-system.md)。
 
-`@easy-player/plugin-sdk@2.1.0` 提供纯契约与插件定义辅助函数，不依赖 Electron、应用数据库、UI、播放器状态或应用源码。
+`@easy-player/plugin-sdk@2.2.0` 提供纯契约与插件定义辅助函数，不依赖 Electron、应用数据库、UI、播放器状态或应用源码。
 
 ```sh
 npm ci --ignore-scripts
@@ -41,3 +41,18 @@ Liquid Glass 组件材质新增公开 `--ep-glass-*` tokens，包括圆角、浮
 BackTop 使用公开 `.ep-backtop` 钩子；`THEME_BACKTOP_TOKENS` / `PluginThemeBackTopToken` 和 `PluginThemeTokens` 提供 size、radius、right、bottom 四个几何变量的补全，Schema 同步说明。几何变量也适用于未开启玻璃的主题；开启时复用已有玻璃染色、边缘和阴影参数，不自动改变用户的效果开关。
 
 Tooltip 使用 `.ep-tooltip`、`.ep-tooltip--control` 和 `.ep-tooltip-trigger` 公共钩子，`THEME_TOOLTIP_TOKENS` / `PluginThemeTooltipToken` 提供底色、文字、边框、圆角、阴影、字号、内边距、最大宽度及竖向调节面板尺寸补全。变量同时适用于普通主题和 Liquid Glass；开启玻璃后缺省跟随浮层材质，显式 Tooltip 属性仍可覆盖。Schema、uiDEV 示例和属性表已同步。
+
+## 艺术家头像（SDK 2.2）
+
+来源可在清单 capabilities 中声明 `artistArtwork`，并实现
+`artistArtwork.search(name, context): Promise<ArtistArtworkCandidate[]>`。
+候选包含 `id`、规范艺术家名称 `name`、HTTP(S) `imageUrl` 和 `resource`；
+`resource.resourceType` 必须是 `artist`。不得返回专辑封面或把查询名称填成真实艺术家名称。
+宿主按 NFKC、大小写及空格归一化后精确匹配名称，使用现有超时/取消/禁用策略调用插件，
+将图片解码并裁剪为 512px JPEG，缓存到 `player_data/covers/artists/<名称哈希>.jpg`。
+
+媒体库设置中的“获取网络艺术家头像”默认关闭；开启后列表按可见区域匹配，主进程全局最多并行处理两个艺术家，各艺术家的来源依次尝试，成功后停止。
+缓存可离线使用。歌手详情可选择原头像或网络头像，按艺术家持久化选择；原歌曲封面不修改。
+旧来源无需实现此可选能力；声明该能力的新插件需要支持它的新版宿主，不能由旧宿主加载。
+
+缓存管理中提供“清除头像缓存”：取消当前及排队的头像获取任务，清理磁盘头像与内存匹配缓存。已打开页面回退原头像；下次进入时按设置重新获取。手动选择原头像的偏好保留。

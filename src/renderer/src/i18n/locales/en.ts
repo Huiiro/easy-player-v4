@@ -855,6 +855,7 @@ export default {
       youtube: 'YouTube'
     },
     capabilities: {
+      artistArtwork: 'Artist portraits',
       lyrics: 'Lyrics',
       artwork: 'Artwork',
       metadata: 'Metadata',
@@ -1336,6 +1337,18 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    artistArtworkCache: 'Online Artist Artwork Cache',
+    artistArtworkCacheDescription:
+      'Clear downloaded online artist artwork and restore default avatars.',
+    clearArtistArtworkCache: 'Clear Artwork Cache',
+    artistArtworkCacheConfirm: 'Are you sure you want to clear all online artist artwork cache?',
+    artistArtworkCacheCleared: 'Cleared {count} artwork cache files',
+    artistArtworkCacheFailed: 'Failed to clear artwork cache, please try again',
+    autoSearchArtistArtwork: 'Fetch Online Artist Artwork',
+    autoSearchArtistArtworkDescription:
+      'Automatically match artist artwork and cache it locally. Requires the corresponding plugin to be installed.',
+    useLocalArtistArtwork: 'Use Local Artwork',
+    useNetworkArtistArtwork: 'Use Online Artwork',
     albumGroupByName: 'Group albums by name',
     albumGroupByNameDescription:
       'Group songs from albums with the same name without changing file details.',
@@ -1823,8 +1836,7 @@ export default {
     stemCacheUsage: '{size} · {count} files',
     stemCacheRefresh: 'Refresh',
     stemCacheClear: 'Clear stem cache',
-    stemCacheConfirm:
-      'Clear generated stems and legacy model caches? Separation tasks will stop first. Installed components and models remain; stems will be recalculated when needed.',
+    stemCacheConfirm: 'Are you sure you want to clear the generated vocal stem cache?',
     stemCacheFailed: 'Unable to inspect or clear the stem cache.',
     stemComponent_checking: 'Checking component…',
     stemComponent_downloading: 'Downloading…',
