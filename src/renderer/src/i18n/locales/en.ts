@@ -1280,6 +1280,9 @@ export default {
     cancelSleepTimer: 'Cancel',
     stopAfterCurrent: 'Stop after current track',
     playerBackground: 'Now playing appearance',
+    playerLayout: 'Now playing layout',
+    playerLayoutClassic: 'Classic',
+    playerLayoutBottom: 'Modern',
     playerBackgroundDescription: 'Adjust the appearance and behavior of the Now playing page.',
     playerBackgroundStyle: 'Background style',
     playerBackgroundAlbum: 'Album artwork',
@@ -1422,6 +1425,7 @@ export default {
     version: 'Version'
   },
   playerPanel: {
+    showAudioDetails: 'Show song parameters',
     adjustLyricsDisplay: 'Auto-fit lyrics',
     lyricSearchHint: 'Enter the song details and search. Results will appear here.',
     lyricSearchResults: 'Search results',

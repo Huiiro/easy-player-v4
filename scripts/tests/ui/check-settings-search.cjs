@@ -128,6 +128,15 @@ app.whenReady().then(async () => {
       let ui;const instance=Vue.createApp({setup(){ui=useUIStore();ui.platform='linux';ui.reduceMotion=true;return()=>Vue.h(Page)}}).use(createPinia()).use(i18n);
       document.documentElement.classList.add('dark');document.body.style.cssText='height:100vh;margin:0';document.getElementById('app').style.height='100%';
       instance.mount('#app');await wait(300);
+      const layoutRow=[...document.querySelectorAll('#background .setting-row')].find(row=>row.querySelector('h3')?.textContent===zh.settings.playerLayout);
+      check(layoutRow&&ui.playerLayout==='classic','Player layout is configurable and defaults to Classic');
+      layoutRow.scrollIntoView({block:'center'});await wait();
+      layoutRow.querySelector('button[aria-haspopup="listbox"]').click();await wait();
+      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()===zh.settings.playerLayoutBottom).click();await wait();
+      check(ui.playerLayout==='bottom','Selecting Bottom controls updates the player layout preference');
+      layoutRow.querySelector('button[aria-haspopup="listbox"]').click();await wait();
+      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()===zh.settings.playerLayoutClassic).click();await wait();
+      check(ui.playerLayout==='classic','Classic remains available after switching layouts');
       const effectRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent===zh.settings.playerCoverEffect);
       check(effectRow,'Cover rhythm effect appears in player settings');
       effectRow.scrollIntoView({block:'center'});await wait();

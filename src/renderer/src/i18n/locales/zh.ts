@@ -1248,6 +1248,9 @@ export default {
     cancelSleepTimer: '取消',
     stopAfterCurrent: '当前歌曲结束后停止',
     playerBackground: '播放页外观',
+    playerLayout: '播放页布局',
+    playerLayoutClassic: '经典',
+    playerLayoutBottom: '现代',
     playerBackgroundDescription: '调整播放页外观及行为。',
     playerBackgroundStyle: '背景样式',
     playerBackgroundAlbum: '专辑封面',
@@ -1381,6 +1384,7 @@ export default {
     version: '版本'
   },
   playerPanel: {
+    showAudioDetails: '显示歌曲参数',
     adjustLyricsDisplay: '自动调整占比',
     lyricSearchHint: '输入歌曲信息后点击搜索，结果将显示在这里。',
     lyricSearchResults: '搜索结果',

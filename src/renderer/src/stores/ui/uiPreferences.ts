@@ -10,6 +10,11 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    playerLayout: preferences.playerLayout === 'bottom' ? 'bottom' : 'classic',
+    showPlayerAudioDetails:
+      typeof preferences.showPlayerAudioDetails === 'boolean'
+        ? preferences.showPlayerAudioDetails
+        : true,
     playerLyricsFontWeight:
       typeof preferences.playerLyricsFontWeight === 'number' &&
       [300, 400, 500, 600, 700, 800].includes(preferences.playerLyricsFontWeight)

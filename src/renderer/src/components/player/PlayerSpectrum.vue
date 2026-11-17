@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { spectrumGradientColors } from './spectrumColor'
 const props = defineProps<{ spectrum: number[]; color?: string; active?: boolean }>()
 const ui = useUIStore()
 const canvas = ref<HTMLCanvasElement>()
@@ -58,15 +59,16 @@ function render(): void {
 
   const color = props.color || '77 136 220'
   if (!gradient || gradientHeight !== height || gradientColor !== color) {
+    const colors = spectrumGradientColors(color)
     gradient = c.createLinearGradient(0, height, 0, 0)
-    gradient.addColorStop(0, `rgb(${color} / .55)`)
-    gradient.addColorStop(1, `rgb(${color} / .98)`)
+    gradient.addColorStop(0, `rgb(${colors.bottom} / .78)`)
+    gradient.addColorStop(1, `rgb(${colors.top} / .94)`)
     gradientHeight = height
     gradientColor = color
   }
 
   const bw = width / barCount
-  const barWidth = Math.max(1, bw * 0.58)
+  const barWidth = bw * 0.4
   const dotSize = Math.min(barWidth, 3 * pixelScale)
   const dotStep = dotSize + Math.max(pixelScale, dotSize * 0.5)
   c.fillStyle = gradient

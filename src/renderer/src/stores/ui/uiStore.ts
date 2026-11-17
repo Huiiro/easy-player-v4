@@ -128,6 +128,8 @@ export const UI_PREFERENCE_KEYS = [
   'autoAdjustLyricsDisplay',
   'lyricSourceOrder',
   'playerBgType',
+  'playerLayout',
+  'showPlayerAudioDetails',
   'playerCoverStyle',
   'playerCoverEffect',
   'playerDisplayMode',
@@ -503,6 +505,8 @@ export const useUIStore = defineStore(
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
     const playerBgType = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
+    const playerLayout = ref<'classic' | 'bottom'>('classic')
+    const showPlayerAudioDetails = ref(true)
     const playerCoverStyle = ref<PlayerCoverStyle>(DEFAULT_PLAYER_COVER_STYLE)
     const playerCoverEffect = ref<PlayerCoverEffect>(DEFAULT_PLAYER_COVER_EFFECT)
     const playerDisplayMode = ref(PlayerDisplayMode.Normal)
@@ -821,6 +825,9 @@ export const useUIStore = defineStore(
       if (typeof saved.autoPlayOnRestore === 'boolean')
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       setPlayerBgType(saved.playerBgType)
+      playerLayout.value = saved.playerLayout === 'bottom' ? 'bottom' : 'classic'
+      if (typeof saved.showPlayerAudioDetails === 'boolean')
+        showPlayerAudioDetails.value = saved.showPlayerAudioDetails
       setPlayerCoverStyle(saved.playerCoverStyle)
       setPlayerCoverEffect(saved.playerCoverEffect)
       if (
@@ -1108,6 +1115,8 @@ export const useUIStore = defineStore(
       lyricSourceOrder,
       playerBgType,
       setPlayerBgType,
+      playerLayout,
+      showPlayerAudioDetails,
       playerCoverStyle,
       setPlayerCoverStyle,
       playerCoverEffect,

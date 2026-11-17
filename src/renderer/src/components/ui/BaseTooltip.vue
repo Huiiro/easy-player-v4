@@ -180,7 +180,13 @@ onDeactivated(() => {
   hide()
 })
 onBeforeUnmount(hide)
-defineExpose({ show: () => show(true), hide })
+defineExpose({
+  show: () => {
+    dismissed = false
+    show(true)
+  },
+  hide
+})
 </script>
 
 <template>

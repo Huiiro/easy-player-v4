@@ -13,6 +13,10 @@ import { useUIStore } from '@/stores/ui/uiStore'
 const props = defineProps<{ fontOptions: { label: string; value: string }[] }>()
 const ui = useUIStore()
 const { t } = useI18n()
+const playerLayoutOptions = computed(() => [
+  { label: t('settings.playerLayoutClassic'), value: 'classic' },
+  { label: t('settings.playerLayoutBottom'), value: 'bottom' }
+])
 const playerLyricsFontOptions = computed(() => [
   { label: t('settings.playerLyricsFontInherit'), value: '' },
   ...props.fontOptions.filter((option) => option.value !== '')
@@ -174,6 +178,15 @@ const openFooterAnywhere = computed({
           v-model="playerCoverEffect"
           :aria-label="t('settings.playerCoverEffect')"
           :options="coverEffectOptions"
+          teleport
+          class="w-56"
+        />
+      </SettingRow>
+      <SettingRow :label="t('settings.playerLayout')">
+        <BaseSelect
+          v-model="ui.playerLayout"
+          :options="playerLayoutOptions"
+          :aria-label="t('settings.playerLayout')"
           teleport
           class="w-56"
         />

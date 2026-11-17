@@ -6,11 +6,12 @@ const path = require('node:path')
 const sharp = require('sharp')
 const assert = require('node:assert/strict')
 const esbuild = require('esbuild')
-const { parse, compileScript } = require('@vue/compiler-sfc')
+const { parse, compileScript, compileStyle } = require('@vue/compiler-sfc')
 const baseline = process.argv.includes('--baseline')
 const mesh = process.argv.includes('--mesh')
 const particles = process.argv.includes('--particles')
 const ambient = process.argv.includes('--ambient')
+const bottomControls = process.argv.includes('--bottom-controls')
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'ep-panel-switch-')))
 protocol.registerSchemesAsPrivileged([
   {
@@ -36,6 +37,7 @@ app.whenReady().then(async () => {
         )
     )
     const styles = []
+    let scope = 0
     const bundle = await esbuild.build({
       stdin: {
         resolveDir: process.cwd(),
@@ -105,9 +107,24 @@ app.whenReady().then(async () => {
             )
             build.onLoad({ filter: /\.vue$/ }, ({ path: filename }) => {
               const { descriptor } = parse(fs.readFileSync(filename, 'utf8'), { filename })
-              descriptor.styles.forEach((style) => styles.push(style.content))
+              const id = 'panel-' + ++scope
+              descriptor.styles.forEach((style) => {
+                const compiled = compileStyle({
+                  source: style.content,
+                  filename,
+                  id: 'data-v-' + id,
+                  scoped: style.scoped
+                })
+                if (compiled.errors.length) throw compiled.errors[0]
+                styles.push(compiled.code)
+              })
               return {
-                contents: compileScript(descriptor, { id: filename, inlineTemplate: true }).content,
+                contents:
+                  compileScript(descriptor, { id, inlineTemplate: true, genDefaultAs: '__sfc__' })
+                    .content +
+                  '\n__sfc__.__scopeId="data-v-' +
+                  id +
+                  '";export default __sfc__;',
                 loader: 'ts',
                 resolveDir: path.dirname(filename)
               }
@@ -126,7 +143,23 @@ app.whenReady().then(async () => {
       if (!event.message.includes('Security Warning')) console.log(event.message)
     })
     const fixture = path.join(app.getPath('userData'), 'panel.html')
-    fs.writeFileSync(fixture, '<html><body><div id="app"></div></body></html>')
+    const svgRoot = path.resolve('src/renderer/src/assets/svg')
+    const symbols = fs
+      .readdirSync(svgRoot, { recursive: true })
+      .filter((file) => file.endsWith('.svg'))
+      .map((file) => {
+        const svg = fs
+          .readFileSync(path.join(svgRoot, file), 'utf8')
+          .match(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/)
+        if (!svg) return ''
+        const attrs = svg[1].replace(/\s(?:width|height|xmlns(?::\w+)?)=(["']).*?\1/g, '')
+        return `<symbol id="icon-${file.replaceAll(path.sep, '-').replace(/\.svg$/, '')}" ${attrs}>${svg[2]}</symbol>`
+      })
+      .join('')
+    fs.writeFileSync(
+      fixture,
+      `<html><body><svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute" aria-hidden="true">${symbols}</svg><div id="app"></div></body></html>`
+    )
     await window.loadFile(fixture)
     await window.webContents.executeJavaScript(bundle.outputFiles[0].text)
     const css =
@@ -140,6 +173,14 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript(`(async()=>{
    const style=document.createElement('style');style.textContent=${JSON.stringify(css)};document.head.append(style);
    const {Vue,createPinia,createI18n,createRouter,createMemoryHistory,Panel,useUIStore,CoverAnalyzer,zh}=PanelCheck;
+   const nativeMatchMedia=window.matchMedia.bind(window),hoverListeners=new Set();
+   const fineHover={matches:true,addEventListener:(_event,handler)=>hoverListeners.add(handler),removeEventListener:(_event,handler)=>hoverListeners.delete(handler)};
+   window.matchMedia=query=>query==='(hover: hover) and (pointer: fine)'?fineHover:nativeMatchMedia(query);
+   window.panelSetHover=value=>{fineHover.matches=value;hoverListeners.forEach(handler=>handler({matches:value}))};
+   const nativeSetTimeout=window.setTimeout.bind(window),nativeClearTimeout=window.clearTimeout.bind(window);
+   window.panelIdleTimers=new Map();
+   window.setTimeout=(callback,delay,...args)=>{let id;const run=()=>{window.panelIdleTimers.delete(id);callback(...args)};id=nativeSetTimeout(run,delay);if(delay===5000)window.panelIdleTimers.set(id,()=>{nativeClearTimeout(id);run()});return id};
+   window.clearTimeout=id=>{window.panelIdleTimers.delete(id);nativeClearTimeout(id)};
    window.panelWait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
    window.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),16);window.cancelAnimationFrame=clearTimeout;
    window.panelAnalysis=[];const analyze=CoverAnalyzer.analyze;CoverAnalyzer.analyze=function(...args){const start=performance.now();const result=analyze.apply(this,args);window.panelAnalysis.push(performance.now()-start);return result};
@@ -163,6 +204,37 @@ app.whenReady().then(async () => {
    const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
    const ui=useUIStore();ui.showPlayer=true;ui.playerBgType=${JSON.stringify(ambient ? 'ambient' : particles ? 'particles' : mesh ? 'mesh' : 'album')};ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
+   if(${bottomControls}){
+    const cover=document.querySelector('.cover-frame img'),lyrics=document.querySelector('.lyric-viewport'),play=document.querySelector('.playback-button');
+    ui.playerLayout='bottom';await Vue.nextTick();await window.panelWait(600);
+    const area=document.querySelector('.panel-controls').getBoundingClientRect(),art=document.querySelector('.panel-artwork').getBoundingClientRect(),text=document.querySelector('.panel-lyrics').getBoundingClientRect(),progress=document.querySelector('.ep-playback-progress').getBoundingClientRect();
+    if(art.right>text.left+1||area.top<Math.max(art.bottom,text.bottom)-1||progress.width<innerWidth*0.8)throw Error('Bottom layout keeps artwork and lyrics side by side above full-width controls');
+    if(!document.querySelector('.panel-controls .panel-tools')||document.querySelector('.panel-tools').getBoundingClientRect().top<progress.top)throw Error('Modern layout keeps utility buttons at the bottom right');
+    if(parseFloat(getComputedStyle(document.querySelector('.panel-controls')).borderTopWidth)!==0)throw Error('The progress track is the only divider in Modern layout');
+    const playRect=play.getBoundingClientRect();
+    if(playRect.width!==44||playRect.height!==44||play.querySelector('svg').getBoundingClientRect().width!==document.querySelector('.panel-control-button svg').getBoundingClientRect().width)throw Error('Modern play retains its original button size with an icon matching adjacent controls');
+    if(Math.abs((playRect.top-progress.bottom)-(area.bottom-playRect.bottom))>1)throw Error('Modern control padding is balanced below the progress divider');
+    if(parseFloat(getComputedStyle(document.querySelector('.panel-time')).fontSize)<14)throw Error('Modern time uses the larger text size');
+    if(document.querySelectorAll('.playback-button').length!==1||cover!==document.querySelector('.cover-frame img')||lyrics!==document.querySelector('.lyric-viewport')||play!==document.querySelector('.playback-button'))throw Error('Switching layout must preserve artwork, lyrics and playback controls');
+    const collapse=document.querySelector('header button[aria-expanded]');collapse.click();await Vue.nextTick();await window.panelWait(600);
+    if(getComputedStyle(play).pointerEvents==='none'||play.getBoundingClientRect().width===0)throw Error('Bottom playback controls remain usable with the artwork collapsed');
+    collapse.click();ui.playerLayout='classic';await Vue.nextTick();await window.panelWait(600);
+    if(getComputedStyle(document.querySelector('.panel-controls')).display!=='contents')throw Error('Classic layout restores controls below the cover');
+    ui.playerLayout='bottom';await Vue.nextTick();await window.panelWait(600);
+   }
+   const moreTrigger=document.querySelector('.panel-transport button[aria-label="'+zh.songList.more+'"]');
+   if(!moreTrigger||document.querySelectorAll('button[aria-label="'+zh.songList.more+'"]').length!==1)throw Error('The single More button stays beside the queue in the transport');
+   const volumeButton=document.querySelector('button[aria-label="'+zh.footer.volume+'"]'),modeButton=document.querySelector('.panel-transport > button');
+   if(volumeButton.getBoundingClientRect().width!==modeButton.getBoundingClientRect().width||volumeButton.querySelector('svg').getBoundingClientRect().width!==modeButton.querySelector('svg').getBoundingClientRect().width)throw Error('Volume matches the other control button and icon sizes');
+   const details=document.querySelector('.panel-artwork dl');
+   if(!details||getComputedStyle(details).backgroundColor==='rgba(0, 0, 0, 0)')throw Error('Song parameters keep their original background');
+   for(const visible of [false,true]){
+    moreTrigger.click();await Vue.nextTick();await window.panelWait(100);
+    const toggle=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===zh.playerPanel.showAudioDetails);
+    if(!toggle)throw Error('More includes the song parameter visibility toggle');
+    toggle.click();await Vue.nextTick();await window.panelWait(160);
+    if(!!document.querySelector('.panel-artwork dl')!==visible)throw Error('Parameter visibility follows the More menu toggle');
+   }
    for(const label of [zh.footer.volume,zh.playerPanel.speed,zh.playerPanel.lyricTiming,zh.playerPanel.lyricFontSize,zh.playerPanel.lyricSpacing]){
     const trigger=[...document.querySelectorAll('.ep-tooltip-trigger button')].find(button=>button.getAttribute('aria-label')===label);
     if(!trigger||trigger.title!==label)throw Error('Player control must expose a visible hover hint: '+label);
@@ -271,10 +343,61 @@ app.whenReady().then(async () => {
    Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async text=>{copiedName=text}}});
    await chooseLyricOption('更多','复制名称',()=>copiedName==='Action song - Artist - Album');
    window.panelPlayer.currentQueueSong=null;await Vue.nextTick();
-   if(!document.querySelector('button[aria-label="更多"]').disabled)throw Error('Song actions require a current song');
+   if(document.querySelector('button[aria-label="更多"]').disabled===${bottomControls})throw Error('Modern More remains available for playback tools without a song; Classic song actions require a current song');
    window.panelPlayer.currentQueueSong=actionSong;await Vue.nextTick();
+   if(${bottomControls}){
+    const controls=document.querySelector('.panel-controls'),progress=document.querySelector('.ep-playback-progress');
+    const wait=async()=>{await Vue.nextTick();await window.panelWait(370)};
+    const idle=async()=>{await Vue.nextTick();[...window.panelIdleTimers.values()].forEach(run=>run());await wait()};
+    const outside=()=>window.dispatchEvent(new PointerEvent('pointermove',{clientY:10}));
+    const reveal=()=>window.dispatchEvent(new PointerEvent('pointermove',{clientY:innerHeight-1}));
+    document.activeElement?.blur();outside();await Vue.nextTick();
+    const lyricsHeight=document.querySelector('.panel-lyrics').getBoundingClientRect().height;
+    window.panelPlayer.positionMs=45000;await idle();
+    if(!controls.classList.contains('panel-controls--idle')||getComputedStyle(progress).visibility!=='hidden'||!document.querySelector('.panel-transport').inert||!document.querySelector('.panel-tools').inert)throw Error('Idle Modern controls hide buttons, native slider and unused track access');
+    const fill=document.querySelector('.panel-idle-progress span'),track=fill.parentElement;
+    if(Math.abs(fill.getBoundingClientRect().width/track.getBoundingClientRect().width-0.25)>0.01||!document.querySelector('.panel-time').textContent.includes('0:45'))throw Error('Idle view retains time and only the completed progress segment');
+    window.panelPlayer.positionMs=90000;await Vue.nextTick();
+    if(Math.abs(fill.getBoundingClientRect().width/track.getBoundingClientRect().width-0.5)>0.01||!document.querySelector('.panel-time').textContent.includes('1:30'))throw Error('Idle progress and time keep updating during playback');
+    if(document.querySelector('.panel-lyrics').getBoundingClientRect().height!==lyricsHeight)throw Error('Auto-hide preserves the lyric viewport height');
+    reveal();await wait();if(controls.classList.contains('panel-controls--idle')||getComputedStyle(progress).visibility!=='visible'||document.querySelector('.panel-transport').inert)throw Error('Moving to the bottom restores playback controls and seeking');
+    controls.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));outside();await idle();
+    if(controls.classList.contains('panel-controls--idle'))throw Error('A dragging gesture prevents auto-hide');
+    window.dispatchEvent(new PointerEvent('pointerup'));await idle();
+    if(!controls.classList.contains('panel-controls--idle'))throw Error('Releasing outside the controls resumes auto-hide');
+    reveal();await wait();
+    document.querySelector('.panel-transport button[aria-label="'+zh.songList.more+'"]').click();await Vue.nextTick();outside();await idle();
+    if(controls.classList.contains('panel-controls--idle'))throw Error('An open More menu prevents auto-hide');
+    document.querySelector('.ep-menu').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await wait();
+    if(!ui.showPlayer||document.querySelector('.ep-menu'))throw Error('Closing More keeps the page open');
+    document.activeElement?.blur();await Vue.nextTick();await idle();
+    if(!controls.classList.contains('panel-controls--idle'))throw Error('Closing More resumes the idle countdown');
+    window.dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true}));await wait();
+    if(controls.classList.contains('panel-controls--idle'))throw Error('Keyboard use reveals hidden controls');
+    document.activeElement?.blur();outside();window.panelSetHover(false);await idle();
+    if(controls.classList.contains('panel-controls--idle'))throw Error('Touch pointers keep the controls visible');
+    window.panelSetHover(true);ui.playerLayout='classic';await idle();
+    if(controls.classList.contains('panel-controls--idle'))throw Error('Classic layout does not auto-hide its playback controls');
+    ui.playerLayout='bottom';window.panelPlayer.positionMs=0;reveal();await wait();
+   }
 
   })()`)
+    if (bottomControls) {
+      await window.webContents.executeJavaScript(`(async()=>{
+        document.activeElement?.blur();window.dispatchEvent(new PointerEvent('pointermove',{clientY:10}));
+        window.panelPlayer.positionMs=60000;await PanelCheck.Vue.nextTick();
+        [...window.panelIdleTimers.values()].forEach(run=>run());await PanelCheck.Vue.nextTick();await window.panelWait(370);
+        if(!document.querySelector('.panel-controls--idle')||document.querySelector('.ep-menu'))throw Error('Idle screenshot must show controls fully hidden with no open menu');
+      })()`)
+      fs.writeFileSync(
+        path.resolve('build/player-modern-idle.png'),
+        (await window.webContents.capturePage()).toPNG()
+      )
+      await window.webContents.executeJavaScript(`(async()=>{
+        window.panelPlayer.positionMs=0;window.dispatchEvent(new PointerEvent('pointermove',{clientY:innerHeight-1}));
+        await PanelCheck.Vue.nextTick();await window.panelWait(370);
+      })()`)
+    }
     const result = await window.webContents.executeJavaScript(`(async()=>{
    const durations=[],gaps=[],longTasks=[];window.panelAnalysis=[];
    const observer=new PerformanceObserver(list=>longTasks.push(...list.getEntries().map(task=>task.duration)));observer.observe({type:'longtask'});
@@ -288,6 +411,60 @@ app.whenReady().then(async () => {
     const report = {
       scope: `Actual playback panel, cover analysis, ${ambient ? 'ambient' : particles ? 'particles' : mesh ? 'mesh' : 'album'} background and 100 lyric lines; isolated reactive player, no decoder or persistence`,
       ...result
+    }
+    if (bottomControls) {
+      for (const [width, height] of [
+        [1600, 900],
+        [1000, 700],
+        [760, 600],
+        [640, 600]
+      ]) {
+        window.setSize(width, height)
+        await new Promise((resolve) => setTimeout(resolve, 650))
+        const bounds = await window.webContents.executeJavaScript(`(()=>{
+          const controls=document.querySelector('.panel-controls').getBoundingClientRect(),play=document.querySelector('.playback-button').getBoundingClientRect(),lyrics=document.querySelector('.panel-lyrics').getBoundingClientRect(),art=document.querySelector('.panel-artwork').getBoundingClientRect(),time=document.querySelector('.panel-time').getBoundingClientRect(),tools=document.querySelector('.panel-tools').getBoundingClientRect();
+          return {visible:controls.bottom<=innerHeight+1&&play.top>=controls.top&&play.bottom<=controls.bottom,split:art.right<=lyrics.left+1,leftTime:time.left<play.left&&document.querySelector('.panel-time span:last-child').getBoundingClientRect().right<=play.left+1,toolsFit:(tools.left>=play.right||tools.top>=play.bottom)&&tools.right<=innerWidth+1&&tools.top>=controls.top&&tools.bottom<=controls.bottom+1,overflow:document.querySelector('.panel-controls').scrollWidth>controls.width+1||document.querySelector('.panel-tools').scrollWidth>document.querySelector('.panel-tools').clientWidth+1};
+        })()`)
+        assert.ok(
+          bounds.visible && bounds.split && bounds.leftTime && bounds.toolsFit && !bounds.overflow,
+          `Bottom controls fit ${width}x${height}`
+        )
+        if (width === 760) {
+          await window.webContents.executeJavaScript(`(async()=>{
+            const {Vue,zh}=PanelCheck;
+            const more=()=>document.querySelector('.panel-transport button[aria-label="'+zh.songList.more+'"]');
+            const toolbar=document.querySelector('.panel-tools');toolbar.style.maxWidth='140px';toolbar.style.justifySelf='end';await Vue.nextTick();await window.panelWait(80);
+            const hiddenSlider=[{key:'size',label:zh.playerPanel.lyricFontSize,value:'1.5',reset:'1'},{key:'spacing',label:zh.playerPanel.lyricSpacing,value:'45',reset:'30'}].find(tool=>getComputedStyle(document.querySelector('[data-panel-tool="'+tool.key+'"]')).display==='none');
+            if(!hiddenSlider)throw Error('Narrow layout retains a slider in More');
+            more().click();await Vue.nextTick();await window.panelWait(100);
+            const item=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===hiddenSlider.label);
+            if(!item)throw Error('Hidden font size control must be available in More');
+            item.click();await Vue.nextTick();await window.panelWait(200);
+            const range=document.querySelector('.ep-tooltip input[aria-label="'+hiddenSlider.label+'"]');
+            if(!range||getComputedStyle(range).visibility!=='visible')throw Error('Overflow action opens the original font size control');
+            range.value=hiddenSlider.value;range.dispatchEvent(new Event('input',{bubbles:true}));await Vue.nextTick();
+            range.value=hiddenSlider.reset;range.dispatchEvent(new Event('input',{bubbles:true}));await Vue.nextTick();
+            document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await Vue.nextTick();await window.panelWait(200);
+            if(document.querySelector('[data-overflow-anchor]'))throw Error('Closing overflow control releases its temporary anchor');
+            const translation=document.querySelector('[data-panel-tool="translation"] button')||document.querySelector('button[data-panel-tool="translation"]');
+            const initial=translation.classList.contains('active');
+            more().click();await Vue.nextTick();await window.panelWait(100);
+            [...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===zh.playerPanel.showTranslation).click();await Vue.nextTick();await window.panelWait(80);
+            if(translation.classList.contains('active')===initial)throw Error('Overflow toggles retain their original behavior');
+            more().click();await Vue.nextTick();await window.panelWait(100);
+            [...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim().startsWith(zh.playerPanel.lyricAlignment.split('{')[0])).click();await Vue.nextTick();await window.panelWait(150);
+            const alignment=[...document.querySelectorAll('.ep-menu-item')].find(button=>button.textContent.trim()===zh.playerPanel.alignCenter);
+            if(!alignment)throw Error('Overflow alignment opens the original option menu');
+            alignment.click();await Vue.nextTick();await window.panelWait(250);
+            if(!document.querySelector('[data-panel-tool="alignment"] button').title.includes(zh.playerPanel.alignCenter))throw Error('Overflow alignment updates the preference');
+            toolbar.style.removeProperty('max-width');toolbar.style.removeProperty('justify-self');await Vue.nextTick();await window.panelWait(100);
+          })()`)
+        }
+        fs.writeFileSync(
+          path.resolve('build', `player-bottom-${width}.png`),
+          (await window.webContents.capturePage()).toPNG()
+        )
+      }
     }
     assert.equal(
       result.lyricRows,

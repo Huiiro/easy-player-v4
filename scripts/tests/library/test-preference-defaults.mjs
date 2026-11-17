@@ -128,6 +128,10 @@ assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
 assert.equal(ui.playerLyricsFontFamily, '', 'lyrics follow interface fonts by default')
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLayout'))
+assert.equal(ui.playerLayout, 'classic', 'the original player layout remains the default')
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('showPlayerAudioDetails'))
+assert.equal(ui.showPlayerAudioDetails, true, 'song parameters remain visible by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontWeight'))
 assert.equal(ui.playerLyricsFontWeight, 700, 'existing lyrics keep their bold default')
 ui.playerLyricsFontWeight = 400
@@ -304,6 +308,32 @@ for (const weight of [undefined, 300, 400, 500, 600, 700, 800, 0, 9999, 'bold', 
 console.log(
   'Lyrics weight: defaults, hydration, invalid-value fallback, persistence and reset passed'
 )
+for (const visible of [undefined, true, false, 'false', null]) {
+  savedUiPreferences = JSON.stringify({ showPlayerAudioDetails: visible })
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  assert.equal(hydrated.showPlayerAudioDetails, typeof visible === 'boolean' ? visible : true)
+  hydrated.showPlayerAudioDetails = false
+  hydrated.$persist()
+  assert.equal(JSON.parse(savedUiPreferences).showPlayerAudioDetails, false)
+  hydrated.resetPreferences()
+  assert.equal(hydrated.showPlayerAudioDetails, true)
+  Pinia.disposePinia(pinia)
+}
+for (const layout of [undefined, 'classic', 'bottom', 'unknown', null]) {
+  savedUiPreferences = JSON.stringify({ playerLayout: layout })
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  assert.equal(hydrated.playerLayout, layout === 'bottom' ? 'bottom' : 'classic')
+  hydrated.playerLayout = 'bottom'
+  hydrated.$persist()
+  assert.equal(JSON.parse(savedUiPreferences).playerLayout, 'bottom')
+  hydrated.resetPreferences()
+  assert.equal(hydrated.playerLayout, 'classic')
+  Pinia.disposePinia(pinia)
+}
 for (const background of [
   'aurora',
   'ocean',
