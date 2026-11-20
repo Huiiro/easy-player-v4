@@ -39,8 +39,10 @@ FFmpeg CLI requires a small avfilter library. Video encoders, hardware video,
 device capture, swscale, subtitles and external video/GPU libraries are omitted.
 The package contains exactly five manifest-verified FFmpeg DLLs and rejects
 video/device DLLs or an FFmpeg runtime over 15 MiB.
-SoundTouch 2.4.0 is pinned to an official Git commit and checked archive hash
-in `sources.json`, avoiding a regenerated upstream tag archive.
+SoundTouch 2.4.0 uses the upstream commit archive stored in
+`resources/lib/native-deps/archives/`. The build verifies its SHA-512 against
+`sources.json` before vcpkg extracts and patches it. Windows and macOS CI can
+build SoundTouch without a network request to Codeberg.
 
 Native compilation explicitly configures the installed Electron headers even
 when reusing an old build directory. Windows packaging defaults to BCJ/level 9

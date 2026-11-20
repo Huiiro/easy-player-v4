@@ -4,7 +4,7 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
-## v3.4.1
+## v3.4.2
 
 - Added a splash screen that shows initialization progress before the main window opens.
 - Added the Modern player layout with bottom playback controls and optional auto-hide. Switch to the Classic layout in Settings.
@@ -14,6 +14,7 @@ This document lists features, improvements, and fixes in descending version orde
 - Added artist portrait lookup through the NetEase Cloud Music, Kugou Music, and QQ Music source plugins, with options to restore local artwork and clear cached portraits.
 - Fixed the local folder hierarchy in library browsing and refined player titles, volume icons, and settings layouts.
 - Reduced redundant draws and texture uploads for static and paused scenes, sped up artwork color processing for mesh backgrounds, and improved resource cleanup when switching backgrounds or closing views.
+- Fixed release builds that failed when the SoundTouch source download timed out by using a local source archive verified with SHA-512.
 
 ## v3.4.0
 

@@ -14,6 +14,15 @@ const target = nativeTarget(process.platform, process.env.EASY_PLAYER_NATIVE_ARC
 const manifestRoot = path.join(root, 'resources/lib/native-deps')
 const manifest = JSON.parse(fs.readFileSync(path.join(manifestRoot, 'vcpkg.json'), 'utf8'))
 const baseline = manifest['builtin-baseline']
+const soundtouchLock = JSON.parse(
+  fs.readFileSync(path.join(manifestRoot, 'sources.json'), 'utf8')
+).soundtouch
+const soundtouchArchiveName = `soundtouch-${soundtouchLock.commit}.tar.gz`
+const soundtouchArchive = fs.readFileSync(
+  path.join(manifestRoot, 'archives', soundtouchArchiveName)
+)
+if (createHash('sha512').update(soundtouchArchive).digest('hex') !== soundtouchLock.sha512)
+  throw new Error(`SoundTouch source archive checksum mismatch: ${soundtouchArchiveName}`)
 const output = path.join(root, 'build/native-deps')
 const vcpkg = process.env.VCPKG_ROOT || path.join(output, 'vcpkg')
 const env = {
@@ -81,12 +90,8 @@ const profile = fs.readFileSync(path.join(manifestRoot, 'ffmpeg-profile.cmake'))
 fs.writeFileSync(path.join(overlay, 'ffmpeg-profile.cmake'), profile)
 if (target.platform === 'darwin')
   fs.copyFileSync(path.join(manifestRoot, target.profile), path.join(overlay, target.profile))
-// Codeberg regenerated its release tarball. Pin the verified 2.4.0 Git commit
-// and archive hash instead of depending on the mutable tag archive.
+// Use the verified upstream snapshot without contacting Codeberg during a build.
 const soundtouch = path.join(output, 'overlay/soundtouch')
-const soundtouchLock = JSON.parse(
-  fs.readFileSync(path.join(manifestRoot, 'sources.json'), 'utf8')
-).soundtouch
 fs.mkdirSync(soundtouch, { recursive: true })
 for (const file of git(['ls-tree', '-r', '--name-only', `${baseline}:ports/soundtouch`])
   .trim()
@@ -97,13 +102,21 @@ for (const file of git(['ls-tree', '-r', '--name-only', `${baseline}:ports/sound
 }
 const soundtouchPort = path.join(soundtouch, 'portfile.cmake')
 const soundtouchSource = fs.readFileSync(soundtouchPort, 'utf8')
-if (!soundtouchSource.includes('REF ${VERSION}') || !/SHA512 [a-f0-9]{128}/.test(soundtouchSource))
+const upstreamSource = soundtouchSource.match(
+  /^vcpkg_from_github\([\s\S]*?(?=^[ \t]+PATCHES\b)/m
+)?.[0]
+if (
+  !upstreamSource?.includes('REF ${VERSION}') ||
+  !upstreamSource.includes('REPO soundtouch/soundtouch')
+)
   throw new Error('Pinned SoundTouch port patch location changed')
+fs.writeFileSync(path.join(soundtouch, soundtouchArchiveName), soundtouchArchive)
 fs.writeFileSync(
   soundtouchPort,
-  soundtouchSource
-    .replace('REF ${VERSION}', `REF ${soundtouchLock.commit}`)
-    .replace(/SHA512 [a-f0-9]{128}/, `SHA512 ${soundtouchLock.sha512}`)
+  soundtouchSource.replace(
+    upstreamSource,
+    `vcpkg_extract_source_archive(SOURCE_PATH\n    ARCHIVE "\${CMAKE_CURRENT_LIST_DIR}/${soundtouchArchiveName}"\n`
+  )
 )
 console.log(`[native-deps] Pinned vcpkg ${baseline}; audio-only FFmpeg, ${target.triplet}`)
 run(executable, [
