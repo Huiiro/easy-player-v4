@@ -4,6 +4,17 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
+## v3.4.1
+
+- Added a splash screen that shows initialization progress before the main window opens.
+- Added the Modern player layout with bottom playback controls and optional auto-hide. Switch to the Classic layout in Settings.
+- Added a player appearance drawer for artwork, backgrounds, lyric sizing and colors, and bar or dot spectrum styles.
+- Added a Stage background with music-reactive cameras and lightsticks. It supports single and mixed colors, with density, uniformity, and brightness controls.
+- Added the Frosted Glass interface effect and refined Liquid Glass controls for blur, dispersion, and surface appearance.
+- Added artist portrait lookup through the NetEase Cloud Music, Kugou Music, and QQ Music source plugins, with options to restore local artwork and clear cached portraits.
+- Fixed the local folder hierarchy in library browsing and refined player titles, volume icons, and settings layouts.
+- Reduced redundant draws and texture uploads for static and paused scenes, sped up artwork color processing for mesh backgrounds, and improved resource cleanup when switching backgrounds or closing views.
+
 ## v3.4.0
 
 - Added in-app update checks, downloads, and restart-to-install controls, with optional startup checks, update notifications, and per-version dismissal.

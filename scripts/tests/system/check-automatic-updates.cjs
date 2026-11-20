@@ -109,7 +109,7 @@ app.whenReady().then(async () => {
       let ui,instance,pinia,router;
       async function mount(){
         pinia=createPinia().use(persisted);router=createRouter({history:createMemoryHistory(),routes:[{path:'/',component:{render:()=>null}},{path:'/settings',component:{render:()=>null}}]});
-        instance=Vue.createApp({setup(){ui=useUIStore();ui.platform='linux';return()=>Vue.h('main',{},[Vue.h('header',{class:'ep-header flex h-[42px] items-center'},[Vue.h(HeaderUpdate)]),Vue.h(Settings),Vue.h(Notification)])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false})).use(router);
+        instance=Vue.createApp({setup(){ui=useUIStore();ui.platform='linux';return()=>Vue.h('main',{},[Vue.h('header',{class:'ep-header flex h-[42px] items-center'},[Vue.h(HeaderUpdate)]),Vue.h(Settings,{fontOptions:[]}),Vue.h(Notification)])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false})).use(router);
         await router.push('/');await router.isReady();instance.mount('#app');await wait(300);
       }
       const dialog=()=>document.querySelector('.ep-dialog');
