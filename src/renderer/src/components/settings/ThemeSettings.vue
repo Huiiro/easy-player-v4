@@ -2,7 +2,7 @@
 import SettingGroup from '@/components/settings/SettingGroup.vue'
 import SettingCard from './SettingCard.vue'
 import SettingRow from './SettingRow.vue'
-import { computed } from 'vue'
+import { computed, defineAsyncComponent, ref, useId } from 'vue'
 import CustomThemeSettings from './CustomThemeSettings.vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
@@ -19,10 +19,14 @@ import {
   type SystemBackground
 } from '@/components/background/systemBackgroundRegistry'
 import { useUIStore } from '@/stores/ui/uiStore'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
 const { t, locale } = useI18n()
 const { error } = useMessage()
+const LiquidGlassSettings = defineAsyncComponent(() => import('./LiquidGlassSettings.vue'))
+const glassSettingsOpen = ref(false)
+const glassSettingsId = useId()
 const windowMaterialOptions = computed(() =>
   ui.availableWindowMaterials.map((material) => ({
     value: material,
@@ -165,12 +169,27 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
         :label="t('settings.interfaceEffect')"
         :description="t('settings.interfaceEffectDescription')"
       >
-        <BaseSwitch
-          :model-value="ui.interfaceEffect === 'liquid-glass-studio'"
-          :aria-label="t('settings.interfaceEffect')"
-          @update:model-value="ui.interfaceEffect = $event ? 'liquid-glass-studio' : 'none'"
-        />
+        <div class="flex shrink-0 items-center gap-3">
+          <BaseButton
+            size="sm"
+            variant="secondary"
+            :aria-label="t('settings.liquidGlass.customize')"
+            :aria-expanded="glassSettingsOpen"
+            :aria-controls="glassSettingsId"
+            @click="glassSettingsOpen = !glassSettingsOpen"
+          >
+            <svg-icon name="common-settings" class-name="size-4" />
+          </BaseButton>
+          <BaseSwitch
+            :model-value="ui.interfaceEffect === 'liquid-glass-studio'"
+            :aria-label="t('settings.interfaceEffect')"
+            @update:model-value="ui.interfaceEffect = $event ? 'liquid-glass-studio' : 'none'"
+          />
+        </div>
       </SettingRow>
+      <div :id="glassSettingsId" :hidden="!glassSettingsOpen">
+        <LiquidGlassSettings v-if="glassSettingsOpen" />
+      </div>
       <div class="setting-row theme-background-row">
         <div>
           <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

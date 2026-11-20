@@ -103,12 +103,13 @@ app.whenReady().then(async () => {
         import {useUIStore} from './src/renderer/src/stores/ui/uiStore';
         import {flushPlayerDataStorage} from './src/renderer/src/stores/persistence';
         import ThemeSettings from './src/renderer/src/components/settings/ThemeSettings.vue';
+        import LiquidGlassStudioHost from './src/renderer/src/components/background/LiquidGlassStudioHost.vue';
         import {useMessage} from './src/renderer/src/components/ui/useMessage';
         import OfficialPluginSettings from './src/renderer/src/components/settings/OfficialPluginSettings.vue';
         import AppBackground from './src/renderer/src/components/background/AppBackground.vue';
         import {systemBackgroundThemes} from './src/renderer/src/components/background/systemBackgroundRegistry';
         import zh from './src/renderer/src/i18n/locales/zh';
-        export {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh};`,
+        export {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,LiquidGlassStudioHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh};`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -231,7 +232,7 @@ app.whenReady().then(async () => {
         ';void 0'
     )
     const result = await window.webContents.executeJavaScript(`(async()=>{
-      const {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh}=AppearanceCheck;
+      const {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,LiquidGlassStudioHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh}=AppearanceCheck;
       const {h,createApp,nextTick}=Vue;
       const checks=[];const check=(ok,message)=>{if(!ok)throw new Error(message);checks.push(message)};
       const wait=async()=>{await nextTick();await nextTick();await nextTick();await new Promise(resolve=>setTimeout(resolve,30))};
@@ -244,7 +245,7 @@ app.whenReady().then(async () => {
       const themeListeners=new Set();const themeListener=()=>{for(const callback of themeListeners)callback()};
       window.api.plugins={themes:async()=>({success:true,data:activeThemes}),onChanged:callback=>{themeListeners.add(callback);return()=>themeListeners.delete(callback)}};
       let ui;
-      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();const contentDark=Vue.ref(ui.resolvedAppearance.contentDark);return()=>h('main',{class:'app-layout settings-page','data-background-contrast':!ui.resolvedAppearance.dark&&contentDark.value?'dark':undefined,style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground,{onContrast:value=>{contentDark.value=value}}),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)])])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
+      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();const contentDark=Vue.ref(ui.resolvedAppearance.contentDark);return()=>h('main',{class:'app-layout settings-page','data-background-contrast':!ui.resolvedAppearance.dark&&contentDark.value?'dark':undefined,style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground,{onContrast:value=>{contentDark.value=value}}),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)]),ui.interfaceEffect==='liquid-glass-studio'?h(LiquidGlassStudioHost):null])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
       let mounted=mount();await ui.initializeTheme();await wait();
       check(ui.colorMode==='light'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Legacy native-material snapshots migrate back to the saved user preferences');
       check(ui.nativeMaterialEnabled&&ui.resolvedAppearance.background.type==='none'&&!document.querySelector('.app-background-layer,.ep-app-background'),'Native material suppresses all renderer backgrounds');
@@ -252,6 +253,49 @@ app.whenReady().then(async () => {
       check(!document.querySelector('input[type=file]')&&!document.body.textContent.includes('导入主题')&&!document.body.textContent.includes('下载示例'),'Appearance settings have no legacy JSON/ZIP import entry');
       await ui.setNativeWindowMaterial('none');await wait();
       check(document.querySelector('.app-background-layer')&&ui.resolvedAppearance.background.id==='plugin:builtin.theme.rainy','Turning material off restores the original scene without rewriting preferences');
+      const defaultGlass={...ui.liquidGlassSettings};
+      const glassCustomize=document.querySelector('button[aria-label="'+zh.settings.liquidGlass.customize+'"]');
+      glassCustomize.click();
+      const glassPreview=()=>document.querySelector('.liquid-glass-preview-surface');
+      for(let attempt=0;attempt<30&&!glassPreview()?.querySelector('canvas:not([hidden])');attempt++) await wait();
+      check(ui.interfaceEffect==='none'&&glassPreview()?.querySelector('canvas:not([hidden])'),'The Liquid Glass editor renders a real preview while the application effect is off');
+      const glassSection=glassPreview().closest('.glass-settings');
+      const blurControl=[...glassSection.querySelectorAll('label')].find(label=>label.textContent.includes(zh.settings.liquidGlass.blurRadius)).querySelector('input');
+      blurControl.value='64';blurControl.dispatchEvent(new Event('input',{bubbles:true}));await wait();
+      check(ui.liquidGlassSettings.blurRadius===defaultGlass.blurRadius&&glassPreview().style.getPropertyValue('--ep-studio-blur-radius')==='64','Dragging updates the preview before the application setting');
+      blurControl.dispatchEvent(new Event('change',{bubbles:true}));await wait();flushPlayerDataStorage();
+      check(ui.liquidGlassSettings.blurRadius===64&&JSON.parse(settings.get('pinia.ui.preferences.v1')).liquidGlassSettings.blurRadius===64,'Releasing an optical slider saves the new value');
+      const glassProbe=document.createElement('div');glassProbe.className='ep-glass-panel';glassProbe.style.cssText='position:fixed;top:10px;right:10px;width:120px;height:60px';document.body.append(glassProbe);
+      const glassSwitch=document.querySelector('button[aria-label="'+zh.settings.interfaceEffect+'"]');glassSwitch.click();await wait();
+      check(getComputedStyle(glassProbe).getPropertyValue('--ep-studio-blur-radius').trim()==='64','Enabling Liquid Glass applies the saved value to its actual surfaces');
+      const advancedGlass=glassSection.querySelector('.glass-settings-advanced');
+      check(!advancedGlass.open,'Advanced glass controls start collapsed');
+      advancedGlass.querySelector('summary').click();await wait();
+      check(advancedGlass.open&&advancedGlass.querySelectorAll('input[type=range]').length===10,'Opening advanced settings shows the remaining optical and shadow sliders');
+      const edgeSwitch=advancedGlass.querySelector('button[aria-label="'+zh.settings.liquidGlass.blurEdge+'"]');
+      edgeSwitch.click();await wait();
+      const sharpEdge=()=>document.querySelector('#ep-glass-settings-preview-backdrop-svg feComposite[result="sharp-edge"]');
+      for(let attempt=0;attempt<30&&!sharpEdge();attempt++)await wait();
+      check(ui.liquidGlassSettings.blurEdge===false&&sharpEdge(),'Disabling edge blur installs a sharp-rim SVG filter in the preview');
+      const shadowControl=[...advancedGlass.querySelectorAll('label')].find(label=>label.textContent.includes(zh.settings.liquidGlass.shadowExpand)).querySelector('input');
+      shadowControl.value='44';shadowControl.dispatchEvent(new Event('input',{bubbles:true}));await wait();
+      check(getComputedStyle(glassPreview()).boxShadow.includes('44px')&&!getComputedStyle(glassProbe).boxShadow.includes('44px'),'Shadow dragging previews without changing the active interface');
+      shadowControl.dispatchEvent(new Event('change',{bubbles:true}));await wait();
+      for(let attempt=0;attempt<20&&!getComputedStyle(glassProbe).boxShadow.includes('44px');attempt++)await wait();
+      check(getComputedStyle(glassProbe).boxShadow.includes('44px'),'The saved shadow radius styles actual glass surfaces: '+[ui.liquidGlassSettings.shadowExpand,getComputedStyle(glassProbe).boxShadow,getComputedStyle(glassProbe).getPropertyValue('--ep-studio-custom-shadow')]);
+      const tintPicker=advancedGlass.querySelector('button[aria-label="'+zh.settings.liquidGlass.tintColor+'"]');
+      tintPicker.click();await wait();
+      const tintInput=document.querySelector('.ep-color-picker input[aria-label="'+zh.ui.colorValue+'"]');
+      tintInput.value='#2F90F080';tintInput.dispatchEvent(new Event('input',{bubbles:true}));await wait();
+      tintInput.dispatchEvent(new FocusEvent('blur'));await wait();
+      const tintVisible=()=>[glassPreview(),glassProbe].every(surface=>getComputedStyle(surface).backgroundColor.includes('47, 144, 240'));
+      for(let attempt=0;attempt<20&&!tintVisible();attempt++)await wait();
+      check(ui.liquidGlassSettings.tintColor==='#2F90F080'&&tintVisible(),'The alpha color picker tints both preview and active glass: '+[ui.liquidGlassSettings.tintColor,getComputedStyle(glassPreview()).backgroundColor,getComputedStyle(glassProbe).backgroundColor]);
+      tintPicker.click();await wait();
+      glassSection.querySelector('button').click();await wait();flushPlayerDataStorage();
+      check(JSON.stringify(ui.liquidGlassSettings)===JSON.stringify(defaultGlass)&&blurControl.value===String(defaultGlass.blurRadius)&&edgeSwitch.getAttribute('aria-checked')==='true'&&getComputedStyle(glassProbe).getPropertyValue('--ep-studio-blur-radius').trim()===String(defaultGlass.blurRadius)&&!getComputedStyle(glassProbe).backgroundColor.includes('47, 144, 240')&&!getComputedStyle(glassProbe).boxShadow.includes('44px'),'Restore defaults resets both basic and advanced settings across the preview and active interface');
+      glassSwitch.click();glassCustomize.click();glassProbe.remove();await wait();
+      check(!glassPreview()&&!document.getElementById('ep-glass-settings-preview'),'Closing customization disposes the preview instance');
       ui.setColorMode('system');await wait();
       check(ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Following system appearance keeps the selected scene');
       systemDark=true;for(const listener of mediaListeners)listener();await wait();
@@ -397,7 +441,7 @@ app.whenReady().then(async () => {
       check(document.documentElement.dataset.chromeDark==='false'&&document.documentElement.dataset.chromeRaised==='false'&&contrast(rgb(getComputedStyle(chromeHost.querySelector('.text-text')).color),baseSurface)>=7,'Leaving authored backgrounds restores ordinary light chrome without stale colors');
       await ui.setNativeWindowMaterial('mica');await wait();
       const micaFooter=chromeHost.querySelector('.ep-footer');const page=document.querySelector('.app-layout');
-      const contrastProbe=document.createElement('div');contrastProbe.style.cssText='position:fixed;left:-10000px';contrastProbe.innerHTML='<span class="text-text">Page</span><span class="text-text-l">Secondary</span><label class="plain-label">Caption</label><aside class="ep-sidebar-item">Sidebar</aside><button class="ep-button ep-button--primary">Play</button>';page.append(contrastProbe);
+      const contrastProbe=document.createElement('div');contrastProbe.className='app-layout';contrastProbe.style.cssText='position:fixed;left:-10000px';contrastProbe.innerHTML='<span class="text-text">Page</span><span class="text-text-l">Secondary</span><label class="plain-label">Caption</label><aside class="ep-sidebar-item">Sidebar</aside><button class="ep-button ep-button--primary">Play</button>';document.body.append(contrastProbe);
       const dialogProbe=document.createElement('div');dialogProbe.className='ep-dialog-panel';dialogProbe.style.cssText='position:fixed;left:-10000px';dialogProbe.innerHTML='<span class="text-text">Dialog</span>';document.body.append(dialogProbe);
       for(const nativeDark of [false,true]) {
         systemDark=nativeDark;for(const listener of mediaListeners)listener();await wait();
@@ -406,6 +450,7 @@ app.whenReady().then(async () => {
         check(micaSurface[3]/255<=0.18&&lum(micaSurface)<0.05,'Light Mica footer uses only a subtle dark tint instead of covering the native material');
         for(const token of ['--color-text','--color-text-l','--color-text-l2','--color-primary']) check(contrast(rgb(micaStyle.getPropertyValue(token)),composite)>=4.5,'Light Mica footer keeps '+token+' readable on its '+(nativeDark?'dark':'light')+' native backdrop');
         check(ui.colorMode==='light'&&!document.documentElement.classList.contains('dark')&&ui.resolvedAppearance.contentDark===nativeDark&&(page.dataset.backgroundContrast==='dark')===nativeDark,'Native backdrop contrast changes the page foreground without rewriting the selected light mode');
+        if(nativeDark)contrastProbe.dataset.backgroundContrast='dark';else delete contrastProbe.dataset.backgroundContrast;
         for(const selector of ['.text-text','.text-text-l','.plain-label','.ep-sidebar-item']) check(contrast(rgb(getComputedStyle(contrastProbe.querySelector(selector)).color),backdrop)>=4.5,'Page '+selector+' stays readable on a '+(nativeDark?'dark':'light')+' Mica backdrop');
         const buttonStyle=getComputedStyle(contrastProbe.querySelector('button'));check(contrast(rgb(buttonStyle.color),rgb(buttonStyle.backgroundColor))>=4.5,'Primary labels retain contrast in the adaptive content palette');
         check(contrast(rgb(getComputedStyle(dialogProbe.querySelector('span')).color),rgb(getComputedStyle(dialogProbe).backgroundColor))>=7&&lum(rgb(getComputedStyle(dialogProbe).backgroundColor))>0.85,'Body-teleported dialogs keep their independent light surface and dark labels');
@@ -445,11 +490,43 @@ app.whenReady().then(async () => {
       check(!!document.querySelector('.declarative-theme-background canvas.ready'),'Black Hole fragment shader and precomputed textures render through the generic WebGL host');
       activeThemes=[midnight];themeListener();await wait();
       check(ui.systemBackground==='plugin:builtin.theme.blackhole'&&ui.resolvedAppearance.background.type==='none','Disabling a selected theme falls back without overwriting its saved choice');
-      check(document.querySelector('[role=status]')?.textContent.includes('主题插件'),'Missing theme explains the fallback in Appearance');
+      check([...document.querySelectorAll('[role=status]')].some(status=>status.textContent.includes(zh.plugins.themeMissing)),'Missing theme explains the fallback in Appearance');
       activeThemes=[blackhole,midnight];themeListener();await wait();
       check(ui.resolvedAppearance.background.id==='plugin:builtin.theme.blackhole','Re-enabling a theme restores the saved background automatically');
       [...document.querySelectorAll('[role=radio]')].find(button=>button.textContent.includes('午夜')).click();await wait();
       check(ui.systemBackground==='plugin:example.midnight'&&rgb(getComputedStyle(document.documentElement).getPropertyValue('--color-bg')).slice(0,3).join(',')==='16,17,34','Third-party theme selection applies its palette through the real UI');
+      check(!document.querySelector('.declarative-theme-background canvas'),'CSS-only themes do not mount a canvas');
+      const staticShader={...midnight,pluginId:'example.static-shader',revision:'static-fixture',data:{...midnight.data,shader:blackhole.data.shader},fragmentShader:'#version 300 es\\nprecision mediump float;\\nout vec4 color;\\nvoid main(){color=vec4(0.08,0.12,0.2,1.0);}'};
+      activeThemes=[blackhole,midnight,staticShader];themeListener();await wait();
+      ui.selectThemeBackground('plugin:example.static-shader');await wait();
+      const staticCanvas=document.querySelector('.declarative-theme-background canvas.ready');
+      check(!!staticCanvas,'Static shader paints its first frame');
+      const pauseOnBlur=ui.pauseAnimationsOnBlur;
+      ui.pauseAnimationsOnBlur=false;ui.reduceMotion=false;await wait();
+      const staticGl=staticCanvas.getContext('webgl2');const staticDraw=staticGl.drawArrays;
+      let staticDraws=0;
+      staticGl.drawArrays=function(...args){staticDraws++;return staticDraw.apply(this,args)};
+      await new Promise(resolve=>setTimeout(resolve,350));
+      staticGl.drawArrays=staticDraw;
+      check(staticDraws===0&&staticCanvas.hasAttribute('data-background-static'),'Static shader makes zero idle draws over 350 ms: '+staticDraws);
+      ui.reduceMotion=true;
+      const pointerShader={...staticShader,pluginId:'example.pointer-shader',fragmentShader:'#version 300 es\\nprecision mediump float;\\nuniform vec2 u_pointer;\\nout vec4 color;\\nvoid main(){color=vec4(0.5+u_pointer.x*0.3,0.12,0.2,1.0);}'};
+      activeThemes=[blackhole,midnight,pointerShader];themeListener();await wait();
+      ui.selectThemeBackground('plugin:example.pointer-shader');await wait();
+      const pointerCanvas=document.querySelector('.declarative-theme-background canvas.ready');
+      check(!!pointerCanvas,'Pointer-only shader paints its initial frame');
+      ui.reduceMotion=false;await wait();
+      const pointerGl=pointerCanvas.getContext('webgl2');
+      const pointerProgram=pointerGl.getParameter(pointerGl.CURRENT_PROGRAM);
+      const pointerUniform=pointerGl.getUniformLocation(pointerProgram,'u_pointer');
+      const pointerBounds=pointerCanvas.getBoundingClientRect();
+      window.dispatchEvent(new PointerEvent('pointermove',{clientX:pointerBounds.left+pointerBounds.width,pointerType:'mouse'}));
+      await wait();
+      check(pointerGl.getUniform(pointerProgram,pointerUniform)[0]>0&&!pointerCanvas.hasAttribute('data-background-static'),'Pointer movement wakes a pointer-only shader');
+      for(let retry=0;retry<80&&!pointerCanvas.hasAttribute('data-background-static');retry++)await new Promise(resolve=>setTimeout(resolve,50));
+      check(pointerGl.getUniform(pointerProgram,pointerUniform)[0]===1&&pointerCanvas.hasAttribute('data-background-static'),'Pointer-only shader stops again when it reaches its target');
+      ui.reduceMotion=true;ui.pauseAnimationsOnBlur=pauseOnBlur;
+      ui.selectThemeBackground('plugin:example.midnight');await wait();
       midnight.author={name:'Fixture Author'};
       const sameName={...midnight,pluginId:'other.midnight',author:{name:'Fixture Author'}};
       activeThemes=[blackhole,midnight,sameName];themeListener();await wait();
@@ -498,8 +575,27 @@ app.whenReady().then(async () => {
       check(!!rainyCanvas,'Rain shader loads its street-image texture through the production protocol');
       check(getComputedStyle(document.querySelector('.declarative-theme-background')).backgroundImage.includes('rainy-night-cool.webp'),'Rainy preserves its street image as the shader fallback');
       const gl=rainyCanvas.getContext('webgl2');
-      rainyCanvas.dispatchEvent(new Event('webglcontextrestored'));
-      const pixels=new Uint8Array(rainyCanvas.width*rainyCanvas.height*4);gl.readPixels(0,0,rainyCanvas.width,rainyCanvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+      const initialBitmapCloses=closedBitmaps;
+      check(initialBitmapCloses>0,'Rainy releases its decoded bitmap immediately after texture upload');
+      const extension=gl.getExtension('WEBGL_lose_context');
+      const lost=new Promise(resolve=>rainyCanvas.addEventListener('webglcontextlost',resolve,{once:true}));
+      extension.loseContext();await lost;
+      // Chromium marks the context restorable after the lost event finishes dispatching.
+      await new Promise(resolve=>setTimeout(resolve,0));
+      let pixels;
+      const rainDraw=gl.drawArrays;
+      gl.drawArrays=function(...args){
+        const result=rainDraw.apply(this,args);
+        if(!pixels){
+          pixels=new Uint8Array(rainyCanvas.width*rainyCanvas.height*4);
+          gl.readPixels(0,0,rainyCanvas.width,rainyCanvas.height,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+        }
+        return result;
+      };
+      extension.restoreContext();
+      for(let retry=0;retry<80&&!pixels;retry++)await new Promise(resolve=>setTimeout(resolve,50));
+      gl.drawArrays=rainDraw;
+      check(!!pixels&&closedBitmaps>initialBitmapCloses,'Context restoration reloads and releases Rainy textures');
       let maximum=0,minimum=255;for(let index=0;index<pixels.length;index+=400){maximum=Math.max(maximum,pixels[index],pixels[index+1],pixels[index+2]);minimum=Math.min(minimum,pixels[index],pixels[index+1],pixels[index+2])}
       check(maximum>40&&maximum-minimum>20,'Rain shader produces nonblank image pixels after context restoration');
       check(gl.getTexParameter(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER)===gl.LINEAR_MIPMAP_LINEAR,'Image texture retains mipmaps for the rain blur');

@@ -13,6 +13,10 @@ interface Program {
 }
 const SIZE = 128
 const INTERVAL = 1000 / 30
+const artworkSaturation = 1.45
+const artworkChannelCurve = Float64Array.from({ length: 256 }, (_, channel) =>
+  Math.exp((-channel * artworkSaturation) / 180)
+)
 
 /** GPU artwork compositing at 128px; only the final deformed mesh fills the viewport. */
 export class MeshFlowRenderer {
@@ -230,9 +234,11 @@ export class MeshFlowRenderer {
         for (let i = 0; i < pixels.data.length; i += 4) {
           const gray =
             pixels.data[i] * 0.2126 + pixels.data[i + 1] * 0.7152 + pixels.data[i + 2] * 0.0722
+          // The desaturated part of the transfer curve is shared by all three channels.
+          const grayFactor = Math.exp((gray * (artworkSaturation - 1)) / 180)
           for (let channel = 0; channel < 3; channel++) {
-            const value = Math.max(0, gray + (pixels.data[i + channel] - gray) * 1.45)
-            pixels.data[i + channel] = 220 * (1 - Math.exp(-value / 180))
+            const value = artworkChannelCurve[pixels.data[i + channel]]
+            pixels.data[i + channel] = 220 * Math.max(0, 1 - value * grayFactor)
           }
         }
         context.putImageData(pixels, 0, 0)
@@ -240,13 +246,18 @@ export class MeshFlowRenderer {
       } catch {
         this.source = null
         this.replace(this.fallback())
+      } finally {
+        image.onload = image.onerror = null
+        image.removeAttribute('src')
+        this.image = null
       }
-      this.image = null
     }
     image.onerror = () => {
       if (this.disposed || generation !== this.generation) return
       this.source = null
       this.image = null
+      image.onload = image.onerror = null
+      image.removeAttribute('src')
       this.replace(this.fallback())
     }
     image.src = source
@@ -366,5 +377,6 @@ export class MeshFlowRenderer {
     for (const texture of this.textures) this.gl.deleteTexture(texture)
     for (const target of this.targets) this.gl.deleteFramebuffer(target)
     for (const program of this.programs) this.gl.deleteProgram(program)
+    this.currentPixels = this.previousPixels = null
   }
 }

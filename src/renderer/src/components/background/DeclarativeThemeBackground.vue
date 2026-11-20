@@ -17,12 +17,12 @@ const props = withDefaults(defineProps<{ theme: InstalledPluginTheme; paused?: b
 })
 const emit = defineEmits<{ failure: []; ready: [] }>()
 const ui = useUIStore()
-const isAnimationActive = useAnimationActivity(() => ui.pauseAnimationsOnBlur !== false)
-const loading = new AbortController()
-const textureData = new Map<string, Float32Array | ImageBitmap>()
+const isAnimationActive = props.theme.fragmentShader
+  ? useAnimationActivity(() => ui.pauseAnimationsOnBlur !== false)
+  : undefined
+let loading: AbortController | undefined
 let failed = false
 let shaderError = ''
-let resourcesLoaded = false
 function failure(reason: string, detail?: unknown): void {
   if (!failed && !disposed) {
     failed = true
@@ -33,6 +33,7 @@ function failure(reason: string, detail?: unknown): void {
 }
 const canvas = ref<HTMLCanvasElement | null>(null)
 const ready = ref(false)
+const animated = ref(false)
 let gl: WebGL2RenderingContext | null = null
 let program: WebGLProgram | null = null
 let buffer: WebGLBuffer | null = null
@@ -62,6 +63,7 @@ const frameInterval = 1000 / (props.theme.data.shader?.fps ?? 30)
 function stop(): void {
   cancelAnimationFrame(frame)
   frame = 0
+  animated.value = false
   lastTick = 0
   lastDraw = 0
   slowFrames = 0
@@ -164,7 +166,7 @@ function draw(now = performance.now()): void {
     gl.deleteQuery(query)
     query = null
   }
-  const measure = timer && !query && drawCount++ % 20 === 0
+  const measure = time && timer && !query && drawCount++ % 20 === 0
   if (measure) {
     query = gl.createQuery()
     if (query) gl.beginQuery(timer!.TIME_ELAPSED_EXT, query)
@@ -178,16 +180,31 @@ function draw(now = performance.now()): void {
 }
 
 function inactive(): boolean {
-  return props.paused || !isAnimationActive.value || !!motion?.matches
+  return props.paused || !isAnimationActive?.value || !!motion?.matches
+}
+
+function pointerMoving(): boolean {
+  return currentPointer.x !== targetPointer.x || currentPointer.y !== targetPointer.y
+}
+
+function schedule(): void {
+  if (!frame && ready.value && !inactive() && (time || (pointer && pointerMoving()))) {
+    frame = requestAnimationFrame(tick)
+    animated.value = true
+  }
 }
 
 function tick(now: number): void {
   frame = 0
   if (!ready.value || inactive()) return
   if (!lastTick || now - lastTick >= frameInterval) {
-    const delta = lastDraw ? Math.min((now - lastDraw) / 1000, 0.1) : 0
+    const delta = lastDraw
+      ? Math.min((now - lastDraw) / 1000, 0.1)
+      : time
+        ? 0
+        : frameInterval / 1000
     // A sustained slow RAF is a fallback signal on GPUs without timing queries.
-    if (!timer && lastDraw) {
+    if (time && !timer && lastDraw) {
       slowFrames = now - lastDraw > 46 ? slowFrames + 1 : Math.max(0, slowFrames - 1)
       if (slowFrames >= 20) {
         adjustQuality(25, now)
@@ -198,11 +215,14 @@ function tick(now: number): void {
     const smoothing = 1 - Math.exp(-delta * 5)
     currentPointer.x += (targetPointer.x - currentPointer.x) * smoothing
     currentPointer.y += (targetPointer.y - currentPointer.y) * smoothing
+    if (Math.abs(targetPointer.x - currentPointer.x) < 1 / 1024) currentPointer.x = targetPointer.x
+    if (Math.abs(targetPointer.y - currentPointer.y) < 1 / 1024) currentPointer.y = targetPointer.y
     lastTick = now - (lastTick ? (now - lastTick) % frameInterval : 0)
     lastDraw = now
     draw(now)
   }
-  frame = requestAnimationFrame(tick)
+  schedule()
+  if (!frame) stop()
 }
 
 function syncAnimation(): void {
@@ -212,18 +232,18 @@ function syncAnimation(): void {
     targetPointer.x = targetPointer.y = 0
     draw()
   }
-  if (ready.value && !inactive()) frame = requestAnimationFrame(tick)
+  schedule()
 }
 
 function resize(): void {
-  if (!canvas.value) return
+  if (!canvas.value || !ready.value) return
   bounds = canvas.value.getBoundingClientRect()
   sizeCanvas()
   draw()
 }
 
 function movePointer(event: PointerEvent): void {
-  if (!bounds || inactive() || event.pointerType === 'touch') return
+  if (!pointer || !bounds || inactive() || event.pointerType === 'touch') return
   targetPointer.x = Math.max(
     -1,
     Math.min(1, ((event.clientX - bounds.left) / Math.max(bounds.width, 1)) * 2 - 1)
@@ -232,19 +252,21 @@ function movePointer(event: PointerEvent): void {
     -1,
     Math.min(1, 1 - ((event.clientY - bounds.top) / Math.max(bounds.height, 1)) * 2)
   )
+  schedule()
 }
 
 function resetPointer(): void {
   targetPointer.x = targetPointer.y = 0
+  schedule()
 }
 
 function pointerOut(event: PointerEvent): void {
   if (!event.relatedTarget) resetPointer()
 }
 
-function initialize(): void {
+function initialize(textureData: Map<string, Float32Array | ImageBitmap>): void {
   const element = canvas.value
-  if (!element || !props.theme.fragmentShader || !resourcesLoaded || disposed) return
+  if (!element || !props.theme.fragmentShader || disposed || gl?.isContextLost()) return
   releaseResources()
   gl = element.getContext('webgl2', {
     alpha: false,
@@ -319,9 +341,71 @@ function contextLost(event: Event): void {
   releaseResources()
 }
 
-watch(() => props.paused, syncAnimation)
-watch(isAnimationActive, syncAnimation)
+async function loadShader(): Promise<void> {
+  if (disposed || failed || loading) return
+  const controller = new AbortController()
+  loading = controller
+  const { signal } = controller
+  const textureData = new Map<string, Float32Array | ImageBitmap>()
+  try {
+    await Promise.all(
+      props.theme.textures.map(async (texture) => {
+        const response = await fetch(texture.url, { signal })
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => undefined)
+          throw new Error('Theme texture unavailable')
+        }
+        if (texture.format === 'image') {
+          const blob = await response.blob()
+          signal.throwIfAborted()
+          const bitmap = await createImageBitmap(blob, {
+            imageOrientation: 'flipY',
+            premultiplyAlpha: 'none'
+          })
+          if (
+            signal.aborted ||
+            bitmap.width !== texture.width ||
+            bitmap.height !== texture.height
+          ) {
+            bitmap.close()
+            signal.throwIfAborted()
+            throw new Error('Invalid image texture dimensions')
+          }
+          const previous = textureData.get(texture.path)
+          if (previous && !(previous instanceof Float32Array)) previous.close()
+          textureData.set(texture.path, bitmap)
+        } else {
+          const buffer = await response.arrayBuffer()
+          signal.throwIfAborted()
+          if (buffer.byteLength !== texture.width * texture.height * 8)
+            throw new Error('Invalid texture size')
+          textureData.set(texture.path, new Float32Array(buffer))
+        }
+      })
+    )
+    signal.throwIfAborted()
+    initialize(textureData)
+  } catch (error) {
+    if (!signal.aborted) {
+      controller.abort()
+      failure('RESOURCE_LOAD', error)
+    }
+  } finally {
+    for (const data of textureData.values()) if (!(data instanceof Float32Array)) data.close()
+    textureData.clear()
+    loading = undefined
+  }
+}
+
+if (isAnimationActive) {
+  watch(() => props.paused, syncAnimation)
+  watch(isAnimationActive, syncAnimation)
+}
 onMounted(() => {
+  if (!props.theme.fragmentShader) {
+    emit('ready')
+    return
+  }
   motion = window.matchMedia('(prefers-reduced-motion: reduce)')
   motion.addEventListener('change', syncAnimation)
   // Observe window-level movement without intercepting clicks on player controls.
@@ -329,64 +413,27 @@ onMounted(() => {
   window.addEventListener('pointerout', pointerOut, { passive: true })
   window.addEventListener('blur', resetPointer)
   canvas.value?.addEventListener('webglcontextlost', contextLost)
-  canvas.value?.addEventListener('webglcontextrestored', initialize)
+  canvas.value?.addEventListener('webglcontextrestored', loadShader)
   observer = new ResizeObserver(resize)
   if (canvas.value) observer.observe(canvas.value)
-  if (!props.theme.fragmentShader) {
-    emit('ready')
-    return
-  }
-  void Promise.all(
-    props.theme.textures.map(async (texture) => {
-      const response = await fetch(texture.url, { signal: loading.signal })
-      if (!response.ok) throw new Error('Theme texture unavailable')
-      if (texture.format === 'image') {
-        const bitmap = await createImageBitmap(await response.blob(), {
-          imageOrientation: 'flipY',
-          premultiplyAlpha: 'none'
-        })
-        if (disposed || bitmap.width !== texture.width || bitmap.height !== texture.height) {
-          bitmap.close()
-          if (!disposed) throw new Error('Invalid image texture dimensions')
-          return
-        }
-        const previous = textureData.get(texture.path)
-        if (previous && !(previous instanceof Float32Array)) previous.close()
-        textureData.set(texture.path, bitmap)
-      } else {
-        const buffer = await response.arrayBuffer()
-        if (buffer.byteLength !== texture.width * texture.height * 8)
-          throw new Error('Invalid texture size')
-        if (!disposed) textureData.set(texture.path, new Float32Array(buffer))
-      }
-    })
-  )
-    .then(() => {
-      resourcesLoaded = true
-      initialize()
-    })
-    .catch((error: unknown) => {
-      if (!loading.signal.aborted) failure('RESOURCE_LOAD', error)
-    })
+  void loadShader()
 })
 onBeforeUnmount(() => {
   // A replacement covers this layer before disposal. Hide the canvas before
   // context loss for callers that also retain a surrounding view during exit.
   if (canvas.value) canvas.value.style.display = 'none'
   disposed = true
-  loading.abort()
+  loading?.abort()
   observer?.disconnect()
   motion?.removeEventListener('change', syncAnimation)
   window.removeEventListener('pointermove', movePointer)
   window.removeEventListener('pointerout', pointerOut)
   window.removeEventListener('blur', resetPointer)
   canvas.value?.removeEventListener('webglcontextlost', contextLost)
-  canvas.value?.removeEventListener('webglcontextrestored', initialize)
+  canvas.value?.removeEventListener('webglcontextrestored', loadShader)
   releaseResources()
   gl?.getExtension('WEBGL_lose_context')?.loseContext()
   gl = null
-  for (const data of textureData.values()) if (!(data instanceof Float32Array)) data.close()
-  textureData.clear()
 })
 </script>
 
@@ -396,7 +443,12 @@ onBeforeUnmount(() => {
     :style="{ '--theme-background': theme.data.background }"
     aria-hidden="true"
   >
-    <canvas ref="canvas" :class="{ ready }" />
+    <canvas
+      v-if="theme.fragmentShader"
+      ref="canvas"
+      :class="{ ready }"
+      :data-background-static="animated ? undefined : ''"
+    />
   </div>
 </template>
 

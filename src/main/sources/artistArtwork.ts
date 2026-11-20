@@ -5,7 +5,7 @@ import sharp from 'sharp'
 import { getCoverPath } from '../utils/pathUtils'
 import { getNetworkSources } from './index'
 import { invokeSource, type SourceCallOptions } from './runtime'
-import { fetchArtworkDataUrl } from './artworkFetch'
+import { fetchArtworkImage } from './artworkFetch'
 import { SourceCallError } from './errors'
 
 export const normalizeArtistName = (name: string): string =>
@@ -145,10 +145,9 @@ export async function resolveArtistArtwork(
         )
           continue
         try {
-          const data = await fetchArtworkDataUrl(candidate.imageUrl, options)
-          const image = await sharp(Buffer.from(data.slice(data.indexOf(',') + 1), 'base64'), {
-            limitInputPixels: 40000000
-          })
+          const { data } = await fetchArtworkImage(candidate.imageUrl, options)
+          signal.throwIfAborted()
+          const image = await sharp(data, { limitInputPixels: 40000000 })
             .resize(512, 512, { fit: 'cover' })
             .jpeg({ quality: 88 })
             .toBuffer()

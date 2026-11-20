@@ -16,6 +16,8 @@ import BaseRange from './BaseRange.vue'
 import BaseConfirmDialog from './BaseConfirmDialog.vue'
 import BaseBackTop from './BaseBackTop.vue'
 import BaseTooltip from './BaseTooltip.vue'
+import BaseSegmentedControl from './BaseSegmentedControl.vue'
+import BaseDisclosure from './BaseDisclosure.vue'
 
 // 统一管理
 const components = [
@@ -34,7 +36,9 @@ const components = [
   BaseRange,
   BaseConfirmDialog,
   BaseBackTop,
-  BaseTooltip
+  BaseTooltip,
+  BaseSegmentedControl,
+  BaseDisclosure
 ]
 
 /**
@@ -63,7 +67,9 @@ export {
   BaseMessage,
   BaseSelect,
   BaseColorPicker,
-  BaseSkeleton
+  BaseSkeleton,
+  BaseSegmentedControl,
+  BaseDisclosure
 }
 export { default as BasePopover } from './BasePopover.vue'
 export { default as BaseRange } from './BaseRange.vue'

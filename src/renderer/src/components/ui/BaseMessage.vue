@@ -51,10 +51,10 @@ function handleClose(msg: MessageInstance): void {
       :class="position === 'top' ? 'top-4' : 'bottom-4'"
     >
       <TransitionGroup
-        enter-active-class="transition-all duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)]"
+        enter-active-class="transition-[opacity,translate] duration-[var(--motion-duration-slow)] ease-[var(--motion-ease-enter)]"
         enter-from-class="opacity-0 -translate-y-4"
         enter-to-class="opacity-100 translate-y-0"
-        leave-active-class="transition-all duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
+        leave-active-class="transition-[opacity,translate] duration-[var(--motion-duration-fast)] ease-[var(--motion-ease-exit)]"
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-2"
       >

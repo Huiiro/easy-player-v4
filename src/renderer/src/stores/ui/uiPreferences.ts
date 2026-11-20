@@ -1,4 +1,13 @@
 import { isSystemBackground } from '@/components/background/systemBackgroundRegistry'
+import { resolveLiquidGlassSettings } from '@/services/liquidGlassProfile'
+import {
+  resolvePlayerBgType,
+  resolvePlayerBgTypeBeforeCheer,
+  resolvePlayerCheerColor,
+  resolvePlayerCheerColorMode,
+  resolvePlayerCheerColors,
+  resolvePlayerCheerLights
+} from '@/constants'
 
 /** Migrate the former artist/genre switches before Pinia picks persisted fields. */
 export function deserializeUIPreferences(value: string): Record<string, unknown> {
@@ -10,6 +19,12 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
   >
   return {
     ...preferences,
+    playerBgType: resolvePlayerBgType(preferences.playerBgType),
+    playerBgTypeBeforeCheer: resolvePlayerBgTypeBeforeCheer(preferences.playerBgTypeBeforeCheer),
+    playerCheerColor: resolvePlayerCheerColor(preferences.playerCheerColor),
+    playerCheerColorMode: resolvePlayerCheerColorMode(preferences.playerCheerColorMode),
+    playerCheerColors: resolvePlayerCheerColors(preferences.playerCheerColors),
+    playerCheerLights: resolvePlayerCheerLights(preferences.playerCheerLights),
     playerLayout: preferences.playerLayout === 'bottom' ? 'bottom' : 'classic',
     showPlayerAudioDetails:
       typeof preferences.showPlayerAudioDetails === 'boolean'
@@ -22,6 +37,7 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
         : 700,
     interfaceEffect:
       preferences.interfaceEffect === 'liquid-glass-studio' ? 'liquid-glass-studio' : 'none',
+    liquidGlassSettings: resolveLiquidGlassSettings(preferences.liquidGlassSettings),
     autoCheckUpdates:
       typeof preferences.autoCheckUpdates === 'boolean' ? preferences.autoCheckUpdates : true,
     ignoredUpdateVersions: Array.isArray(preferences.ignoredUpdateVersions)

@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import FooterLayoutSettings from './FooterLayoutSettings.vue'
 import SleepTimerSettings from './SleepTimerSettings.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
@@ -130,6 +131,9 @@ function setSmartShuffle(value: boolean | string | number): void {
           @update:model-value="player.setExtremePlayback($event === true)"
         />
       </SettingRow>
+    </SettingGroup>
+    <SettingGroup :title="t('settings.playerControlBar')">
+      <FooterLayoutSettings />
     </SettingGroup>
   </SettingCard>
 </template>

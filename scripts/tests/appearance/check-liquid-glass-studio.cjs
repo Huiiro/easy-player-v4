@@ -188,6 +188,37 @@ app.whenReady().then(async () => {
           'Paired blur uses framebuffer texels after equivalent display-pixel kernel remapping'
         )
     }
+    const customOptics = {
+      blurEdge: false,
+      refFresnelRange: 48,
+      refFresnelHardness: 45,
+      glareRange: 57,
+      glareHardness: 39,
+      glareConvergence: 17,
+      glareOppositeFactor: 42,
+      shadowExpand: 35,
+      shadowFactor: 50
+    }
+    await win.webContents.executeJavaScript(
+      `controller.setSettings(Studio.resolveLiquidGlassSettings(${JSON.stringify(customOptics)}))`
+    )
+    if (!fallback) {
+      await wait(250)
+      const uniforms = await win.webContents.executeJavaScript('opticUniforms')
+      for (const [key, value] of Object.entries(customOptics)) {
+        const normalized =
+          typeof value === 'boolean'
+            ? Number(value)
+            : /Hardness|Convergence|Factor/.test(key)
+              ? value / 100
+              : value
+        assert.equal(uniforms['u_' + key], normalized, key + ' reaches the live WebGL passes')
+      }
+    }
+    await win.webContents.executeJavaScript(
+      'controller.setSettings(Studio.resolveLiquidGlassSettings())'
+    )
+    await wait(220)
     const drag = await win.webContents.executeJavaScript(`(()=>{
       const header=document.querySelector('.ep-header'),canvas=header.querySelector('.ep-studio-canvas'),input=document.querySelector('#input'),r=input.getBoundingClientRect();
       const region=e=>getComputedStyle(e).getPropertyValue('-webkit-app-region');
@@ -580,6 +611,31 @@ app.whenReady().then(async () => {
     }
     if (!fallback)
       assert(media.animatedDraws > 0, 'Dynamic theme keeps updating during interaction')
+    const idleCanvas = await win.webContents.executeJavaScript(`(async()=>{
+      const stage=document.querySelector('.app-background-stage'),canvas=document.createElement('canvas');
+      const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+      stage.append(canvas);await wait(220);
+      const start=uploadCounts.updates;await wait(350);
+      const activeUploads=uploadCounts.updates-start;
+      canvas.setAttribute('data-background-static','');await wait(220);
+      await bg.capture();const staticSource=!bg.dynamic;
+      const still=uploadCounts.updates;await wait(350);
+      const staticUploads=uploadCounts.updates-still;
+      canvas.removeAttribute('data-background-static');
+      stage.setAttribute('data-background-paused','');await wait(220);
+      await bg.capture();const pausedSource=!bg.dynamic;
+      const paused=uploadCounts.updates;await wait(350);
+      const pausedUploads=uploadCounts.updates-paused;
+      stage.removeAttribute('data-background-paused');canvas.remove();
+      return {activeUploads,staticUploads,pausedUploads,staticSource,pausedSource};
+    })()`)
+    assert.equal(idleCanvas.staticSource, true, 'A settled shader is sampled on demand')
+    assert.equal(idleCanvas.pausedSource, true, 'Paused stages do not keep a live capture timer')
+    if (!fallback) {
+      assert(idleCanvas.activeUploads > 0, 'Animated canvas continues updating glass textures')
+      assert.equal(idleCanvas.staticUploads, 0, 'Settled canvas makes no periodic uploads')
+      assert.equal(idleCanvas.pausedUploads, 0, 'Paused canvas makes no periodic uploads')
+    }
     // The following checks use a second sampler. Stop the controller so it does
     // not compete for the iframe helper's single in-flight snapshot request.
     await win.webContents.executeJavaScript('controller.setActivity(false,false)')
@@ -801,6 +857,7 @@ app.whenReady().then(async () => {
       clearActivity,
       media,
       uploads,
+      idleCanvas,
       sandbox,
       layers: { throughGlass, dimmedGlass, ...restoration },
       cleanup,

@@ -15,6 +15,7 @@ const props = withDefaults(
     showAlpha?: boolean
     showValue?: boolean
     presets?: string[]
+    ariaLabel?: string
     teleport?: boolean
   }>(),
   {
@@ -220,7 +221,7 @@ const anchorRef = ref<HTMLElement | null>(null)
         as="button"
         type="button"
         :disabled="disabled"
-        :aria-label="t('ui.color')"
+        :aria-label="ariaLabel ?? t('ui.color')"
         :class="[
           'ep-color-trigger ep-focusable inline-flex items-center gap-2 rounded-lg border border-border px-2.5 py-1.5 cursor-pointer transition-colors enabled:hover:border-primary select-none',
           disabled ? 'opacity-50 cursor-not-allowed' : '',

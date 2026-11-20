@@ -41,8 +41,8 @@ export function usePlayerBackdrop(
   const useLiquidBackground = computed(
     () => effectivePlayerBackground.value === PlayerBgType.LIQUID
   )
-  // Both render three colors. The persisted album cache only contains two;
-  // use the complete, unsoftened palette cache for these backgrounds.
+  const useCheerBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.CHEER)
+  // The persisted album cache only contains two colors. These backgrounds use all three.
   const useVibrantPalette = computed(() => useLiquidBackground.value || useAmbientBackground.value)
   const ambientIntensity = computed(() =>
     selectedPlayerBackground.value === PlayerBgType.AMBIENT ? 1 : 0.68
@@ -131,9 +131,13 @@ export function usePlayerBackdrop(
         )
       : 0
   )
+  const stageLightingActive = computed(
+    () => ui.showPlayer && !ui.extremePlayback && useCheerBackground.value && shouldAnimate.value
+  )
+  const analysisNeedsSpectrum = computed(() => ui.showPlayerSpectrum || stageLightingActive.value)
   const analysisPollingRate = computed(() => {
     if (!ui.showPlayer || !isPanelVisible.value) return 0
-    if (ui.showPlayerSpectrum) return 20
+    if (analysisNeedsSpectrum.value) return 20
     return shouldAnimate.value ? 12 : 0
   })
   function extractCoverColors(event: Event): void {
@@ -165,7 +169,7 @@ export function usePlayerBackdrop(
         })
       }
     })
-    if ((useLiquidBackground.value || useAmbientBackground.value) && result.source === 'failed') {
+    if (useVibrantPalette.value && result.source === 'failed') {
       resetCoverPalette('failed')
       paletteReady.value = true
       return
@@ -216,11 +220,13 @@ export function usePlayerBackdrop(
       }
       const image = new Image()
       let active = true
+      const releaseImage = (): void => {
+        image.onload = image.onerror = null
+        image.removeAttribute('src')
+      }
       onCleanup(() => {
         active = false
-        image.onload = null
-        image.onerror = null
-        image.removeAttribute('src')
+        releaseImage()
       })
       image.crossOrigin = 'anonymous'
       image.onload = () => {
@@ -229,9 +235,13 @@ export function usePlayerBackdrop(
           .catch(() => {})
           .then(() => {
             if (!active) return
-            // Palette extraction must not depend on a visible cover's load event.
-            analyzeCoverImage(image)
-            displayedCoverUrl.value = url
+            try {
+              // Palette extraction must not depend on a visible cover's load event.
+              analyzeCoverImage(image)
+              displayedCoverUrl.value = url
+            } finally {
+              releaseImage()
+            }
           })
       }
       image.onerror = () => {
@@ -239,6 +249,7 @@ export function usePlayerBackdrop(
         coverFailed.value = true
         displayedCoverUrl.value = null
         resetCoverPalette('failed')
+        releaseImage()
       }
       image.src = url
     },
@@ -263,6 +274,7 @@ export function usePlayerBackdrop(
     useLiquidBackground,
     useMeshBackground,
     useParticleBackground,
+    useCheerBackground,
     ambientIntensity,
     liquidCoverSource,
     backgroundSource,
@@ -276,6 +288,8 @@ export function usePlayerBackdrop(
     liquidEnergy,
     liquidBass,
     liquidBeat,
+    stageLightingActive,
+    analysisNeedsSpectrum,
     analysisPollingRate,
     extractCoverColors,
     handleCoverError

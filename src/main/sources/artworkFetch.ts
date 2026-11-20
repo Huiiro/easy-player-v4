@@ -1,10 +1,10 @@
 import { invokeArtworkFetch, type SourceCallOptions } from './runtime'
 import { SourceCallError } from './errors'
 
-export function fetchArtworkDataUrl(
+export function fetchArtworkImage(
   imageUrl: string,
   options: SourceCallOptions = {}
-): Promise<string> {
+): Promise<{ data: Buffer; contentType: string }> {
   if (typeof imageUrl !== 'string' || imageUrl.length > 10000 || !/^https?:\/\//i.test(imageUrl))
     throw new SourceCallError('INVALID_REQUEST')
   return invokeArtworkFetch(async ({ signal }) => {
@@ -27,6 +27,7 @@ export function fetchArtworkDataUrl(
         if (done) break
         size += value.byteLength
         if (size > 20 * 1024 * 1024) {
+          chunks.length = 0
           await reader.cancel()
           throw new SourceCallError('INVALID_RESPONSE')
         }
@@ -36,6 +37,14 @@ export function fetchArtworkDataUrl(
       reader.releaseLock()
     }
     if (!size) throw new SourceCallError('INVALID_RESPONSE')
-    return 'data:' + contentType + ';base64,' + Buffer.concat(chunks).toString('base64')
+    return { data: Buffer.concat(chunks, size), contentType }
   }, options)
+}
+
+export async function fetchArtworkDataUrl(
+  imageUrl: string,
+  options: SourceCallOptions = {}
+): Promise<string> {
+  const { data, contentType } = await fetchArtworkImage(imageUrl, options)
+  return 'data:' + contentType + ';base64,' + data.toString('base64')
 }

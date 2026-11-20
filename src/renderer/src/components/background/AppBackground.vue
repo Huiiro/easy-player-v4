@@ -50,19 +50,27 @@ watch(
     // Sample a bounded thumbnail once per song, even when the player panel is closed.
     const image = new Image()
     let cancelled = false
-    onCleanup(() => {
-      cancelled = true
+    const releaseImage = (): void => {
       image.onload = image.onerror = null
       image.removeAttribute('src')
+    }
+    onCleanup(() => {
+      cancelled = true
+      releaseImage()
     })
     image.crossOrigin = 'anonymous'
     image.onload = () => {
       if (cancelled) return
-      const color = SystemThemeColorAnalyzer.getSystemThemeColor(image, song.cover!)
-      ui.songThemeColor = color ? `rgb(${color})` : null
+      try {
+        const color = SystemThemeColorAnalyzer.getSystemThemeColor(image, song.cover!)
+        ui.songThemeColor = color ? `rgb(${color})` : null
+      } finally {
+        releaseImage()
+      }
     }
     image.onerror = () => {
       if (!cancelled) ui.songThemeColor = null
+      releaseImage()
     }
     image.src = `easy-player-media://cover-thumb?path=${encodeURIComponent(song.cover)}&size=256`
   },

@@ -10,9 +10,13 @@ import color from '../vendor/liquid-glass-studio/src/shaders/lib/color.glsl?raw'
 import { createGlassBackground } from './glassBackground'
 import { createLiquidGlassEffect } from './liquidGlass'
 import { mountGlassComponentEffects } from './liquidGlassComponents'
+import { parseAnyColor } from '@/components/ui/color'
 import {
   STUDIO_PRESET,
   STUDIO_BLUR_RADIUS,
+  LIQUID_GLASS_SETTING_KEYS,
+  resolveLiquidGlassSettings,
+  type LiquidGlassSettings,
   studioBlurSamples,
   studioBlurSigma
 } from './liquidGlassProfile'
@@ -50,6 +54,11 @@ const backgroundShader = expand(background)
 // Retain only the optical delta, in premultiplied-alpha form. The baseline must
 // be the neutral wavelength; subtracting the dispersed sample erases dispersion.
 const edgeShader = expand(main)
+  // The adjustable rim widths can send the fifth-power base below zero.
+  .replaceAll(
+    /1\.0 \+\s+merged \* u_resolution1x\.y \/ 1500\.0 \* pow\(500\.0 \/ u_(refFresnel|glare)Range, 2\.0\) \+\s+u_\1Hardness/g,
+    'max(0.0, $&)'
+  )
   .replace('vec4 getTextureDispersion(', 'vec3 neutralTransmission;\nvec4 getTextureDispersion(')
   .replace(
     'float bgG = texture(tex1, v_uv + offset * (1.0 - (N_G - 1.0) * factor)).g;',
@@ -99,18 +108,11 @@ const edgeShader = expand(main)
   fragColor = vec4(clamp(delta + backdrop * alpha, vec3(0.0), vec3(alpha)), alpha);
 `
   )
-const liveGlass: PluginThemeGlass = {
-  selectors: defaultSelector.split(','),
+const liveGlass: Omit<PluginThemeGlass, 'selectors' | 'refraction'> = {
   // Share one live normal map and blur; separate wavelengths in the compositor
   // so colours follow actual page detail. WebGL supplies reflection and glare.
   blur: 0,
-  // Upstream normal magnitude is sqrt(2)*1000/resolution.y. SVG displacement
-  // stores a signed half-range vector, hence twice the CSS-pixel travel scale.
-  refraction: 2 * Math.SQRT2 * 1000 * STUDIO_PRESET.refDistance,
   saturation: 1,
-  thickness: STUDIO_PRESET.refThickness,
-  ior: STUDIO_PRESET.refFactor,
-  dispersion: (STUDIO_PRESET.refDispersion * 0.02) / 0.3,
   fresnel: 0,
   highlight: 0,
   lightAngle: 225,
@@ -157,6 +159,7 @@ export interface GlassStudioController {
   refresh(): void
   updateGeometry(): void
   setActivity(active: boolean, reduced: boolean): void
+  setSettings(settings: LiquidGlassSettings): void
   dispose(): void
 }
 
@@ -164,39 +167,53 @@ export interface GlassStudioController {
 export function mountLiquidGlassStudio(options?: {
   selector?: string
   id?: string
+  settings?: LiquidGlassSettings
+  background?: HTMLElement
 }): GlassStudioController {
   const selector = options?.selector ?? defaultSelector
   const id = options?.id ?? 'ep-liquid-glass-studio'
-  const material = { ...liveGlass, selectors: selector.split(',') }
+  const selectors = selector.split(',')
+  let settings = resolveLiquidGlassSettings(options?.settings)
+  let tint = parseAnyColor(settings.tintColor)
   const disposeComponents = options?.selector ? undefined : mountGlassComponentEffects()
+  const backdropOptions: NonNullable<Parameters<typeof createLiquidGlassEffect>[2]> = {
+    adaptiveQuality: false,
+    // Sample the real page at each wavelength using one normal map.
+    chromaticTransmission: true,
+    waitForImages: true,
+    model: 'studio',
+    reflection: false,
+    blurEdge: settings.blurEdge,
+    blurForSurface: (element) => {
+      const authored = parseFloat(
+        getComputedStyle(element).getPropertyValue('--ep-studio-blur-radius')
+      )
+      const radius = Number.isFinite(authored)
+        ? Math.max(0, Math.min(200, authored))
+        : options?.selector
+          ? settings.blurRadius
+          : 0
+      return studioBlurSigma(radius, devicePixelRatio)
+    }
+  }
   // Own instance: applying a theme must not dispose this live backdrop compositor.
   const backdrop = createLiquidGlassEffect(
     options?.id ? `${id}-backdrop` : 'ep-studio-backdrop',
     false,
-    {
-      adaptiveQuality: false,
-      // Sample the real page at each wavelength, not just the theme texture.
-      // Share one normal image and one blur across the three displacements.
-      chromaticTransmission: true,
-      waitForImages: true,
-      model: 'studio',
-      reflection: false,
-      blurEdge: STUDIO_PRESET.blurEdge,
-      blurForSurface: (element) => {
-        const authored = parseFloat(
-          getComputedStyle(element).getPropertyValue('--ep-studio-blur-radius')
-        )
-        const radius = Number.isFinite(authored)
-          ? Math.max(0, Math.min(200, authored))
-          : options?.selector
-            ? STUDIO_BLUR_RADIUS
-            : 0
-        return studioBlurSigma(radius, devicePixelRatio)
-      }
-    }
+    backdropOptions
   )
-  backdrop(material)
-  const source = createGlassBackground()
+  function applyBackdrop(): void {
+    backdrop({
+      ...liveGlass,
+      selectors,
+      // SVG displacement stores a signed half-range of the upstream travel.
+      refraction: 2 * Math.SQRT2 * 1000 * settings.refDistance,
+      thickness: settings.refThickness,
+      ior: settings.refFactor,
+      dispersion: (settings.refDispersion * 0.02) / 0.3
+    })
+  }
+  const source = createGlassBackground(options?.background)
   const surfaces = new Map<HTMLElement, Surface>()
   // Hovering between submenus must not repeatedly tear down GPU contexts and
   // replace their compositor mailboxes. Keep two renderers ready for reuse.
@@ -213,10 +230,14 @@ export function mountLiquidGlassStudio(options?: {
   let gpuFailed = false
   const style = document.createElement('style')
   style.id = id
+  const surfacesSelector = `:where(${selector})[data-ep-studio-surface]`
+  const defaultTint =
+    'color-mix(in srgb,var(--color-bg,#152236) var(--ep-studio-surface-tint,var(--ep-glass-chrome-tint,4%)),transparent)'
+  const defaultShadow = `${STUDIO_PRESET.shadowPosition.x}px ${STUDIO_PRESET.shadowPosition.y}px ${STUDIO_PRESET.shadowExpand}px rgb(0 0 0 / ${STUDIO_PRESET.shadowFactor}%)`
   // Electron subtracts no-drag rectangles even for pointer-events:none layers.
   // Keep Header decoration draggable; its real controls retain no-drag regions.
   style.textContent = `
-    html body [data-ep-studio-surface]{isolation:isolate;background-color:color-mix(in srgb,var(--color-bg,#152236) var(--ep-studio-surface-tint,var(--ep-glass-chrome-tint,4%)),transparent)!important;background-image:none!important;border-color:var(--ep-glass-surface-border,color-mix(in srgb,var(--color-text,#fff) 8%,transparent))!important;box-shadow:var(--ep-glass-surface-shadow,${STUDIO_PRESET.shadowPosition.x}px ${STUDIO_PRESET.shadowPosition.y}px ${STUDIO_PRESET.shadowExpand}px rgb(0 0 0 / ${STUDIO_PRESET.shadowFactor}%))}
+    html body ${surfacesSelector}{isolation:isolate;background-color:var(--ep-studio-custom-tint,${defaultTint})!important;background-image:none!important;border-color:var(--ep-glass-surface-border,color-mix(in srgb,var(--color-text,#fff) 8%,transparent))!important;box-shadow:var(--ep-studio-custom-shadow,var(--ep-glass-surface-shadow,${defaultShadow}))}
     html body [data-ep-studio-relative]{position:relative}
     html body [data-ep-studio-surface]:where(:not(.ep-backtop)){transition-property:color,background-color,border-color,box-shadow,opacity,transform,translate,scale,rotate,width,height,min-height,max-width,padding,gap,border-radius,grid-template-columns!important}
     html body .ep-studio-canvas{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;z-index:-1;pointer-events:none;border-radius:inherit}
@@ -225,6 +246,45 @@ export function mountLiquidGlassStudio(options?: {
     ${options?.selector ? '' : 'html:has([data-ep-studio-surface]) .ep-overlay--blur{backdrop-filter:none!important}'}
   `
   document.head.append(style)
+  const sheet = style.sheet!
+  const overrides = (
+    sheet.cssRules[
+      sheet.insertRule(options?.selector ? `:is(${selector}){}` : ':root{}')
+    ] as CSSStyleRule
+  ).style
+  const shadowRule = (
+    sheet.cssRules[sheet.insertRule(`html body :is(${selector}){}`)] as CSSStyleRule
+  ).style
+  let overrideText = ''
+  function applySettings(): void {
+    tint = parseAnyColor(settings.tintColor)
+    const shadow = `${settings.shadowOffsetX}px ${settings.shadowOffsetY}px ${settings.shadowExpand}px rgb(0 0 0 / ${settings.shadowFactor}%)`
+    const fallback = options?.selector ? 'initial' : ''
+    const nextOverrides = [
+      [
+        '--ep-studio-custom-blur',
+        !options?.selector && settings.blurRadius !== STUDIO_BLUR_RADIUS ? settings.blurRadius : ''
+      ],
+      [
+        '--ep-studio-custom-tint',
+        tint.a > 0 ? `rgb(${tint.r} ${tint.g} ${tint.b} / ${tint.a * 0.8})` : fallback
+      ],
+      ['--ep-studio-custom-shadow', shadow !== defaultShadow ? shadow : fallback]
+    ]
+      .filter(([, value]) => value !== '')
+      .map(([name, value]) => `${name}:${value};`)
+      .join('')
+    if (nextOverrides !== overrideText) {
+      overrides.cssText = overrideText = nextOverrides
+      // Apply custom shadows before the optical surface is discovered, too.
+      if (shadow !== defaultShadow)
+        shadowRule.setProperty('box-shadow', 'var(--ep-studio-custom-shadow)', 'important')
+      else shadowRule.removeProperty('box-shadow')
+    }
+    backdropOptions.blurEdge = settings.blurEdge
+    applyBackdrop()
+  }
+  applySettings()
 
   function releaseGPU(surface: Surface): void {
     surface.gl?.deleteTexture(surface.texture ?? null)
@@ -337,7 +397,7 @@ export function mountLiquidGlassStudio(options?: {
     const authoredBlur = parseFloat(css.getPropertyValue('--ep-studio-blur-radius'))
     const blurRadius = Number.isFinite(authoredBlur)
       ? Math.max(0, Math.min(200, Math.round(authoredBlur)))
-      : STUDIO_BLUR_RADIUS
+      : settings.blurRadius
     const radius = Math.min(parseFloat(css.borderTopLeftRadius) || 0, w / 2, h / 2)
     const geometry = [
       rect.left,
@@ -382,6 +442,9 @@ export function mountLiquidGlassStudio(options?: {
         return
       }
     }
+    const backgroundRect = options?.background?.getBoundingClientRect()
+    const backgroundWidth = Math.max(1, backgroundRect?.width ?? innerWidth)
+    const backgroundHeight = Math.max(1, backgroundRect?.height ?? innerHeight)
     renderer.setUniforms({
       STEP: 9,
       u_resolution: [width, height],
@@ -398,37 +461,32 @@ export function mountLiquidGlassStudio(options?: {
       u_bgType: 3,
       u_bgTextureReady: 1,
       u_bgTexture: surface.texture,
-      u_bgTextureRatio: innerWidth / innerHeight,
+      u_bgTextureRatio: backgroundWidth / backgroundHeight,
       u_themeOrigin: [
-        rect.left + element.clientLeft,
-        innerHeight - rect.top - element.clientTop - h
+        rect.left + element.clientLeft - (backgroundRect?.left ?? 0),
+        (backgroundRect?.bottom ?? innerHeight) - rect.top - element.clientTop - h
       ],
       u_themePanelSize: [w, h],
-      u_themeSize: [innerWidth, innerHeight],
-      u_shadowExpand: STUDIO_PRESET.shadowExpand,
-      u_shadowFactor: STUDIO_PRESET.shadowFactor / 100,
-      u_shadowPosition: [-STUDIO_PRESET.shadowPosition.x, -STUDIO_PRESET.shadowPosition.y],
-      u_tint: [
-        STUDIO_PRESET.tint.r / 255,
-        STUDIO_PRESET.tint.g / 255,
-        STUDIO_PRESET.tint.b / 255,
-        STUDIO_PRESET.tint.a
-      ],
-      u_refThickness: STUDIO_PRESET.refThickness,
-      u_refDistance: STUDIO_PRESET.refDistance,
-      u_refFactor: STUDIO_PRESET.refFactor,
+      u_themeSize: [backgroundWidth, backgroundHeight],
+      u_shadowExpand: Math.max(0.01, settings.shadowExpand),
+      u_shadowFactor: settings.shadowFactor / 100,
+      u_shadowPosition: [-settings.shadowOffsetX, -settings.shadowOffsetY],
+      u_tint: [tint.r / 255, tint.g / 255, tint.b / 255, tint.a],
+      u_refThickness: settings.refThickness,
+      u_refDistance: settings.refDistance,
+      u_refFactor: settings.refFactor,
       // The live compositor already separates RGB. Do not apply it twice.
       u_refDispersion: 0,
-      u_refFresnelRange: STUDIO_PRESET.refFresnelRange,
-      u_refFresnelFactor: STUDIO_PRESET.refFresnelFactor / 100,
-      u_refFresnelHardness: STUDIO_PRESET.refFresnelHardness / 100,
-      u_glareRange: STUDIO_PRESET.glareRange,
-      u_glareFactor: STUDIO_PRESET.glareFactor / 100,
-      u_glareHardness: STUDIO_PRESET.glareHardness / 100,
-      u_glareConvergence: STUDIO_PRESET.glareConvergence / 100,
-      u_glareOppositeFactor: STUDIO_PRESET.glareOppositeFactor / 100,
-      u_glareAngle: (STUDIO_PRESET.glareAngle * Math.PI) / 180,
-      u_blurEdge: Number(STUDIO_PRESET.blurEdge)
+      u_refFresnelRange: settings.refFresnelRange,
+      u_refFresnelFactor: settings.refFresnelFactor / 100,
+      u_refFresnelHardness: settings.refFresnelHardness / 100,
+      u_glareRange: settings.glareRange,
+      u_glareFactor: settings.glareFactor / 100,
+      u_glareHardness: settings.glareHardness / 100,
+      u_glareConvergence: settings.glareConvergence / 100,
+      u_glareOppositeFactor: settings.glareOppositeFactor / 100,
+      u_glareAngle: (settings.glareAngle * Math.PI) / 180,
+      u_blurEdge: Number(settings.blurEdge)
     })
     const blurKey = [width, height, w, h, devicePixelRatio, blurRadius].join(',')
     if (blurKey !== surface.blurKey) {
@@ -507,6 +565,7 @@ export function mountLiquidGlassStudio(options?: {
   }
   const resize = new ResizeObserver((entries) => {
     for (const { target } of entries) {
+      if (target === options?.background) refresh()
       const surface = surfaces.get(target as HTMLElement)
       if (!surface) continue
       const { canvas, element } = surface
@@ -527,6 +586,7 @@ export function mountLiquidGlassStudio(options?: {
     }
     schedule()
   })
+  if (options?.background) resize.observe(options.background)
   const observer = new MutationObserver((records) => {
     let changed = false
     for (const record of records) {
@@ -567,7 +627,14 @@ export function mountLiquidGlassStudio(options?: {
     subtree: true,
     childList: true,
     attributes: true,
-    attributeFilter: ['class', 'style', 'src', 'data-background-key']
+    attributeFilter: [
+      'class',
+      'style',
+      'src',
+      'data-background-key',
+      'data-background-paused',
+      'data-background-static'
+    ]
   })
   const rootObserver = new MutationObserver(refresh)
   rootObserver.observe(document.documentElement, {
@@ -587,8 +654,16 @@ export function mountLiquidGlassStudio(options?: {
   schedule()
   return {
     refresh() {
-      backdrop(material)
+      applyBackdrop()
       refresh()
+    },
+    setSettings(value) {
+      const next = resolveLiquidGlassSettings(value)
+      if (LIQUID_GLASS_SETTING_KEYS.every((key) => next[key] === settings[key])) return
+      settings = next
+      applySettings()
+      for (const surface of surfaces.values()) surface.geometry = ''
+      schedule()
     },
     updateGeometry: schedule,
     setActivity(next, reduce) {

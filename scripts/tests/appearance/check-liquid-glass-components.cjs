@@ -482,10 +482,10 @@ app.whenReady().then(async () => {
     await win.webContents.executeJavaScript('fixtureApp.unmount()')
     // Render the actual uiDEV gallery with production utilities and a minimal
     // reactive preference store. Its real components and WebGL engine are used.
-    const indexHtml = fs.readFileSync('out/renderer/index.html', 'utf8')
-    const productionCss = [...indexHtml.matchAll(/href="[^"]*\/assets\/([^"]+\.css)"/g)]
-      .map((match) => fs.readFileSync(path.join('out/renderer/assets', match[1]), 'utf8'))
-      .join('\n')
+    const rendererAssets = 'out/renderer/assets'
+    const mainCss = fs.readdirSync(rendererAssets).find((file) => /^main-.*\.css$/.test(file))
+    assert(mainCss, 'The production build contains the renderer stylesheet')
+    const productionCss = fs.readFileSync(path.join(rendererAssets, mainCss), 'utf8')
     await win.webContents.executeJavaScript(`{
       const style=document.createElement('style');style.textContent=${JSON.stringify(productionCss)};document.head.append(style);
       document.documentElement.style.setProperty('--ep-glass-floating-radius','23px');

@@ -142,7 +142,7 @@ app.whenReady().then(async () => {
       stdin: {
         resolveDir: process.cwd(),
         contents:
-          "export * as Vue from 'vue';export {default as Background} from './src/renderer/src/components/background/MeshFlowBackground.vue';export {MeshFlowRenderer} from './src/renderer/src/components/background/meshFlowRenderer';export {resolvePlayerBgType} from './src/renderer/src/consts';"
+          "export * as Vue from 'vue';export {default as Background} from './src/renderer/src/components/background/player/MeshFlowBackground.vue';export {MeshFlowRenderer} from './src/renderer/src/components/background/player/meshFlowRenderer';export {resolvePlayerBgType} from './src/renderer/src/constants';"
       },
       bundle: true,
       write: false,

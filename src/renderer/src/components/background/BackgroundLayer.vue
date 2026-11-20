@@ -26,9 +26,12 @@ const backgroundStyle = document.createElement('style')
 watch(
   () => props.scene.theme,
   (theme) => {
-    backgroundStyle.textContent = theme
-      ? customThemeBackgroundCSS(theme, `[data-background-style="${styleId}"]`)
-      : ''
+    const css = theme ? customThemeBackgroundCSS(theme, `[data-background-style="${styleId}"]`) : ''
+    if (!css) backgroundStyle.remove()
+    else {
+      if (backgroundStyle.textContent !== css) backgroundStyle.textContent = css
+      if (!backgroundStyle.isConnected) document.head.append(backgroundStyle)
+    }
   },
   { immediate: true }
 )
@@ -63,8 +66,11 @@ const surfaceStyle = computed<CSSProperties>(() => {
     backgroundRepeat: 'no-repeat'
   }
   if (CSS.supports('color', surface)) {
-    const context = document.createElement('canvas').getContext('2d')
-    if (surface.startsWith('var(') || !context) return { ...style, backgroundColor: surface }
+    if (surface.startsWith('var(')) return { ...style, backgroundColor: surface }
+    const canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 1
+    const context = canvas.getContext('2d')
+    if (!context) return { ...style, backgroundColor: surface }
     context.fillStyle = surface
     context.fillRect(0, 0, 1, 1)
     if (context.getImageData(0, 0, 1, 1).data[3] === 255)
@@ -86,6 +92,7 @@ async function markReady(): Promise<void> {
   if (disposed || preparing || signaled) return
   preparing = true
   await nextTick()
+  if (disposed || signaled) return
   const hosts = root.value?.querySelectorAll<HTMLElement>('.ep-app-background, .background-image')
   const urls = new Set<string>()
   for (const host of hosts ?? []) {
@@ -99,8 +106,11 @@ async function markReady(): Promise<void> {
       const image = new Image()
       images.add(image)
       image.src = src
-      await image.decode().catch(() => undefined)
-      images.delete(image)
+      try {
+        await image.decode().catch(() => undefined)
+      } finally {
+        if (images.delete(image)) image.removeAttribute('src')
+      }
     })
   )
   if (disposed || signaled) return
@@ -150,25 +160,33 @@ function unfreeze(): void {
 defineExpose({ freeze, unfreeze })
 
 onMounted(() => {
-  document.head.append(backgroundStyle)
   // A failed async module or media decode must not retain an outgoing GPU forever.
   timeout = setTimeout(() => {
     if (signaled || disposed) return
     signaled = true
     cancelAnimationFrame(readyFrame)
+    releaseImages()
     emit('failure', props.scene.kind === 'video' ? 'video' : 'theme')
     emit('ready')
   }, 10000)
   if (props.scene.kind !== 'preset' && props.scene.kind !== 'video') void markReady()
   if (props.scene.kind === 'video' && !props.scene.mediaUrl) void markReady()
 })
+function releaseImages(): void {
+  for (const image of images) image.removeAttribute('src')
+  images.clear()
+}
 onBeforeUnmount(() => {
   backgroundStyle.remove()
   disposed = true
   clearTimeout(timeout)
   cancelAnimationFrame(readyFrame)
-  for (const image of images) image.removeAttribute('src')
-  images.clear()
+  releaseImages()
+  if (video.value) {
+    video.value.pause()
+    video.value.removeAttribute('src')
+    video.value.load()
+  }
 })
 </script>
 
@@ -180,6 +198,7 @@ onBeforeUnmount(() => {
     :style="[surfaceStyle, frozenSurface, { '--ep-app-bg': 'var(--_app-background-paint)' }]"
     :data-background-key="scene.key"
     :data-background-style="styleId"
+    :data-background-paused="paused || reducedMotion ? '' : undefined"
     aria-hidden="true"
   >
     <div

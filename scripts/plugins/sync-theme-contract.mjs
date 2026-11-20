@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { pluginPath } from '../lib/plugin-require.mjs'
 
-const sdk = new URL('../../packages/plugin-sdk', import.meta.url)
+const sdk = new URL('../../packages/plugin-sdk/', import.meta.url)
 const version = JSON.parse(readFileSync(new URL('package.json', sdk), 'utf8')).version
 const files = ['theme-plugin-manifest.schema.json', 'theme.schema.json']
 const contents = new Map(files.map((name) => [name, readFileSync(new URL('schemas/' + name, sdk))]))

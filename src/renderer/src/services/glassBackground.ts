@@ -135,7 +135,7 @@ function sandboxFrame(frame: HTMLIFrameElement): Promise<ImageBitmap | null> {
   })
 }
 
-export function createGlassBackground(): GlassBackground {
+export function createGlassBackground(sample?: HTMLElement): GlassBackground {
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')!
   const images = new Map<string, Promise<HTMLImageElement | null>>()
@@ -215,25 +215,31 @@ export function createGlassBackground(): GlassBackground {
     ctx.restore()
   }
   async function capture(): Promise<void> {
-    const scale = Math.min(1, 1280 / innerWidth, 900 / innerHeight)
-    const w = Math.max(1, Math.round(innerWidth * scale)),
-      h = Math.max(1, Math.round(innerHeight * scale))
+    const rect = sample?.getBoundingClientRect() ?? new DOMRect(0, 0, innerWidth, innerHeight)
+    const scale = Math.min(1, 1280 / rect.width, 900 / rect.height)
+    const w = Math.max(1, Math.round(rect.width * scale)),
+      h = Math.max(1, Math.round(rect.height * scale))
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w
       canvas.height = h
     }
-    ctx.setTransform(scale, 0, 0, scale, 0, 0)
+    ctx.setTransform(scale, 0, 0, scale, -rect.left * scale, -rect.top * scale)
     ctx.globalAlpha = 1
     ctx.filter = 'none'
     ctx.fillStyle =
       getComputedStyle(document.documentElement).getPropertyValue('--color-bg').trim() || '#141820'
-    ctx.fillRect(0, 0, innerWidth, innerHeight)
+    ctx.fillRect(rect.left, rect.top, rect.width, rect.height)
+    if (sample) {
+      await paint(sample)
+      return
+    }
     const stages = [...document.querySelectorAll<HTMLElement>('.app-background-stage')]
     const stage = stages
       .sort((a, b) => +getComputedStyle(a).opacity - +getComputedStyle(b).opacity)
       .at(-1)
     state.dynamic = false
     if (!stage) return
+    const paused = stage.hasAttribute('data-background-paused')
     await paint(stage)
     for (const element of stage.querySelectorAll<HTMLElement>(
       '.ep-app-background, .background-image'
@@ -245,9 +251,8 @@ export function createGlassBackground(): GlassBackground {
     const video = stage.querySelector<HTMLVideoElement>('video')
     const frame = stage.querySelector<HTMLIFrameElement>('.sandboxed-theme-background iframe.ready')
     if (frame) {
-      // A busy, loading or timed-out frame is still an animated source. Keep
-      // the controller's bounded polling alive so a later frame can recover.
-      state.dynamic = true
+      // Retry busy or timed-out frames while their scene is running.
+      state.dynamic = !paused
       const bitmap = await sandboxFrame(frame)
       if (bitmap) {
         if (!disposed) cover(bitmap, bitmap.width, bitmap.height, frame.getBoundingClientRect())
@@ -270,7 +275,9 @@ export function createGlassBackground(): GlassBackground {
         /* Cross-origin media keeps its theme's declared background. */
       }
       ctx.filter = 'none'
-      state.dynamic ||= video ? !video.paused && !video.ended : true
+      state.dynamic ||=
+        !paused &&
+        (video ? !video.paused && !video.ended : !media.hasAttribute('data-background-static'))
     }
     const scrim = stage.querySelector<HTMLElement>('.app-background-scrim')
     if (scrim) await paint(scrim)

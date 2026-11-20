@@ -9,9 +9,6 @@ const CENTERS_Y = [0.28, -0.26, 0.12]
 const unit = (value: number): number =>
   Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0
 
-/** Reference: shaders/01, https://openprocessing.org/@u206311/1522899.
- * The original point-grid / inertial attraction is driven by audio rather than a pointer.
- */
 export class ParticleFlowRenderer {
   private gl: WebGLRenderingContext
   private program: WebGLProgram | null = null

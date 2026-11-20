@@ -569,7 +569,8 @@ export function createLiquidGlassEffect(
           geometry,
           window.devicePixelRatio,
           Math.min(budget, 262144),
-          blur
+          blur,
+          options.blurEdge
         ])
         if (surface.signature !== signature) {
           cancelAnimationFrame(surface.commitFrame ?? 0)

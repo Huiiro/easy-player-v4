@@ -22,12 +22,17 @@ watch(
       controller = undefined
       return
     }
-    controller ??= mountLiquidGlassStudio()
+    controller ??= mountLiquidGlassStudio({ settings: ui.liquidGlassSettings })
     controller.setActivity(active && !player, reduced)
   },
   { immediate: true, flush: 'post' }
 )
 onBeforeUnmount(() => controller?.dispose())
+watch(
+  () => ui.liquidGlassSettings,
+  (settings) => controller?.setSettings(settings),
+  { flush: 'post' }
+)
 watch(
   () => [ui.resolvedAppearance.background, ui.backgroundTheme, ui.activeThemeColor],
   () => controller?.refresh(),

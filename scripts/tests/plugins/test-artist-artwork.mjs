@@ -80,10 +80,10 @@ try {
           )
       },
       './artworkFetch': {
-        fetchArtworkDataUrl: async () => {
+        fetchArtworkImage: async () => {
           downloads++
           if (downloadFails) throw new Error('HTTP')
-          return 'data:image/png;base64,' + png.toString('base64')
+          return { data: png, contentType: 'image/png' }
         }
       }
     }
@@ -316,6 +316,39 @@ requests.at(-1).done({ success: true, data: { path: '/cached/refetched.jpg' } })
 await flush()
 assert.equal(state.networkPath.value, '/cached/refetched.jpg')
 scope.stop()
+
+// Scrolling away drops a queued portrait. Revisiting it queues a fresh request in order,
+// and dropping one of two cards for the same artist leaves the other request intact.
+const queued = (name) => {
+  const scope = effectScope()
+  const visible = ref(true)
+  const state = scope.run(() => renderer.useArtistArtwork(ref(name), visible))
+  return { scope, visible, state }
+}
+const start = requests.length
+const first = queued('Active first')
+const second = queued('Active second')
+const revisit = queued('Revisited')
+const shared = queued('Shared queue entry')
+const duplicate = queued('Shared queue entry')
+assert.equal(requests.length, start + 2)
+revisit.visible.value = false
+duplicate.scope.stop()
+await flush()
+revisit.visible.value = true
+await flush()
+requests[start].done({ success: false })
+await flush()
+assert.equal(requests[start + 2].name, 'Shared queue entry')
+requests[start + 2].done({ success: true, data: { path: '/shared.jpg' } })
+await flush()
+assert.equal(shared.state.networkPath.value, '/shared.jpg')
+assert.equal(requests[start + 3].name, 'Revisited')
+requests[start + 1].done({ success: false })
+requests[start + 3].done({ success: false })
+await flush()
+for (const entry of [first, second, revisit, shared]) entry.scope.stop()
+
 console.log(
-  'Artist portrait UI state: manual original/network selection, cache reuse, global disable, route race guards and cross-window cache invalidation passed'
+  'Artist portrait UI state: cache reuse, global disable, route race guards, queue disposal, deduplication and cross-window cache invalidation passed'
 )

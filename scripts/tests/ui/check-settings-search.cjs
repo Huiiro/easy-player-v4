@@ -38,10 +38,18 @@ app.whenReady().then(async () => {
         {
           name: 'fixtures',
           setup(build) {
+            build.onResolve({ filter: /stores[/\\]player[/\\]playerStore$/ }, () => ({
+              path: 'player',
+              namespace: 'fixture'
+            }))
+            build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({
+              contents:
+                'const player={rhythmVisualConfig:{intensity:0.6},smartShuffleEnabled:false};export const usePlayerStore=()=>player'
+            }))
             build.onLoad(
               {
                 filter:
-                  /(PlaybackSettings|LyricsSettings|DesktopLyricsSettings|ThemeSettings|OfficialPluginSettings|PluginProxySettings|NetworkSourceSettings|CacheSettings|LibrarySettings|StatisticsSettings|ResetPreferencesSettings)\.vue$/
+                  /(LyricsSettings|DesktopLyricsSettings|ThemeSettings|OfficialPluginSettings|PluginProxySettings|NetworkSourceSettings|CacheSettings|LibrarySettings|StatisticsSettings|ResetPreferencesSettings)\.vue$/
               },
               () => ({ contents: 'export default {render(){return null}}', loader: 'js' })
             )
@@ -128,35 +136,31 @@ app.whenReady().then(async () => {
       let ui;const instance=Vue.createApp({setup(){ui=useUIStore();ui.platform='linux';ui.reduceMotion=true;return()=>Vue.h(Page)}}).use(createPinia()).use(i18n);
       document.documentElement.classList.add('dark');document.body.style.cssText='height:100vh;margin:0';document.getElementById('app').style.height='100%';
       instance.mount('#app');await wait(300);
-      const layoutRow=[...document.querySelectorAll('#background .setting-row')].find(row=>row.querySelector('h3')?.textContent===zh.settings.playerLayout);
-      check(layoutRow&&ui.playerLayout==='classic','Player layout is configurable and defaults to Classic');
-      layoutRow.scrollIntoView({block:'center'});await wait();
-      layoutRow.querySelector('button[aria-haspopup="listbox"]').click();await wait();
-      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()===zh.settings.playerLayoutBottom).click();await wait();
-      check(ui.playerLayout==='bottom','Selecting Bottom controls updates the player layout preference');
-      layoutRow.querySelector('button[aria-haspopup="listbox"]').click();await wait();
-      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()===zh.settings.playerLayoutClassic).click();await wait();
-      check(ui.playerLayout==='classic','Classic remains available after switching layouts');
-      const effectRow=[...document.querySelectorAll('.setting-row')].find(row=>row.querySelector('h3')?.textContent===zh.settings.playerCoverEffect);
-      check(effectRow,'Cover rhythm effect appears in player settings');
-      effectRow.scrollIntoView({block:'center'});await wait();
-      const effectTrigger=()=>effectRow.querySelector('button[aria-haspopup="listbox"]');
-      check(ui.playerCoverEffect==='glow'&&effectTrigger().textContent.includes('辉光'),'Existing users retain glow by default');
-      effectTrigger().click();await wait();
-      const effectChoices=[...document.querySelectorAll('[role="option"]')];
-      check(effectChoices.length===2&&effectChoices.some(option=>option.textContent.trim()==='关闭')&&effectChoices.some(option=>option.textContent.trim()==='辉光'),'Cover effect dropdown offers Off and Glow');
-      effectChoices.find(option=>option.textContent.trim()==='关闭').click();await wait();
-      check(ui.playerCoverEffect==='none'&&effectTrigger().textContent.includes('关闭'),'Selecting Off updates the player preference');
-      effectTrigger().click();await wait();
-      [...document.querySelectorAll('[role="option"]')].find(option=>option.textContent.trim()==='辉光').click();await wait();
-      check(ui.playerCoverEffect==='glow','Selecting Glow restores the player preference');
+      const playback=document.querySelector('#playback'),card=playback.querySelector('.settings-card');
+      const footerGroup=[...card.querySelectorAll('.settings-group')].find(group=>group.querySelector('.settings-group-title')?.textContent.trim()===zh.settings.playerControlBar);
+      const footerLabels=[...footerGroup.querySelectorAll('.setting-row h3')].map(label=>label.textContent.trim());
+      check(footerGroup.querySelector('.settings-group-title').textContent.trim()==='控制栏','The control bar group uses the updated Chinese label');
+      check(!document.querySelector('#footer')&&![...document.querySelectorAll('.settings-nav-item')].some(button=>button.textContent.trim()===zh.settings.playerControlBar),'Control bar is no longer a sidebar section');
+      check([zh.settings.footerOpenAnywhere,zh.settings.autoHideFooter,zh.footerLayout.title].every(label=>footerLabels.includes(label)),'The control bar keeps all three settings in the playback card');
+      const playbackLabels=[...card.querySelectorAll('.setting-row h3')].map(label=>label.textContent.trim());
+      check([zh.settings.playerBackground,zh.settings.playerLayout,zh.settings.playerCoverEffect,zh.settings.playerLyricsFont].every(label=>!playbackLabels.includes(label)),'Preferences does not show the appearance shortcut or duplicate its options');
       const trigger=()=>document.querySelector('.settings-nav button');
       check(trigger()?.textContent.includes('搜索设置'),'Search is the first settings sidebar entry');
       const open=async()=>{trigger().click();await wait(350)};
       const input=()=>document.querySelector('.ep-dialog input[type=search]');
       const search=async(query)=>{input().value=query;input().dispatchEvent(new Event('input',{bubbles:true}));await wait(150);return [...document.querySelectorAll('.settings-search-result')]};
       await open();check(document.activeElement===input(),'Opening search focuses the input');
-      check((await search('封面律动效果')).some(button=>button.textContent.includes('封面律动效果')),'Cover rhythm effect is searchable');
+      const footerResult=(await search(en.settings.autoHideFooter)).find(button=>button.textContent.includes(zh.settings.autoHideFooter));
+      check(footerResult?.textContent.includes(zh.settings.playback+' › '+zh.settings.playerControlBar),'Control bar results show the new Playback and controls hierarchy');
+      footerResult.click();await wait(350);
+      const footerTarget=footerGroup.querySelector('.settings-search-highlight');
+      check(document.activeElement===footerTarget&&footerTarget?.textContent.includes(zh.settings.autoHideFooter)&&document.querySelector('.settings-nav-item[aria-current=location]')?.textContent.trim()===zh.settings.playback,'Selecting a control bar result focuses its setting and selects Playback and controls');
+      const autoHide=footerTarget.querySelector('button[role=switch]'),initialAutoHide=ui.autoHideFooter;
+      autoHide.click();await wait();
+      check(ui.autoHideFooter!==initialAutoHide,'The moved control bar switch still updates the preference');
+      autoHide.click();await wait();await open();
+      check((await search(zh.settings.playerBackground)).length===0,'Settings search no longer shows the appearance shortcut');
+      check((await search(en.settings.playerCoverEffect)).length===0,'Settings search no longer routes appearance aliases through the removed shortcut');
       check((await search('系统 更新 启动')).some(button=>button.textContent.includes('启动时自动检查更新')),'Matches section, group and setting title terms together');
       check((await search('SYSTEM updates startup')).some(button=>button.textContent.includes('启动时自动检查更新')),'English hierarchy queries find Chinese settings');
       check((await search(en.settings.interfaceFontDescription)).some(button=>button.textContent.includes(zh.settings.interfaceFont)),'Search matches translated descriptions');

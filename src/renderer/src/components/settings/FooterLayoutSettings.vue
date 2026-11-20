@@ -12,6 +12,10 @@ import { normalizeFooterLayout, type FooterLayout } from '@/utils/footerLayout'
 const ui = useUIStore()
 const { t } = useI18n()
 const layout = computed(() => normalizeFooterLayout(ui.footerLayout))
+const openFooterAnywhere = computed({
+  get: () => ui.footerOpenMode === 'cover',
+  set: (enabled: boolean) => (ui.footerOpenMode = enabled ? 'cover' : 'all')
+})
 const modes = computed(() => [
   { value: 'centered', label: t('footerLayout.centered') },
   { value: 'stacked', label: t('footerLayout.stacked') }
@@ -22,6 +26,18 @@ function update(key: keyof FooterLayout, value: unknown): void {
 </script>
 
 <template>
+  <SettingRow
+    :label="t('settings.footerOpenAnywhere')"
+    :description="t('settings.footerOpenModeDescription')"
+  >
+    <BaseSwitch v-model="openFooterAnywhere" size="md" />
+  </SettingRow>
+  <SettingRow
+    :label="t('settings.autoHideFooter')"
+    :description="t('settings.autoHideFooterDescription')"
+  >
+    <BaseSwitch v-model="ui.autoHideFooter" size="md" />
+  </SettingRow>
   <section :aria-label="t('footerLayout.title')">
     <SettingRow :label="t('footerLayout.title')" :description="t('footerLayout.description')">
       <BaseSwitch :model-value="layout.enabled" @update:model-value="update('enabled', $event)" />

@@ -13,6 +13,7 @@ const props = defineProps<{
 const emit = defineEmits<{ ready: [] }>()
 const canvas = ref<HTMLCanvasElement>()
 const available = ref(false)
+const animated = ref(false)
 const fallbackStyle = computed(() => ({
   backgroundColor: solidBackgroundColor(props.primary, props.dark !== false)
 }))
@@ -51,6 +52,7 @@ function stop(): void {
   if (frame) cancelAnimationFrame(frame)
   frame = 0
   lastFrame = 0
+  animated.value = false
 }
 
 function draw(now: number): void {
@@ -78,6 +80,7 @@ function draw(now: number): void {
   gl.uniform1f(lightUniform, props.dark === false ? 1 : 0)
   gl.uniform3fv(lightSurfaceUniform, currentLightSurface)
   gl.drawArrays(gl.TRIANGLES, 0, 3)
+  animated.value = animate
   if (animate) frame = requestAnimationFrame(draw)
   else lastFrame = 0
 }
@@ -96,10 +99,14 @@ function resize(): void {
     Math.sqrt(650_000 / (width * height)),
     1280 / Math.max(width, height)
   )
-  canvas.value.width = Math.max(1, Math.round(width * scale))
-  canvas.value.height = Math.max(1, Math.round(height * scale))
-  gl.viewport(0, 0, canvas.value.width, canvas.value.height)
-  start()
+  const nextWidth = Math.max(1, Math.round(width * scale))
+  const nextHeight = Math.max(1, Math.round(height * scale))
+  if (canvas.value.width !== nextWidth || canvas.value.height !== nextHeight) {
+    if (canvas.value.width !== nextWidth) canvas.value.width = nextWidth
+    if (canvas.value.height !== nextHeight) canvas.value.height = nextHeight
+    gl.viewport(0, 0, nextWidth, nextHeight)
+    start()
+  }
 }
 
 function release(): void {
@@ -169,6 +176,7 @@ function init(): void {
   lightSurfaceUniform = gl.getUniformLocation(program, 'u_light_surface')
   available.value = true
   resize()
+  start()
 }
 
 function contextLost(event: Event): void {
@@ -243,6 +251,7 @@ onBeforeUnmount(() => {
       ref="canvas"
       class="absolute inset-0 size-full"
       :style="{ opacity: available ? 1 : 0 }"
+      :data-background-static="animated ? undefined : ''"
     />
   </div>
 </template>

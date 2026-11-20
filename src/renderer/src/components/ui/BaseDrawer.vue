@@ -89,8 +89,6 @@ const panelClasses = computed(() => {
     flex
     flex-col
     overflow-hidden
-    transform-gpu
-    will-change-transform
   `
 
   const position: Record<Direction, string> = {
@@ -198,6 +196,7 @@ const leaveTo = computed(() => {
         as="template"
         enter="
     transition-transform
+    will-change-transform
     duration-[var(--motion-duration-standard)]
     ease-[var(--motion-ease-enter)]
   "
@@ -208,6 +207,7 @@ const leaveTo = computed(() => {
   "
         leave="
     transition-transform
+    will-change-transform
     duration-[var(--motion-duration-fast)]
     ease-[var(--motion-ease-exit)]
   "
@@ -228,7 +228,7 @@ const leaveTo = computed(() => {
             v-if="showClose && !hasHeader && !$slots.header"
             type="button"
             :aria-label="t('common.close')"
-            class="absolute top-4 right-4 z-20 p-1.5 rounded-md hover:bg-hover-bg transition-colors"
+            class="ep-drawer-close absolute top-4 right-4 z-20 rounded-md p-1.5 transition-colors"
             @click="close"
           >
             <svg
@@ -261,7 +261,7 @@ const leaveTo = computed(() => {
                     v-if="showClose"
                     type="button"
                     :aria-label="t('common.close')"
-                    class="p-1.5 rounded-md hover:bg-hover-bg transition-colors"
+                    class="ep-drawer-close rounded-md p-1.5 transition-colors"
                     @click="close"
                   >
                     <svg
@@ -283,10 +283,14 @@ const leaveTo = computed(() => {
             </slot>
           </div>
 
+          <div v-if="$slots.toolbar" class="ep-drawer-toolbar shrink-0">
+            <slot name="toolbar" />
+          </div>
+
           <!-- content -->
 
           <div
-            class="ep-drawer-body flex-1 overflow-y-auto custom-scrollbar p-5"
+            class="ep-drawer-body min-h-0 flex-1 overflow-y-auto custom-scrollbar p-5"
             :class="[bodyClass, { 'pt-12': showClose && !hasHeader && !$slots.header }]"
           >
             <slot :close="close" />
@@ -305,3 +309,9 @@ const leaveTo = computed(() => {
     </Dialog>
   </TransitionRoot>
 </template>
+
+<style scoped>
+.ep-drawer-close:hover {
+  background-color: var(--ep-drawer-close-hover, var(--color-hover-bg));
+}
+</style>

@@ -40,8 +40,16 @@ const backgroundRegistry = load(
   'src/renderer/src/components/background/systemBackgroundRegistry.ts',
   { vue: Vue }
 )
+const constants = load(
+  'src/renderer/src/constants/index.ts',
+  {},
+  { __APP_VERSION__: 'test', __APP_BUILD__: 'test' }
+)
+const liquidGlassProfile = load('src/renderer/src/services/liquidGlassProfile.ts')
 const uiPreferenceMigration = load('src/renderer/src/stores/ui/uiPreferences.ts', {
-  '@/components/background/systemBackgroundRegistry': backgroundRegistry
+  '@/components/background/systemBackgroundRegistry': backgroundRegistry,
+  '@/services/liquidGlassProfile': liquidGlassProfile,
+  '@/constants': constants
 })
 let savedUiPreferences = null
 const uiPreferenceStorage = {
@@ -64,6 +72,7 @@ const uiModule = load(
     '@/services/customTheme': {},
     '@/services/themePreview': themePreview,
     '@/services/pluginThemes': { connectPluginThemes: () => () => {} },
+    '@/services/liquidGlassProfile': liquidGlassProfile,
     '@/services/appearance': appearance,
     '@/services/appearanceController': controller,
     '@/components/background/backgroundScene': load(
@@ -77,11 +86,7 @@ const uiModule = load(
       ...backgroundRegistry,
       getSystemBackgroundTheme: () => ({ accentColor: '#00ff00' })
     },
-    '@/constants': load(
-      'src/renderer/src/constants/index.ts',
-      {},
-      { __APP_VERSION__: 'test', __APP_BUILD__: 'test' }
-    )
+    '@/constants': constants
   },
   {
     window: {
@@ -94,6 +99,7 @@ Pinia.setActivePinia(Pinia.createPinia())
 const ui = uiModule.useUIStore()
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('interfaceEffect'))
 assert.equal(ui.interfaceEffect, 'none', 'built-in material is independently opt-in')
+assert.equal(ui.liquidGlassSettings.blurRadius, liquidGlassProfile.STUDIO_BLUR_RADIUS)
 for (const effect of ['none', 'liquid-glass-studio', 'unknown', true, null]) {
   const restored = uiPreferenceMigration.deserializeUIPreferences(
     JSON.stringify({
@@ -414,6 +420,15 @@ console.log(
 )
 savedUiPreferences = JSON.stringify({
   interfaceEffect: 'liquid-glass-studio',
+  liquidGlassSettings: {
+    blurRadius: 68,
+    refDistance: 9,
+    refFactor: '1.4',
+    refFresnelRange: 0,
+    blurEdge: false,
+    tintColor: '#2f90f080',
+    shadowOffsetY: 24
+  },
   systemBackground: 'solid',
   useCustomBg: true,
   customBg: { kind: 'video', url: 'easy-player-media://background?path=example.mp4' }
@@ -422,10 +437,21 @@ const effectPinia = Pinia.createPinia().use(persisted)
 Vue.createSSRApp({ render: () => null }).use(effectPinia)
 const effectUi = uiModule.useUIStore(effectPinia)
 assert.equal(effectUi.interfaceEffect, 'liquid-glass-studio')
+assert.equal(effectUi.liquidGlassSettings.blurRadius, 68)
+assert.equal(
+  effectUi.liquidGlassSettings.refDistance,
+  liquidGlassProfile.LIQUID_GLASS_CONTROLS.refDistance.max
+)
+assert.equal(effectUi.liquidGlassSettings.refFactor, liquidGlassProfile.STUDIO_PRESET.refFactor)
+assert.equal(effectUi.liquidGlassSettings.refFresnelRange, 1)
+assert.equal(effectUi.liquidGlassSettings.blurEdge, false)
+assert.equal(effectUi.liquidGlassSettings.tintColor, '#2F90F080')
 effectUi.interfaceEffect = 'none'
 effectUi.$persist()
 const savedEffect = JSON.parse(savedUiPreferences)
 assert.equal(savedEffect.interfaceEffect, 'none')
+assert.equal(savedEffect.liquidGlassSettings.blurRadius, 68)
+assert.equal(savedEffect.liquidGlassSettings.shadowOffsetY, 24)
 assert.equal(savedEffect.systemBackground, 'solid')
 assert.equal(savedEffect.useCustomBg, true)
 assert.equal(savedEffect.customBg.url, 'easy-player-media://background?path=example.mp4')

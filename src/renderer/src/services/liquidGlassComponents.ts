@@ -7,6 +7,7 @@ function token(name: PluginThemeGlassToken, fallback?: string): string {
 
 const attribute = 'data-ep-glass-components'
 const scope = `html[${attribute}="liquid-glass-studio"]`
+const floatingBlur = `var(--ep-studio-custom-blur, ${token('--ep-glass-floating-blur-radius', String(STUDIO_BLUR_RADIUS))})`
 
 /** The importable theme's component treatments, using the current theme palette. */
 const css = `
@@ -38,7 +39,7 @@ ${scope} {
 /* This selector also covers portals before asynchronous surface discovery. */
 ${scope} :is(.ep-header, .ep-sidebar, .ep-footer, .ep-dialog-panel, .ep-drawer-panel, .ep-menu, .ep-popover, .ep-select-options, .ep-color-picker, .ep-message, .ep-glass-panel, .ep-backtop, .ep-tooltip) {
   isolation: isolate;
-  background-color: color-mix(in srgb, var(--color-bg) var(--ep-studio-surface-tint, var(--ep-glass-chrome-tint, 4%)), transparent) !important;
+  background-color: var(--ep-studio-custom-tint, color-mix(in srgb, var(--color-bg) var(--ep-studio-surface-tint, var(--ep-glass-chrome-tint, 4%)), transparent)) !important;
   background-image: none !important;
   backdrop-filter: blur(calc(var(--ep-studio-blur-radius, 0) * var(--ep-glass-fallback-blur-unit))) saturate(1);
 }
@@ -52,12 +53,15 @@ ${scope} .ep-sidebar {
 }
 ${scope} :is(.ep-dialog-panel, .ep-drawer-panel, .ep-glass-panel) {
   --ep-studio-surface-tint: ${token('--ep-glass-panel-tint')};
-  --ep-studio-blur-radius: ${token('--ep-glass-floating-blur-radius', String(STUDIO_BLUR_RADIUS))};
+  --ep-studio-blur-radius: ${floatingBlur};
   border: 1px solid color-mix(in srgb, var(--color-text) 10%, transparent);
+}
+${scope} .ep-drawer-panel {
+  --ep-drawer-close-hover: color-mix(in srgb, var(--color-text) 12%, transparent);
 }
 ${scope} :is(.ep-menu, .ep-popover, .ep-select-options, .ep-color-picker, .ep-message) {
   --ep-studio-surface-tint: ${token('--ep-glass-floating-tint')};
-  --ep-studio-blur-radius: ${token('--ep-glass-floating-blur-radius', String(STUDIO_BLUR_RADIUS))};
+  --ep-studio-blur-radius: ${floatingBlur};
   background-color: var(--ep-menu-glass-bg);
   border-radius: var(--ep-floating-radius);
 }
@@ -115,10 +119,10 @@ ${scope} .ep-color-trigger {
 ${scope} .ep-message { border-radius: ${token('--ep-glass-message-radius')}; }
 ${scope} .ep-tooltip {
   --ep-studio-surface-tint: ${token('--ep-glass-floating-tint')};
-  --ep-studio-blur-radius: ${token('--ep-glass-floating-blur-radius', String(STUDIO_BLUR_RADIUS))};
-  background-color: var(--ep-tooltip-bg, var(--ep-menu-glass-bg)) !important;
+  --ep-studio-blur-radius: ${floatingBlur};
+  background-color: var(--ep-studio-custom-tint, var(--ep-tooltip-bg, var(--ep-menu-glass-bg))) !important;
   border-color: var(--ep-tooltip-border, ${token('--ep-glass-control-border')}) !important;
-  box-shadow: var(--ep-tooltip-shadow, ${token('--ep-glass-surface-shadow')}) !important;
+  box-shadow: var(--ep-studio-custom-shadow, var(--ep-tooltip-shadow, ${token('--ep-glass-surface-shadow')})) !important;
 }
 ${scope} .ep-backtop {
   --ep-studio-surface-tint: ${token('--ep-glass-chrome-tint')};

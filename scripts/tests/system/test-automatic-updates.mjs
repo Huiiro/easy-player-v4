@@ -96,12 +96,34 @@ await flush()
 assert.equal(notices.length, 2, 'disabling or unmounting suppresses a late response permanently')
 pending = undefined
 
+const constants = {}
+vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/renderer/src/constants/index.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS }
+  }).outputText,
+  { exports: constants, __APP_VERSION__: 'test', __APP_BUILD__: 'test' }
+)
 const migration = {}
+const glassProfile = {}
+vm.runInNewContext(
+  ts.transpileModule(readFileSync('src/renderer/src/services/liquidGlassProfile.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS }
+  }).outputText,
+  { exports: glassProfile }
+)
 vm.runInNewContext(
   ts.transpileModule(readFileSync('src/renderer/src/stores/ui/uiPreferences.ts', 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS }
   }).outputText,
-  { exports: migration, require: () => ({ isSystemBackground: () => false }) }
+  {
+    exports: migration,
+    require: (name) =>
+      ({
+        '@/constants': constants,
+        '@/services/liquidGlassProfile': glassProfile,
+        '@/components/background/systemBackgroundRegistry': { isSystemBackground: () => false }
+      })[name]
+  }
 )
 const restore = (value) => migration.deserializeUIPreferences(JSON.stringify(value))
 assert.equal(restore({}).autoCheckUpdates, true, 'existing installs enable automatic checks')

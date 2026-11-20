@@ -6,6 +6,7 @@ import { DEFAULT_FOOTER_LAYOUT, type FooterLayout } from '@/utils/footerLayout'
 import { applyCustomTheme, parseCustomTheme, type CustomTheme } from '@/services/customTheme'
 import { createThemePreviewTimer } from '@/services/themePreview'
 import { connectPluginThemes } from '@/services/pluginThemes'
+import { resolveLiquidGlassSettings } from '@/services/liquidGlassProfile'
 import type { InstalledThemePackage } from '../../../../shared/themePackage'
 import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
@@ -28,6 +29,9 @@ import { backgroundSceneKey } from '@/components/background/backgroundScene'
 import { computed, nextTick, onScopeDispose, reactive, ref, shallowRef, watch } from 'vue'
 import {
   DEFAULT_PLAYER_BG_TYPE,
+  DEFAULT_PLAYER_CHEER_COLOR,
+  DEFAULT_PLAYER_CHEER_COLORS,
+  DEFAULT_PLAYER_CHEER_LIGHTS,
   DEFAULT_PLAYER_COVER_STYLE,
   DEFAULT_PLAYER_COVER_EFFECT,
   PlayerBgType,
@@ -35,6 +39,11 @@ import {
   PlayerCoverEffect,
   PlayerDisplayMode,
   resolvePlayerBgType,
+  resolvePlayerBgTypeBeforeCheer,
+  resolvePlayerCheerColor,
+  resolvePlayerCheerColorMode,
+  resolvePlayerCheerColors,
+  resolvePlayerCheerLights,
   resolvePlayerCoverStyle,
   resolvePlayerCoverEffect,
   TagStyle
@@ -87,6 +96,7 @@ export const UI_PREFERENCE_KEYS = [
   'reduceMotion',
   'pauseAnimationsOnBlur',
   'interfaceEffect',
+  'liquidGlassSettings',
   'useLocalFileName',
   'useFullProgress',
   'extremePlayback',
@@ -128,6 +138,11 @@ export const UI_PREFERENCE_KEYS = [
   'autoAdjustLyricsDisplay',
   'lyricSourceOrder',
   'playerBgType',
+  'playerBgTypeBeforeCheer',
+  'playerCheerColor',
+  'playerCheerColorMode',
+  'playerCheerColors',
+  'playerCheerLights',
   'playerLayout',
   'showPlayerAudioDetails',
   'playerCoverStyle',
@@ -337,6 +352,7 @@ export const useUIStore = defineStore(
     const reduceMotion = ref(false)
     const pauseAnimationsOnBlur = ref(true)
     const interfaceEffect = ref<'none' | 'liquid-glass-studio'>('none')
+    const liquidGlassSettings = ref(resolveLiquidGlassSettings())
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const extremePlayback = ref(false)
@@ -507,6 +523,14 @@ export const useUIStore = defineStore(
     const lyricSourceOrder = ref<LyricSource[]>(['embedded', 'database', 'local', 'network'])
     // ========== 播放器设置 ==========
     const playerBgType = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
+    const playerBgTypeBeforeCheer = ref<PlayerBgType>(DEFAULT_PLAYER_BG_TYPE)
+    const playerCheerColor = ref(DEFAULT_PLAYER_CHEER_COLOR)
+    const playerCheerColorMode = ref(resolvePlayerCheerColorMode(undefined))
+    const playerCheerColors = ref<string[]>([...DEFAULT_PLAYER_CHEER_COLORS])
+    const activePlayerCheerColors = computed(() =>
+      playerCheerColorMode.value === 'mixed' ? playerCheerColors.value : [playerCheerColor.value]
+    )
+    const playerCheerLights = ref({ ...DEFAULT_PLAYER_CHEER_LIGHTS })
     const playerLayout = ref<'classic' | 'bottom'>('classic')
     const showPlayerAudioDetails = ref(true)
     const playerCoverStyle = ref<PlayerCoverStyle>(DEFAULT_PLAYER_COVER_STYLE)
@@ -520,6 +544,10 @@ export const useUIStore = defineStore(
     const showPlayerSpectrum = ref(false)
     const playerSpectrumStyle = ref<'bars' | 'dots'>('bars')
     const showPlayer = ref(false)
+    const showPlayerAppearance = ref(false)
+    watch(showPlayer, (visible) => {
+      if (!visible) showPlayerAppearance.value = false
+    })
     const footerOpenMode = ref<'all' | 'cover'>('all')
     const footerLayout = ref<FooterLayout>({ ...DEFAULT_FOOTER_LAYOUT })
     function resetFooterLayout(): void {
@@ -829,6 +857,11 @@ export const useUIStore = defineStore(
       if (typeof saved.autoPlayOnRestore === 'boolean')
         autoPlayOnRestore.value = saved.autoPlayOnRestore
       setPlayerBgType(saved.playerBgType)
+      playerBgTypeBeforeCheer.value = resolvePlayerBgTypeBeforeCheer(saved.playerBgTypeBeforeCheer)
+      setPlayerCheerColor(saved.playerCheerColor)
+      setPlayerCheerColorMode(saved.playerCheerColorMode)
+      setPlayerCheerColors(saved.playerCheerColors)
+      setPlayerCheerLights(saved.playerCheerLights)
       playerLayout.value = saved.playerLayout === 'bottom' ? 'bottom' : 'classic'
       if (typeof saved.showPlayerAudioDetails === 'boolean')
         showPlayerAudioDetails.value = saved.showPlayerAudioDetails
@@ -884,7 +917,27 @@ export const useUIStore = defineStore(
       setColorMode(mode)
     }
     function setPlayerBgType(value: unknown): void {
-      playerBgType.value = resolvePlayerBgType(value)
+      const next = resolvePlayerBgType(value)
+      if (next === PlayerBgType.CHEER && playerBgType.value !== PlayerBgType.CHEER)
+        playerBgTypeBeforeCheer.value = playerBgType.value
+      playerBgType.value = next
+    }
+    function setPlayerCheerEnabled(enabled: boolean): void {
+      if (enabled) setPlayerBgType(PlayerBgType.CHEER)
+      else if (playerBgType.value === PlayerBgType.CHEER)
+        setPlayerBgType(resolvePlayerBgTypeBeforeCheer(playerBgTypeBeforeCheer.value))
+    }
+    function setPlayerCheerColor(value: unknown): void {
+      playerCheerColor.value = resolvePlayerCheerColor(value)
+    }
+    function setPlayerCheerColorMode(value: unknown): void {
+      playerCheerColorMode.value = resolvePlayerCheerColorMode(value)
+    }
+    function setPlayerCheerColors(value: unknown): void {
+      playerCheerColors.value = resolvePlayerCheerColors(value)
+    }
+    function setPlayerCheerLights(value: unknown): void {
+      playerCheerLights.value = resolvePlayerCheerLights(value)
     }
     function setPlayerCoverStyle(value: unknown): void {
       playerCoverStyle.value = resolvePlayerCoverStyle(value)
@@ -1069,6 +1122,7 @@ export const useUIStore = defineStore(
       reduceMotion,
       pauseAnimationsOnBlur,
       interfaceEffect,
+      liquidGlassSettings,
       extremePlayback,
       autoPlayOnRestore,
       songPlayTrigger,
@@ -1118,7 +1172,18 @@ export const useUIStore = defineStore(
       autoAdjustLyricsDisplay,
       lyricSourceOrder,
       playerBgType,
+      playerBgTypeBeforeCheer,
       setPlayerBgType,
+      setPlayerCheerEnabled,
+      playerCheerColor,
+      setPlayerCheerColor,
+      playerCheerColorMode,
+      setPlayerCheerColorMode,
+      playerCheerColors,
+      setPlayerCheerColors,
+      activePlayerCheerColors,
+      playerCheerLights,
+      setPlayerCheerLights,
       playerLayout,
       showPlayerAudioDetails,
       playerCoverStyle,
@@ -1134,6 +1199,7 @@ export const useUIStore = defineStore(
       showPlayerSpectrum,
       playerSpectrumStyle,
       showPlayer,
+      showPlayerAppearance,
       footerOpenMode,
       footerLayout,
       resetFooterLayout,

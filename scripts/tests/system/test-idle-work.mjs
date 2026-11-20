@@ -116,7 +116,11 @@ scope.run(() =>
         ...spectrumLife.api,
         ref: (...args) => (args.length ? Vue.ref(...args) : Vue.shallowRef(canvas))
       },
-      '@/stores/ui/uiStore': { useUIStore: () => ui }
+      '@/stores/ui/uiStore': { useUIStore: () => ui },
+      './spectrumColor': evaluate(
+        readFileSync('src/renderer/src/components/player/spectrumColor.ts', 'utf8'),
+        {}
+      )
     },
     {
       defineProps: () => props,

@@ -10,7 +10,7 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
 import PlaybackSettings from '@/components/settings/PlaybackSettings.vue'
-import PlayerAppearanceSettings from '@/components/settings/PlayerAppearanceSettings.vue'
+import { useAppearanceFontOptions } from '@/components/player/useAppearanceFontOptions'
 import LyricsSettings from '@/components/settings/LyricsSettings.vue'
 import DesktopLyricsSettings from '@/components/settings/DesktopLyricsSettings.vue'
 import ThemeSettings from '@/components/settings/ThemeSettings.vue'
@@ -46,7 +46,6 @@ let sidebarScrollTimer: number | undefined
 // Heading sizes follow the playback icon's 26 / 20 ratio; nav sizes compensate for SVG whitespace.
 const sectionIcons = {
   playback: { name: 'common-headphone', size: 26, navSize: 20 },
-  background: { name: 'menu-display', size: 19.5, navSize: 15 },
   theme: { name: 'common-dark-sun', size: 36.4, navSize: 28 },
   customBackground: { name: 'common-theme', size: 28.6, navSize: 22 },
   lyrics: { name: 'common-lyrics-music', size: 19.5, navSize: 15 },
@@ -62,7 +61,6 @@ const sectionIcons = {
 const navigationSections = computed(() =>
   [
     { id: 'playback', label: t('settings.playback') },
-    { id: 'background', label: t('settings.playerBackground') },
     { id: 'theme', label: t('settings.theme') },
     { id: 'customBackground', label: t('settings.customBackground') },
     { id: 'lyrics', label: t('settings.lyrics') },
@@ -79,20 +77,8 @@ const navigationSections = computed(() =>
     icon: sectionIcons[section.id as keyof typeof sectionIcons]
   }))
 )
-const fontOptions = computed(() => [
-  { label: t('settings.fontSystemDefault'), value: '' },
-  { label: t('settings.fontSystemUi'), value: 'system-ui' },
-  { label: t('settings.fontAppleMusic'), value: 'SF Pro Display' },
-  { label: t('settings.fontAppleMusicRounded'), value: 'SF Pro Rounded' },
-  { label: t('settings.fontPingfang'), value: 'PingFang SC' },
-  { label: t('settings.fontSegoeUiVariable'), value: 'Segoe UI Variable' },
-  { label: t('settings.fontMicrosoftYahei'), value: 'Microsoft YaHei' },
-  { label: t('settings.fontMiSans'), value: 'MiSans' },
-  { label: t('settings.fontHarmonyOsSans'), value: 'HarmonyOS Sans SC' },
-  { label: t('settings.fontSourceHanSans'), value: 'Source Han Sans SC' },
-  { label: t('settings.fontNotoSans'), value: 'Noto Sans SC' },
-  ...ui.customFonts.map((font) => ({ label: font.file, value: font.family }))
-])
+const fontOptions = useAppearanceFontOptions()
+
 function navigateTo(sectionId: string): void {
   activeSection.value = sectionId
   const container = settingsScroller.value
@@ -228,23 +214,6 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <PlaybackSettings />
-        </section>
-        <!-- player theme -->
-        <section id="background" class="settings-section">
-          <div class="section-heading">
-            <div>
-              <h2>
-                <SvgIcon
-                  :name="sectionIcons.background.name"
-                  :size="sectionIcons.background.size"
-                  class-name="settings-heading-icon"
-                />
-                <span>{{ t('settings.playerBackground') }}</span>
-              </h2>
-              <p>{{ t('settings.playerBackgroundDescription') }}</p>
-            </div>
-          </div>
-          <PlayerAppearanceSettings :font-options="fontOptions" />
         </section>
         <!-- theme -->
         <section id="theme" class="settings-section">
