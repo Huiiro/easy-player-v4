@@ -1098,8 +1098,13 @@ export default {
     confirmResetTheme:
       '确定恢复默认主题吗？明暗、强调色和全局背景将恢复默认，原生材质与当前主题将关闭。已导入的主题和播放页外观会保留。',
     appearanceMode: '外观模式',
-    interfaceEffect: 'Liquid Glass 样式效果',
-    interfaceEffectDescription: '独立的液态玻璃效果，可叠加当前主题、自定义背景。',
+    interfaceEffect: '界面材质',
+    interfaceEffectDescription: '玻璃材质可叠加在当前主题和背景上。',
+    interfaceEffects: {
+      none: '跟随主题',
+      'frosted-glass': '毛玻璃',
+      'liquid-glass-studio': 'Liquid Glass'
+    },
     liquidGlass: {
       button: '自定义',
       customize: '自定义 Liquid Glass',

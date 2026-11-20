@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { defineAsyncComponent, onBeforeUnmount, onMounted, watch } from 'vue'
+import { onBeforeUnmount, onMounted, watch } from 'vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useI18n } from 'vue-i18n'
 import DuplicateTaskHost from '@/components/scan/DuplicateTaskHost.vue'
@@ -7,6 +7,7 @@ import GlobalNotifications from '@/components/ui/GlobalNotifications.vue'
 import ThemePreviewDialog from '@/components/settings/ThemePreviewDialog.vue'
 import GlobalSearchHost from '@/components/search/GlobalSearchHost.vue'
 import AppUpdateNotification from '@/components/settings/AppUpdateNotification.vue'
+import InterfaceEffectHost from '@/components/background/InterfaceEffectHost.vue'
 import { useMessage } from '@/components/ui/useMessage'
 import router from '@/router'
 import { flushPlayerDataStorage } from '@/stores/persistence'
@@ -16,9 +17,6 @@ useFileDropImport()
 
 const { t } = useI18n()
 const ui = useUIStore()
-const LiquidGlassStudioHost = defineAsyncComponent(
-  () => import('@/components/background/LiquidGlassStudioHost.vue')
-)
 const { success } = useMessage()
 watch(
   () => [ui.autoImportLocalMusic, ui.ignoreShortSongs] as const,
@@ -75,5 +73,5 @@ onBeforeUnmount(() => {
   <ThemePreviewDialog />
   <GlobalSearchHost />
   <AppUpdateNotification />
-  <LiquidGlassStudioHost v-if="ui.interfaceEffect === 'liquid-glass-studio'" />
+  <InterfaceEffectHost />
 </template>

@@ -1117,9 +1117,13 @@ export default {
     confirmResetTheme:
       'Restore color mode, accent and global background defaults, and turn off native material and the active theme? Imported themes and Now playing page appearance will be kept.',
     appearanceMode: 'Appearance Mode',
-    interfaceEffect: 'Liquid Glass style effect',
-    interfaceEffectDescription:
-      'An independent Liquid Glass effect that can be layered over the current theme and custom background.',
+    interfaceEffect: 'Interface material',
+    interfaceEffectDescription: 'Layer a glass material over the current theme and background.',
+    interfaceEffects: {
+      none: 'Follow theme',
+      'frosted-glass': 'Frosted Glass',
+      'liquid-glass-studio': 'Liquid Glass'
+    },
     liquidGlass: {
       button: 'Customize',
       customize: 'Customize Liquid Glass',

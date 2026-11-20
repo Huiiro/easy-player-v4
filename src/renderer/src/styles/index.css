@@ -3,6 +3,7 @@
 @import 'motion.css';
 @import 'components.css';
 @import 'controls.css';
+@import 'frosted-glass.css';
 
 :root.reduce-motion *,
 :root.reduce-motion *::before,

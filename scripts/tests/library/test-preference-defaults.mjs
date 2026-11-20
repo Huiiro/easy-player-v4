@@ -100,7 +100,7 @@ const ui = uiModule.useUIStore()
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('interfaceEffect'))
 assert.equal(ui.interfaceEffect, 'none', 'built-in material is independently opt-in')
 assert.equal(ui.liquidGlassSettings.blurRadius, liquidGlassProfile.STUDIO_BLUR_RADIUS)
-for (const effect of ['none', 'liquid-glass-studio', 'unknown', true, null]) {
+for (const effect of ['none', 'frosted-glass', 'liquid-glass-studio', 'unknown', true, null]) {
   const restored = uiPreferenceMigration.deserializeUIPreferences(
     JSON.stringify({
       interfaceEffect: effect,
@@ -109,7 +109,10 @@ for (const effect of ['none', 'liquid-glass-studio', 'unknown', true, null]) {
       customBg: { kind: 'video', url: 'easy-player-media://custom/video' }
     })
   )
-  assert.equal(restored.interfaceEffect, effect === 'liquid-glass-studio' ? effect : 'none')
+  assert.equal(
+    restored.interfaceEffect,
+    effect === 'liquid-glass-studio' || effect === 'frosted-glass' ? effect : 'none'
+  )
   assert.equal(restored.systemBackground, 'plugin:builtin.theme.aurora')
   assert.equal(restored.useCustomBg, true)
   assert.equal(restored.customBg.kind, 'video')

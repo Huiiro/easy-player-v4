@@ -12,7 +12,11 @@ import type { WindowMaterial } from '../../../../shared/windowMaterial'
 import { DEFAULT_LOCAL_SHORTCUTS, DEFAULT_GLOBAL_SHORTCUTS } from '../../../../shared/shortcuts'
 import { DEFAULT_GENRE_SEPARATOR } from '../../../../shared/metadataValues'
 import type { LibrarySortBy } from '../../../../shared/librarySort'
-import { deserializeUIPreferences } from './uiPreferences'
+import {
+  deserializeUIPreferences,
+  resolveInterfaceEffect,
+  type InterfaceEffect
+} from './uiPreferences'
 import {
   resolveAppearance,
   DEFAULT_ACCENT_COLOR,
@@ -273,7 +277,7 @@ export const useUIStore = defineStore(
                 plugin: theme.plugin
               }
             : null,
-          interfaceEffect.value !== 'liquid-glass-studio'
+          interfaceEffect.value === 'none'
         )
       } catch {
         if (customThemePreviewActive.value) {
@@ -351,7 +355,7 @@ export const useUIStore = defineStore(
     const useCustomBg = ref(false)
     const reduceMotion = ref(false)
     const pauseAnimationsOnBlur = ref(true)
-    const interfaceEffect = ref<'none' | 'liquid-glass-studio'>('none')
+    const interfaceEffect = ref<InterfaceEffect>('none')
     const liquidGlassSettings = ref(resolveLiquidGlassSettings())
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
@@ -847,8 +851,8 @@ export const useUIStore = defineStore(
         customThemeColor.value = saved.customThemeColor
       if (typeof saved.useCustomBg === 'boolean') useCustomBg.value = saved.useCustomBg
       if (typeof saved.reduceMotion === 'boolean') reduceMotion.value = saved.reduceMotion
-      if (saved.interfaceEffect === 'liquid-glass-studio')
-        interfaceEffect.value = saved.interfaceEffect
+      if (saved.interfaceEffect !== undefined)
+        interfaceEffect.value = resolveInterfaceEffect(saved.interfaceEffect)
       if (typeof saved.pauseAnimationsOnBlur === 'boolean')
         pauseAnimationsOnBlur.value = saved.pauseAnimationsOnBlur
       if (isSystemBackground(saved.systemBackground)) {

@@ -19,6 +19,7 @@ import {
   type SystemBackground
 } from '@/components/background/systemBackgroundRegistry'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { INTERFACE_EFFECTS, resolveInterfaceEffect } from '@/stores/ui/uiPreferences'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 
 const ui = useUIStore()
@@ -27,6 +28,9 @@ const { error } = useMessage()
 const LiquidGlassSettings = defineAsyncComponent(() => import('./LiquidGlassSettings.vue'))
 const glassSettingsOpen = ref(false)
 const glassSettingsId = useId()
+const interfaceEffectOptions = computed(() =>
+  INTERFACE_EFFECTS.map((value) => ({ value, label: t(`settings.interfaceEffects.${value}`) }))
+)
 const windowMaterialOptions = computed(() =>
   ui.availableWindowMaterials.map((material) => ({
     value: material,
@@ -180,10 +184,13 @@ function selectThemeBackground(value: ThemeBackgroundChoice): void {
           >
             <svg-icon name="common-settings" class-name="size-4" />
           </BaseButton>
-          <BaseSwitch
-            :model-value="ui.interfaceEffect === 'liquid-glass-studio'"
+          <BaseSelect
+            :model-value="ui.interfaceEffect"
+            :options="interfaceEffectOptions"
             :aria-label="t('settings.interfaceEffect')"
-            @update:model-value="ui.interfaceEffect = $event ? 'liquid-glass-studio' : 'none'"
+            class="w-44"
+            teleport
+            @update:model-value="ui.interfaceEffect = resolveInterfaceEffect($event)"
           />
         </div>
       </SettingRow>

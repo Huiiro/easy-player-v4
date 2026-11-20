@@ -103,13 +103,13 @@ app.whenReady().then(async () => {
         import {useUIStore} from './src/renderer/src/stores/ui/uiStore';
         import {flushPlayerDataStorage} from './src/renderer/src/stores/persistence';
         import ThemeSettings from './src/renderer/src/components/settings/ThemeSettings.vue';
-        import LiquidGlassStudioHost from './src/renderer/src/components/background/LiquidGlassStudioHost.vue';
+        import InterfaceEffectHost from './src/renderer/src/components/background/InterfaceEffectHost.vue';
         import {useMessage} from './src/renderer/src/components/ui/useMessage';
         import OfficialPluginSettings from './src/renderer/src/components/settings/OfficialPluginSettings.vue';
         import AppBackground from './src/renderer/src/components/background/AppBackground.vue';
         import {systemBackgroundThemes} from './src/renderer/src/components/background/systemBackgroundRegistry';
         import zh from './src/renderer/src/i18n/locales/zh';
-        export {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,LiquidGlassStudioHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh};`,
+        export {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,InterfaceEffectHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh};`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -232,7 +232,7 @@ app.whenReady().then(async () => {
         ';void 0'
     )
     const result = await window.webContents.executeJavaScript(`(async()=>{
-      const {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,LiquidGlassStudioHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh}=AppearanceCheck;
+      const {Vue,createPinia,persisted,createI18n,useUIStore,flushPlayerDataStorage,ThemeSettings,InterfaceEffectHost,OfficialPluginSettings,useMessage,AppBackground,systemBackgroundThemes,zh}=AppearanceCheck;
       const {h,createApp,nextTick}=Vue;
       const checks=[];const check=(ok,message)=>{if(!ok)throw new Error(message);checks.push(message)};
       const wait=async()=>{await nextTick();await nextTick();await nextTick();await new Promise(resolve=>setTimeout(resolve,30))};
@@ -245,7 +245,7 @@ app.whenReady().then(async () => {
       const themeListeners=new Set();const themeListener=()=>{for(const callback of themeListeners)callback()};
       window.api.plugins={themes:async()=>({success:true,data:activeThemes}),onChanged:callback=>{themeListeners.add(callback);return()=>themeListeners.delete(callback)}};
       let ui;
-      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();const contentDark=Vue.ref(ui.resolvedAppearance.contentDark);return()=>h('main',{class:'app-layout settings-page','data-background-contrast':!ui.resolvedAppearance.dark&&contentDark.value?'dark':undefined,style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground,{onContrast:value=>{contentDark.value=value}}),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)]),ui.interfaceEffect==='liquid-glass-studio'?h(LiquidGlassStudioHost):null])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
+      const mount=()=>{const pinia=createPinia().use(persisted);const instance=createApp({setup(){ui=useUIStore();const contentDark=Vue.ref(ui.resolvedAppearance.contentDark);return()=>h('main',{class:'app-layout settings-page','data-background-contrast':!ui.resolvedAppearance.dark&&contentDark.value?'dark':undefined,style:'position:relative;min-height:100vh;padding:20px'},[h(AppBackground,{onContrast:value=>{contentDark.value=value}}),h('section',{style:'position:relative;z-index:2'},[h(ThemeSettings)]),h(InterfaceEffectHost)])}}).use(pinia).use(createI18n({legacy:false,locale:'zh',messages:{zh},missingWarn:false,fallbackWarn:false}));instance.mount('#app');return instance};
       let mounted=mount();await ui.initializeTheme();await wait();
       check(ui.colorMode==='light'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Legacy native-material snapshots migrate back to the saved user preferences');
       check(ui.nativeMaterialEnabled&&ui.resolvedAppearance.background.type==='none'&&!document.querySelector('.app-background-layer,.ep-app-background'),'Native material suppresses all renderer backgrounds');
@@ -266,7 +266,12 @@ app.whenReady().then(async () => {
       blurControl.dispatchEvent(new Event('change',{bubbles:true}));await wait();flushPlayerDataStorage();
       check(ui.liquidGlassSettings.blurRadius===64&&JSON.parse(settings.get('pinia.ui.preferences.v1')).liquidGlassSettings.blurRadius===64,'Releasing an optical slider saves the new value');
       const glassProbe=document.createElement('div');glassProbe.className='ep-glass-panel';glassProbe.style.cssText='position:fixed;top:10px;right:10px;width:120px;height:60px';document.body.append(glassProbe);
-      const glassSwitch=document.querySelector('button[aria-label="'+zh.settings.interfaceEffect+'"]');glassSwitch.click();await wait();
+      const selectInterfaceEffect=async(effect)=>{
+        document.querySelector('button[aria-label="'+zh.settings.interfaceEffect+'"]').click();await wait();
+        [...document.querySelectorAll('[role=option]')].find(option=>option.textContent.trim()===zh.settings.interfaceEffects[effect]).click();await wait();
+      };
+      await selectInterfaceEffect('liquid-glass-studio');
+      for(let attempt=0;attempt<30&&!getComputedStyle(glassProbe).getPropertyValue('--ep-studio-blur-radius');attempt++)await wait();
       check(getComputedStyle(glassProbe).getPropertyValue('--ep-studio-blur-radius').trim()==='64','Enabling Liquid Glass applies the saved value to its actual surfaces');
       const advancedGlass=glassSection.querySelector('.glass-settings-advanced');
       check(!advancedGlass.open,'Advanced glass controls start collapsed');
@@ -294,7 +299,11 @@ app.whenReady().then(async () => {
       tintPicker.click();await wait();
       glassSection.querySelector('button').click();await wait();flushPlayerDataStorage();
       check(JSON.stringify(ui.liquidGlassSettings)===JSON.stringify(defaultGlass)&&blurControl.value===String(defaultGlass.blurRadius)&&edgeSwitch.getAttribute('aria-checked')==='true'&&getComputedStyle(glassProbe).getPropertyValue('--ep-studio-blur-radius').trim()===String(defaultGlass.blurRadius)&&!getComputedStyle(glassProbe).backgroundColor.includes('47, 144, 240')&&!getComputedStyle(glassProbe).boxShadow.includes('44px'),'Restore defaults resets both basic and advanced settings across the preview and active interface');
-      glassSwitch.click();glassCustomize.click();glassProbe.remove();await wait();
+      await selectInterfaceEffect('frosted-glass');
+      const frostedSurface=()=>getComputedStyle(glassProbe);
+      check(ui.interfaceEffect==='frosted-glass'&&frostedSurface().backdropFilter.includes('blur(12px)')&&!document.documentElement.hasAttribute('data-ep-glass-components'),'Switching to Frosted Glass applies CSS blur and disposes the Liquid Glass material');
+      check(!frostedSurface().boxShadow.includes('inset'),'Frosted Glass leaves the edge free of inset shadow rims');
+      glassCustomize.click();await wait();
       check(!glassPreview()&&!document.getElementById('ep-glass-settings-preview'),'Closing customization disposes the preview instance');
       ui.setColorMode('system');await wait();
       check(ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Following system appearance keeps the selected scene');
@@ -312,6 +321,7 @@ app.whenReady().then(async () => {
       check(!!document.querySelector('.ep-app-background'),'Theme background can be restored explicitly');
       ui.setCustomBackground({kind:'image',url:'',path:'fixture.png'});await wait();
       check(ui.resolvedAppearance.background.type==='image'&&!ui.themeBackgroundEnabled&&ui.effectiveCustomThemeName==='Fixture theme','Media import follows the same background-selection rule');
+      check(frostedSurface().backdropFilter!=='none','Frosted Glass remains active over the selected theme and image background');
       ui.customBg.chromeBorder='#abcdef';await wait();
       const borderProbe=document.createElement('div');borderProbe.style.cssText='border:1px solid var(--color-border)';document.body.append(borderProbe);
       const lightBorderProbe=document.createElement('div');lightBorderProbe.style.cssText='border:1px solid var(--color-border-l)';document.body.append(lightBorderProbe);
@@ -334,6 +344,7 @@ app.whenReady().then(async () => {
       ui.setColorMode('dark');ui.setColorMode('light');ui.setColorMode('dark');ui.selectThemeBackground('plugin:builtin.theme.rainy');ui.setColorMode('light');await wait();
       check(!document.documentElement.classList.contains('dark')&&document.documentElement.dataset.systemTheme==='plugin:builtin.theme.rainy','Rapid consecutive changes apply the final color mode and background');
       ui.playerBgType='liquid';ui.playerCoverStyle='vinyl';await ui.setNativeWindowMaterial('mica');await wait();failMaterial=true;
+      check(!document.documentElement.hasAttribute('data-ep-frosted-glass')&&ui.interfaceEffect==='frosted-glass','Native window material suspends Frosted Glass without clearing the preference');
       let failed=false;try{await ui.resetTheme()}catch{failed=true}await wait();
       check(failed&&ui.nativeMaterialEnabled&&ui.appearancePreferences.background.id==='plugin:builtin.theme.rainy','Failed native reset leaves saved appearance intact');
       failMaterial=false;await ui.resetTheme();await wait();
@@ -341,6 +352,10 @@ app.whenReady().then(async () => {
       ui.setColorMode('system');ui.selectThemeBackground('plugin:builtin.theme.aurora');ui.accentSource='song';ui.themeBackgroundEnabled=false;await wait();flushPlayerDataStorage();
       ui.$dispose();mounted.unmount();mounted=mount();await ui.initializeTheme();await wait();
       check(ui.colorMode==='system'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.aurora'&&ui.accentSource==='song'&&!ui.themeBackgroundEnabled,'Independent appearance choices survive a fresh store and renderer initialization');
+      check(ui.interfaceEffect==='frosted-glass'&&document.documentElement.hasAttribute('data-ep-frosted-glass'),'Frosted Glass resumes after leaving native material and survives renderer initialization');
+      await selectInterfaceEffect('none');
+      check(getComputedStyle(glassProbe).backdropFilter==='none','Following the theme restores the surface without Frosted Glass');
+      glassProbe.remove();
       const selectors=[document.querySelector('.ep-select[aria-label="外观模式"]')];
       selectors[0].click();await wait();const light=[...document.querySelectorAll('[role=option]')].find(option=>option.textContent.includes('浅色'));light.click();await wait();
       check(ui.colorMode==='light'&&ui.appearancePreferences.background.id==='plugin:builtin.theme.aurora','The real settings control changes color mode without clearing the scene');

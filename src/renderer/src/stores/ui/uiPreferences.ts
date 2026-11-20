@@ -9,6 +9,13 @@ import {
   resolvePlayerCheerLights
 } from '@/constants'
 
+export const INTERFACE_EFFECTS = ['none', 'frosted-glass', 'liquid-glass-studio'] as const
+export type InterfaceEffect = (typeof INTERFACE_EFFECTS)[number]
+
+export function resolveInterfaceEffect(value: unknown): InterfaceEffect {
+  return INTERFACE_EFFECTS.find((effect) => effect === value) ?? 'none'
+}
+
 /** Migrate the former artist/genre switches before Pinia picks persisted fields. */
 export function deserializeUIPreferences(value: string): Record<string, unknown> {
   const parsed: unknown = JSON.parse(value)
@@ -35,8 +42,7 @@ export function deserializeUIPreferences(value: string): Record<string, unknown>
       [300, 400, 500, 600, 700, 800].includes(preferences.playerLyricsFontWeight)
         ? preferences.playerLyricsFontWeight
         : 700,
-    interfaceEffect:
-      preferences.interfaceEffect === 'liquid-glass-studio' ? 'liquid-glass-studio' : 'none',
+    interfaceEffect: resolveInterfaceEffect(preferences.interfaceEffect),
     liquidGlassSettings: resolveLiquidGlassSettings(preferences.liquidGlassSettings),
     autoCheckUpdates:
       typeof preferences.autoCheckUpdates === 'boolean' ? preferences.autoCheckUpdates : true,
