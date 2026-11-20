@@ -45,8 +45,7 @@ const host = {
 try {
   await build({
     stdin: {
-      contents:
-        "export * from './src/main/database/repository/songLyrics'; export * from './src/main/database/schema'",
+      contents: "export * from './src/main/database/repository/songLyrics'",
       resolveDir: process.cwd()
     },
     outfile: join(directory, 'storage.cjs'),
@@ -56,7 +55,6 @@ try {
     plugins: [host]
   })
   const storage = require(join(directory, 'storage.cjs'))
-  assert.equal(storage.DATABASE_SCHEMA_VERSION, 1)
   assert.deepEqual(storage.getSongLyricSettings(1), {
     songId: 1,
     offsetMs: null,

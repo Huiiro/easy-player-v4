@@ -29,12 +29,21 @@ const props = defineProps<{
   small?: boolean
   hideDividers?: boolean
   columns?: SongListColumns
+  reorderMode?: boolean
+  reorderable?: boolean
+  dragging?: boolean
+  dropPosition?: 'before' | 'after'
 }>()
 
 const emit = defineEmits<{
   play: [song: LibrarySong]
   toggleSelect: [id: number]
   requestMenu: [song: LibrarySong, x: number, y: number]
+  reorderStart: [id: number, event: DragEvent]
+  reorderEnd: []
+  reorderOver: [id: number, event: DragEvent]
+  reorderLeave: [id: number, event: DragEvent]
+  reorderDrop: [id: number, event: DragEvent]
 }>()
 
 const { t } = useI18n()
@@ -123,18 +132,34 @@ function openAlbum(event: MouseEvent): void {
 
 <template>
   <div
-    class="border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
-    :class="{ 'border-b': !hideDividers }"
+    class="relative border-[color:color-mix(in_srgb,var(--color-border)_60%,transparent)]"
+    :class="{ 'border-b': !hideDividers, 'opacity-50': dragging }"
     :style="{ height: `${songListRowHeight(compact, small)}px` }"
+    @dragover="emit('reorderOver', song.id, $event)"
+    @dragleave="emit('reorderLeave', song.id, $event)"
+    @drop="emit('reorderDrop', song.id, $event)"
   >
+    <span
+      v-if="dropPosition"
+      class="pointer-events-none absolute inset-x-0 z-10 h-0.5 bg-primary"
+      :class="dropPosition === 'before' ? 'top-0' : 'bottom-0'"
+      aria-hidden="true"
+    />
     <div
       class="song-list-row grid h-full items-center gap-3 px-5 transition-colors hover:bg-hover"
       :class="[
-        { 'song-list-row--small': small, 'cursor-pointer': selectionMode },
+        {
+          'song-list-row--small': small,
+          'cursor-pointer': selectionMode,
+          'cursor-grab select-none active:cursor-grabbing': reorderable
+        },
         current
           ? 'bg-[color:color-mix(in_srgb,var(--color-primary)_14%,transparent)] text-primary'
           : ''
       ]"
+      :draggable="reorderable"
+      @dragstart.self="emit('reorderStart', song.id, $event)"
+      @dragend.self="emit('reorderEnd')"
       @click="onRowActivation"
       @dblclick="onRowActivation"
       @contextmenu.prevent.stop="requestMenu"
@@ -148,7 +173,19 @@ function openAlbum(event: MouseEvent): void {
           @click.stop="emit('toggleSelect', song.id)"
           @dblclick.stop
         />
-        <span>{{ index + 1 }}</span>
+        <span
+          v-if="reorderMode"
+          class="grid size-6 place-items-center"
+          :class="reorderable ? 'hover:text-primary' : 'opacity-50'"
+          :title="t('songList.dragToReorder')"
+          :aria-label="t('songList.dragToReorder')"
+          role="img"
+          @click.stop
+          @dblclick.stop
+        >
+          <SvgIcon name="common-drag2" class-name="size-4" />
+        </span>
+        <span v-else>{{ index + 1 }}</span>
       </span>
       <span class="song-list-title flex min-w-0 items-center gap-3">
         <img
@@ -156,6 +193,7 @@ function openAlbum(event: MouseEvent): void {
           :src="coverUrl"
           class="song-list-cover size-10 shrink-0 rounded-md object-cover"
           :alt="song.title"
+          :draggable="reorderMode ? false : undefined"
           @error="coverFailed = true"
         />
         <span
@@ -167,8 +205,11 @@ function openAlbum(event: MouseEvent): void {
         <span class="min-w-0">
           <span class="flex min-w-0 items-center gap-1">
             <span
-              class="song-list-name truncate cursor-pointer"
-              :class="song.songStatus === 0 ? 'line-through opacity-60' : ''"
+              class="song-list-name truncate"
+              :class="{
+                'cursor-pointer': !reorderable,
+                'line-through opacity-60': song.songStatus === 0
+              }"
             >
               <template v-for="(part, partIndex) in highlightedTitle" :key="partIndex">
                 <mark v-if="part.highlighted" class="bg-yellow-400 text-black">
@@ -320,7 +361,9 @@ function openAlbum(event: MouseEvent): void {
           role="img"
         />
       </span>
-      <span class="text-right text-sm text-text-l cursor-default">{{ formatDuration }}</span>
+      <span class="text-right text-sm text-text-l" :class="{ 'cursor-default': !reorderable }">
+        {{ formatDuration }}
+      </span>
     </div>
   </div>
 </template>

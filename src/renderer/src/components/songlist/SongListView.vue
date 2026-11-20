@@ -31,6 +31,8 @@ import { LIKED_PLAYLIST_ID } from '@/constants/playlists'
 import type { MusicSource } from '../../../../shared/remoteSources'
 
 type MusicSourceOption = Pick<MusicSource, 'id' | 'name'>
+type PlaylistDropPosition = 'before' | 'after'
+const playlistSongDragType = 'application/x-easy-player-playlist-song'
 
 const props = withDefaults(defineProps<{ source?: SongListSource }>(), {
   source: () => ({ type: 'songs' })
@@ -151,10 +153,12 @@ function compareSongs(left: LibrarySong, right: LibrarySong): number {
   let result = 0
 
   if (field === 'id' && props.source.type === 'playlist') {
-    const addedOrder =
+    const direction = sortOrder.value === 'asc' ? 1 : -1
+    const playlistOrder =
+      (left.playlistPosition ?? 0) - (right.playlistPosition ?? 0) ||
       (left.playlistAddedAt ?? '').localeCompare(right.playlistAddedAt ?? '') ||
       (left.playlistEntryId ?? 0) - (right.playlistEntryId ?? 0)
-    if (addedOrder) return addedOrder * (sortOrder.value === 'asc' ? 1 : -1)
+    if (playlistOrder) return playlistOrder * direction
   }
 
   if (field === 'id' && ['recommendation', 'playlist'].includes(props.source.type)) {
@@ -319,6 +323,121 @@ const load = async (resetScroll = false): Promise<void> => {
     if (!disposed && revision === loadRevision) loading.value = false
   }
 }
+
+const draggedSongId = ref<number | null>(null)
+const dropTarget = ref<{ id: number; position: PlaylistDropPosition } | null>(null)
+const savingOrder = ref(false)
+const reorderMode = ref(false)
+const canEditOrder = computed(
+  () =>
+    props.source.type === 'playlist' &&
+    !keyword.value.trim() &&
+    !hasSearch.value &&
+    !composing.value &&
+    !selectedTagIds.value.length &&
+    !selectionMode.value
+)
+const canReorder = computed(
+  () =>
+    reorderMode.value &&
+    canEditOrder.value &&
+    sortBy.value === 'id' &&
+    !loading.value &&
+    !isRestoringScroll.value &&
+    !savingOrder.value &&
+    songs.value.length > 1
+)
+function toggleReorder(): void {
+  if (!canEditOrder.value) return
+  if (!reorderMode.value && sortBy.value !== 'id') toggleSort('id')
+  reorderMode.value = !reorderMode.value
+}
+watch([canEditOrder, collectionPlaylistId], () => {
+  reorderMode.value = false
+})
+
+function clearSongDrag(): void {
+  draggedSongId.value = null
+  dropTarget.value = null
+}
+watch([canReorder, collectionPlaylistId, sortOrder], clearSongDrag)
+
+function startSongDrag(id: number, event: DragEvent): void {
+  if (!canReorder.value || !event.dataTransfer) {
+    event.preventDefault()
+    return
+  }
+  event.dataTransfer.setData(playlistSongDragType, String(id))
+  event.dataTransfer.effectAllowed = 'move'
+  draggedSongId.value = id
+}
+function getDropPosition(id: number, event: DragEvent): PlaylistDropPosition | undefined {
+  if (
+    !canReorder.value ||
+    draggedSongId.value === null ||
+    !event.dataTransfer?.types.includes(playlistSongDragType)
+  )
+    return
+  event.preventDefault()
+  if (draggedSongId.value === id) return
+  event.dataTransfer.dropEffect = 'move'
+  const row = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  return event.clientY < row.top + row.height / 2 ? 'before' : 'after'
+}
+function previewSongDrop(id: number, event: DragEvent): void {
+  const position = getDropPosition(id, event)
+  if (!position) dropTarget.value = null
+  else if (dropTarget.value?.id !== id || dropTarget.value.position !== position)
+    dropTarget.value = { id, position }
+}
+function leaveSongDrop(id: number, event: DragEvent): void {
+  const row = event.currentTarget as HTMLElement
+  if (dropTarget.value?.id === id && !row.contains(event.relatedTarget as Node | null))
+    dropTarget.value = null
+}
+async function dropSong(id: number, event: DragEvent): Promise<void> {
+  const position = getDropPosition(id, event)
+  const songId = draggedSongId.value
+  clearSongDrag()
+  if (!position || songId === null || props.source.type !== 'playlist') return
+  const playlistId = props.source.id
+  const revision = loadRevision
+  const before = sortOrder.value === 'desc' ? position === 'before' : position === 'after'
+  savingOrder.value = true
+  try {
+    const response = await window.api.database.command('movePlaylistSong', {
+      playlistId,
+      songId,
+      targetSongId: id,
+      before
+    })
+    if (disposed || collectionPlaylistId.value !== playlistId) return
+    if (!response.success || !response.data) {
+      showError(t('songList.reorderFailed'))
+      if (response.success) await load()
+      return
+    }
+    const entries = response.data as { id: number; position: number }[]
+    const positions = new Map(entries.map(({ id, position }) => [id, position]))
+    if (
+      revision !== loadRevision ||
+      positions.size !== songs.value.length ||
+      songs.value.some((song) => !positions.has(song.id))
+    ) {
+      await load()
+      return
+    }
+    songs.value = songs.value.map((song) => ({
+      ...song,
+      playlistPosition: positions.get(song.id)
+    }))
+  } catch {
+    if (!disposed && collectionPlaylistId.value === playlistId)
+      showError(t('songList.reorderFailed'))
+  } finally {
+    savingOrder.value = false
+  }
+}
 watch(
   () => [statistics.generation, statistics.enabled],
   () => {
@@ -330,6 +449,7 @@ async function refreshSongs(): Promise<void> {
   success(t('songList.refreshed'))
 }
 const toggleSort = (field: SortField): void => {
+  if (field !== 'id') reorderMode.value = false
   if (sortBy.value === field) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
   else {
     sortBy.value = field
@@ -560,7 +680,7 @@ watch([keyword, composing], () => {
 <template>
   <section
     class="relative flex h-full min-h-0 flex-col text-text"
-    :aria-busy="loading || isRestoringScroll"
+    :aria-busy="loading || isRestoringScroll || savingOrder"
     :style="layoutStyle"
   >
     <SongListHeader
@@ -571,6 +691,8 @@ watch([keyword, composing], () => {
       :show-album-sorts="source.type === 'album'"
       :show-play-time-sort="source.type === 'history'"
       :show-relevance-sort="hasSearch"
+      :reorder-mode="source.type === 'playlist' ? reorderMode : undefined"
+      :reorder-disabled="!canEditOrder || loading || songs.length < 2"
       :selection-mode="selectionMode"
       :selected-count="selectedIds.size"
       :all-selected="allSelected"
@@ -588,6 +710,7 @@ watch([keyword, composing], () => {
       @composition-change="composing = $event"
       @refresh="refreshSongs"
       @sort="toggleSort"
+      @toggle-reorder="toggleReorder"
       @toggle-selection="toggleSelection"
       @toggle-all="toggleAll"
       @select-newest="selectNewest"
@@ -643,6 +766,17 @@ watch([keyword, composing], () => {
             :small="uiStore.smallSongList"
             :hide-dividers="uiStore.hideSongListDividers"
             :columns="columns"
+            :reorder-mode="reorderMode"
+            :reorderable="canReorder"
+            :dragging="draggedSongId === item.id"
+            :drop-position="
+              dropTarget && dropTarget.id === item.id ? dropTarget.position : undefined
+            "
+            @reorder-start="startSongDrag"
+            @reorder-end="clearSongDrag"
+            @reorder-over="previewSongDrop"
+            @reorder-leave="leaveSongDrop"
+            @reorder-drop="dropSong"
             @play="playSong"
             @toggle-select="toggleSelect"
             @request-menu="(song, x, y) => actions?.openMenu(song, x, y)"

@@ -24,6 +24,8 @@ const props = defineProps<{
   showAlbumSorts?: boolean
   showPlayTimeSort?: boolean
   showRelevanceSort?: boolean
+  reorderMode?: boolean
+  reorderDisabled?: boolean
   selectionMode: boolean
   selectedCount: number
   allSelected: boolean
@@ -44,6 +46,7 @@ const emit = defineEmits<{
   'update:keyword': [value: string]
   compositionChange: [composing: boolean]
   sort: [field: SortField]
+  toggleReorder: []
   refresh: []
   toggleSelection: []
   toggleAll: []
@@ -319,6 +322,17 @@ const batchMenuItems = computed(() => [
             </button>
           </template>
         </BaseMenu>
+        <button
+          v-if="reorderMode !== undefined"
+          type="button"
+          class="header-button header-control px-2 disabled:opacity-50"
+          :class="{ 'text-primary': reorderMode }"
+          :disabled="reorderDisabled"
+          @click="emit('toggleReorder')"
+        >
+          <SvgIcon :name="reorderMode ? 'common-back-left' : 'common-drag2'" class-name="size-4" />
+          {{ t(reorderMode ? 'songList.exitDragSort' : 'songList.toggleDragSort') }}
+        </button>
         <!-- source -->
         <BaseMenu
           v-if="sourceOptions?.length"

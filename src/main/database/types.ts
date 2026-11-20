@@ -8,6 +8,7 @@ export interface Song {
   /** Present only when queried as a playlist member. */
   playlistAddedAt?: string
   playlistEntryId?: number
+  playlistPosition?: number
   sortReadings?: {
     title: string | null
     artist: string | null

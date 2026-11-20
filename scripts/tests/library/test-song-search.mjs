@@ -426,13 +426,46 @@ try {
   db.prepare(
     'UPDATE song_list_item SET created_at = ? WHERE song_list_id = ? AND song_id = 10'
   ).run('2000-01-02 00:00:00', orderedPlaylist.id)
-  assert.deepEqual(playlistIds(), [10, 1, 3], 'Membership timestamp takes precedence over entry ID')
+  db.exec(helpers.schemaV2)
+  assert.deepEqual(
+    playlistIds(),
+    [10, 1, 3],
+    'Migration preserves the previous membership-time order'
+  )
   repo.removeSongsFromPlaylist(orderedPlaylist.id, [3])
   repo.addSongsToPlaylist(orderedPlaylist.id, [3])
   assert.deepEqual(
     playlistIds(),
     [3, 10, 1],
     'Removing then re-adding a song gives it a fresh addition time'
+  )
+  assert.deepEqual(
+    repo.movePlaylistSong(orderedPlaylist.id, 3, 10, true),
+    [3, 10, 1].map((id, index) => ({ id, position: 3 - index })),
+    'Dropping onto the original position leaves existing positions intact'
+  )
+  assert.equal(repo.movePlaylistSong(orderedPlaylist.id, 3, 999, true), null)
+  repo.movePlaylistSong(orderedPlaylist.id, 3, 1, false)
+  assert.deepEqual(playlistIds(), [10, 1, 3], 'A fresh query returns the saved manual order')
+  assert.deepEqual(
+    db
+      .prepare('SELECT song_id FROM song_list_item WHERE song_list_id = ? ORDER BY position DESC')
+      .pluck()
+      .all(orderedPlaylist.id),
+    [10, 1, 3],
+    'Moving a song updates the default positions'
+  )
+  assert.deepEqual(playlistIds({ sortOrder: 'asc' }), [3, 1, 10])
+  assert.deepEqual(playlistIds({ size: 2, page: 1 }), [10, 1])
+  assert.deepEqual(
+    repo.queryPlaylistSongs(1).data.map((song) => song.id),
+    [1]
+  )
+  assert.equal(repo.addSongsToPlaylist(orderedPlaylist.id, [14]).added, 1)
+  assert.deepEqual(
+    playlistIds(),
+    [14, 10, 1, 3],
+    'New additions appear before manually ordered songs'
   )
   repo.deletePlaylists([orderedPlaylist.id])
 

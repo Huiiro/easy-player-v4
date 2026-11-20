@@ -486,13 +486,34 @@ async function runChecks() {
   await wait()
   check(queries === beforeUnmount, 'unmounted song lists stop reacting to source changes')
   // The server returns membership-time order, deliberately different from song IDs.
-  const playlistOrder = [fixture[1], fixture[0], fixture[2], ...fixture.slice(3, 33)].map(
+  let playlistOrder = [fixture[1], fixture[0], fixture[2], ...fixture.slice(3, 33)].map(
     (song, index) => ({
       ...song,
+      playlistPosition: 32 - index,
       playlistAddedAt: '2000-01-01 00:00:00',
       playlistEntryId: fixture.length - index
     })
   )
+  const originalCommand = window.api.database.command
+  const moves = []
+  let rejectMove = false
+  window.api.database.command = async (action, params) => {
+    if (action !== 'movePlaylistSong') return originalCommand(action, params)
+    moves.push(params)
+    if (rejectMove) return { success: false, error: 'save failed' }
+    const moved = playlistOrder.find((song) => song.id === params.songId)
+    playlistOrder = playlistOrder.filter((song) => song.id !== params.songId)
+    const targetIndex = playlistOrder.findIndex((song) => song.id === params.targetSongId)
+    playlistOrder.splice(targetIndex + (params.before ? 0 : 1), 0, moved)
+    playlistOrder = playlistOrder.map((song, index) => ({
+      ...song,
+      playlistPosition: playlistOrder.length - index - 1
+    }))
+    return {
+      success: true,
+      data: playlistOrder.map(({ id, playlistPosition }) => ({ id, position: playlistPosition }))
+    }
+  }
   window.songQuery = async () => playlistOrder
   const playlistApp = createApp({
     render: () => h(SongListView, { source: { type: 'playlist', id: 1 } })
@@ -504,10 +525,12 @@ async function runChecks() {
     .component('RecycleScroller', RecycleScroller)
   playlistApp.mount('#app')
   await wait(180)
-  const playlistTopTitles = () =>
+  const playlistRows = () =>
     [...document.querySelectorAll('.vue-recycle-scroller__item-view')]
       .filter((row) => getComputedStyle(row).visibility !== 'hidden')
       .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+  const playlistTopTitles = () =>
+    playlistRows()
       .slice(0, 3)
       .map((row) => row.querySelector('.song-list-name')?.textContent.trim())
       .join(',')
@@ -515,25 +538,118 @@ async function runChecks() {
     playlistTopTitles() === 'Track 2,Track 1,Track 3',
     'Playlist default display preserves newest additions instead of sorting by library song ID'
   )
+  const reorderToggle = [...document.querySelectorAll('header button')].find(
+    (button) => button.textContent.trim() === zh.songList.toggleDragSort
+  )
+  const draggableRow = () => document.querySelector('.song-list-row[draggable=true]')
+  const firstSongRow = () => playlistRows()[0].querySelector('.song-list-row')
+  const firstSequenceCell = () => firstSongRow().firstElementChild
+  const icon = (element) => element.querySelector('use')?.getAttribute('xlink:href')
+  check(
+    icon(reorderToggle) === '#icon-common-drag2' &&
+      !draggableRow() &&
+      firstSequenceCell().textContent.trim() === '1',
+    'Playlist rows show sequence numbers before entering reorder mode'
+  )
   await menuAction('排序', zh.songList.title)
   check(
     playlistTopTitles() === 'Track 1,Track 2,Track 3',
     'Explicit playlist title sorting still works'
   )
-  await menuAction('排序', '默认')
+  check(!draggableRow(), 'Title sorting disables row dragging')
+  reorderToggle.click()
+  await wait()
   check(
-    playlistTopTitles() === 'Track 2,Track 1,Track 3',
-    'Returning to default restores playlist addition order'
+    playlistTopTitles() === 'Track 2,Track 1,Track 3' &&
+      reorderToggle.textContent.trim() === zh.songList.exitDragSort &&
+      icon(reorderToggle) === '#icon-common-back-left' &&
+      icon(firstSequenceCell()) === '#icon-common-drag2' &&
+      firstSequenceCell().textContent.trim() === '',
+    'Reorder mode replaces row numbers with handles and shows the exit action'
   )
-  await menuAction('排序', '默认')
+  check(
+    firstSongRow().querySelector('.song-list-name').closest('[draggable=true]') ===
+      firstSongRow() && !firstSequenceCell().querySelector('[draggable=true]'),
+    'The entire song row is draggable, including its title'
+  )
+  const dragSong = (from, to, before) => {
+    const rows = playlistRows()
+    const source = rows[from].querySelector('.song-list-row[draggable=true]')
+    const target = rows[to].querySelector('.song-list-row')
+    const box = target.getBoundingClientRect()
+    const dataTransfer = new DataTransfer()
+    const send = (element, type, clientY) =>
+      element.dispatchEvent(
+        new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer, clientY })
+      )
+    send(source, 'dragstart')
+    const y = before ? box.top + 3 : box.bottom - 3
+    check(!send(target, 'dragover', y), 'Accepts a drag from its own song row')
+    return { drop: () => send(target, 'drop', y), end: () => send(source, 'dragend') }
+  }
+  const firstDrag = dragSong(0, 2, false)
+  await wait()
+  check(
+    playlistRows()[2].querySelector('.bottom-0.h-0\\.5'),
+    'Shows an insertion line under the target'
+  )
+  firstDrag.drop()
+  firstDrag.end()
+  await wait()
+  check(
+    moves.length === 1 &&
+      moves[0].playlistId === 1 &&
+      moves[0].songId === 2 &&
+      moves[0].targetSongId === 3 &&
+      !moves[0].before &&
+      playlistTopTitles() === 'Track 1,Track 3,Track 2',
+    'Drop saves the order and updates the virtual rows'
+  )
+  reorderToggle.click()
+  await wait()
+  check(
+    !draggableRow() &&
+      firstSequenceCell().textContent.trim() === '1' &&
+      reorderToggle.textContent.trim() === zh.songList.toggleDragSort &&
+      playlistTopTitles() === 'Track 1,Track 3,Track 2',
+    'Exiting restores sequence numbers, the entry action, and the saved order'
+  )
+  reorderToggle.click()
+  await wait()
+  rejectMove = true
+  dragSong(0, 2, true).drop()
+  await wait()
+  check(
+    playlistTopTitles() === 'Track 1,Track 3,Track 2',
+    'Failed saves leave the visible order intact'
+  )
+  rejectMove = false
+  const cancelledDrag = dragSong(0, 2, false)
+  cancelledDrag.end()
+  await wait()
+  check(moves.length === 2, 'Cancelling a drag leaves the saved order intact')
+  await menuAction('排序', zh.songList.defaultSort)
   check(
     playlistTopTitles() === 'Track 33,Track 32,Track 31',
-    'Default sort can reverse the playlist addition order'
+    'Playlist sort can reverse the saved order'
+  )
+  dragSong(0, 2, false).drop()
+  await wait()
+  check(
+    moves[2].before && playlistTopTitles() === 'Track 32,Track 31,Track 33',
+    'Dragging in reverse order saves the correct relative placement'
+  )
+  document.querySelector('header button[aria-label="刷新"]').click()
+  await wait(180)
+  check(
+    playlistTopTitles() === 'Track 32,Track 31,Track 33',
+    'Refreshing the playlist keeps the saved placement'
   )
   window.songQuery = async () =>
-    [playlistOrder[2], ...playlistOrder.slice(0, 2), ...playlistOrder.slice(3)].map(
-      (song, index) => ({ ...song, searchScore: 100 - index })
-    )
+    [
+      playlistOrder.find((song) => song.id === 3),
+      ...playlistOrder.filter((song) => song.id !== 3)
+    ].map((song, index) => ({ ...song, searchScore: 100 - index }))
   const playlistSearch = document.querySelector('header input')
   playlistSearch.value = 'Track'
   playlistSearch.dispatchEvent(new Event('input', { bubbles: true }))
@@ -542,12 +658,14 @@ async function runChecks() {
     playlistTopTitles().startsWith('Track 3,'),
     'Playlist search can rank an older addition first by relevance'
   )
-  await menuAction('排序', '默认')
+  check(!draggableRow() && reorderToggle.disabled, 'A search disables row dragging')
+  await menuAction('排序', zh.songList.defaultSort)
   check(
-    playlistTopTitles() === 'Track 2,Track 1,Track 3',
-    'Default sorting after search uses membership time rather than relevance order'
+    playlistTopTitles() === 'Track 1,Track 3,Track 2',
+    'Default sorting after search follows the saved playlist positions'
   )
   playlistApp.unmount()
+  window.api.database.command = originalCommand
   const rowPlays = []
   window.player.playCollection = async (...args) => {
     rowPlays.push(args)

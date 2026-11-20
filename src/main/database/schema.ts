@@ -1,4 +1,18 @@
-export const DATABASE_SCHEMA_VERSION = 1
+export const DATABASE_SCHEMA_VERSION = 2
+
+// Seed the default positions from the order existing playlists displayed.
+export const schemaV2 = `
+  WITH ordered AS (
+    SELECT id, ROW_NUMBER() OVER (
+      PARTITION BY song_list_id ORDER BY created_at, id
+    ) - 1 AS position
+    FROM song_list_item
+  )
+  UPDATE song_list_item
+  SET position = ordered.position
+  FROM ordered
+  WHERE song_list_item.id = ordered.id AND song_list_item.position IS NOT ordered.position;
+`
 
 export const schemaV1 = `
   CREATE TABLE IF NOT EXISTS music_source (

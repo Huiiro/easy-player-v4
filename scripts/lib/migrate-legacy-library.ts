@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3'
-import { DATABASE_SCHEMA_VERSION, schemaV1 } from '../../src/main/database/schema'
+import { DATABASE_SCHEMA_VERSION, schemaV1, schemaV2 } from '../../src/main/database/schema'
 import { searchSchema } from '../../src/main/search/schema'
 import { normalizeSearchText, japaneseSortReading } from '../../src/main/search/searchTokens'
 
@@ -39,6 +39,10 @@ export function migrateLegacyLibrary(db: Database.Database): boolean {
   db.function('search_normalize', { deterministic: true }, normalizeSearchText)
   db.function('search_japanese_sort', { deterministic: true }, japaneseSortReading)
   db.transaction(() => {
+    const migratedPositions = db
+      .prepare('SELECT MAX(version) = 2 FROM schema_migration')
+      .pluck()
+      .get()
     // Only derived search data is discarded. Original song metadata, playlists,
     // settings, sources and history are left intact.
     const triggers = db.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all() as {
@@ -50,6 +54,7 @@ export function migrateLegacyLibrary(db: Database.Database): boolean {
     }
     for (const name of searchTables) db.exec(`DROP TABLE IF EXISTS ${name}`)
     db.exec(schemaV1)
+    if (!migratedPositions) db.exec(schemaV2)
     db.exec(searchSchema)
     db.exec(`
       INSERT INTO song_original_fts(rowid,title,artist,album,file_name)

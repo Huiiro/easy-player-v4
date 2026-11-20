@@ -48,6 +48,7 @@ export {
   reorderPlaylists,
   addSongsToPlaylist,
   removeSongsFromPlaylist,
+  movePlaylistSong,
   queryPlaylistSongs,
   listPlaylistMemberships
 } from './repository/playlists'

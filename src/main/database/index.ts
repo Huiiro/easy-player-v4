@@ -1,7 +1,7 @@
 import { t } from '../i18n'
 import { logOperation } from '../service/operationLogger'
 import Database from 'better-sqlite3'
-import { DATABASE_SCHEMA_VERSION, schemaV1 } from './schema'
+import { schemaV1, schemaV2 } from './schema'
 import { refreshNewestSongs } from './newestSongs'
 import { getDatabasePath } from '../utils/pathUtils'
 import { searchSchema } from '../search/schema'
@@ -25,14 +25,20 @@ function migrate(db: Database.Database): void {
     const { version } = db
       .prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migration')
       .get() as { version: number }
-    if (version >= DATABASE_SCHEMA_VERSION) return
-    db.exec(schemaV1)
-    db.exec(searchSchema)
-    db.prepare('INSERT INTO schema_migration (version) VALUES (?)').run(DATABASE_SCHEMA_VERSION)
+    const recordMigration = db.prepare('INSERT INTO schema_migration (version) VALUES (?)')
+    if (version < 1) {
+      db.exec(schemaV1)
+      db.exec(searchSchema)
+      recordMigration.run(1)
+    }
+    if (version < 2) {
+      db.exec(schemaV2)
+      recordMigration.run(2)
+    }
   })()
 }
 
-/** Opens the local library database and ensures the consolidated V1 schema. */
+/** Opens the local library database and applies pending migrations. */
 export function initDatabase(overridePath?: string): Database.Database {
   return logOperation(
     '[Database] initialize',

@@ -95,6 +95,15 @@ vm.runInNewContext(
         return queryModule.exports
       }
       if (name.endsWith('useSongSelection')) return selectionModule.exports
+      if (name.endsWith('useScrollPosition'))
+        return {
+          useScrollPosition: () => ({
+            isRestoringScroll: Vue.ref(false),
+            saveScrollPosition() {},
+            clearSavedScrollPosition() {},
+            restoreScrollPosition() {}
+          })
+        }
       if (name.endsWith('songTextSort')) return sortModule.exports
       if (name.endsWith('songListLayout')) {
         const layout = { exports: {} }

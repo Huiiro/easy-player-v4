@@ -223,6 +223,17 @@ const handlers = {
     library.addSongsToPlaylist(playlistId, songIds),
   removeSongsFromPlaylist: ({ playlistId, songIds }: { playlistId: number; songIds: number[] }) =>
     library.removeSongsFromPlaylist(playlistId, songIds),
+  movePlaylistSong: ({
+    playlistId,
+    songId,
+    targetSongId,
+    before
+  }: {
+    playlistId: number
+    songId: number
+    targetSongId: number
+    before: boolean
+  }) => library.movePlaylistSong(playlistId, songId, targetSongId, before),
   deleteSongs: ({ songIds, deleteLocalFiles }: { songIds: number[]; deleteLocalFiles?: boolean }) =>
     library.deleteSongs(songIds, deleteLocalFiles === true),
   queryPlaylistSongs: ({

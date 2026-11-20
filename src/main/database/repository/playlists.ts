@@ -18,6 +18,8 @@ import { getAppSetting, setAppSetting } from './settings'
 import { attachTags, songColumnsFor, relevanceOrder, mapSong, type SongRow } from './songHelpers'
 
 const likedPlaylistCoverSetting = 'playlist.liked.customCover'
+const playlistSongOrder = (order: 'ASC' | 'DESC'): string =>
+  `COALESCE(sli.position, 0) ${order}, sli.created_at ${order}, sli.id ${order}`
 
 export function listPlaylists(): PlaylistSummary[] {
   return getDatabase()
@@ -194,6 +196,43 @@ export function removeSongsFromPlaylist(playlistId: number, songIds: number[]): 
   })()
 }
 
+export function movePlaylistSong(
+  playlistId: number,
+  songId: number,
+  targetSongId: number,
+  before: boolean
+): { id: number; position: number }[] | null {
+  const db = getDatabase()
+  return db
+    .transaction(() => {
+      const entries = db
+        .prepare(
+          `SELECT sli.song_id AS id, COALESCE(sli.position, 0) AS position
+         FROM song_list_item sli WHERE sli.song_list_id = ? ORDER BY ${playlistSongOrder('DESC')}`
+        )
+        .all(playlistId) as { id: number; position: number }[]
+      const from = entries.findIndex((entry) => entry.id === songId)
+      const target = entries.findIndex((entry) => entry.id === targetSongId)
+      if (from < 0 || target < 0) return null
+      const to = target + (before ? 0 : 1) - (from < target ? 1 : 0)
+      if (songId === targetSongId || from === to) return entries
+
+      const [moved] = entries.splice(from, 1)
+      entries.splice(to, 0, moved)
+      const update = db.prepare(
+        `UPDATE song_list_item SET position = @position
+       WHERE song_list_id = @playlistId AND song_id = @songId`
+      )
+      entries.forEach((entry, index) => {
+        const position = entries.length - index - 1
+        if (entry.position !== position) update.run({ playlistId, songId: entry.id, position })
+        entry.position = position
+      })
+      return entries
+    })
+    .immediate()
+}
+
 export function refreshPlaylistCover(playlistId: number): void {
   const db = getDatabase()
   const playlist = db.prepare('SELECT custom_cover FROM song_list WHERE id = ?').get(playlistId) as
@@ -201,7 +240,7 @@ export function refreshPlaylistCover(playlistId: number): void {
   if (!playlist || playlist.custom_cover) return
   const song = db
     .prepare(
-      `SELECT s.cover FROM song_list_item sli JOIN song s ON s.id = sli.song_id WHERE sli.song_list_id = ? ORDER BY sli.position DESC, sli.id DESC LIMIT 1`
+      `SELECT s.cover FROM song_list_item sli JOIN song s ON s.id = sli.song_id WHERE sli.song_list_id = ? ORDER BY sli.created_at DESC, sli.id DESC LIMIT 1`
     )
     .get(playlistId) as { cover: string | null } | undefined
   db.prepare('UPDATE song_list SET cover = ? WHERE id = ?').run(song?.cover ?? null, playlistId)
@@ -233,11 +272,7 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const allowed = new Set(['id', 'title', 'artist', 'album', 'duration', 'created_at'])
   const sort = allowed.has(query.sortBy ?? '') ? query.sortBy! : undefined
   const order = query.sortOrder ? (query.sortOrder === 'desc' ? 'DESC' : 'ASC') : 'DESC'
-  // Membership time is distinct from when the song entered the library.
-  // The entry ID keeps same-second additions in a stable newest-first order.
-  const sorting = sort
-    ? `s.${sort} ${order}, sli.id ${order}`
-    : `sli.created_at ${order}, sli.id ${order}`
+  const sorting = sort ? `s.${sort} ${order}, sli.id ${order}` : playlistSongOrder(order)
   const size =
     query.size && Number.isFinite(query.size) && query.size > 0 ? Math.floor(query.size) : undefined
   if (size) {
@@ -249,7 +284,10 @@ export function queryPlaylistSongs(playlistId: number, query: SongQuery = {}): P
   const data = attachTags(
     db
       .prepare(
-        `SELECT ${songColumnsFor('s.')}, sli.created_at AS playlistAddedAt, sli.id AS playlistEntryId, ${searchFilter.score} AS searchScore FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause} ORDER BY ${relevanceOrder(searchFilter.sql, query)}${sorting} ${pagination}`
+        `SELECT ${songColumnsFor('s.')}, sli.created_at AS playlistAddedAt, sli.id AS playlistEntryId,
+          COALESCE(sli.position, 0) AS playlistPosition, ${searchFilter.score} AS searchScore
+         FROM song_list_item sli JOIN song s ON s.id = sli.song_id ${clause}
+         ORDER BY ${relevanceOrder(searchFilter.sql, query)}${sorting} ${pagination}`
       )
       .all(params)
       .map((row) => mapSong(row as SongRow))
