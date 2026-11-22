@@ -325,13 +325,13 @@ useVisibleInterval(() => {
               <button
                 v-if="group === 'lessRecommended'"
                 type="button"
-                class="btn-hover inline-flex size-8 items-center justify-center rounded-md text-text-l disabled:opacity-50"
+                class="btn-hover rounded-md px-2 py-1 text-xs text-text-l disabled:opacity-50"
                 :title="t('recommendation.resetScoreHelp')"
                 :aria-label="t('recommendation.removeAndReset')"
                 :disabled="clearingLessRecommended || resettingSongIds.has(song.id)"
                 @click="resetRecommendation(song)"
               >
-                <span aria-hidden="true" class="text-xl leading-none">−</span>
+                <SvgIcon name="common-minimize" class-name="size-5" />
               </button>
               <button
                 class="btn-hover rounded-md px-2 py-1 text-xs"
