@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import SettingGroup from '@/components/settings/SettingGroup.vue'
+import SettingRow from '@/components/settings/SettingRow.vue'
 import SettingsSearch from '@/components/settings/SettingsSearch.vue'
 import type { SettingsSearchEntry } from '@/utils/settingsSearch'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseConfirmDialog from '@/components/ui/BaseConfirmDialog.vue'
+import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
 import { useMessage } from '@/components/ui/useMessage'
@@ -426,6 +428,16 @@ onBeforeUnmount(() => {
               <StatisticsSettings />
             </SettingGroup>
             <SettingGroup :title="t('settings.groups.preferences')">
+              <SettingRow
+                :label="t('settings.linkEasyLyrics')"
+                :description="t('settings.linkEasyLyricsDescription')"
+              >
+                <BaseSwitch
+                  v-model="ui.linkEasyLyrics"
+                  :aria-label="t('settings.linkEasyLyrics')"
+                  size="md"
+                />
+              </SettingRow>
               <ResetPreferencesSettings @reset="preferencesRevision++" />
             </SettingGroup>
             <SettingGroup :title="t('settings.groups.links')">

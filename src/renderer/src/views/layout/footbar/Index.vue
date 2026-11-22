@@ -722,7 +722,11 @@ onBeforeUnmount(() => {
                   <button class="menu-item flex items-center gap-2" @click="locateSong">
                     <SvgIcon name="common-locate" class-name="size-4" />{{ t('footer.locateSong') }}
                   </button>
-                  <button class="menu-item flex items-center gap-2" @click="openInLyricEditor">
+                  <button
+                    v-if="ui.linkEasyLyrics"
+                    class="menu-item flex items-center gap-2"
+                    @click="openInLyricEditor"
+                  >
                     <SvgIcon name="common-edit-lrc" class-name="size-4" />
                     {{ t('footer.openInLyricEditor') }}
                   </button>

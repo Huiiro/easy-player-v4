@@ -53,6 +53,7 @@ async function runChecks() {
     artistSeparator: '/',
     normalizeMetadataSeparator: true,
     footerOpenMode: 'bar',
+    linkEasyLyrics: false,
     useDesktopLyrics: false
   })
   window.footerPlayer = reactive({
@@ -183,6 +184,17 @@ async function runChecks() {
     !!menu() && !window.footerUi.showPlayer,
     'collapsed more menu opens without opening the player'
   )
+  const lyricEditorAction = () =>
+    [...menu().querySelectorAll('button')].find(
+      (button) => button.textContent.trim() === zh.footer.openInLyricEditor
+    )
+  check(!lyricEditorAction(), 'Easy Lyrics action is hidden by default')
+  window.footerUi.linkEasyLyrics = true
+  await wait()
+  check(!!lyricEditorAction(), 'Linking Easy Lyrics shows its action in the open more menu')
+  window.footerUi.linkEasyLyrics = false
+  await wait()
+  check(!lyricEditorAction(), 'Unlinking Easy Lyrics removes its action')
   for (const category of ['volume', 'mode', 'queue', 'secondary'])
     check(
       getComputedStyle(action('.ep-footer-menu-' + category)).display !== 'none',

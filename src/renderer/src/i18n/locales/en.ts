@@ -1062,6 +1062,7 @@ export default {
     extremePlaybackActive: 'Lightweight mode is active',
     returnFullPlayer: 'Return to full player',
     extremePlayback: 'Lightweight mode',
+    pinLightweightModeToHeader: 'Pin lightweight mode to the header',
     extremePlaybackDescription:
       'Unload the main interface, keep basic playback, and pause other activities.',
     exitExtremePlayback: 'Exit lightweight mode',
@@ -1207,6 +1208,7 @@ export default {
     library: 'Library',
     libraryDescription: 'Manage library files.',
     audioControlPanel: 'Audio control panel',
+    pinAudioControlsToHeader: 'Pin audio controls to the header',
     audioControlPanelDescription: 'Adjust the audio output chain and related settings.',
     openAudioControlPanel: 'Open audio controls',
     reduceMotion: 'Reduce motion',
@@ -1371,6 +1373,8 @@ export default {
     desktopLyricsPreviewNext: 'Next lyric preview',
     other: 'Other',
     otherDescription: 'About This Player',
+    linkEasyLyrics: 'Link Easy Lyrics',
+    linkEasyLyricsDescription: 'Add a related entry in the more menu of the bottom control bar.',
     artistArtworkCache: 'Online Artist Artwork Cache',
     artistArtworkCacheDescription:
       'Clear downloaded online artist artwork and restore default avatars.',

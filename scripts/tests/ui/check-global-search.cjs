@@ -20,10 +20,11 @@ app.whenReady().then(async () => {
           import Header from './src/renderer/src/views/layout/header/Index.vue';
           import Host from './src/renderer/src/components/search/GlobalSearchHost.vue';
           import SvgIcon from './src/renderer/src/components/svg/SvgIcon.vue';
+          import eventBus from './src/renderer/src/utils/eventBus';
           import {useShortcuts} from './src/renderer/src/hooks/useShortcuts';
           import {DEFAULT_LOCAL_SHORTCUTS,DEFAULT_GLOBAL_SHORTCUTS} from './src/shared/shortcuts';
           import zh from './src/renderer/src/i18n/locales/zh';
-          export {Vue,createI18n,createRouter,createMemoryHistory,Scroller,Header,Host,SvgIcon,useShortcuts,zh,DEFAULT_LOCAL_SHORTCUTS,DEFAULT_GLOBAL_SHORTCUTS};`,
+          export {Vue,createI18n,createRouter,createMemoryHistory,Scroller,Header,Host,SvgIcon,eventBus,useShortcuts,zh,DEFAULT_LOCAL_SHORTCUTS,DEFAULT_GLOBAL_SHORTCUTS};`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -76,8 +77,10 @@ app.whenReady().then(async () => {
               },
               ({ path: file }) => ({ path: file, namespace: 'unrelated-feature' })
             )
-            build.onLoad({ filter: /.*/, namespace: 'unrelated-feature' }, () => ({
-              contents: 'export default {render:()=>null}',
+            build.onLoad({ filter: /.*/, namespace: 'unrelated-feature' }, ({ path: file }) => ({
+              contents: file.endsWith('AudioControlPanelV2.vue')
+                ? "import { h } from 'vue'; export default {render:()=>h('div',{ 'data-audio-controls-fixture': '' })}"
+                : 'export default {render:()=>null}',
               loader: 'js'
             }))
             build.onLoad({ filter: /\.css$/ }, () => ({ contents: '', loader: 'js' }))
@@ -94,10 +97,15 @@ app.whenReady().then(async () => {
                   }
                   // Esbuild's IIFE namespace lacks the native ESM marker that Vue's
                   // async loader uses to unwrap a default export in production.
-                }).content.replace(
-                  "import('./GlobalSearchDialog.vue')",
-                  "import('./GlobalSearchDialog.vue').then(module => module.default)"
-                ),
+                })
+                  .content.replace(
+                    "import('./GlobalSearchDialog.vue')",
+                    "import('./GlobalSearchDialog.vue').then(module => module.default)"
+                  )
+                  .replace(
+                    "import('@/components/player/AudioControlPanelV2.vue')",
+                    "import('@/components/player/AudioControlPanelV2.vue').then(module => module.default)"
+                  ),
                 loader: 'ts',
                 resolveDir: path.dirname(file)
               }
@@ -157,11 +165,12 @@ app.whenReady().then(async () => {
     )
     await window.webContents.executeJavaScript(bundle.outputFiles[0].text)
     const results = await window.webContents.executeJavaScript(`(async()=>{
-      const {Vue,createI18n,createRouter,createMemoryHistory,Scroller,Header,Host,SvgIcon,useShortcuts,zh,DEFAULT_LOCAL_SHORTCUTS,DEFAULT_GLOBAL_SHORTCUTS}=SearchCheck;
+      const {Vue,createI18n,createRouter,createMemoryHistory,Scroller,Header,Host,SvgIcon,eventBus,useShortcuts,zh,DEFAULT_LOCAL_SHORTCUTS,DEFAULT_GLOBAL_SHORTCUTS}=SearchCheck;
       const {h,createApp,reactive,nextTick}=Vue;
       const checks=[];const check=(value,message)=>{if(!value)throw new Error(message);checks.push(message)};
       const wait=async(ms=100)=>{await nextTick();await new Promise(resolve=>setTimeout(resolve,ms))};
       window.searchUi=reactive({shortcutKeys:{...DEFAULT_LOCAL_SHORTCUTS},globalShortcutKeys:{...DEFAULT_GLOBAL_SHORTCUTS},useGlobalShortcutKeys:false,useMica:false,useCardView:false,sidebarExpanded:true,customThemeText:{},logoText:'Easy Player',musicSource:'local',musicSourceId:0,artistSeparator:' / ',normalizeMetadataSeparator:true,compactSongList:false});
+      Object.assign(window.searchUi,{pinAudioControlsToHeader:true,pinLightweightModeToHeader:false});
       const songs=[{id:1,title:'稻香',artist:'周杰伦',album:'魔杰座',audio:'one.wav',songStatus:1,sourceId:null,duration:220,searchScore:900},{id:2,title:'稻香现场',artist:'周杰伦',album:'演唱会',audio:'two.wav',songStatus:1,sourceId:null,duration:240,searchScore:100},{id:3,title:'Remote song',artist:'Artist',album:'Album',audio:'remote.wav',songStatus:1,sourceId:7,duration:200,searchScore:50}];
       const original={id:99,title:'Current song',audio:'current.wav',songStatus:1};
       const playback=[];const requests=[];let indexListeners=0;
@@ -182,6 +191,24 @@ app.whenReady().then(async () => {
       await router.push('/home');await router.isReady();
       const mounted=createApp({setup(){useShortcuts();return()=>[h(Header),h('main',{style:'padding:30px'},'Underlying home page'),h(Host)]}}).use(createI18n({legacy:false,locale:'zh',messages:{zh}})).use(router).use(Scroller).component('SvgIcon',SvgIcon);
       mounted.mount('#app');await wait();
+      const headerAction=label=>[...document.querySelectorAll('.ep-header button')].find(button=>button.getAttribute('aria-label')===label);
+      check(headerAction(zh.footer.audioControls)&&!headerAction(zh.settings.extremePlayback),'Only audio controls are pinned to the header by default');
+      window.searchUi.pinAudioControlsToHeader=false;
+      window.searchUi.pinLightweightModeToHeader=true;
+      await wait();
+      const lightweight=headerAction(zh.settings.extremePlayback);
+      check(!headerAction(zh.footer.audioControls)&&lightweight,'Header reflects both changed preferences');
+      let enteredLightweightMode=false;
+      window.searchPlayer.setExtremePlayback=enabled=>{enteredLightweightMode=enabled};
+      lightweight.click();
+      check(enteredLightweightMode,'Pinned lightweight action calls the playback mode switch');
+      window.searchUi.pinLightweightModeToHeader=false;
+      await wait();
+      check(!headerAction(zh.settings.extremePlayback),'Unpinning lightweight mode removes its header action');
+      eventBus.emit('openAudioControls');await wait(400);
+      const audioDialog=[...document.querySelectorAll('.ep-dialog')].find(dialog=>dialog.querySelector('.ep-dialog-title')?.textContent.trim()===zh.footer.audioControls);
+      check(audioDialog?.querySelector('[data-audio-controls-fixture]'),'Settings can still open the audio controls while its shortcut is unpinned');
+      audioDialog.querySelector('button[aria-label="'+zh.common.close+'"]').click();await wait(400);
       const trigger=document.querySelector('[aria-label="全局搜索"]');
       check(trigger&&trigger.title.includes('CTRL + K'),'Header exposes search and its configured shortcut');
       check(indexListeners===0,'Search does not load the song list before opening');

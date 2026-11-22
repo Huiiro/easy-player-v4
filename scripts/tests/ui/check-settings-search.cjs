@@ -137,6 +137,13 @@ app.whenReady().then(async () => {
       document.documentElement.classList.add('dark');document.body.style.cssText='height:100vh;margin:0';document.getElementById('app').style.height='100%';
       instance.mount('#app');await wait(300);
       const playback=document.querySelector('#playback'),card=playback.querySelector('.settings-card');
+      for(const [key,initial] of [['pinAudioControlsToHeader',true],['pinLightweightModeToHeader',false]]){
+        const pin=[...card.querySelectorAll('button[aria-pressed]')].find(button=>button.getAttribute('aria-label')===zh.settings[key]);
+        check(pin?.getAttribute('aria-pressed')===String(initial)&&pin.querySelector('use')?.getAttribute('xlink:href')==='#icon-common-pin',zh.settings[key]+' uses the pin icon and correct default');
+        pin.click();await wait();
+        check(ui[key]===!initial&&pin.getAttribute('aria-pressed')===String(!initial),zh.settings[key]+' changes its pin preference');
+      }
+      check(!ui.extremePlayback,'Pinning lightweight mode does not activate it');
       const footerGroup=[...card.querySelectorAll('.settings-group')].find(group=>group.querySelector('.settings-group-title')?.textContent.trim()===zh.settings.playerControlBar);
       const footerLabels=[...footerGroup.querySelectorAll('.setting-row h3')].map(label=>label.textContent.trim());
       check(footerGroup.querySelector('.settings-group-title').textContent.trim()==='控制栏','The control bar group uses the updated Chinese label');
@@ -144,6 +151,10 @@ app.whenReady().then(async () => {
       check([zh.settings.footerOpenAnywhere,zh.settings.autoHideFooter,zh.footerLayout.title].every(label=>footerLabels.includes(label)),'The control bar keeps all three settings in the playback card');
       const playbackLabels=[...card.querySelectorAll('.setting-row h3')].map(label=>label.textContent.trim());
       check([zh.settings.playerBackground,zh.settings.playerLayout,zh.settings.playerCoverEffect,zh.settings.playerLyricsFont].every(label=>!playbackLabels.includes(label)),'Preferences does not show the appearance shortcut or duplicate its options');
+      const easyLyrics=[...document.querySelectorAll('#other button[role=switch]')].find(button=>button.getAttribute('aria-label')===zh.settings.linkEasyLyrics);
+      check(easyLyrics?.getAttribute('aria-checked')==='false','Other settings shows the Easy Lyrics switch off by default');
+      easyLyrics.click();await wait();
+      check(ui.linkEasyLyrics&&easyLyrics.getAttribute('aria-checked')==='true','The Easy Lyrics switch updates the preference');
       const trigger=()=>document.querySelector('.settings-nav button');
       check(trigger()?.textContent.includes('搜索设置'),'Search is the first settings sidebar entry');
       const open=async()=>{trigger().click();await wait(350)};
@@ -161,6 +172,7 @@ app.whenReady().then(async () => {
       autoHide.click();await wait();await open();
       check((await search(zh.settings.playerBackground)).length===0,'Settings search no longer shows the appearance shortcut');
       check((await search(en.settings.playerCoverEffect)).length===0,'Settings search no longer routes appearance aliases through the removed shortcut');
+      check((await search(en.settings.linkEasyLyrics)).some(button=>button.textContent.includes(zh.settings.linkEasyLyrics)),'Easy Lyrics is searchable in Other settings');
       check((await search('系统 更新 启动')).some(button=>button.textContent.includes('启动时自动检查更新')),'Matches section, group and setting title terms together');
       check((await search('SYSTEM updates startup')).some(button=>button.textContent.includes('启动时自动检查更新')),'English hierarchy queries find Chinese settings');
       check((await search(en.settings.interfaceFontDescription)).some(button=>button.textContent.includes(zh.settings.interfaceFont)),'Search matches translated descriptions');

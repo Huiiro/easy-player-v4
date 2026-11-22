@@ -6,6 +6,7 @@ import SearchIndexStatus from '@/components/search/SearchIndexStatus.vue'
 import AppUpdateStatus from '@/components/settings/AppUpdateStatus.vue'
 import { useAutoHide } from '@/hooks/useAutoHide'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { usePlayerStore } from '@/stores/player/playerStore'
 import { useRoute } from 'vue-router'
 import router from '@/router'
 import { useI18n } from 'vue-i18n'
@@ -21,6 +22,7 @@ const AudioControlPanelV2 = defineAsyncComponent(
 const props = defineProps<{ autoHide?: boolean; hideDelay?: number }>()
 const { visible } = useAutoHide({ enabled: () => props.autoHide, delay: props.hideDelay || 5000 })
 const ui = useUIStore()
+const player = usePlayerStore()
 const { t } = useI18n()
 const { info } = useMessage()
 const route = useRoute()
@@ -208,6 +210,7 @@ eventBus.on('openAudioControls', openAudioControls)
         <svgIcon name="menu-settings" class-name="size-4" />
       </button>
       <button
+        v-if="ui.pinAudioControlsToHeader"
         class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"
         :title="t('footer.audioControls')"
         :aria-label="t('footer.audioControls')"
@@ -216,6 +219,17 @@ eventBus.on('openAudioControls', openAudioControls)
         @click="openAudioControls"
       >
         <svgIcon name="common-equalizer" class-name="size-4" />
+      </button>
+      <button
+        v-if="ui.pinLightweightModeToHeader"
+        type="button"
+        class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text disabled:opacity-50"
+        :title="t('settings.extremePlayback')"
+        :aria-label="t('settings.extremePlayback')"
+        :disabled="player.playbackModeChanging"
+        @click="player.setExtremePlayback(true)"
+      >
+        <svgIcon name="common-light" class-name="size-5" />
       </button>
       <button
         class="grid size-[42px] place-items-center text-text-l transition hover:bg-hover hover:text-text"

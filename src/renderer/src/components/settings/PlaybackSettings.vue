@@ -7,6 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
+import SvgIcon from '@/components/svg/SvgIcon.vue'
 import FooterLayoutSettings from './FooterLayoutSettings.vue'
 import SleepTimerSettings from './SleepTimerSettings.vue'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -47,9 +48,25 @@ function setSmartShuffle(value: boolean | string | number): void {
         :label="t('settings.audioControlPanel')"
         :description="t('settings.audioControlPanelDescription')"
       >
-        <BaseButton size="sm" variant="ghost" type="button" @click="openAudioControls">
-          {{ t('settings.openAudioControlPanel') }}
-        </BaseButton>
+        <div class="flex shrink-0 items-center gap-2">
+          <BaseButton
+            size="sm"
+            icon-only
+            :variant="ui.pinAudioControlsToHeader ? 'secondary' : 'ghost'"
+            :aria-pressed="ui.pinAudioControlsToHeader"
+            :aria-label="t('settings.pinAudioControlsToHeader')"
+            :title="t('settings.pinAudioControlsToHeader')"
+            @click="ui.pinAudioControlsToHeader = !ui.pinAudioControlsToHeader"
+          >
+            <SvgIcon
+              name="common-pin"
+              :class-name="ui.pinAudioControlsToHeader ? 'size-4 text-primary' : 'size-4'"
+            />
+          </BaseButton>
+          <BaseButton size="sm" variant="ghost" type="button" @click="openAudioControls">
+            {{ t('settings.openAudioControlPanel') }}
+          </BaseButton>
+        </div>
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.groups.timer')">
@@ -124,12 +141,28 @@ function setSmartShuffle(value: boolean | string | number): void {
         :label="t('settings.extremePlayback')"
         :description="t('settings.extremePlaybackDescription')"
       >
-        <BaseSwitch
-          :model-value="ui.extremePlayback"
-          :disabled="player.playbackModeChanging"
-          size="md"
-          @update:model-value="player.setExtremePlayback($event === true)"
-        />
+        <div class="flex shrink-0 items-center gap-2">
+          <BaseButton
+            size="sm"
+            icon-only
+            :variant="ui.pinLightweightModeToHeader ? 'secondary' : 'ghost'"
+            :aria-pressed="ui.pinLightweightModeToHeader"
+            :aria-label="t('settings.pinLightweightModeToHeader')"
+            :title="t('settings.pinLightweightModeToHeader')"
+            @click="ui.pinLightweightModeToHeader = !ui.pinLightweightModeToHeader"
+          >
+            <SvgIcon
+              name="common-pin"
+              :class-name="ui.pinLightweightModeToHeader ? 'size-4 text-primary' : 'size-4'"
+            />
+          </BaseButton>
+          <BaseSwitch
+            :model-value="ui.extremePlayback"
+            :disabled="player.playbackModeChanging"
+            size="md"
+            @update:model-value="player.setExtremePlayback($event === true)"
+          />
+        </div>
       </SettingRow>
     </SettingGroup>
     <SettingGroup :title="t('settings.playerControlBar')">

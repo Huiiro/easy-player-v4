@@ -398,11 +398,18 @@ onBeforeUnmount(() => {
   padding: 0 1.25rem 1rem;
 }
 .watch-folder {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 0;
+  padding: 0.75rem 0.5rem;
+}
+.watch-folder::after {
+  position: absolute;
+  inset: auto 0 0;
   border-bottom: 1px solid var(--color-border);
+  pointer-events: none;
+  content: '';
 }
 .actions {
   display: flex;

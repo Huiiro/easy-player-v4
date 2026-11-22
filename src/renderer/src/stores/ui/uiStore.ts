@@ -104,6 +104,8 @@ export const UI_PREFERENCE_KEYS = [
   'useLocalFileName',
   'useFullProgress',
   'extremePlayback',
+  'pinAudioControlsToHeader',
+  'pinLightweightModeToHeader',
   'autoPlayOnRestore',
   'songPlayTrigger',
   'playQueuePosition',
@@ -157,6 +159,7 @@ export const UI_PREFERENCE_KEYS = [
   'footerOpenMode',
   'footerLayout',
   'autoHideFooter',
+  'linkEasyLyrics',
   'allowSwitchCoverStyle',
   'isCircularCover',
   'isCoverSpin',
@@ -360,6 +363,8 @@ export const useUIStore = defineStore(
     const useLocalFileName = ref(false)
     const useFullProgress = ref(false)
     const extremePlayback = ref(false)
+    const pinAudioControlsToHeader = ref(true)
+    const pinLightweightModeToHeader = ref(false)
     const autoPlayOnRestore = ref(false)
     const songPlayTrigger = ref<'single' | 'double'>('double')
     const playQueuePosition = ref<'left' | 'right'>('right')
@@ -558,6 +563,7 @@ export const useUIStore = defineStore(
       footerLayout.value = { ...DEFAULT_FOOTER_LAYOUT }
     }
     const autoHideFooter = ref(false)
+    const linkEasyLyrics = ref(false)
     // ========== 标签与来源 ==========
     const tagStyle = ref(TagStyle.Full)
     const tagSelected = ref<number[]>([])
@@ -1128,6 +1134,8 @@ export const useUIStore = defineStore(
       interfaceEffect,
       liquidGlassSettings,
       extremePlayback,
+      pinAudioControlsToHeader,
+      pinLightweightModeToHeader,
       autoPlayOnRestore,
       songPlayTrigger,
       playQueuePosition,
@@ -1208,6 +1216,7 @@ export const useUIStore = defineStore(
       footerLayout,
       resetFooterLayout,
       autoHideFooter,
+      linkEasyLyrics,
       tagStyle,
       tagSelected,
       musicSource,

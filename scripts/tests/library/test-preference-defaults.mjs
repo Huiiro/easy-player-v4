@@ -330,6 +330,41 @@ for (const visible of [undefined, true, false, 'false', null]) {
   assert.equal(hydrated.showPlayerAudioDetails, true)
   Pinia.disposePinia(pinia)
 }
+for (const linked of [undefined, true, false]) {
+  savedUiPreferences = JSON.stringify({ linkEasyLyrics: linked })
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const hydrated = uiModule.useUIStore(pinia)
+  assert.equal(hydrated.linkEasyLyrics, linked ?? false)
+  hydrated.linkEasyLyrics = true
+  hydrated.$persist()
+  assert.equal(JSON.parse(savedUiPreferences).linkEasyLyrics, true)
+  hydrated.resetPreferences()
+  assert.equal(hydrated.linkEasyLyrics, false)
+  Pinia.disposePinia(pinia)
+}
+{
+  savedUiPreferences = '{}'
+  const pinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(pinia)
+  const initial = uiModule.useUIStore(pinia)
+  assert.equal(initial.pinAudioControlsToHeader, true)
+  assert.equal(initial.pinLightweightModeToHeader, false)
+  initial.pinAudioControlsToHeader = false
+  initial.pinLightweightModeToHeader = true
+  initial.$persist()
+  Pinia.disposePinia(pinia)
+
+  const restartedPinia = Pinia.createPinia().use(persisted)
+  Vue.createSSRApp({ render: () => null }).use(restartedPinia)
+  const restored = uiModule.useUIStore(restartedPinia)
+  assert.equal(restored.pinAudioControlsToHeader, false)
+  assert.equal(restored.pinLightweightModeToHeader, true)
+  restored.resetPreferences()
+  assert.equal(restored.pinAudioControlsToHeader, true)
+  assert.equal(restored.pinLightweightModeToHeader, false)
+  Pinia.disposePinia(restartedPinia)
+}
 for (const layout of [undefined, 'classic', 'bottom', 'unknown', null]) {
   savedUiPreferences = JSON.stringify({ playerLayout: layout })
   const pinia = Pinia.createPinia().use(persisted)
