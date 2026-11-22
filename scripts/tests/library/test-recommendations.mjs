@@ -534,7 +534,9 @@ assert.ok(
   'today’s like affects tomorrow’s recommendation'
 )
 assert.ok(
-  [...tomorrowDaily.recommended, ...tomorrowDaily.discovery].some((song) => song.songId === 3),
+  getRecommendationScores(new Date(tomorrowNoon).setHours(0, 0, 0, 0), true).some(
+    (song) => song.songId === 3
+  ),
   'today’s imported song becomes eligible tomorrow'
 )
 setSongPreference(9, 0)
@@ -752,5 +754,57 @@ assert.equal(
   1,
   'an undated nonempty library still has a newest song'
 )
+// Exercise persisted discovery rotation across a year boundary and a fourth-day rollover.
+for (const candidateCount of [320, 61, 2, 1, 0]) {
+  db.exec('DELETE FROM recommendation_daily; DELETE FROM song')
+  for (let id = 1; id <= candidateCount; id++) {
+    songs.run(id, `Track ${id}`, `/test/${id}`, null, null, null, null, 0, 180)
+  }
+  const days = []
+  for (let day = 0; day < 4; day++) {
+    const at = new Date(2026, 11, 30 + day, 12).getTime()
+    if (candidateCount === 61 && day === 1) {
+      // An existing installation can have an old snapshot for both yesterday and today.
+      const yesterdayKey = localDate(new Date(2026, 11, 30))
+      db.prepare(
+        "UPDATE recommendation_daily SET groups_json = json_set(groups_json, '$.algorithmVersion', 2) WHERE local_date = ?"
+      ).run(yesterdayKey)
+      const legacy = db
+        .prepare('SELECT groups_json FROM recommendation_daily WHERE local_date = ?')
+        .get(yesterdayKey)
+      insertSnapshot.run(
+        localDate(new Date(at)),
+        new Date(at).setHours(0, 0, 0, 0),
+        legacy.groups_json,
+        at
+      )
+    }
+    const ids = Array.from(getDailyRecommendationGroups(at).discovery, (song) => song.songId)
+    days.push(ids)
+    const recent = Array.from(getRecentDiscoveryGroups(at), ({ scores }) =>
+      Array.from(scores, (song) => song.songId)
+    )
+    assert.deepEqual(
+      recent,
+      days.slice(-3).reverse(),
+      'past lists retain their membership and order'
+    )
+    if (day >= 2) {
+      const total = recent.flat().length
+      const unique = new Set(recent.flat()).size
+      assert.equal(
+        unique,
+        Math.min(300, candidateCount),
+        'three days cover distinct eligible songs'
+      )
+      if (candidateCount >= 3)
+        assert.equal(unique, total, 'no repeats across the three visible days')
+    }
+    if (candidateCount === 2 && day > 0) {
+      assert.equal(ids.length, 1)
+      assert.notEqual(ids[0], days[day - 1][0], 'reuse the older song in a tiny library')
+    }
+  }
+}
 db.close()
 console.log('Recommendation behavior fixtures passed')

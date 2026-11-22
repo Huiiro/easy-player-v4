@@ -346,7 +346,7 @@ export default {
     year: '年份',
     playTimes: '播放次数',
     defaultSort: '默认',
-    toggleDragSort: '拖拽排序',
+    toggleDragSort: '排序',
     exitDragSort: '退出排序',
     dragToReorder: '拖拽调整歌曲顺序',
     reorderFailed: '保存歌曲顺序失败',

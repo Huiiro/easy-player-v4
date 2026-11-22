@@ -448,10 +448,29 @@ function mixDiscovery(items: RecommendationScore[], limit: number): Recommendati
   return result
 }
 
+const DAILY_ALGORITHM_VERSION = 3
+
+function rotateDailyDiscovery(
+  candidates: RecommendationScore[],
+  limit: number,
+  history: ReadonlySet<number>[]
+): RecommendationScore[] {
+  // Leave enough candidates for the following two days, even on a first run.
+  const dailyLimit = Math.min(limit, Math.ceil(candidates.length / 3))
+  let pool = candidates
+  for (const shown of history) {
+    // Check yesterday first. If every song has appeared, reuse the oldest options.
+    const unseen = pool.filter((song) => !shown.has(song.songId))
+    if (unseen.length) pool = unseen
+  }
+  return mixDiscovery(pool, dailyLimit)
+}
+
 export function selectRecommendationGroups(
   scores: RecommendationScore[],
   limit: number,
-  at = Date.now()
+  at = Date.now(),
+  discoveryHistory?: ReadonlySet<number>[]
 ): {
   recommended: RecommendationScore[]
   discovery: RecommendationScore[]
@@ -499,15 +518,15 @@ export function selectRecommendationGroups(
     else break
   }
   const favoriteIds = new Set(recommended.map((score) => score.songId))
+  const discoveryCandidates = eligible.filter(
+    (score) =>
+      score.engagedPlays <= 2 && score.reason !== 'skipped' && !favoriteIds.has(score.songId)
+  )
   return {
     recommended,
-    discovery: mixDiscovery(
-      eligible.filter(
-        (score) =>
-          score.engagedPlays <= 2 && score.reason !== 'skipped' && !favoriteIds.has(score.songId)
-      ),
-      limit
-    ),
+    discovery: discoveryHistory
+      ? rotateDailyDiscovery(discoveryCandidates, limit, discoveryHistory)
+      : mixDiscovery(discoveryCandidates, limit),
     lessRecommended: scores
       .filter((score) => score.preference === -1 || score.reason === 'skipped')
       .sort((a, b) => a.weight - b.weight)
@@ -542,7 +561,7 @@ export function getDailyRecommendationGroups(at = Date.now()): {
         typeof selectRecommendationGroups
       > & { algorithmVersion?: number }
       if (
-        groups.algorithmVersion === 2 &&
+        groups.algorithmVersion === DAILY_ALGORITHM_VERSION &&
         Array.isArray(groups.recommended) &&
         Array.isArray(groups.discovery) &&
         Array.isArray(groups.lessRecommended)
@@ -558,7 +577,15 @@ export function getDailyRecommendationGroups(at = Date.now()): {
       // Rebuild a corrupt or outdated local snapshot.
     }
   }
-  const groups = selectRecommendationGroups(getRecommendationScores(cutoffAt, true), 100, cutoffAt)
+  const discoveryHistory = readDiscoverySnapshots(oldestDate, dataThrough).map(
+    ({ scores }) => new Set(scores.map((score) => score.songId))
+  )
+  const groups = selectRecommendationGroups(
+    getRecommendationScores(cutoffAt, true),
+    100,
+    cutoffAt,
+    discoveryHistory
+  )
   db.prepare(
     `INSERT INTO recommendation_daily (local_date, cutoff_at, groups_json, created_at)
      VALUES (?, ?, ?, ?)
@@ -566,7 +593,12 @@ export function getDailyRecommendationGroups(at = Date.now()): {
        cutoff_at = excluded.cutoff_at,
        groups_json = excluded.groups_json,
        created_at = excluded.created_at`
-  ).run(generatedFor, cutoffAt, JSON.stringify({ ...groups, algorithmVersion: 2 }), at)
+  ).run(
+    generatedFor,
+    cutoffAt,
+    JSON.stringify({ ...groups, algorithmVersion: DAILY_ALGORITHM_VERSION }),
+    at
+  )
   return { generatedFor, dataThrough, ...groups }
 }
 
@@ -579,13 +611,20 @@ export function getRecentDiscoveryGroups(at = Date.now()): Array<{
   const oldestDate = localDateKey(
     new Date(date.getFullYear(), date.getMonth(), date.getDate() - 2).getTime()
   )
+  return readDiscoverySnapshots(oldestDate, today)
+}
+
+function readDiscoverySnapshots(
+  oldestDate: string,
+  newestDate: string
+): Array<{ generatedFor: string; scores: RecommendationScore[] }> {
   const rows = getDatabase()
     .prepare(
       `SELECT local_date AS generatedFor, groups_json AS groupsJson
        FROM recommendation_daily WHERE local_date BETWEEN ? AND ?
        ORDER BY local_date DESC LIMIT 3`
     )
-    .all(oldestDate, today) as Array<{ generatedFor: string; groupsJson: string }>
+    .all(oldestDate, newestDate) as Array<{ generatedFor: string; groupsJson: string }>
   return rows.flatMap(({ generatedFor, groupsJson }) => {
     try {
       const groups = JSON.parse(groupsJson) as { discovery?: RecommendationScore[] }
