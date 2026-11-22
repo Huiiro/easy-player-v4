@@ -999,7 +999,7 @@ app.whenReady().then(() =>
         packaged: app.isPackaged
       })
       migrateSourceSecrets()
-      registerDatabaseIpcHandlers()
+      registerDatabaseIpcHandlers(() => mainWindow?.webContents)
       registerScanIpcHandlers()
       registerDuplicateFileIpcHandlers()
       await initializePluginProxy()

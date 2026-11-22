@@ -241,6 +241,10 @@ const databaseAPI = {
   },
   command: (action: string, params?: unknown) =>
     ipcRenderer.invoke('database:command', { action, params }),
+  savePlaybackSession: (input: import('../shared/playbackSession').PlaybackSessionWrite) =>
+    ipcRenderer.invoke('database:save-playback-session', input),
+  savePlaybackSessionSync: (input: import('../shared/playbackSession').PlaybackSessionWrite) =>
+    ipcRenderer.sendSync('database:save-playback-session-sync', input),
   saveSync: (key: string, value: unknown) =>
     ipcRenderer.sendSync('database:save-setting-sync', { key, value }) as {
       success: boolean

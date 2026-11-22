@@ -33,6 +33,11 @@ import { PlayMode } from '@/constants'
 import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { normalizeRhythmVisualIntensity } from '@/utils/rhythmVisual'
+import {
+  PLAYBACK_QUEUE_KEY,
+  PLAYBACK_SESSION_KEY,
+  type PlaybackSessionWrite
+} from '../../../../shared/playbackSession'
 
 export const usePlayerStore = defineStore('player', () => {
   const { warning, success, info } = useMessage()
@@ -1119,7 +1124,6 @@ export const usePlayerStore = defineStore('player', () => {
   interface PlaybackSession {
     durationMs: number
     trackInfo: TrackInfo | null
-    queue: PersistedQueueSong[]
     queuePlaylistId?: number | null
     currentQueueIndex: number
     playMode: PlayMode
@@ -1196,26 +1200,25 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function savePlaybackSession(): Promise<void> {
     try {
-      const result = await window.api.database.command('setSetting', {
-        key: 'player.playback-session',
-        value: capturePlaybackSession()
-      })
-      if (!result.success)
-        console.warn('[Player] Failed to persist playback session:', result.error)
+      const snapshot = capturePlaybackSession()
+      confirmPlaybackSession(snapshot, await window.api.database.savePlaybackSession(snapshot))
     } catch (error) {
-      console.warn('[Player] Failed to serialize playback session:', error)
+      console.warn('[Player] Failed to save playback session:', error)
     }
   }
 
   // Track changes only move the queue cursor. Reuse its serialized rows until
   // queue contents or one of the persisted song fields actually changes.
   const persistedQueueSongs = computed(() => queue.value.map(serializeQueueSong))
+  let playbackSessionRevision = 0
+  let savedQueueRevision = 0
+  let savedQueueSnapshot: PlaybackSessionWrite['queue']
 
-  function capturePlaybackSession(): PlaybackSession {
-    return {
+  function capturePlaybackSession(): PlaybackSessionWrite {
+    const queueSnapshot = persistedQueueSongs.value
+    const state: PlaybackSession = {
       durationMs: durationMs.value,
       trackInfo: toPlainData(trackInfo.value),
-      queue: persistedQueueSongs.value,
       queuePlaylistId: queuePlaylistId.value,
       currentQueueIndex: currentQueueIndex.value,
       playMode: playMode.value,
@@ -1228,29 +1231,53 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleReservation: shuffleReservation ? { ...shuffleReservation } : null,
       resolvedQueuePaths: [...resolvedQueuePaths]
     }
+    return {
+      revision: ++playbackSessionRevision,
+      state,
+      queue: queueSnapshot === savedQueueSnapshot ? undefined : queueSnapshot
+    }
+  }
+
+  function confirmPlaybackSession(
+    snapshot: PlaybackSessionWrite,
+    result: Awaited<ReturnType<typeof window.api.database.savePlaybackSession>>
+  ): void {
+    if (!result.success) {
+      console.warn('[Player] Failed to persist playback session:', result.error)
+    } else if (result.data && snapshot.queue && snapshot.revision > savedQueueRevision) {
+      savedQueueSnapshot = snapshot.queue
+      savedQueueRevision = snapshot.revision
+    }
   }
 
   function savePlaybackSessionSync(): void {
     if (playbackSessionTimer) clearTimeout(playbackSessionTimer)
     playbackSessionTimer = undefined
     try {
-      const result = window.api.database.saveSync(
-        'player.playback-session',
-        capturePlaybackSession()
-      )
-      if (!result.success) {
-        console.warn('[Player] Failed to persist playback session:', result.error)
-      }
+      const snapshot = capturePlaybackSession()
+      confirmPlaybackSession(snapshot, window.api.database.savePlaybackSessionSync(snapshot))
     } catch (error) {
-      console.warn('[Player] Failed to serialize playback session:', error)
+      console.warn('[Player] Failed to save playback session:', error)
     }
   }
 
   async function restorePlaybackSession(autoPlay = false): Promise<void> {
     try {
-      const response = window.api.database.getSync('player.playback-session')
+      const response = window.api.database.getSync(PLAYBACK_SESSION_KEY)
       if (!response.success || !response.data || typeof response.data !== 'object') return
-      const session = response.data as Partial<PlaybackSession & PlaybackCheckpoint>
+      const session = response.data as Partial<PlaybackSession & PlaybackCheckpoint> & {
+        queue?: PersistedQueueSong[]
+        revision?: number
+      }
+      let savedQueue = session.queue
+      const storedRevision = session.revision ?? 0
+      const splitQueue = Number.isSafeInteger(storedRevision) && storedRevision > 0
+      if (splitQueue) {
+        playbackSessionRevision = Math.max(playbackSessionRevision, storedRevision)
+        const queueResponse = window.api.database.getSync(PLAYBACK_QUEUE_KEY)
+        if (!queueResponse.success || !Array.isArray(queueResponse.data)) return
+        savedQueue = queueResponse.data
+      }
       const checkpointResponse = window.api.database.getSync('player.playback-checkpoint')
       const checkpoint =
         checkpointResponse.success &&
@@ -1266,14 +1293,18 @@ export const usePlayerStore = defineStore('player', () => {
       shuffleReservation = null
       unavailableSongIds.clear()
       resolvedQueuePaths.clear()
-      const savedCurrentId = session.queue?.[session.currentQueueIndex ?? -1]?.id
-      if (Array.isArray(session.queue)) {
+      const savedCurrentId = savedQueue?.[session.currentQueueIndex ?? -1]?.id
+      if (Array.isArray(savedQueue)) {
         const ids = new Set<number>()
-        queue.value = (session.queue as LibrarySong[]).filter((song) => {
+        queue.value = (savedQueue as LibrarySong[]).filter((song) => {
           if (!song || !Number.isInteger(song.id) || ids.has(song.id)) return false
           ids.add(song.id)
           return true
         })
+        if (splitQueue && queue.value.length === savedQueue.length) {
+          savedQueueSnapshot = persistedQueueSongs.value
+          savedQueueRevision = playbackSessionRevision
+        }
       }
       // An empty queue must not revive a decoder from an older checkpoint.
       if (!queue.value.length) return

@@ -25,6 +25,7 @@ math.random = () => {
   return seed / 2 ** 32
 }
 const smart = load('src/renderer/src/stores/player/smartShuffle.ts', {}, { Math: math })
+const sessionKeys = load('src/shared/playbackSession.ts')
 let saved
 let sessionSyncWrites = 0
 let prepared = ''
@@ -113,10 +114,10 @@ const api = {
       success: true,
       data: key === 'player.playback-session' ? restoreSession : restoreCheckpoint
     }),
-    saveSync: (_key, data) => {
-      if (_key === 'player.playback-session') sessionSyncWrites++
-      saved = JSON.parse(JSON.stringify(data))
-      return { success: true }
+    savePlaybackSessionSync: ({ state, queue }) => {
+      sessionSyncWrites++
+      saved = JSON.parse(JSON.stringify({ ...state, queue: queue ?? saved?.queue }))
+      return { success: true, data: true }
     },
     command: async () => ({ success: true, data: [] })
   },
@@ -128,6 +129,7 @@ const module = load(
   {
     vue: Vue,
     pinia: Pinia,
+    '../../../../shared/playbackSession': sessionKeys,
     '@/services/songLyricController': { createSongLyricController: () => ({}) },
     '@/utils/rhythmVisual': load('src/renderer/src/utils/rhythmVisual.ts'),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
@@ -146,7 +148,7 @@ const module = load(
     },
     '@/components/ui/useMessage': { useMessage: () => ({ warning() {}, success() {}, info() {} }) },
     '@/i18n': { t: (key) => key },
-    '@/consts': { PlayMode: { List: 0, Random: 1, Single: 2 } },
+    '@/constants': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
   },
   {

@@ -3,27 +3,63 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const vm = require('node:vm')
 const assert = require('node:assert/strict')
 const esbuild = require('esbuild')
+const ts = require('typescript')
 const Database = require('better-sqlite3')
 const baseline = process.argv.includes('--baseline')
 app.setPath('userData', fs.mkdtempSync(path.join(os.tmpdir(), 'ep-switch-check-')))
 app.disableHardwareAcceleration()
+
+function loadModule(file, dependencies = {}) {
+  const exports = {}
+  const source = fs.readFileSync(file, 'utf8')
+  const { outputText } = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  })
+  vm.runInNewContext(outputText, { exports, require: (name) => dependencies[name] })
+  return exports
+}
+
 app.whenReady().then(async () => {
   let db
   try {
     db = new Database(path.join(app.getPath('userData'), 'session.db'))
     db.pragma('journal_mode = WAL')
-    db.exec('CREATE TABLE setting(key TEXT PRIMARY KEY, value TEXT)')
-    const write = db.prepare('INSERT OR REPLACE INTO setting VALUES(?,?)')
+    db.exec(loadModule('src/main/database/schema.ts').schemaV1)
+    const { PLAYBACK_SESSION_KEY, PLAYBACK_QUEUE_KEY } = loadModule('src/shared/playbackSession.ts')
+    const settings = loadModule('src/main/database/repository/settings.ts', {
+      '../index': { getDatabase: () => db },
+      '../../../shared/playbackSession': { PLAYBACK_SESSION_KEY, PLAYBACK_QUEUE_KEY }
+    })
     const writes = []
     const save = (kind, key, value) => {
       const start = performance.now()
-      const json = JSON.stringify(value)
-      write.run(key, json)
-      writes.push({ kind, bytes: Buffer.byteLength(json), mainMs: performance.now() - start })
+      settings.setAppSetting(key, value)
+      const mainMs = performance.now() - start
+      writes.push({ kind, bytes: Buffer.byteLength(JSON.stringify(value)), mainMs })
       return { success: true }
     }
+    const saveSession = (kind, input) => {
+      const start = performance.now()
+      const applied = settings.savePlaybackSession(input)
+      const mainMs = performance.now() - start
+      writes.push({
+        kind,
+        bytes: Buffer.byteLength(JSON.stringify(input)),
+        queueWritten: applied && input.queue !== undefined,
+        mainMs
+      })
+      return { success: true, data: applied }
+    }
+    ipcMain.handle('switch-session', (_event, input) => saveSession('async', input))
+    ipcMain.on('switch-session-sync', (event, input) => {
+      event.returnValue = saveSession('sync', input)
+    })
+    ipcMain.on('switch-read', (event, key) => {
+      event.returnValue = { success: true, data: settings.getAppSetting(key) }
+    })
     ipcMain.on('switch-save', (event, key, value) => {
       event.returnValue = save('sync', key, value)
     })
@@ -101,11 +137,22 @@ app.whenReady().then(async () => {
     await window.webContents.executeJavaScript(bundle.outputFiles[0].text)
     await window.webContents.executeJavaScript(`
       const {ipcRenderer}=require('electron');
-      window.api={database:{saveSync:(key,value)=>ipcRenderer.sendSync('switch-save',key,value),command:(action,params)=>ipcRenderer.invoke('switch-command',action,params)},miniPlayer:{update(){}},system:{updateTray(){}}};
+      window.api={database:{
+        saveSync:(key,value)=>ipcRenderer.sendSync('switch-save',key,value),
+        getSync:key=>ipcRenderer.sendSync('switch-read',key),
+        savePlaybackSession:input=>ipcRenderer.invoke('switch-session',input),
+        savePlaybackSessionSync:input=>ipcRenderer.sendSync('switch-session-sync',input),
+        command:(action,params)=>ipcRenderer.invoke('switch-command',action,params)
+      },miniPlayer:{update(){}},system:{updateTray(){}}};
       const {Vue,createPinia,usePlayerStore}=SwitchCheck;
       const app=Vue.createApp({setup(){window.switchPlayer=usePlayerStore();return()=>Vue.h('p',window.switchPlayer.currentQueueSong?.title)}});
       app.use(createPinia());app.mount('#app');
       window.switchWait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+      window.restoreTestSession=async()=>{
+        const player=usePlayerStore(createPinia());
+        await player.restorePlaybackSession();
+        return player;
+      };
       window.requestAnimationFrame=callback=>setTimeout(()=>callback(performance.now()),16);window.cancelAnimationFrame=clearTimeout;
       window.switchSongs=Array.from({length:2419},(_,index)=>({id:index+1,title:'Track '+index+' 日本語歌曲标题',artist:'Artist name',album:'Album name',audio:'D:/Fixture/Library/Artist/Album/Track '+index+'.flac',duration:180,cover:'D:/Fixture/covers/'+index+'.jpg',coverAnalysisPath:'D:/Fixture/covers/'+index+'.jpg',coverPrimary:'77 136 220',coverSecondary:'205 78 165',coverLyricsDark:0,coverAnalysisVersion:11,fileName:'Track '+index,isNewest:false,songStatus:1,sourceId:null,createdAt:'2026-10-24T00:00:00Z'}));
       window.switchPlayer.setQueue(window.switchSongs);
@@ -134,11 +181,10 @@ app.whenReady().then(async () => {
       return {switchMs:durations,maxFrameGapMs:Math.max(...gaps),longTasksMs:longTasks,currentIndex:window.switchPlayer.currentQueueIndex};
     })()`)
     const switchWrites = [...writes]
-    const session = JSON.parse(
-      db.prepare('SELECT value FROM setting WHERE key=?').get('player.playback-session').value
-    )
+    const session = settings.getAppSetting(PLAYBACK_SESSION_KEY)
     assert.equal(session.currentQueueIndex, 3)
-    assert.equal(session.queue.length, 2419)
+    const queue = baseline ? session.queue : settings.getAppSetting(PLAYBACK_QUEUE_KEY)
+    assert.equal(queue.length, 2419)
     if (!baseline) {
       assert.equal(
         switchWrites.filter((item) => item.kind === 'sync').length,
@@ -150,6 +196,9 @@ app.whenReady().then(async () => {
         1,
         'burst switches coalesce into one asynchronous save'
       )
+      assert.equal(switchWrites[0].queueWritten, false)
+      assert.ok(switchWrites[0].bytes < 4096, 'switching should send only the small session state')
+      assert.equal(session.queue, undefined)
     }
     writes.length = 0
     await window.webContents.executeJavaScript(
@@ -158,15 +207,16 @@ app.whenReady().then(async () => {
     if (!baseline) {
       assert.equal(writes.length, 1, 'explicit flush cancels the pending asynchronous save')
       assert.equal(writes[0].kind, 'sync', 'exit retains an immediate reliable save')
+      assert.equal(writes[0].queueWritten, false, 'exit flush reuses the persisted queue')
     }
     await window.webContents.executeJavaScript(
       `window.switchPlayer.queue[0].title='Edited queue title';window.switchPlayer.savePlaybackSessionSync();void 0;`
     )
-    const edited = JSON.parse(
-      db.prepare('SELECT value FROM setting WHERE key=?').get('player.playback-session').value
-    )
+    const edited = baseline
+      ? settings.getAppSetting(PLAYBACK_SESSION_KEY).queue
+      : settings.getAppSetting(PLAYBACK_QUEUE_KEY)
     assert.equal(
-      edited.queue[0].title,
+      edited[0].title,
       'Edited queue title',
       'queue snapshot cache invalidates when persisted metadata changes'
     )
@@ -204,6 +254,11 @@ app.whenReady().then(async () => {
         1,
         'manual playback burst coalesces session persistence'
       )
+      assert.equal(
+        writes[0].queueWritten,
+        false,
+        'same collection playback reuses the stored queue'
+      )
     }
     const report = {
       scope:
@@ -213,6 +268,52 @@ app.whenReady().then(async () => {
       writes: switchWrites,
       manualCollectionMetrics,
       manualCollectionWrites: [...writes]
+    }
+    if (!baseline) {
+      writes.length = 0
+      const restore = await window.webContents.executeJavaScript(`(async()=>{
+        const player=await window.restoreTestSession();
+        player.savePlaybackSessionSync();
+        return {length:player.queue.length,title:player.queue[0]?.title,index:player.currentQueueIndex};
+      })()`)
+      assert.deepEqual(restore, { length: 2419, title: 'Edited queue title', index: 7 })
+      assert.equal(writes[0].queueWritten, false, 'a new renderer reuses the restored queue')
+
+      const latest = settings.getAppSetting(PLAYBACK_SESSION_KEY)
+      assert.equal(
+        settings.savePlaybackSession({
+          revision: latest.revision - 1,
+          state: { currentQueueIndex: 0 },
+          queue: []
+        }),
+        false,
+        'a stale asynchronous save cannot overwrite a newer flush'
+      )
+      db.exec(`CREATE TEMP TRIGGER fail_session_write BEFORE UPDATE ON app_setting
+        WHEN NEW.key = 'player.playback-session' BEGIN SELECT RAISE(ABORT, 'test failure'); END`)
+      assert.throws(() =>
+        settings.savePlaybackSession({
+          revision: latest.revision + 1,
+          state: { currentQueueIndex: 0 },
+          queue: []
+        })
+      )
+      db.exec('DROP TRIGGER fail_session_write')
+      assert.equal(settings.getAppSetting(PLAYBACK_QUEUE_KEY).length, 2419)
+      assert.deepEqual(settings.getAppSetting(PLAYBACK_SESSION_KEY), latest)
+
+      settings.setAppSetting(PLAYBACK_SESSION_KEY, {
+        queue: [{ id: 1, title: 'Legacy', audio: '/legacy.flac' }],
+        currentQueueIndex: 0
+      })
+      const migrated = await window.webContents.executeJavaScript(`(async()=>{
+        const player=await window.restoreTestSession();
+        player.savePlaybackSessionSync();
+        return player.currentQueueSong?.title;
+      })()`)
+      assert.equal(migrated, 'Legacy')
+      assert.equal(settings.getAppSetting(PLAYBACK_QUEUE_KEY).length, 1)
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).queue, undefined)
     }
     const output = path.resolve(
       'build',

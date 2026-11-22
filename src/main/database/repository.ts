@@ -1,5 +1,5 @@
 // Public repository API. Implementations are grouped by feature in ./repository/.
-export { getAppSetting, setAppSetting } from './repository/settings'
+export { getAppSetting, savePlaybackSession, setAppSetting } from './repository/settings'
 export {
   querySongs,
   getSong,

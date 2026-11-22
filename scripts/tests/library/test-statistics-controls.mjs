@@ -49,8 +49,10 @@ db.exec(
 )
 db.exec("INSERT INTO song_list (name) VALUES ('Keep this playlist')")
 const shared = load('src/shared/statistics.ts')
+const sessionKeys = load('src/shared/playbackSession.ts')
 const settings = load('src/main/database/repository/settings.ts', {
-  '../index': { getDatabase: () => db }
+  '../index': { getDatabase: () => db },
+  '../../../shared/playbackSession': sessionKeys
 })
 const policy = load('src/main/database/statisticsControl.ts', {
   './index': { getDatabase: () => db },
@@ -79,6 +81,7 @@ const library = new Proxy(
 )
 const asyncHandlers = new Map(),
   syncHandlers = new Map()
+const playbackRenderer = {}
 load('src/main/ipc/databaseIpcHandlers.ts', {
   electron: {
     ipcMain: {
@@ -96,12 +99,30 @@ load('src/main/ipc/databaseIpcHandlers.ts', {
     }
   },
   '../database/statisticsControl': policy,
+  '../service/libraryAutoImport': { excludeMusicDirectory() {} },
   '../service/loggerService': { Logger: { warn() {} } },
   '../service/operationLogger': {
     logParams: (value) => value,
     logOperation: (_name, _params, fn) => fn()
   }
-}).registerDatabaseIpcHandlers()
+}).registerDatabaseIpcHandlers(() => playbackRenderer)
+const replacedWindow = { sender: {} }
+syncHandlers.get('database:save-playback-session-sync')(replacedWindow, {
+  revision: 1,
+  state: { currentQueueIndex: 0 },
+  queue: [{ id: 2 }]
+})
+assert.equal(replacedWindow.returnValue.success, true)
+assert.equal(replacedWindow.returnValue.data, false)
+assert.equal(settings.getAppSetting(sessionKeys.PLAYBACK_SESSION_KEY), null)
+const activeWindow = { sender: playbackRenderer }
+syncHandlers.get('database:save-playback-session-sync')(activeWindow, {
+  revision: 1,
+  state: { currentQueueIndex: 0 },
+  queue: [{ id: 1 }]
+})
+assert.equal(activeWindow.returnValue.data, true)
+assert.equal(settings.getAppSetting(sessionKeys.PLAYBACK_QUEUE_KEY)[0].id, 1)
 function command(action, params) {
   return asyncHandlers.get('database:command')({}, { action, params })
 }
@@ -200,7 +221,8 @@ let delayedRefresh
 const api = {
   database: {
     getSync: (key) => ({ success: true, data: settings.getAppSetting(key) }),
-    saveSync: () => ({ success: true }),
+    savePlaybackSession: async () => ({ success: true, data: true }),
+    savePlaybackSessionSync: () => ({ success: true, data: true }),
     command: async (action, params) => {
       calls.push([action, params])
       if (action === 'getStatisticsState' && delayedRefresh) return delayedRefresh.promise
@@ -237,7 +259,9 @@ const playerModule = load(
   {
     vue: Vue,
     pinia: Pinia,
+    '../../../../shared/playbackSession': sessionKeys,
     '@/services/songLyricController': { createSongLyricController: () => ({}) },
+    '@/utils/rhythmVisual': load('src/renderer/src/utils/rhythmVisual.ts'),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
     '@/stores/statistics/statisticsStore': { useStatisticsStore: () => statistics },
     '@/stores/ui/uiStore': { useUIStore: () => ui },
@@ -246,7 +270,7 @@ const playerModule = load(
     '@/stores/log/logStore': { useLogStore: () => ({ addEntry() {} }) },
     '@/components/ui/useMessage': { useMessage: () => ({ warning() {}, success() {}, info() {} }) },
     '@/i18n': { t: (key) => key },
-    '@/consts': { PlayMode: { List: 0, Random: 1, Single: 2 } },
+    '@/constants': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
   },
   { window: { api }, document: { documentElement: { dataset: {}, classList: { toggle() {} } } } }
@@ -324,6 +348,15 @@ const defaultOrder = [...viewUi.homeSectionOrder, 'navigation', 'clock']
 const hooks = { ...Vue, onMounted() {}, onActivated() {}, onDeactivated() {}, onBeforeUnmount() {} }
 const viewMocks = {
   vue: hooks,
+  '@/hooks/useScrollPosition': {
+    useScrollPosition: () => ({
+      isRestoringScroll: Vue.ref(false),
+      saveScrollPosition() {},
+      scheduleScrollPositionSave() {},
+      clearSavedScrollPosition() {},
+      restoreScrollPosition() {}
+    })
+  },
   '@/hooks/useVisibleInterval': { useVisibleInterval() {} },
   'vue-i18n': { useI18n: () => ({ t: (key) => key }) },
   'vue-router': { useRouter: () => ({}) },

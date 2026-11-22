@@ -1,6 +1,7 @@
 import { t } from '../i18n'
-import { ipcMain } from 'electron'
+import { ipcMain, type WebContents } from 'electron'
 import type { LibrarySortBy } from '../../shared/librarySort'
+import type { PlaybackSessionWrite } from '../../shared/playbackSession'
 import * as library from '../database/repository'
 import {
   clearLessRecommended,
@@ -318,7 +319,25 @@ export interface DatabaseRequest {
 export type DatabaseResponse<T = unknown> =
   { success: true; data: T } | { success: false; error: string }
 
-export function registerDatabaseIpcHandlers(): void {
+export function registerDatabaseIpcHandlers(playbackRenderer: () => WebContents | undefined): void {
+  const savePlaybackSession = (
+    sender: WebContents,
+    input: PlaybackSessionWrite
+  ): DatabaseResponse<boolean> => {
+    // The outgoing window can still unload after its replacement is created.
+    if (sender !== playbackRenderer()) return { success: true, data: false }
+    try {
+      return { success: true, data: library.savePlaybackSession(input) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+  ipcMain.handle('database:save-playback-session', (event, input: PlaybackSessionWrite) =>
+    savePlaybackSession(event.sender, input)
+  )
+  ipcMain.on('database:save-playback-session-sync', (event, input: PlaybackSessionWrite) => {
+    event.returnValue = savePlaybackSession(event.sender, input)
+  })
   ipcMain.on(
     'database:record-play-event-sync',
     (event, input: Parameters<typeof handlers.recordPlayEvent>[0]) => {

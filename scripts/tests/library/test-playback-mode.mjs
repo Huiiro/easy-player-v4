@@ -76,7 +76,8 @@ const api = {
     }
   },
   database: {
-    saveSync: () => ({ success: true }),
+    savePlaybackSession: async () => ({ success: true, data: true }),
+    savePlaybackSessionSync: () => ({ success: true, data: true }),
     command: async (action) =>
       ['setSongPreference', 'resetSongRecommendation'].includes(action) && !preferenceAccepted
         ? { success: false }
@@ -91,6 +92,7 @@ const playerModule = load(
   {
     vue: Vue,
     pinia: Pinia,
+    '../../../../shared/playbackSession': load('src/shared/playbackSession.ts'),
     '@/services/songLyricController': { createSongLyricController: () => ({}) },
     '@/utils/rhythmVisual': load('src/renderer/src/utils/rhythmVisual.ts'),
     '@/stores/persistence': { flushPlayerDataStorage() {} },

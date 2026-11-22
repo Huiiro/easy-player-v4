@@ -324,6 +324,12 @@ declare global {
         ): () => void
         onSearchIndexChanged(callback: () => void): () => void
         command(action: DatabaseAction, params?: unknown): Promise<DatabaseResponse>
+        savePlaybackSession(
+          input: import('../shared/playbackSession').PlaybackSessionWrite
+        ): Promise<DatabaseResponse<boolean>>
+        savePlaybackSessionSync(
+          input: import('../shared/playbackSession').PlaybackSessionWrite
+        ): DatabaseResponse<boolean>
         saveSync(key: string, value: unknown): { success: boolean; error?: string }
         getSync(key: string): { success: boolean; data?: unknown; error?: string }
         recordPlayEventSync(input: {

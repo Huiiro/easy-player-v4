@@ -70,7 +70,8 @@ const globals = {
       audio: { setAnalysisEnabled: async () => ({ success: true }) },
       database: {
         command: async () => ({ success: true, data: [] }),
-        saveSync: () => ({ success: true })
+        savePlaybackSession: async () => ({ success: true, data: true }),
+        savePlaybackSessionSync: () => ({ success: true, data: true })
       },
       miniPlayer: {
         update() {},
@@ -106,6 +107,10 @@ const module = run(
   {
     vue: Vue,
     pinia: Pinia,
+    '../../../../shared/playbackSession': run(
+      readFileSync('src/shared/playbackSession.ts', 'utf8'),
+      {}
+    ),
     '@/services/songLyricController': { createSongLyricController: () => ({}) },
     '@/utils/rhythmVisual': run(readFileSync('src/renderer/src/utils/rhythmVisual.ts', 'utf8'), {}),
     '@/stores/persistence': { flushPlayerDataStorage() {} },
