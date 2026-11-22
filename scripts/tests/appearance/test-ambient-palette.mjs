@@ -226,6 +226,16 @@ images[2].onload()
 await flush()
 assert.deepEqual(analyzed, ['first', 'current'], 'stale decode cannot overwrite current colors')
 assert.equal(displayedCoverUrl.value, 'current')
+load(['missing', false], ['current', false], () => {})
+images.at(-1).onerror()
+const attempts = images.length
+load(['missing', true], ['missing', false], () => {})
+assert.equal(images.length, attempts, 'ambient fallback does not retry failed cover')
+assert.equal(displayedCoverUrl.value, null)
+load(['recovered', true], ['missing', true], () => {})
+images.at(-1).onload()
+await flush()
+assert.equal(displayedCoverUrl.value, 'recovered', 'the next cover loads after fallback')
 console.log(
   'Ambient palette checks passed: complete three-color cache, transparent artwork, hue fidelity, preloading and stale decodes'
 )

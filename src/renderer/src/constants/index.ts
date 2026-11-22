@@ -158,4 +158,4 @@ export enum TagStyle {
 }
 export const VERSION = __APP_VERSION__
 export const BUILD_NUMBER = __APP_BUILD__
-export const ENGINE_VERSION = '1.0.5'
+export const ENGINE_VERSION = '1.0.6'

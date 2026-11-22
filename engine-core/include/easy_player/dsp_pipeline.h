@@ -1102,15 +1102,17 @@ private:
     static void apply_channel_matrix(const float* input, int input_channels,
                                      float* output, int output_channels,
                                      int frames) noexcept {
-        if (input == output && input_channels == output_channels) return;
+        if (input_channels == output_channels) {
+            if (input != output)
+                std::memcpy(output, input, static_cast<size_t>(frames) * input_channels * sizeof(float));
+            return;
+        }
 
         for (int frame = 0; frame < frames; ++frame) {
             const float* in = input + frame * input_channels;
             float* out = output + frame * output_channels;
 
-            if (input_channels == output_channels) {
-                std::memcpy(out, in, output_channels * sizeof(float));
-            } else if (input_channels == 1 && output_channels == 2) {
+            if (input_channels == 1 && output_channels == 2) {
                 out[0] = in[0];
                 out[1] = in[0];
             } else if (input_channels == 2 && output_channels == 1) {

@@ -37,7 +37,7 @@ onMounted(() => {
       resizeTimer = setTimeout(() => renderer?.resize(), 80)
     })
     observer.observe(canvas.value)
-    canvas.value.addEventListener('webglcontextlost', lost)
+    canvas.value.addEventListener('webglcontextlost', lost, { once: true })
     document.addEventListener('visibilitychange', syncActivity)
   } catch (reason) {
     renderer?.dispose()

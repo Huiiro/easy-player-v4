@@ -7,7 +7,7 @@ import BaseTooltip from '@/components/ui/BaseTooltip.vue'
 import FloatingPanel from '@/components/ui/FloatingPanel.vue'
 import { useFooterSwipe } from '@/components/player/useFooterSwipe'
 import { useFooterAutoHide } from '@/components/player/useFooterAutoHide'
-import { useSeekProgress } from '@/components/player/useSeekProgress'
+import SeekProgress from '@/components/player/SeekProgress.vue'
 import { loadLyricSourceOptions } from '@/services/lyricSourceOptions'
 import { footerLayoutStyle, updateFooterSideWidths } from '@/utils/footerLayout'
 import { useRouter } from 'vue-router'
@@ -34,8 +34,6 @@ const ui = useUIStore()
 const layoutStyle = computed(() => footerLayoutStyle(ui.footerLayout))
 const player = usePlayerStore()
 const volumeIcon = computed(() => `volume-volume-${getVolumeLevel(player.volume)}`)
-const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
-  useSeekProgress(player)
 const { t } = useI18n()
 const router = useRouter()
 const { error } = useMessage()
@@ -477,25 +475,27 @@ onBeforeUnmount(() => {
             </div>
           </div>
         </div>
-        <div
-          class="ep-footer-progress flex min-w-0 items-center gap-2 text-[11px] tabular-nums text-text-l"
-        >
-          <span class="shrink-0">{{ displayPositionFormatted }}</span>
-          <BaseRange
-            class="ep-range ep-playback-progress h-2 w-full min-w-0 flex-1 cursor-pointer disabled:cursor-default disabled:opacity-45"
-            :min="0"
-            :max="player.durationMs || 0"
-            :value="displayPositionMs"
-            :disabled="!player.durationMs"
-            :aria-label="t('footer.progress')"
-            @click.stop
-            @input="previewSeek"
-            @change="commitSeek"
-            @pointercancel="cancelSeek"
-            @blur="cancelSeek"
-          />
-          <span class="shrink-0">{{ player.durationFormatted }}</span>
-        </div>
+        <SeekProgress v-slot="{ position, formatted, preview, commit, cancel }">
+          <div
+            class="ep-footer-progress flex min-w-0 items-center gap-2 text-[11px] tabular-nums text-text-l"
+          >
+            <span class="shrink-0">{{ formatted }}</span>
+            <BaseRange
+              class="ep-range ep-playback-progress h-2 w-full min-w-0 flex-1 cursor-pointer disabled:cursor-default disabled:opacity-45"
+              :min="0"
+              :max="player.durationMs || 0"
+              :value="position"
+              :disabled="!player.durationMs"
+              :aria-label="t('footer.progress')"
+              @click.stop
+              @input="preview"
+              @change="commit"
+              @pointercancel="cancel"
+              @blur="cancel"
+            />
+            <span class="shrink-0">{{ player.durationFormatted }}</span>
+          </div>
+        </SeekProgress>
       </div>
       <div
         ref="footerActions"

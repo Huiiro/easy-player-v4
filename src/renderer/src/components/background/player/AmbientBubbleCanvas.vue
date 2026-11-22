@@ -182,8 +182,7 @@ function createNoisePattern(): void {
 
 function resize(): void {
   const canvas = canvasRef.value
-  const bubblesCanvas = bubblesCanvasRef.value
-  if (!canvas || !bubblesCanvas) return
+  if (!canvas) return
   const bounds = canvas.getBoundingClientRect()
   const nextWidth = Math.max(1, bounds.width)
   const nextHeight = Math.max(1, bounds.height)
@@ -194,16 +193,24 @@ function resize(): void {
   dpr = nextDpr
   canvas.width = Math.round(width * dpr)
   canvas.height = Math.round(height * dpr)
-  bubblesCanvas.width = canvas.width
-  bubblesCanvas.height = canvas.height
   context = canvas.getContext('2d', { alpha: true })
-  bubblesContext = bubblesCanvas.getContext('2d', { alpha: true })
   context?.setTransform(dpr, 0, 0, dpr, 0, 0)
-  bubblesContext?.setTransform(dpr, 0, 0, dpr, 0, 0)
+  resizeBubbleLayer()
   createNoisePattern()
-  createBubbles()
   drawBase()
   drawBubbles()
+}
+
+function resizeBubbleLayer(): void {
+  const canvas = bubblesCanvasRef.value
+  bubblesContext = null
+  if (!canvas) return
+  canvas.width = props.bubblesEnabled ? Math.round(width * dpr) : 1
+  canvas.height = props.bubblesEnabled ? Math.round(height * dpr) : 1
+  if (!props.bubblesEnabled) return
+  bubblesContext = canvas.getContext('2d', { alpha: true })
+  bubblesContext?.setTransform(dpr, 0, 0, dpr, 0, 0)
+  createBubbles()
 }
 
 function drawGlow(
@@ -389,6 +396,7 @@ function startAnimation(): void {
   else drawBubbles()
 }
 
+watch(() => props.bubblesEnabled, resizeBubbleLayer)
 watch(() => [props.active, props.bubblesEnabled, props.reducedMotion], startAnimation)
 watch(
   () => [props.primary, props.secondary, props.tertiary],
@@ -437,6 +445,11 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  for (const canvas of [canvasRef.value, bubblesCanvasRef.value]) {
+    if (canvas) canvas.width = canvas.height = 1
+  }
+  noisePattern = null
+  context = bubblesContext = null
   if (animationFrame) cancelAnimationFrame(animationFrame)
 })
 </script>

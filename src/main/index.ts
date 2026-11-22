@@ -124,6 +124,8 @@ let miniWindow: BrowserWindow | null = null
 let desktopLyricsWindow: BrowserWindow | null = null
 let desktopLyricsBoundsTimer: ReturnType<typeof setTimeout> | undefined
 onPlaybackModeChanged((enabled) => {
+  // Drop cached libvips operations when leaving the artwork-heavy renderer.
+  sharp.cache(!enabled)
   if (!enabled) return
   miniWindow?.destroy()
   desktopLyricsWindow?.destroy()

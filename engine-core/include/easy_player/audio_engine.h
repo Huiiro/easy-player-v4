@@ -72,7 +72,7 @@ struct AutoMixStemRequest {
 
 class AudioEngine {
 public:
-    static constexpr const char* kVersion = "1.0.5";
+    static constexpr const char* kVersion = "1.0.6";
     explicit AudioEngine(std::shared_ptr<AudioBackendFactory> backend_factory);
     ~AudioEngine();
     const char* version() const { return kVersion; }
@@ -171,11 +171,19 @@ public:
     AudioChainStatus audio_chain_status() const;
     AudioAnalysisSnapshot audio_analysis_snapshot() const;
     void set_analysis_enabled(bool enabled) {
-        analysis_enabled_.store(enabled, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lock(analysis_wait_mutex_);
+            analysis_enabled_.store(enabled, std::memory_order_release);
+        }
+        analysis_cv_.notify_one();
     }
     void set_playback_only(bool enabled) {
         if (enabled) cancel_auto_mix();
-        playback_only_.store(enabled, std::memory_order_release);
+        {
+            std::lock_guard<std::mutex> lock(analysis_wait_mutex_);
+            playback_only_.store(enabled, std::memory_order_release);
+        }
+        analysis_cv_.notify_one();
         dsp_pipeline_.set_playback_only(enabled);
     }
     void set_loudness_analysis_enabled(bool enabled) {
@@ -292,6 +300,8 @@ private:
     std::atomic<uint64_t> analysis_dropped_frames_{0};
     std::vector<float> analysis_work_buffer_;
     std::unique_ptr<std::thread> analysis_thread_;
+    std::mutex analysis_wait_mutex_;
+    std::condition_variable analysis_cv_;
     std::atomic<bool> analysis_running_{false};
     std::atomic<uint64_t> analysis_output_frames_{0};
     std::atomic<uint64_t> analysis_processed_frames_{0};

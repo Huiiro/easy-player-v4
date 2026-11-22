@@ -404,6 +404,12 @@ async function runFixture() {
     const first = rows.find((row) => row.textContent.includes('First'))
     first.click()
     check(seeks.at(-1) === 0, 'clicking the opening line can seek to zero')
+    const characters = [...first.querySelectorAll('.lyric-karaoke-char')]
+    const paint = (char) => {
+      const style = getComputedStyle(char)
+      return [style.color, style.opacity, style.backgroundImage].join('|')
+    }
+    const beforeHover = characters.map(paint)
     first.setAttribute('data-fixture-inspect', '')
     const inspect = (active) =>
       new Promise((resolve, reject) => {
@@ -412,7 +418,6 @@ async function runFixture() {
       })
     await inspect(true)
     await wait(450)
-    const characters = [...first.querySelectorAll('.lyric-karaoke-char')]
     check(
       characters.length > 0 &&
         getComputedStyle(first).opacity === '1' &&
@@ -430,7 +435,12 @@ async function runFixture() {
     first.removeAttribute('data-fixture-inspect')
     await wait(450)
     check(
-      characters.some((char) => getComputedStyle(char).backgroundImage !== 'none'),
+      characters.every((char, i) => paint(char) === beforeHover[i]) &&
+        characters.some(
+          (char) =>
+            getComputedStyle(char).opacity !== '1' ||
+            getComputedStyle(char).backgroundImage !== 'none'
+        ),
       'leaving a lyric restores its timed word highlighting'
     )
     if (component === PlayerLyricsV2) {

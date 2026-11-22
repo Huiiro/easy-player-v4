@@ -20,6 +20,7 @@ require.cache[oldPath] = {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const errors = []
 const presentations = []
+const checkPeaks = process.env.PERF_PLAYER_PEAKS === '1'
 app.on('browser-window-created', (_event, window) => {
   window.once('show', () => {
     presentations.push({
@@ -37,6 +38,28 @@ app.on('web-contents-created', (_event, contents) => {
 })
 require(path.join(root, 'out/main/index.js'))
 const p = `document.getElementById('app').__vue_app__.config.globalProperties.$pinia._s.get('player')`
+async function samplePlaybackPeaks(js, phase) {
+  const start = (await js('window.api.audio.getStatus()')).data
+  const samples = []
+  app.getAppMetrics()
+  for (let i = 0; i < 240; i++) {
+    await sleep(250)
+    const processes = app
+      .getAppMetrics()
+      .map(({ type, cpu }) => ({ type, cpu: cpu.percentCPUUsage }))
+    samples.push({ cpu: processes.reduce((total, entry) => total + entry.cpu, 0), processes })
+  }
+  const end = (await js('window.api.audio.getStatus()')).data
+  if (end.positionMs - start.positionMs < 59000 || end.glitchCount !== start.glitchCount)
+    throw Error('Interrupted playback during ' + phase)
+  const values = samples.map((sample) => sample.cpu).sort((a, b) => a - b)
+  return {
+    mean: values.reduce((total, cpu) => total + cpu, 0) / values.length,
+    p95: values[Math.ceil(values.length * 0.95) - 1],
+    max: values.at(-1),
+    samples
+  }
+}
 async function run() {
   await app.whenReady()
   let window
@@ -58,7 +81,8 @@ async function run() {
   if (!window) throw Error('No app window')
   const js = (source) => window.webContents.executeJavaScript(source)
   const sampleSeconds = Math.max(20, Math.min(600, Number(process.env.PERF_EXTREME_SECONDS) || 20))
-  const seconds = sampleSeconds + 70
+  const checkPanel = checkPeaks || process.env.PERF_PLAYER_PANEL === '1'
+  const seconds = sampleSeconds + (checkPanel ? 150 : 70)
   const rate = 48000,
     totalBytes = 44 + rate * seconds * 4,
     wav = Buffer.alloc(44)
@@ -117,13 +141,82 @@ async function run() {
       sourceId: null
     }
   })
+  if (checkPanel) {
+    const covers = path.join(process.env.EASY_PLAYER_DATA_DIR, 'player_data', 'covers')
+    fs.mkdirSync(covers, { recursive: true })
+    const cover = path.join(covers, 'test-cover.png')
+    fs.copyFileSync(path.join(root, 'resources/icons/easy-player.png'), cover)
+    const lrc = Array.from({ length: 100 }, (_, index) => {
+      const seconds = index * 2
+      return `[${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}.00]Performance lyric ${index}`
+    }).join('\n')
+    for (const song of songs) {
+      song.cover = cover
+      database.prepare('UPDATE song SET cover = ?, lrc = ? WHERE id = ?').run(cover, lrc, song.id)
+    }
+    if (checkPeaks) {
+      const timed = Array.from({ length: 100 }, (_, line) => {
+        const start = line * 2000
+        const words = Array.from(
+          { length: 16 },
+          (_, i) => `(${start + i * 125},125,0)${String.fromCharCode(0x4e00 + i)}`
+        )
+        return `[${start},2000]${words.join('')}`
+      }).join('\n')
+      database
+        .prepare("UPDATE song SET lrc=?, lyric_format='yrc' WHERE id=?")
+        .run(timed, songs[1].id)
+    }
+    await js(`${p}.rhythmVisualConfig.enabled = false`)
+  }
   database.close()
   await js(`${p}.setQueue(${JSON.stringify(songs)}); ${p}.setVolume(0)`)
   const playing = await js(`${p}.playQueueItem(0)`)
   if (!playing) throw Error('Playback failed')
+  if (checkPeaks) {
+    const ui =
+      "document.getElementById('app').__vue_app__.config.globalProperties.$pinia._s.get('ui')"
+    await js(
+      `${ui}.lyricSourceMode='database'; ${ui}.showPlayerSpectrum=false; ${ui}.setPlayerBgType('album'); ${ui}.showPlayer=true`
+    )
+    const report = {}
+    for (const [index, phase] of ['line', 'word'].entries()) {
+      if (index && !(await js(`${p}.playQueueItem(${index})`))) throw Error('Track switch failed')
+      await sleep(2500)
+      const rows = await js("document.querySelectorAll('.lyric-line').length")
+      const timed = await js("!!document.querySelector('.lyric-karaoke-char')")
+      if (rows !== 100 || timed !== Boolean(index)) throw Error('Unexpected lyrics during ' + phase)
+      report[phase] = await samplePlaybackPeaks(js, phase)
+    }
+    fs.writeFileSync(
+      path.join(buildDir, 'playback-panel-peaks.json'),
+      JSON.stringify(report, null, 2)
+    )
+    await js('window.api.audio.stop()')
+    if (errors.length) throw Error(errors.join('; '))
+    app.quit()
+    return
+  }
   const samples = {}
-  for (const mode of ['normal', 'extreme', 'restored']) {
-    if (mode !== 'normal') {
+  const modes = checkPanel
+    ? ['normal', 'panel', 'cycled', 'extreme', 'restored']
+    : ['normal', 'extreme', 'restored']
+  for (const mode of modes) {
+    if (mode === 'panel' || mode === 'cycled') {
+      const ui =
+        "document.getElementById('app').__vue_app__.config.globalProperties.$pinia._s.get('ui')"
+      await js(
+        `${ui}.lyricSourceMode = 'database'; ${ui}.showPlayerSpectrum = false; ${ui}.setPlayerBgType('album'); ${ui}.showPlayer = true`
+      )
+      if (mode === 'cycled') {
+        for (let cycle = 0; cycle < 3; cycle++) {
+          for (const background of ['ambient', 'mesh', 'particles', 'album']) {
+            await js(`${ui}.setPlayerBgType(${JSON.stringify(background)})`)
+            await sleep(600)
+          }
+        }
+      }
+    } else if (mode !== 'normal') {
       const old = window
       if (mode === 'extreme' && process.env.PERF_EOF_HANDOFF === '1')
         await js(`${p}.seek(${seconds * 1000 - 50})`)
@@ -149,8 +242,17 @@ async function run() {
     await sleep(4000)
     const initialStatus = await js('window.api.audio.getStatus()')
     samples[mode] = []
+    if (
+      (mode === 'panel' || mode === 'cycled') &&
+      !(await js(
+        "document.querySelectorAll('.panel-lyrics .lyric-line').length >= 100 && document.querySelector('.panel-background-item')?.naturalWidth > 0"
+      ))
+    )
+      throw Error('Player panel cover or lyrics did not load')
+    app.getAppMetrics()
     const startPosition = initialStatus.data.positionMs
-    for (let i = 0; i < (mode === 'extreme' ? sampleSeconds : 6); i++) {
+    const count = mode === 'extreme' ? sampleSeconds : checkPanel ? 20 : 6
+    for (let i = 0; i < count; i++) {
       await sleep(mode === 'extreme' ? 1000 : 500)
       const metrics = app.getAppMetrics()
       samples[mode].push({
@@ -168,7 +270,7 @@ async function run() {
       })
     }
     const progressed = (await js('window.api.audio.getStatus()')).data.positionMs - startPosition
-    if (progressed < (mode === 'extreme' ? sampleSeconds * 1000 : 3000) - 1000)
+    if (progressed < (mode === 'extreme' ? sampleSeconds * 1000 : count * 500) - 1000)
       throw Error('Playback stalled during ' + mode + ': ' + progressed)
     if (mode === 'extreme')
       fs.writeFileSync(
@@ -196,6 +298,7 @@ async function run() {
   const report = {
     presentations,
     sampleSeconds,
+    checkPanel,
     steadyUnderruns,
     eofHandoff: process.env.PERF_EOF_HANDOFF === '1',
     playback,
@@ -253,5 +356,5 @@ setTimeout(
   },
   (Number(process.env.PERF_EXTREME_SECONDS) || 20) * 1000 +
     Math.min(600, Math.max(0, Number(process.env.PERF_IDLE_SECONDS) || 0)) * 3000 +
-    90000
+    (checkPeaks || process.env.PERF_PLAYER_PANEL === '1' ? 180000 : 90000)
 )

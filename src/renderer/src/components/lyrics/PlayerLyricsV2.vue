@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import InstrumentalNotice from './InstrumentalNotice.vue'
-import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, toValue, watch } from 'vue'
 import { LyricLine, LyricSource, resolveLyrics } from '@/services/lyrics'
 import { createSourceRequestScope } from '@/services/sourceRequests'
 import { useUIStore } from '@/stores/ui/uiStore'
@@ -25,7 +25,7 @@ const props = withDefaults(
       album?: string | null
     } | null
     sourceOrder: LyricSource[]
-    currentTime: number
+    currentTime: number | (() => number)
     isPlaying?: boolean
     forcedSource?: LyricSource | 'auto'
     autoSearchNetwork?: boolean
@@ -79,13 +79,14 @@ const viewportRef = ref<HTMLElement>()
 const lineRefs = ref<HTMLElement[]>([])
 const isUserScrolling = ref(false)
 const scrollSpring = new LyricSpring()
-let rowSprings: LyricSpring[] = []
-let rowStartTimes: number[] = []
+const rowSprings = new Map<number, LyricSpring>()
+let rowMotionStartedAt = 0
 let rowTarget = Number.NaN
 let rowFocus = -1
 let motionRaf = 0
 let motionTime = 0
 let expectedScroll = 0
+let smoothScrollTarget: number | null = null
 let resizeObserver: ResizeObserver | undefined
 let lineVisibilityObserver: IntersectionObserver | undefined
 const visibleLineIndices = shallowRef(new Set<number>())
@@ -108,11 +109,12 @@ function observeVisibleLines(): void {
         const element = entry.target as HTMLElement
         if (entry.isIntersecting) {
           visible.add(index)
-          const spring = rowSprings[index]
+          const spring = rowSprings.get(index)
           const offset = motionRaf && spring ? expectedScroll - spring.position : 0
           element.style.setProperty('--scroll-y', `${offset}px`)
         } else {
           visible.delete(index)
+          rowSprings.delete(index)
           element.style.removeProperty('--scroll-y')
         }
       }
@@ -144,6 +146,7 @@ const hasUntimedLyrics = computed(
 )
 const clock = new LyricClock()
 let sweepRaf = 0
+let lastSweepPaint = -Infinity
 interface SweepElement {
   element: HTMLElement
   width: number
@@ -176,22 +179,44 @@ function handleWindowResize(): void {
   requestSnapToCurrent()
 }
 
-function findCurrentLineIndex(lyrics: LyricLine[], currentTime: number): number {
-  for (let i = lyrics.length - 1; i >= 0; i--) {
-    if (currentTime >= lyrics[i].timeMs) {
-      return i
+// Active rows (including overlapping voices and outgoing waves) only change at
+// a start, end or wave-tail boundary. Re-evaluate immediately on backward seeks.
+let lastSelectionTime = Infinity
+let nextSelectionTime = -Infinity
+let previousShowTails = false
+function updateLineSelection(time: number): void {
+  const showTails = ui.karaokeAnimation !== 'float' && !ui.reduceMotion && props.allowTransform
+  if (time >= lastSelectionTime && time < nextSelectionTime && showTails === previousShowTails)
+    return
+  lastSelectionTime = time
+  nextSelectionTime = Infinity
+  previousShowTails = showTails
+  const active: number[] = []
+  const tails: number[] = []
+  let fallback = 0
+  const lines = lyrics.value
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.timeMs > time) {
+      nextSelectionTime = Math.min(nextSelectionTime, line.timeMs)
+      continue
+    }
+    fallback = i
+    if (line.untimed) continue
+    const end = line.endMs ?? lines[i + 1]?.timeMs ?? line.timeMs + 5000
+    if (time < end) {
+      active.push(i)
+      nextSelectionTime = Math.min(nextSelectionTime, end)
+    } else if (showTails && time < end + LYRIC_WAVE_TAIL_MS && line.text.trim()) {
+      tails.push(i)
+      nextSelectionTime = Math.min(nextSelectionTime, end + LYRIC_WAVE_TAIL_MS)
     }
   }
-  return 0
-}
-
-function findActiveLineIndices(lines: LyricLine[], currentTime: number): number[] {
-  const active = lines.flatMap((line, index) => {
-    if (line.untimed || currentTime < line.timeMs) return []
-    const endMs = line.endMs ?? lines[index + 1]?.timeMs ?? line.timeMs + 5000
-    return currentTime < endMs ? [index] : []
-  })
-  return active.length ? active : [findCurrentLineIndex(lines, currentTime)]
+  if (!active.length) active.push(fallback)
+  if (!sameIndices(active, activeIndices.value)) activeIndices.value = active
+  const sweep = active.concat(tails.filter((index) => !active.includes(index)))
+  if (!sameIndices(sweep, sweepIndices.value)) sweepIndices.value = sweep
+  currentIndex.value = active[0]
 }
 
 function sameIndices(left: number[], right: number[]): boolean {
@@ -204,6 +229,7 @@ async function load(): Promise<void> {
   stopMotion()
   cancelAnimationFrame(sweepRaf)
   sweepRaf = 0
+  lastSelectionTime = Infinity
   sweepLines.clear()
   lineVisibilityObserver?.disconnect()
   visibleLineIndices.value = new Set()
@@ -213,7 +239,7 @@ async function load(): Promise<void> {
   currentIndex.value = 0
   activeIndices.value = [0]
   sweepIndices.value = [0]
-  rowSprings = []
+  rowSprings.clear()
   rowTarget = Number.NaN
   lyrics.value = []
   source.value = null
@@ -261,6 +287,11 @@ const requestSnapToCurrent = (): void => {
 // AMLL-inspired separation of layout targets, per-line springs and manual scrolling.
 // Native scrolling retains keyboard/touch support; row offsets provide the trailing wave.
 function stopMotion(): void {
+  if (smoothScrollTarget !== null) {
+    const viewport = viewportRef.value
+    if (viewport) viewport.scrollTo({ top: viewport.scrollTop, behavior: 'instant' })
+    smoothScrollTarget = null
+  }
   cancelAnimationFrame(motionRaf)
   motionRaf = 0
 }
@@ -280,10 +311,15 @@ function animateScroll(now: number): void {
   let moving = scrollSpring.step(dt, 9)
   writeScroll(scrollSpring.position)
   const scrollTop = expectedScroll
-  rowSprings.forEach((spring, idx) => {
+  visibleLineIndices.value.forEach((idx) => {
+    let spring = rowSprings.get(idx)
+    if (!spring) {
+      spring = new LyricSpring(scrollTop)
+      rowSprings.set(idx, spring)
+    }
     const distance = Math.max(0, idx - currentIndex.value)
     const frequency = Math.max(6.5, 10 - distance * 0.5)
-    if (now < (rowStartTimes[idx] ?? 0)) {
+    if (now < rowMotionStartedAt + Math.min(260, distance * 60)) {
       spring.step(dt, frequency, 0.82)
       moving = true
     } else {
@@ -291,7 +327,7 @@ function animateScroll(now: number): void {
       moving = spring.step(dt, frequency, 0.82) || moving
     }
     const element = lineRefs.value[idx]
-    if (element && visibleLineIndices.value.has(idx)) {
+    if (element) {
       element.style.setProperty('--scroll-y', `${scrollTop - spring.position}px`)
     }
   })
@@ -317,16 +353,29 @@ const snapToCurrent = (): void => {
     stopMotion()
     writeScroll(target)
     scrollSpring.reset(target)
-    rowSprings = lineRefs.value.map((element) => {
-      element.style.setProperty('--scroll-y', '0px')
-      return new LyricSpring(target)
-    })
+    rowSprings.clear()
+    visibleLineIndices.value.forEach((idx) =>
+      lineRefs.value[idx]?.style.setProperty('--scroll-y', '0px')
+    )
     return
   }
-  if (!motionRaf) scrollSpring.reset(viewport.scrollTop)
-  if (rowSprings.length !== lineRefs.value.length) {
-    rowSprings = lineRefs.value.map(() => new LyricSpring(viewport.scrollTop))
+  // Glyph highlights have their own media clock. With lyric effects off,
+  // let the browser scroll both sentence-timed and word-timed rows.
+  if (ui.lyricsStyle === 'none') {
+    if (smoothScrollTarget === target) return
+    stopMotion()
+    if (rowSprings.size) {
+      rowSprings.forEach((_spring, idx) => lineRefs.value[idx]?.style.removeProperty('--scroll-y'))
+      rowSprings.clear()
+    }
+    if (Math.abs(viewport.scrollTop - target) >= 1) {
+      smoothScrollTarget = target
+      viewport.scrollTo({ top: target, behavior: 'smooth' })
+    }
+    return
   }
+  if (smoothScrollTarget !== null) stopMotion()
+  if (!motionRaf) scrollSpring.reset(viewport.scrollTop)
   scrollSpring.target = target
   if (
     Math.abs(rowTarget - target) > 0.5 ||
@@ -335,10 +384,7 @@ const snapToCurrent = (): void => {
   ) {
     rowTarget = target
     rowFocus = currentIndex.value
-    const now = performance.now()
-    rowStartTimes = rowSprings.map(
-      (_spring, idx) => now + Math.min(260, Math.max(0, idx - rowFocus) * 60)
-    )
+    rowMotionStartedAt = performance.now()
   }
   if (!motionRaf) {
     motionTime = performance.now()
@@ -352,7 +398,7 @@ const handleInteraction = (): void => {
   isUserScrolling.value = true
   // Clear only the small per-line trailing displacement when native input takes over.
   lineRefs.value.forEach((element) => element.style.setProperty('--scroll-y', '0px'))
-  rowSprings = []
+  rowSprings.clear()
   if (scrollTimer) clearTimeout(scrollTimer)
   scrollTimer = setTimeout(() => {
     scrollTimer = null
@@ -365,7 +411,13 @@ const handleScroll = (): void => {
   const viewport = viewportRef.value
   // Wheel/touch/keyboard handlers interrupt explicitly; browser clamping during
   // our own animation must not cancel every line spring.
-  if (!viewport || motionRaf || Math.abs(viewport.scrollTop - expectedScroll) < 1) return
+  if (!viewport) return
+  if (smoothScrollTarget !== null) {
+    expectedScroll = viewport.scrollTop
+    if (Math.abs(expectedScroll - smoothScrollTarget) < 1) smoothScrollTarget = null
+    return
+  }
+  if (motionRaf || Math.abs(viewport.scrollTop - expectedScroll) < 1) return
   handleInteraction()
   expectedScroll = viewport.scrollTop
 }
@@ -398,7 +450,9 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
     })
     return
   }
-  if (ui.karaokeAnimation !== 'float') sampleLyricWave(time, sweepLine.wave, sweepLine.waveCenters)
+  const canLift = props.allowTransform && !ui.reduceMotion
+  const float = ui.karaokeAnimation === 'float'
+  if (canLift && !float) sampleLyricWave(time, sweepLine.wave, sweepLine.waveCenters)
   sweepElements.forEach((entry, index) => {
     const distributedEmphasisProgress =
       (lineFill *
@@ -417,26 +471,24 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
         ? Math.max(0, Math.min(1, (time - entry.emphasisStart) / entry.emphasisDuration))
         : Math.max(0, Math.min(1, distributedEmphasisProgress))
     if (entry.start === undefined && ui.lyricsStyle !== 'follow') return
-    let leadProgress = progress
-    let highlightProgress = progress
     // Precisely timed lyrics use a two-stage sweep. The leading color lifts
     // the glyph group first, then the final highlight catches up.
     let emphasis: number
     if (entry.start !== undefined) {
       const riseDuration = Math.max(1, entry.emphasisDuration - entry.settleDuration)
-      leadProgress = Math.max(
+      emphasis = Math.max(
         0,
         Math.min(1, (time - (entry.emphasisStart ?? entry.start)) / riseDuration)
       )
-      highlightProgress = progress
-      emphasis = leadProgress
     } else {
       emphasis = emphasisProgress + 2.2 * emphasisProgress ** 3 * (1 - emphasisProgress)
     }
     // A shared, time-smoothed crest raises neighboring glyphs together.
     // Highlighting keeps its original exact source timing.
     let lift: number
-    if (ui.karaokeAnimation === 'float') {
+    if (!canLift) {
+      lift = 0
+    } else if (float) {
       const floatProgress =
         entry.emphasisStart === undefined
           ? emphasisProgress
@@ -448,32 +500,34 @@ function paintLineSweep(index: number, sweepLine: SweepLine, now: number): void 
     } else {
       lift = lyricWaveLift(time, index, sweepLine.waveCenters, sweepLine.wave)
     }
-    if (
-      entry.previous === progress &&
-      entry.previousEmphasis === emphasisProgress &&
-      entry.previousLift === lift
-    )
-      return
+    if (entry.previousLift !== lift) {
+      entry.previousLift = lift
+      entry.element.style.setProperty('--lift', String(lift))
+    }
+    if (entry.previousEmphasis !== emphasis) {
+      entry.previousEmphasis = emphasis
+      entry.element.style.setProperty('--emphasis', String(emphasis))
+    }
+    if (entry.previous === progress) return
+    const wasSolid = entry.previous <= 0 || entry.previous >= 1
     entry.previous = progress
-    entry.previousEmphasis = emphasisProgress
-    entry.previousLift = lift
-    const edgeEnvelope = Math.max(
-      0,
-      Math.min(1, highlightProgress / 0.18, (1 - highlightProgress) / 0.18)
-    )
+    entry.element.style.setProperty('--progress', String(progress))
+    if (progress === 0 || progress === 1) {
+      entry.element.dataset.fill = progress ? 'complete' : 'pending'
+      return
+    }
+    if (wasSolid) delete entry.element.dataset.fill
+    const edgeEnvelope = Math.max(0, Math.min(1, progress / 0.18, (1 - progress) / 0.18))
     const edgeWidth =
       Math.min(entry.width, Math.max(6 * lyricMotionScale.value, entry.width * 0.34)) * edgeEnvelope
-    const sweepPosition = highlightProgress * entry.width
+    const sweepPosition = progress * entry.width
     const seamOverlap = edgeWidth > 0 ? 1.5 * lyricMotionScale.value : 0
-    entry.element.style.setProperty('--progress', String(highlightProgress))
     entry.element.style.setProperty(
       '--fill-size',
       `${Math.min(entry.width, Math.max(0, sweepPosition - edgeWidth / 2 + seamOverlap))}px`
     )
     entry.element.style.setProperty('--edge-size', `${edgeWidth}px`)
     entry.element.style.setProperty('--edge-position', `${sweepPosition - edgeWidth / 2}px`)
-    entry.element.style.setProperty('--emphasis', String(emphasis))
-    entry.element.style.setProperty('--lift', String(lift))
   })
 }
 
@@ -482,35 +536,15 @@ function paintSweep(now: number): void {
 }
 
 function animateSweep(now: number): void {
-  const time = clock.read(now)
-  const nextActiveIndices = hasUntimedLyrics.value ? [0] : findActiveLineIndices(lyrics.value, time)
-  if (!sameIndices(nextActiveIndices, activeIndices.value)) activeIndices.value = nextActiveIndices
-  const nextSweepIndices = [...nextActiveIndices]
-  if (ui.karaokeAnimation !== 'float' && !ui.reduceMotion && props.allowTransform) {
-    // Keep outgoing glyphs mounted for their release without delaying highlight,
-    // active-line selection or scrolling to the next sentence.
-    lyrics.value.forEach((line, index) => {
-      const end = line.endMs ?? lyrics.value[index + 1]?.timeMs ?? line.timeMs + 5000
-      if (
-        !line.untimed &&
-        line.text.trim() &&
-        time >= end &&
-        time < end + LYRIC_WAVE_TAIL_MS &&
-        !nextSweepIndices.includes(index)
-      )
-        nextSweepIndices.push(index)
-    })
-  }
-  if (!sameIndices(nextSweepIndices, sweepIndices.value)) sweepIndices.value = nextSweepIndices
-  const index = nextActiveIndices[0] ?? 0
-  if (index !== currentIndex.value) {
-    currentIndex.value = index
-    // The active character DOM changes after Vue commits; refreshSweepElements
-    // paints that DOM in nextTick using the same clock, including the last word.
-  } else {
+  sweepRaf = 0
+  if (document.hidden || !lyrics.value.length || hasUntimedLyrics.value || isUnmounted) return
+  updateLineSelection(clock.read(now))
+  const moving = clock.isMoving(now)
+  if (!moving || now - lastSweepPaint >= 1000 / 30 - 1) {
     paintSweep(now)
+    lastSweepPaint = now
   }
-  sweepRaf = clock.isMoving(now) ? requestAnimationFrame(animateSweep) : 0
+  if (sweepLines.size && moving) sweepRaf = requestAnimationFrame(animateSweep)
 }
 
 function refreshSweepElements(): void {
@@ -519,9 +553,12 @@ function refreshSweepElements(): void {
     const line = lineRefs.value[lineIndex]
     const lyric = lyrics.value[lineIndex]
     if (!lyric) continue
-    const elements = Array.from(
-      line?.querySelectorAll<HTMLElement>('.lyric-karaoke-char, .lyric-char, .interlude-dot') ?? []
-    )
+    const selector =
+      ui.lyricsStyle === 'follow'
+        ? '.lyric-karaoke-char, .lyric-char, .interlude-dot'
+        : '.lyric-karaoke-char, .interlude-dot'
+    const elements = Array.from(line?.querySelectorAll<HTMLElement>(selector) ?? [])
+    if (!elements.length) continue
     const sweepElements = elements.map((element, index) => {
       const start = element.dataset.start === undefined ? undefined : Number(element.dataset.start)
       const sourceDuration = Math.max(1, Number(element.dataset.duration) || 1)
@@ -575,66 +612,56 @@ function refreshSweepElements(): void {
       interludeElement: line?.querySelector<HTMLElement>('.lyric-interlude') ?? null
     })
   }
-  paintSweep(performance.now())
+  const now = performance.now()
+  paintSweep(now)
+  if (!sweepRaf && !document.hidden && sweepLines.size && clock.isMoving(now))
+    sweepRaf = requestAnimationFrame(animateSweep)
 }
 
 const updatePlayback = (): void => {
-  const time = Number.isFinite(props.currentTime) ? props.currentTime : 0
-  clock.sample(time, performance.now(), props.isPlaying)
-  if (!sweepRaf) sweepRaf = requestAnimationFrame(animateSweep)
+  const time = toValue(props.currentTime)
+  clock.sample(Number.isFinite(time) ? time : 0, performance.now(), props.isPlaying)
+  if (!document.hidden && !sweepRaf && lyrics.value.length && !hasUntimedLyrics.value)
+    sweepRaf = requestAnimationFrame(animateSweep)
 }
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-const getLineStyle = (idx: number) => {
-  if (lyrics.value[idx]?.untimed) {
-    return {
-      transform: 'none',
-      filter: 'none',
-      opacity: 1
+// Share the six possible depth styles. Stable identities let v-memo skip rows
+// whose appearance is unchanged when a line starts or enters the viewport.
+const flatLine = { transform: 'none', filter: 'none', opacity: 1 }
+const scrollingLine = { ...flatLine, opacity: 0.6 }
+const offscreenStyles = Array.from({ length: 6 }, (_, depth) => ({
+  ...flatLine,
+  opacity: 1 - Math.min(depth * 0.22, 0.75)
+}))
+const depthStyles = computed(() => {
+  const transform =
+    props.allowTransform && !ui.reduceMotion && ui.lyricsStyle !== 'none'
+      ? 'translateY(var(--scroll-y, 0px))'
+      : 'none'
+  return offscreenStyles.map(({ opacity }, depth) => ({
+    transform,
+    opacity,
+    filter: depth ? `blur(${depth * 1.2 * lyricMotionScale.value}px)` : 'none',
+    zIndex: depth ? undefined : 10
+  }))
+})
+const nearbyDepths = computed(() => {
+  const depths = new Map<number, number>()
+  for (const index of activeIndices.value) {
+    for (let offset = -4; offset <= 4; offset++) {
+      const row = index + offset
+      depths.set(row, Math.min(depths.get(row) ?? 5, Math.abs(offset)))
     }
   }
-  const distance = activeIndices.value.reduce(
-    (closest, activeIndex) =>
-      Math.abs(idx - activeIndex) < Math.abs(closest) ? idx - activeIndex : closest,
-    idx - currentIndex.value
-  )
-  const abs = Math.abs(distance)
-  const blur = Math.min(abs * 1.2, 6) * lyricMotionScale.value
-  const opacity = 1 - Math.min(abs * 0.22, 0.75)
-
-  if (!visibleLineIndices.value.has(idx)) {
-    return { transform: 'none', filter: 'none', opacity }
-  }
-
-  if (isUserScrolling.value) {
-    return {
-      transform: 'none',
-      filter: 'none',
-      opacity: activeIndexSet.value.has(idx) ? 1 : 0.6
-    }
-  }
-  if (activeIndexSet.value.has(idx)) {
-    return {
-      transform:
-        props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none',
-      filter: 'blur(0px)',
-      opacity: 1,
-      zIndex: 10
-    }
-  }
-
-  return {
-    transform:
-      props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none',
-    filter: `blur(${blur}px)`,
-    opacity
-  }
+  return depths
+})
+function lineStyle(idx: number): typeof flatLine {
+  if (lyrics.value[idx].untimed) return flatLine
+  const depth = nearbyDepths.value.get(idx) ?? 5
+  if (!visibleLineIndices.value.has(idx)) return offscreenStyles[depth]
+  if (isUserScrolling.value) return depth === 0 ? flatLine : scrollingLine
+  return depthStyles.value[depth]
 }
-
-// Keep the styles for the
-// complete lyric list stable between line/scroll changes so that update does
-// not allocate a new object for every off-screen line on each render.
-const lineStyles = computed(() => lyrics.value.map((_line, idx) => getLineStyle(idx)))
 
 function getLineAlignment(line: LyricLine): 'left' | 'center' | 'right' {
   return line.vocalPosition ?? props.alignMode
@@ -683,11 +710,10 @@ watch(
         writeScroll(Math.max(0, viewportRef.value.scrollTop - collapsedHeight))
         scrollSpring.reset(viewportRef.value.scrollTop)
         lineRefs.value.forEach((element) => element.style.setProperty('--scroll-y', '0px'))
-        rowSprings = []
+        rowSprings.clear()
         rowTarget = Number.NaN
         rowFocus = -1
       }
-      refreshSweepElements()
       if (enableAutoScroll.value) requestSnapToCurrent()
     })
   },
@@ -762,7 +788,9 @@ watch(
   { flush: 'post' }
 )
 watch([() => ui.reduceMotion, () => props.allowTransform], () => requestSnapToCurrent())
-watch([() => props.currentTime, () => props.isPlaying], updatePlayback, { immediate: true })
+watch([() => toValue(props.currentTime), () => props.isPlaying], updatePlayback, {
+  immediate: true
+})
 
 onMounted(() => {
   updateAutomaticLyricsMetrics()
@@ -773,6 +801,7 @@ onMounted(() => {
     passive: true
   })
   window.addEventListener('resize', handleWindowResize)
+  document.addEventListener('visibilitychange', updatePlayback)
   document.fonts.addEventListener('loadingdone', refreshFontLayout)
   resizeObserver = new ResizeObserver(() => requestSnapToCurrent())
   if (viewport) resizeObserver.observe(viewport)
@@ -786,6 +815,7 @@ onUnmounted(() => {
   const viewport = viewportRef.value
   viewport?.removeEventListener('scroll', handleScroll)
   window.removeEventListener('resize', handleWindowResize)
+  document.removeEventListener('visibilitychange', updatePlayback)
   document.fonts.removeEventListener('loadingdone', refreshFontLayout)
   if (snapRaf) cancelAnimationFrame(snapRaf)
   if (scrollTimer) clearTimeout(scrollTimer)
@@ -823,7 +853,7 @@ onUnmounted(() => {
         ref="lineRefs"
         v-memo="[
           line,
-          lineStyles[idx],
+          lineStyle(idx),
           visibleLineIndices.has(idx),
           activeIndexSet.has(idx),
           sweepIndexSet.has(idx),
@@ -844,7 +874,7 @@ onUnmounted(() => {
           'lyric-line--chorus': line.isChorus,
           'lyric-line--background': line.isBackground
         }"
-        :style="lineStyles[idx]"
+        :style="lineStyle(idx)"
         :role="canSeekLine(line) ? 'button' : undefined"
         :tabindex="canSeekLine(line) ? 0 : undefined"
         :aria-label="canSeekLine(line) ? line.text : undefined"
@@ -915,19 +945,19 @@ onUnmounted(() => {
                   </span>
                 </span>
               </template>
-              <!-- 普通歌词 -->
+              <span
+                v-else-if="ui.lyricsStyle !== 'follow'"
+                class="lyric-highlight"
+                :class="ui.lyricsStyle === 'glow' && 'lyric-glow'"
+                >{{ line.text }}</span
+              >
               <template v-else>
                 <span
                   v-for="(group, groupIndex) in groupTextCharacters(line.text)"
                   :key="groupIndex"
                   class="lyric-word"
                 >
-                  <span
-                    v-for="(char, charIdx) in group"
-                    :key="charIdx"
-                    :class="['lyric-char', ui.lyricsStyle == 'glow' ? 'lyric-glow' : '']"
-                    :style="ui.lyricsStyle == 'follow' ? undefined : `color: var(--lrc-highlight)`"
-                  >
+                  <span v-for="(char, charIdx) in group" :key="charIdx" class="lyric-char">
                     {{ char }}
                   </span>
                 </span>
@@ -994,9 +1024,7 @@ onUnmounted(() => {
   justify-content: center;
   position: relative;
   padding: var(--lrc-padding) 40px;
-  transition:
-    opacity 350ms ease,
-    filter 400ms ease;
+  transition: opacity 350ms ease;
   transform-origin: center center;
 }
 
@@ -1085,9 +1113,10 @@ onUnmounted(() => {
   user-select: text;
 }
 
-.lyric-glow {
+.lyric-highlight {
   color: var(--lrc-highlight);
-
+}
+.lyric-glow {
   text-shadow:
     0 0 calc(4px * var(--lyric-motion-scale))
       color-mix(in srgb, var(--lrc-highlight) 80%, transparent),
@@ -1144,6 +1173,14 @@ onUnmounted(() => {
   background-repeat: no-repeat;
   background-clip: text;
   -webkit-background-clip: text;
+}
+.lyric-viewport [data-fill='pending'] {
+  background-image: none;
+  color: var(--lrc-default);
+}
+.lyric-viewport [data-fill='complete'] {
+  background-image: none;
+  color: var(--lrc-highlight);
 }
 .lyric-word {
   display: inline-block;

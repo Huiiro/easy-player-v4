@@ -378,5 +378,7 @@ export class MeshFlowRenderer {
     for (const target of this.targets) this.gl.deleteFramebuffer(target)
     for (const program of this.programs) this.gl.deleteProgram(program)
     this.currentPixels = this.previousPixels = null
+    if (!this.gl.isContextLost()) this.gl.getExtension('WEBGL_lose_context')?.loseContext()
+    this.canvas.width = this.canvas.height = 1
   }
 }

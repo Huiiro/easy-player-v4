@@ -18,7 +18,7 @@ import { useUIStore } from '@/stores/ui/uiStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { getVolumeLevel } from '@/utils/volume'
 import { usePlayerBackdrop } from '@/components/player/usePlayerBackdrop'
-import { useSeekProgress } from '@/components/player/useSeekProgress'
+import SeekProgress from '@/components/player/SeekProgress.vue'
 import { useFooterAutoHide } from '@/components/player/useFooterAutoHide'
 import { PlayMode } from '@/constants'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
@@ -52,8 +52,6 @@ const StageBackground = defineAsyncComponent(() =>
 )
 const player = usePlayerStore()
 const volumeIcon = computed(() => `volume-volume-${getVolumeLevel(player.volume)}`)
-const { displayPositionMs, displayPositionFormatted, previewSeek, commitSeek, cancelSeek } =
-  useSeekProgress(player)
 const { t } = useI18n()
 const router = useRouter()
 const { error: showError, success } = useMessage()
@@ -403,10 +401,7 @@ const {
   controlsBusy,
   computed(() => ui.reduceMotion)
 )
-const playedProgressWidth = computed(
-  () =>
-    `${player.durationMs > 0 ? Math.max(0, Math.min(1, displayPositionMs.value / player.durationMs)) * 100 : 0}%`
-)
+const lyricTime = (): number => player.positionMs + player.lyricsOffsetMs
 function setControlPopup(key: string, open: boolean): void {
   const next = new Set(controlPopups.value)
   if (open) next.add(key)
@@ -860,7 +855,13 @@ function changeLyricsOffset(event: WheelEvent): void {
             @focusout="onControlsBlur"
           >
             <div v-if="controlsHidden" class="panel-idle-progress" aria-hidden="true">
-              <span :style="{ width: playedProgressWidth }" />
+              <SeekProgress v-slot="{ position }">
+                <span
+                  :style="{
+                    width: `${player.durationMs > 0 ? Math.max(0, Math.min(1, position / player.durationMs)) * 100 : 0}%`
+                  }"
+                />
+              </SeekProgress>
             </div>
             <!-- args control -->
             <div
@@ -1036,29 +1037,31 @@ function changeLyricsOffset(event: WheelEvent): void {
               </button>
             </div>
             <!-- progress -->
-            <div class="panel-progress w-[min(440px,100%)]">
-              <BaseRange
-                class="ep-range ep-playback-progress w-full cursor-pointer disabled:cursor-default disabled:opacity-45"
-                :class="progressStyle === 'thin' ? 'h-1' : 'h-2.5'"
-                :min="0"
-                :max="player.durationMs || 0"
-                :value="displayPositionMs"
-                :disabled="!player.durationMs"
-                :aria-label="t('playerPanel.progress')"
-                :inert="controlsHidden"
-                @input="previewSeek"
-                @change="commitSeek"
-                @pointercancel="cancelSeek"
-                @blur="cancelSeek"
-              />
-              <div
-                class="panel-time panel-secondary-text flex justify-between text-xs tabular-nums"
-              >
-                <span>{{ displayPositionFormatted }}</span>
-                <span class="panel-time-separator" aria-hidden="true">/</span>
-                <span>{{ player.durationFormatted }}</span>
+            <SeekProgress v-slot="{ position, formatted, preview, commit, cancel }">
+              <div class="panel-progress w-[min(440px,100%)]">
+                <BaseRange
+                  class="ep-range ep-playback-progress w-full cursor-pointer disabled:cursor-default disabled:opacity-45"
+                  :class="progressStyle === 'thin' ? 'h-1' : 'h-2.5'"
+                  :min="0"
+                  :max="player.durationMs || 0"
+                  :value="position"
+                  :disabled="!player.durationMs"
+                  :aria-label="t('playerPanel.progress')"
+                  :inert="controlsHidden"
+                  @input="preview"
+                  @change="commit"
+                  @pointercancel="cancel"
+                  @blur="cancel"
+                />
+                <div
+                  class="panel-time panel-secondary-text flex justify-between text-xs tabular-nums"
+                >
+                  <span>{{ formatted }}</span>
+                  <span class="panel-time-separator" aria-hidden="true">/</span>
+                  <span>{{ player.durationFormatted }}</span>
+                </div>
               </div>
-            </div>
+            </SeekProgress>
             <!-- play control -->
             <div class="panel-transport flex items-center gap-4" :inert="controlsHidden">
               <!-- volume -->
@@ -1155,7 +1158,7 @@ function changeLyricsOffset(event: WheelEvent): void {
             class="size-full flex-1"
             :style="lyricColorStyle"
             :song="player.currentQueueSong"
-            :current-time="player.positionMs + player.lyricsOffsetMs"
+            :current-time="lyricTime"
             :is-playing="player.isPlaying"
             :source-order="ui.lyricSourceOrder"
             :align-mode="collapsed ? 'center' : ui.lyricsAlignment"

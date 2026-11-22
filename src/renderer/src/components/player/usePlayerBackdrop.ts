@@ -200,7 +200,10 @@ export function usePlayerBackdrop(
   }
   watch(
     [coverUrl, useVibrantPalette],
-    ([url], _, onCleanup) => {
+    ([url], previous, onCleanup) => {
+      // A failed album cover selects the ambient palette. That palette change
+      // must not retry the same unreadable URL and switch the background back.
+      if (url === previous?.[0] && coverFailed.value) return
       coverFailed.value = false
       const cached = CoverAnalyzer.getCachedPalette(
         player.currentQueueSong,
@@ -249,6 +252,7 @@ export function usePlayerBackdrop(
         coverFailed.value = true
         displayedCoverUrl.value = null
         resetCoverPalette('failed')
+        paletteReady.value = true
         releaseImage()
       }
       image.src = url

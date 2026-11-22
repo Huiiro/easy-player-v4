@@ -505,7 +505,11 @@ bool AudioEngine::set_transition_config(const TransitionConfig& input) {
 }
 
 void AudioEngine::stop_analysis_thread() {
-    analysis_running_.store(false, std::memory_order_release);
+    {
+        std::lock_guard<std::mutex> lock(analysis_wait_mutex_);
+        analysis_running_.store(false, std::memory_order_release);
+    }
+    analysis_cv_.notify_one();
     if (analysis_thread_ && analysis_thread_->joinable()) analysis_thread_->join();
     analysis_thread_.reset();
 }
@@ -1597,6 +1601,9 @@ void AudioEngine::decoder_thread_func() {
     LOG_DEBUG("Decoder thread started");
     int channels = track_info_.channels;
 
+    std::vector<float> buffer;
+    if (!dop_transport_active_.load(std::memory_order_acquire))
+        buffer.resize(static_cast<size_t>(4096) * channels);
     while (decoder_running_) {
         if (dop_transport_active_.load(std::memory_order_acquire)) {
             if (!dop_ring_buffer_) break;
@@ -1627,7 +1634,6 @@ void AudioEngine::decoder_thread_func() {
         }
 
         int decode_chunk = std::min(target, 4096);
-        std::vector<float> buffer(decode_chunk * channels);
         int decoded = 0;
 
         {
@@ -1781,6 +1787,7 @@ void AudioEngine::mark_track_ended_pending() {
 }
 
 void AudioEngine::position_timer_func() {
+    auto next_position_event = std::chrono::steady_clock::now();
     while (timer_running_) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
@@ -1842,7 +1849,11 @@ void AudioEngine::position_timer_func() {
         }
 
         if (pos_cb_ && state_ == EngineState::Playing) {
-            pos_cb_(position_ms(), duration_ms());
+            const auto now = std::chrono::steady_clock::now();
+            if (!playback_only_.load(std::memory_order_acquire) || transitioned || now >= next_position_event) {
+                pos_cb_(position_ms(), duration_ms());
+                next_position_event = now + std::chrono::seconds(1);
+            }
         }
     }
 }
@@ -2044,7 +2055,12 @@ void AudioEngine::analysis_thread_func() {
             if (analysis_ring_buffer_ && !analysis_work_buffer_.empty()) {
                 while (analysis_ring_buffer_->read(analysis_work_buffer_.data(), 1024) > 0) {}
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::unique_lock<std::mutex> lock(analysis_wait_mutex_);
+            analysis_cv_.wait(lock, [this] {
+                return !analysis_running_.load(std::memory_order_acquire) ||
+                    (analysis_enabled_.load(std::memory_order_acquire) &&
+                     !playback_only_.load(std::memory_order_acquire));
+            });
             continue;
         }
         if (!analysis_ring_buffer_ || analysis_work_buffer_.empty()) { std::this_thread::sleep_for(std::chrono::milliseconds(10)); continue; }

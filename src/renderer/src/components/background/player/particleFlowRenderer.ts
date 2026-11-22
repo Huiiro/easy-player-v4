@@ -302,5 +302,6 @@ export class ParticleFlowRenderer {
     this.seeds = this.directions = new Float32Array(0)
     this.field = new Float32Array(0)
     this.canvas.width = this.canvas.height = 1
+    if (!this.gl.isContextLost()) this.gl.getExtension('WEBGL_lose_context')?.loseContext()
   }
 }
