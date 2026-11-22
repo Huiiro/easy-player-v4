@@ -4,6 +4,18 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
+## v3.4.3
+
+- Added a playlist reorder mode with drag-and-drop placement and saved custom song order, respected by default sorting.
+- Improved track switching in large queues by saving playback sessions separately from the full queue and coalescing asynchronous writes, reducing repeated serialization and synchronous database work while retaining restoration of older playback state.
+- Improved word-timed lyric animation, playback progress rendering, and animated backgrounds, reducing repeated calculations and resource use while paused.
+- Improved daily discovery recommendations by rotating songs against recent recommendation history to reduce repeats across consecutive days, and refined the recommendations page layout.
+- Added options to pin audio controls and lightweight mode to the header, plus a toggle for the Easy Lyrics link. Refined settings, search overlays, and footer menus.
+- Clarified forced output sample rates versus automatic resampling, explained the Windows mix rate used by WASAPI shared mode, and adjusted sample-rate control availability.
+- Made remote music source credential encryption and decryption asynchronous to reduce main-thread blocking while retaining credential error messages.
+- Added MIT licenses for the application and plugin SDK, third-party notices, and bundled dependency license files, with a link in Settings.
+- Updated Electron, SQLite, automatic updates, audio metadata, and other runtime dependencies, and removed the unused browser metadata dependency.
+
 ## v3.4.2
 
 - Added a splash screen that shows initialization progress before the main window opens.
