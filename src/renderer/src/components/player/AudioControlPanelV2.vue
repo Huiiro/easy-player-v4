@@ -256,7 +256,15 @@ const bitPerfectLabel = computed(() => {
 })
 function pipelineLabel(node: string): string {
   if (node === 'ReplayGain') return t('ap.replayGain')
-  if (node === 'libsamplerate SRC (stateful)' || node === 'Resampler') return t('ap.resampler')
+  if (node === 'libsamplerate SRC (stateful)') {
+    if (player.currentBackend === 'wasapi_shared') return t('ap.resamplerAutomaticShared')
+    const { forceOutputRate, targetSampleRate } = player.resamplerConfig
+    if (!forceOutputRate || targetSampleRate !== player.audioChain?.backendFormat.sampleRate) {
+      return t('ap.resamplerAutomatic')
+    }
+    return t('ap.resampler')
+  }
+  if (node === 'Resampler') return t('ap.resampler')
   if (node === 'Channel routing') return t('ap.channelRouting')
   if (node === 'SoundTouch tempo' || node === 'Playback speed') return t('ap.playSpeed')
   const match = Object.entries(nodeLabels).find(

@@ -1788,6 +1788,11 @@ export default {
     applied: 'applied',
     noMatchingTags: 'No matching tags',
     resampler: 'Resampler',
+    forceOutputRate: 'Force output sample rate',
+    resamplerAutomatic: 'Automatic resampling (device rate)',
+    resamplerAutomaticShared: 'Automatic resampling (Windows mix rate)',
+    resamplerSharedHelp:
+      'WASAPI Shared uses the Windows mix rate. The player resamples automatically when the source rate differs.',
     channelRouting: 'Channel routing',
     channelNumber: 'Channel {number}',
     wasapiShared: 'WASAPI Shared',

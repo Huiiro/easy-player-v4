@@ -24,7 +24,7 @@ const qualityOptions = computed(() => [
         class="w-fit text-left"
         @change="player.setResamplerConfig(player.resamplerConfig)"
       >
-        {{ t('ap.resampler') }}
+        {{ t('ap.forceOutputRate') }}
       </BaseSwitch>
     </div>
     <div class="flex flex-wrap gap-3">
@@ -32,6 +32,7 @@ const qualityOptions = computed(() => [
         v-model="player.resamplerConfig.targetSampleRate"
         teleport
         :options="sampleRateOptions"
+        :disabled="!player.resamplerConfig.forceOutputRate"
         class="w-44"
         @change="player.setResamplerConfig(player.resamplerConfig)"
       />
@@ -43,6 +44,9 @@ const qualityOptions = computed(() => [
         @change="player.setResamplerConfig(player.resamplerConfig)"
       />
     </div>
+    <p v-if="player.currentBackend === 'wasapi_shared'" class="text-text-l">
+      {{ t('ap.resamplerSharedHelp') }}
+    </p>
     <div class="flex items-center gap-3">
       <BaseSwitch
         class="w-fit text-left"
