@@ -1452,6 +1452,7 @@ export default {
     filesRecovered: 'Recovered {recovered} / {total} tracks',
     buildNumber: 'Build number',
     repository: 'Repository',
+    thirdPartyNotices: 'Third-party notices',
     statistics: 'Data statistics',
     restorePreferences: 'Restore default configuration',
     restorePreferencesDescription:

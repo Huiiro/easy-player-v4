@@ -1,6 +1,6 @@
 # Mac 构建与测试
 
-当前优先支持 Apple Silicon（ARM64），最低 macOS 12.0。Windows 不能直接构建
+当前优先支持 Apple Silicon（ARM64），应用最低要求 macOS 13.0。Windows 不能直接构建
 Mac 原生模块；远程验证环境使用 GitHub Actions `macos-15` ARM64 runner。
 
 ## 从 Actions 获取测试包

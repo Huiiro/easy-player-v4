@@ -5,9 +5,11 @@ const asar = require('@electron/asar')
 const crypto = require('node:crypto')
 const { nativeProfileHash } = require('../lib/native-runtime-paths.cjs')
 const { verifyWindowsRuntime } = require('../lib/windows-runtime.cjs')
+const { verifyThirdPartyNotices } = require('./collect-third-party-notices.cjs')
 const { spawnSync } = require('node:child_process')
 
 const archive = path.resolve(process.argv[2] || 'dist/win-unpacked/resources/app.asar')
+verifyThirdPartyNotices(path.dirname(archive))
 const entries = asar
   .listPackage(archive)
   .map((entry) => entry.replace(/\\/g, '/').replace(/^\//, ''))

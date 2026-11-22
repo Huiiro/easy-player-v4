@@ -2,6 +2,7 @@
 const fs = require('node:fs')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
+const { verifyThirdPartyNotices } = require('./collect-third-party-notices.cjs')
 const {
   verifyMacosRuntime,
   assertArchitecture,
@@ -13,22 +14,26 @@ const app = path.resolve(process.argv[2] || 'dist/mac-arm64/EasyPlayer.app')
 const arch = process.argv[3] || 'arm64'
 const contents = path.join(app, 'Contents')
 const resources = path.join(contents, 'Resources')
+verifyThirdPartyNotices(resources)
 const native = path.join(resources, 'native')
+const infoPlist = path.join(contents, 'Info.plist')
 const execute = (command, args, options = {}) => {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 60_000, ...options })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} failed: ${result.stderr || result.stdout}`)
   return result.stdout.trim()
 }
-const executable = path.join(
-  contents,
-  'MacOS',
-  execute('/usr/libexec/PlistBuddy', [
-    '-c',
-    'Print :CFBundleExecutable',
-    path.join(contents, 'Info.plist')
-  ])
-)
+const applicationMinimum = execute('/usr/libexec/PlistBuddy', [
+  '-c',
+  'Print :LSMinimumSystemVersion',
+  infoPlist
+])
+const executableName = execute('/usr/libexec/PlistBuddy', [
+  '-c',
+  'Print :CFBundleExecutable',
+  infoPlist
+])
+const executable = path.join(contents, 'MacOS', executableName)
 assertArchitecture(executable, arch)
 execute('codesign', ['--verify', '--deep', '--strict', app])
 const inspectModules = (directory) => {
@@ -38,7 +43,7 @@ const inspectModules = (directory) => {
     else if (/\.(node|dylib)$/.test(entry.name)) {
       assertArchitecture(file, arch)
       const minimum = minimumMacosVersion(execute('otool', ['-l', file]))
-      if (minimum && minimum.localeCompare('12.0', undefined, { numeric: true }) > 0)
+      if (minimum && minimum.localeCompare(applicationMinimum, undefined, { numeric: true }) > 0)
         throw new Error(`Native Node dependency requires macOS ${minimum}: ${file}`)
     }
   }

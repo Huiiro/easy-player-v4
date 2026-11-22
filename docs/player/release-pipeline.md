@@ -100,8 +100,8 @@ The `macOS build` workflow is defined in `macos-ci.yml` and handles branch/PR
 pushes, manual runs and reusable calls from the Mac release job. Daily builds
 use `macos-arm64-test`; release calls pass `macos-release`. Separate concurrency
 groups prevent daily builds from cancelling release packaging. It builds ARM64
-DMG/ZIP artifacts on a `macos-15`
-runner, with macOS 12.0 as the minimum deployment target. It builds the same
+DMG/ZIP artifacts on a `macos-15` runner. The app requires macOS 13.0, and
+the native audio engine targets macOS 12.0. The workflow builds the same
 pinned audio-only FFmpeg, libsamplerate and SoundTouch sources as Windows,
 using the `arm64-osx-audio` triplet. Homebrew supplies build tools only.
 Neither the old local FFmpeg SDK nor Homebrew audio libraries are selected.

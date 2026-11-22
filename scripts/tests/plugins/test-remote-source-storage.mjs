@@ -32,17 +32,22 @@ globalThis.remoteStorageFixture = {
     }
   },
   safeStorage: {
-    isEncryptionAvailable: () => globalThis.remoteStorageFixture.available,
-    encryptString(text) {
+    isAsyncEncryptionAvailable: async () => globalThis.remoteStorageFixture.available,
+    async encryptStringAsync(text) {
       const iv = randomBytes(12)
       const cipher = createCipheriv('aes-256-gcm', key, iv)
       const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()])
       return Buffer.concat([iv, cipher.getAuthTag(), encrypted])
     },
-    decryptString(buffer) {
+    async decryptStringAsync(buffer) {
       const cipher = createDecipheriv('aes-256-gcm', key, buffer.subarray(0, 12))
       cipher.setAuthTag(buffer.subarray(12, 28))
-      return Buffer.concat([cipher.update(buffer.subarray(28)), cipher.final()]).toString('utf8')
+      return {
+        result: Buffer.concat([cipher.update(buffer.subarray(28)), cipher.final()]).toString(
+          'utf8'
+        ),
+        shouldReEncrypt: false
+      }
     }
   }
 }
@@ -89,13 +94,21 @@ try {
       passphrase: 'private passphrase'
     }
   }
-  const source = repository.createSource(input)
+  const source = await repository.createSource(input)
   assert.deepEqual(source.auth, input.auth)
-  assert.throws(() => repository.createSource({ ...input, name: '  SFTP  ' }), /sourceNameExists/)
-  const another = repository.createSource({ ...input, name: 'Other' })
-  assert.throws(() => repository.updateSource({ ...another, name: ' SFTP ' }), /sourceNameExists/)
-  assert.equal(repository.getSource(another.id).name, 'Other')
-  assert.equal(repository.updateSource({ ...source, name: ' SFTP ' }), true)
+  await assert.rejects(repository.createSource({ ...input, name: '  SFTP  ' }), /sourceNameExists/)
+  const otherInput = { ...input, name: 'Other' }
+  const [created, duplicate] = await Promise.allSettled([
+    repository.createSource(otherInput),
+    repository.createSource(otherInput)
+  ])
+  assert.equal(created.status, 'fulfilled')
+  assert.equal(duplicate.status, 'rejected')
+  assert.match(duplicate.reason.message, /sourceNameExists/)
+  const another = created.value
+  await assert.rejects(repository.updateSource({ ...another, name: ' SFTP ' }), /sourceNameExists/)
+  assert.equal((await repository.getSource(another.id)).name, 'Other')
+  assert.equal(await repository.updateSource({ ...source, name: ' SFTP ' }), true)
 
   for (const field of ['user', 'secret', 'authType', 'server'])
     assert.equal(field in source, false, `storage field ${field} must not cross IPC`)
@@ -107,26 +120,26 @@ try {
   database.close()
   database = new DatabaseSync(databasePath)
   repository = await import(pathToFileURL(outfile).href + '?restart')
-  assert.deepEqual(repository.getSource(source.id).auth, input.auth)
+  assert.deepEqual((await repository.getSource(source.id)).auth, input.auth)
   globalThis.remoteStorageFixture.available = false
-  const locked = repository.getSource(source.id)
+  const locked = await repository.getSource(source.id)
   assert.equal(locked.credentialError, 'unavailable')
-  repository.updateSource({ ...locked, name: 'Renamed while locked' })
+  await repository.updateSource({ ...locked, name: 'Renamed while locked' })
   assert.equal(
     database.prepare('SELECT secret FROM music_source WHERE id = ?').get(source.id).secret,
     stored.secret
   )
   globalThis.remoteStorageFixture.available = true
-  assert.deepEqual(repository.getSource(source.id).auth, input.auth)
+  assert.deepEqual((await repository.getSource(source.id)).auth, input.auth)
   const token = { type: 'bearer', token: 'secret-token' }
-  const dav = repository.createSource({
+  const dav = await repository.createSource({
     name: 'DAV',
     type: 'webdav',
     baseUrl: 'https://nas/music/',
     auth: token
   })
-  assert.deepEqual(repository.getSource(dav.id).auth, token)
-  const anonymous = repository.createSource({
+  assert.deepEqual((await repository.getSource(dav.id)).auth, token)
+  const anonymous = await repository.createSource({
     name: 'Anonymous',
     type: 'ftp',
     baseUrl: 'ftp://nas/music/',
@@ -136,7 +149,7 @@ try {
     database.prepare('SELECT secret FROM music_source WHERE id = ?').get(anonymous.id).secret,
     null
   )
-  repository.updateSource({ ...dav, auth: { type: 'anonymous' } })
+  await repository.updateSource({ ...dav, auth: { type: 'anonymous' } })
   assert.equal(
     database.prepare('SELECT secret FROM music_source WHERE id = ?').get(dav.id).secret,
     null,
@@ -147,32 +160,36 @@ try {
       "INSERT INTO music_source (name,type,base_url,user,secret) VALUES ('Legacy','navidrome','https://nas','old-user','old-password')"
     )
     .run()
-  repository.migrateSourceSecrets()
-  const legacy = repository.listSources().find((source) => source.name === 'Legacy')
+  await repository.migrateSourceSecrets()
+  const legacy = (await repository.listSources()).find((source) => source.name === 'Legacy')
+  assert.match(
+    database.prepare('SELECT secret FROM music_source WHERE id = ?').get(legacy.id).secret,
+    /^safe:v1:/
+  )
   assert.deepEqual(legacy.auth, {
     type: 'password',
     username: 'old-user',
     password: 'old-password'
   })
   globalThis.remoteStorageFixture.available = false
-  const lockedLegacy = repository.getSource(legacy.id)
-  repository.updateSource({ ...lockedLegacy, name: 'Legacy' })
+  const lockedLegacy = await repository.getSource(legacy.id)
+  await repository.updateSource({ ...lockedLegacy, name: 'Legacy' })
   assert.equal(
     database.prepare('SELECT user FROM music_source WHERE id = ?').get(legacy.id).user,
     'old-user'
   )
   globalThis.remoteStorageFixture.available = true
-  assert.deepEqual(repository.getSource(legacy.id).auth, legacy.auth)
-  repository.updateSource(legacy)
+  assert.deepEqual((await repository.getSource(legacy.id)).auth, legacy.auth)
+  await repository.updateSource(legacy)
   assert.equal(
     database.prepare('SELECT auth_type FROM music_source WHERE id = ?').get(legacy.id).auth_type,
     'v2:password'
   )
-  assert.throws(() =>
+  await assert.rejects(
     repository.createSource({ name: 'Bad', type: 'ftp', baseUrl: 'ftp://nas', auth: token })
   )
   database.prepare("UPDATE music_source SET secret = 'safe:v1:damaged' WHERE id = ?").run(source.id)
-  assert.equal(repository.getSource(source.id).credentialError, 'decrypt-failed')
+  assert.equal((await repository.getSource(source.id)).credentialError, 'decrypt-failed')
   console.log(
     'Remote storage passed: real SQLite restart, encrypted auth envelopes, legacy conversion, locked credential retention, auth changes and corrupt secrets'
   )

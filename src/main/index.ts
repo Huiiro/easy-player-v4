@@ -998,7 +998,9 @@ app.whenReady().then(() =>
         arch: process.arch,
         packaged: app.isPackaged
       })
-      migrateSourceSecrets()
+      await migrateSourceSecrets().catch(() => {
+        Logger.warn('[Remote source] could not encrypt legacy credentials')
+      })
       registerDatabaseIpcHandlers(() => mainWindow?.webContents)
       registerScanIpcHandlers()
       registerDuplicateFileIpcHandlers()

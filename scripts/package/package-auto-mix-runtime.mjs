@@ -39,8 +39,10 @@ for (const folder of ['python', 'models']) {
 const component = Buffer.from(
   JSON.stringify({ formatVersion: 1, version, platform: process.platform, arch: process.arch })
 )
-unpackedSize += component.length
+const notices = fs.readFileSync(path.join(root, 'THIRD_PARTY_NOTICES.md'))
+unpackedSize += component.length + notices.length
 zip.addFile('component.json', component)
+zip.addFile('python/THIRD_PARTY_NOTICES.md', notices)
 const archive = path.join(output, asset)
 zip.writeZip(archive)
 const sha256 = createHash('sha256').update(fs.readFileSync(archive)).digest('hex')

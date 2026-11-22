@@ -352,28 +352,31 @@ export function registerDatabaseIpcHandlers(playbackRenderer: () => WebContents 
       }
     }
   )
-  ipcMain.handle(DATABASE_IPC_CHANNEL, (_event, request: DatabaseRequest): DatabaseResponse => {
-    if (!request || typeof request.action !== 'string') {
-      Logger.warn('[Database IPC] invalid request')
-      return { success: false, error: t('invalidDatabaseRequest') }
-    }
-    const handler = handlers[request.action] as Handler | undefined
-    if (!handler) {
-      Logger.warn('[Database IPC] unknown action', { action: request.action })
-      return { success: false, error: t('unknownDatabaseAction') }
-    }
-    try {
-      return {
-        success: true,
-        data: logOperation(
-          `[Database IPC] ${request.action}`,
-          logParams(request.params),
-          () => handler(request.params as never),
-          { quiet: request.action === 'getSetting' }
-        )
+  ipcMain.handle(
+    DATABASE_IPC_CHANNEL,
+    async (_event, request: DatabaseRequest): Promise<DatabaseResponse> => {
+      if (!request || typeof request.action !== 'string') {
+        Logger.warn('[Database IPC] invalid request')
+        return { success: false, error: t('invalidDatabaseRequest') }
       }
-    } catch (error) {
-      return { success: false, error: error instanceof Error ? error.message : String(error) }
+      const handler = handlers[request.action] as Handler | undefined
+      if (!handler) {
+        Logger.warn('[Database IPC] unknown action', { action: request.action })
+        return { success: false, error: t('unknownDatabaseAction') }
+      }
+      try {
+        return {
+          success: true,
+          data: await logOperation(
+            `[Database IPC] ${request.action}`,
+            logParams(request.params),
+            () => handler(request.params as never),
+            { quiet: request.action === 'getSetting' }
+          )
+        }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : String(error) }
+      }
     }
-  })
+  )
 }

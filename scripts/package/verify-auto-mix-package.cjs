@@ -1,18 +1,24 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- electron-builder loads a CommonJS hook. */
 const fs = require('node:fs')
 const path = require('node:path')
+const { Arch } = require('builder-util')
+const { writeThirdPartyNotices } = require('./collect-third-party-notices.cjs')
 
 module.exports = async (context) => {
+  const root = context.packager.projectDir
+  const arch = Arch[context.arch]
+  if (context.electronPlatformName === 'darwin' && arch !== 'arm64' && arch !== 'x64')
+    throw new Error('Verify individual Mac architectures before building universal')
+  if (context.electronPlatformName === 'win32' && arch !== 'x64')
+    throw new Error('The bundled Auto Mix runtime currently supports Windows x64 only')
+  writeThirdPartyNotices(root, context.electronPlatformName, arch)
   if (context.electronPlatformName === 'darwin') {
-    const arch = context.arch === 3 ? 'arm64' : context.arch === 1 ? 'x64' : null
-    if (!arch) throw new Error('Verify individual Mac architectures before building universal')
     require('../lib/macos-runtime.cjs').verifyMacosRuntime(
-      path.join(context.packager.projectDir, 'build/native-addon'),
+      path.join(root, 'build/native-addon'),
       arch,
-      context.packager.projectDir
+      root
     )
     const crypto = require('node:crypto')
-    const root = context.packager.projectDir
     const release = JSON.parse(
       fs.readFileSync(path.join(root, 'resources/lib/ytdlp-release.json'), 'utf8')
     )
@@ -25,9 +31,6 @@ module.exports = async (context) => {
     return
   }
   if (context.electronPlatformName !== 'win32') return
-  if (context.arch !== 1)
-    throw new Error('The bundled Auto Mix runtime currently supports Windows x64 only')
-  const root = context.packager.projectDir
   for (const relative of [
     'build/native-addon/ffmpeg.exe',
     'build/native-addon/ffmpeg-runtime.json',

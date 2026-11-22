@@ -2,7 +2,7 @@
 
 本目录保存音频引擎的构建入口、依赖配置和外部工具版本锁。
 以下命令均从项目根目录执行。版本标签会同时构建发布 Windows x64 与
-macOS Apple Silicon，Mac 最低系统为 macOS 12，目前仍使用 ad-hoc 签名。
+macOS Apple Silicon，Mac 应用最低要求 macOS 13，目前仍使用 ad-hoc 签名。
 
 ## 目录用途
 

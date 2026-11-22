@@ -1417,6 +1417,7 @@ export default {
     filesRecovered: '已恢复 {recovered} / {total} 首歌曲',
     buildNumber: '构建号',
     repository: '项目仓库',
+    thirdPartyNotices: '第三方许可声明',
     statistics: '数据统计',
     restorePreferences: '还原默认配置',
     restorePreferencesDescription: '恢复默认设置，保留曲库和听歌记录。',

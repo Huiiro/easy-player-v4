@@ -2,6 +2,10 @@
 
 An Electron application with Vue and TypeScript
 
+## 许可证
+
+EasyPlayer 的原创代码和插件 SDK 采用 [MIT 许可证](LICENSE)。随应用分发的第三方依赖、工具和素材适用各自的条款，详见[第三方声明](THIRD_PARTY_NOTICES.md)。
+
 ## 自定义主题开发
 
 - [开发规范](docs/custom-themes.md)：主题格式、公开组件类、覆盖优先级、作用范围与验收流程。

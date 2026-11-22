@@ -495,7 +495,8 @@ export async function syncRemoteSource(
     { sourceId },
     async () => {
       await waitForBackgroundWork()
-      const source = getSource(sourceId)
+      const source = await getSource(sourceId)
+      assertApplicationActive()
       validateSource(source)
       const tracks = await providerFor(source.type).listTracks(source)
       assertApplicationActive()
@@ -583,7 +584,8 @@ async function downloadRemoteSong(songId: number): Promise<string> {
     async () => {
       const song = getSong(songId)
       if (!song?.sourceId || !song.remoteId) throw new Error(t('remoteSongNotFound'))
-      const source = getSource(song.sourceId)
+      const source = await getSource(song.sourceId)
+      assertApplicationActive()
       validateSource(source)
       const directory = cacheDirectory()
       mkdirSync(directory, { recursive: true })

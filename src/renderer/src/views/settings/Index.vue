@@ -32,6 +32,7 @@ const { error } = useMessage()
 const preferencesRevision = ref(0)
 const repositoryUrl = 'https://github.com/Huiiro/easy-player-v4'
 const themeDocumentationUrl = `${repositoryUrl}/blob/master/docs/custom-themes.md`
+const thirdPartyNoticesUrl = `${repositoryUrl}/blob/master/THIRD_PARTY_NOTICES.md`
 const lyricsUtilUrl = 'https://github.com/Huiiro/easy-lyrics'
 const musicTagUrl = 'https://www.cnblogs.com/vinlxc/p/11347744.html'
 const mp3tagUrl = 'https://www.mp3tag.de/'
@@ -476,6 +477,15 @@ onBeforeUnmount(() => {
               <div class="setting-row">
                 <h3 class="flex items-center gap-2">GitHub</h3>
                 <div class="flex flex-wrap items-center justify-end gap-2">
+                  <a
+                    :href="thirdPartyNoticesUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="ep-button ep-button--ghost ep-control--sm"
+                  >
+                    <SvgIcon name="common-link" class-name="size-4 shrink-0" />
+                    {{ t('settings.thirdPartyNotices') }}
+                  </a>
                   <a
                     :href="repositoryUrl"
                     target="_blank"

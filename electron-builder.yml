@@ -25,10 +25,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{LICENSE,THIRD_PARTY_NOTICES.md}'
   # Rebuild intermediates from native modules are not needed at runtime.
   - '!node_modules/better-sqlite3/{deps,src}/**/*'
   - '!node_modules/better-sqlite3/build/Release/obj{,/**/*}'
   - '!node_modules/better-sqlite3/build/Release/*.{iobj,ipdb,lib}'
+  # Desktop packages are built on their target OS. Keep only its SQLite bindings.
+  - '!node_modules/better-sqlite3/prebuilds/!(${platform}-${arch}|${platform}musl-${arch}).node'
 electronLanguages:
   - en-US
   - zh-CN
@@ -38,7 +41,16 @@ extraResources:
     filter:
       - '**/*'
       - '!lib{,/**/*}'
+      - '!licenses{,/**/*}'
       - '!entitlements.mac.plist'
+  - from: LICENSE
+    to: licenses/LICENSE
+  - from: THIRD_PARTY_NOTICES.md
+    to: licenses/THIRD_PARTY_NOTICES.md
+  - from: resources/licenses/
+    to: licenses/
+  - from: 'build/third-party-notices/${platform}-${arch}/'
+    to: licenses/
 asarUnpack:
   - 'node_modules/kuromoji/dict/**'
   - resources/**
@@ -101,7 +113,7 @@ mac:
   hardenedRuntime: false
   notarize: false
   timestamp: none
-  minimumSystemVersion: '12.0'
+  minimumSystemVersion: '13.0'
   artifactName: '${name}-${version}-mac-${arch}.${ext}'
   target:
     - target: dmg
