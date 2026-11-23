@@ -4,6 +4,16 @@
 
 This document lists features, improvements, and fixes in descending version order.
 
+## v3.4.4
+
+- Unified lyric format detection between the main process and player, improving recognition of LRC, ELRC, YRC, KRC, TTML, and plain text.
+- Fixed embedded lyrics failing to load when synchronization fields are absent. Improved support for text tags and synchronized lyrics, filtered invalid timestamps, and preserved millisecond precision.
+- Improved player background transitions by waiting for the incoming background to be ready, reducing flashes during track and background changes. Refined artwork decode reuse and animated background resource management.
+- Improved custom background file import and access, reducing repeated image data transfers, retaining compatibility with older background settings, and cleaning up unused files.
+- Improved startup and Home loading with deferred artwork loading for offscreen sections and idle search-index worker cleanup to reduce background resource use.
+- Improved compatible playback session and queue snapshots, flushing complete state on exit while retaining efficient track-switch saves and restoration in older players.
+- Refined lyric scrolling and rendering with lyric effects disabled, and improved resource cleanup during track switching, background media access, and application shutdown.
+
 ## v3.4.3
 
 - Added a playlist reorder mode with drag-and-drop placement and saved custom song order, respected by default sorting.
