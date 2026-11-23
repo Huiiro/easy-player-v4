@@ -1,6 +1,8 @@
+import { detectLyricFormat, ELRC_WORD_TAG, LRC_TIME_TAG } from '../../../shared/lyricFormat'
 import { readSongLyricSettings } from './songLyricSettings'
 export type LyricSource = 'embedded' | 'database' | 'local' | 'network'
 import type { LyricFormat } from '../../../shared/networkSources'
+export { detectLyricFormat } from '../../../shared/lyricFormat'
 export type { LyricFormat, NetworkLyricCandidate } from '../../../shared/networkSources'
 
 export interface LyricPayload {
@@ -88,8 +90,6 @@ interface ParsedLrcTrack {
   embeddedRomanizationLines?: LyricLine[]
 }
 
-const LRC_TIME_TAG = /\[(\d+):(\d{1,2}(?:[.:]\d{1,3})?)\]/g
-const ELRC_WORD_TAG = /<(\d+):(\d{1,2}(?:[.:]\d{1,3})?)>([^<]*)/g
 const YRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
 const YRC_WORD_TAG = /\((\d+),(\d+),\d+\)/g
 const KRC_LINE_TAG = /^\[(\d+),(\d+)\](.*)$/
@@ -110,26 +110,6 @@ function emptyMetadata(): LyricDocument['metadata'] {
 
 export function isLyricFormat(value: unknown): value is LyricFormat {
   return ['lrc', 'elrc', 'yrc', 'krc', 'ttml', 'plain'].includes(String(value))
-}
-
-export function detectLyricFormat(content: string): LyricFormat {
-  const source = content.replace(/^\uFEFF/, '').trim()
-  if (/<tt(?:\s|>)/i.test(source)) return 'ttml'
-  if (/^\s*\[\d+,\d+\].*<\d+,\d+,\d+>/m.test(source)) return 'krc'
-  if (
-    /^\s*\[\d+,\d+\]\s*\(\d+,\d+,\d+\)/m.test(source) ||
-    /^\s*\[\d+,\d+\](?:\s*\(\d+,\d+\))+\s*$/m.test(source)
-  )
-    return 'yrc'
-  if (ELRC_WORD_TAG.test(source)) {
-    ELRC_WORD_TAG.lastIndex = 0
-    return 'elrc'
-  }
-  if (LRC_TIME_TAG.test(source)) {
-    LRC_TIME_TAG.lastIndex = 0
-    return 'lrc'
-  }
-  return 'plain'
 }
 
 function parseEnhancedWords(content: string): Pick<LyricLine, 'text' | 'words'> {

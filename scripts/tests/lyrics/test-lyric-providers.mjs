@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { parseBuffer } from 'music-metadata'
+import NodeID3 from 'node-id3'
 
 function load(file, mocks = {}, globals = {}, cache = new Map()) {
   if (file.endsWith('/network.ts')) {
@@ -568,14 +570,65 @@ const local = load('src/main/service/lyrics/local.ts', {
   }
 })
 assert.equal(local.readLocalLyrics('/music/track.flac').content, '[00:01.00]Local')
+let embeddedTags
 const embedded = load('src/main/service/lyrics/embedded.ts', {
   '../audioMetadataService': {
-    parseAudioFile: async () => ({
-      common: { lyrics: [{ syncText: [{ timestamp: 1250, text: 'Embedded' }] }] }
-    })
+    parseAudioFile: async () => ({ common: { lyrics: embeddedTags } })
   }
 })
-assert.equal((await embedded.readEmbeddedLyrics('/music/track.flac')).content, '[0:01.25]Embedded')
+async function assertEmbedded(tags, content, format) {
+  embeddedTags = tags
+  const payload = await embedded.readEmbeddedLyrics('/music/track.mp3')
+  if (content === null) assert.equal(payload, null)
+  else {
+    assert.equal(payload?.content, content)
+    assert.equal(payload.format, format)
+  }
+}
+
+for (const [text, format] of [
+  ['First plain lyric\nSecond plain lyric', 'plain'],
+  ['[offset:-30]\n[00:01.234][00:04.56]Timed lyric', 'lrc'],
+  ['[00:01.000]<00:01.000>First<00:01.250> second', 'elrc']
+]) {
+  const mp3Tag = NodeID3.create({ unsynchronisedLyrics: { language: 'eng', text } })
+  const metadata = await parseBuffer(mp3Tag, { mimeType: 'audio/mpeg' }, { skipCovers: true })
+  assert.equal(Object.hasOwn(metadata.common.lyrics[0], 'syncText'), false)
+  await assertEmbedded(metadata.common.lyrics, text, format)
+}
+
+await assertEmbedded(
+  [
+    null,
+    { text: 'Untimed alternate', syncText: {} },
+    {
+      syncText: [
+        null,
+        { text: 5, timestamp: 200 },
+        { text: 'Missing time' },
+        { text: 'Invalid time', timestamp: NaN },
+        { text: 'Negative time', timestamp: -100 },
+        { text: ' Embedded ', timestamp: 1250 },
+        { text: 'Last millisecond', timestamp: 59999 },
+        { text: 'Next minute', timestamp: 60000 }
+      ]
+    }
+  ],
+  '[0:01.25]Embedded\n[0:59.999]Last millisecond\n[1:00.00]Next minute',
+  'lrc'
+)
+await assertEmbedded(
+  [null, { text: ' Plain fallback ', syncText: [null] }, 'Second line'],
+  'Plain fallback\nSecond line',
+  'plain'
+)
+await assertEmbedded(
+  [{ text: 'Plain alternate' }, { text: '[00:03.00]Timed fallback', syncText: [null] }],
+  '[00:03.00]Timed fallback',
+  'lrc'
+)
+await assertEmbedded([null, { text: 8, syncText: ['invalid', { timestamp: 0 }] }], null)
+await assertEmbedded(undefined, null)
 console.log('Lyric provider, fallback, ranking and source separation fixtures passed')
 
 // Real adapters must emit alias-aware names that still pass the unchanged host checks.
