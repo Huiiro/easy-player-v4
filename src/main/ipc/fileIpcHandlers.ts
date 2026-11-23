@@ -9,9 +9,8 @@ import {
   type SaveDialogOptions
 } from 'electron'
 import { exportLibrary, importLibrary, recoverMovedSongs } from '../service/fileService'
-import { rm } from 'node:fs/promises'
 import { extname, isAbsolute } from 'node:path'
-import { importBackgroundMedia, resolveBackgroundMedia } from '../service/backgroundMedia'
+import { importBackgroundMedia, retireBackgroundMedia } from '../service/backgroundMedia'
 
 function showOpenDialogFor(
   event: Electron.IpcMainInvokeEvent,
@@ -31,10 +30,7 @@ function showSaveDialogFor(
 export function registerFileIpcHandlers(): void {
   ipcMain.handle('files:remove-background-media', async (_event, mediaUrl: string) => {
     try {
-      const target = resolveBackgroundMedia(new URL(mediaUrl))
-      if (!target) return { success: false }
-      await rm(target, { force: true })
-      return { success: true }
+      return { success: retireBackgroundMedia(mediaUrl) }
     } catch {
       return { success: false }
     }

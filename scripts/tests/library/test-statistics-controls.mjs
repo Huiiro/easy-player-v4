@@ -123,6 +123,7 @@ syncHandlers.get('database:save-playback-session-sync')(activeWindow, {
 })
 assert.equal(activeWindow.returnValue.data, true)
 assert.equal(settings.getAppSetting(sessionKeys.PLAYBACK_QUEUE_KEY)[0].id, 1)
+assert.equal(settings.getAppSetting(sessionKeys.PLAYBACK_SESSION_KEY).queue[0].id, 1)
 function command(action, params) {
   return asyncHandlers.get('database:command')({}, { action, params })
 }
@@ -148,18 +149,18 @@ const finish = (generation, startedAt) => ({
 assert.equal(policy.getStatisticsState().enabled, true)
 let generation = policy.getStatisticsState().generation
 const firstStart = Date.now() - 50_000
-command('savePlayHistory', start(generation, firstStart))
+await command('savePlayHistory', start(generation, firstStart))
 recordSync(finish(generation, firstStart))
 assert.equal(count('play_history'), 1)
 assert.equal(db.prepare('SELECT played_ms FROM play_history').get().played_ms, 30_000)
-command('getOverviewStats')
+await command('getOverviewStats')
 assert.equal(reads.length, 1)
 
-const disabled = command('setStatisticsEnabled', { enabled: false }).data
+const disabled = (await command('setStatisticsEnabled', { enabled: false })).data
 assert.equal(disabled.enabled, false)
 assert.notEqual(disabled.generation, generation)
-command('savePlayHistory', start(generation))
-command('recordPlayEvent', finish(generation, Date.now()))
+await command('savePlayHistory', start(generation))
+await command('recordPlayEvent', finish(generation, Date.now()))
 recordSync(finish(disabled.generation, Date.now()))
 assert.equal(count('play_history'), 1, 'disabled async and unload events must not be written')
 const queries = [
@@ -174,7 +175,7 @@ const queries = [
   ['getRecommendationPage', { group: 'recommended' }],
   ['queryRecentPlayedSongs', {}]
 ]
-for (const [action, params] of queries) assert.equal(command(action, params).success, true)
+for (const [action, params] of queries) assert.equal((await command(action, params)).success, true)
 assert.equal(reads.length, 1, 'disabled queries must not call statistics or recommendation readers')
 assert.equal(count('play_history'), 1, 'turning off preserves existing data')
 assert.equal(
@@ -182,35 +183,35 @@ assert.equal(
   false,
   'the setting is persisted'
 )
-assert.equal(command('setStatisticsEnabled', { enabled: 'false' }).success, false)
+assert.equal((await command('setStatisticsEnabled', { enabled: 'false' })).success, false)
 
-generation = command('setStatisticsEnabled', { enabled: true }).data.generation
+generation = (await command('setStatisticsEnabled', { enabled: true })).data.generation
 recordSync(finish(disabled.generation, Date.now()))
 assert.equal(count('play_history'), 1, 'events from before re-enabling remain invalid')
-command('savePlayHistory', start(generation, Date.now()))
+await command('savePlayHistory', start(generation, Date.now()))
 assert.equal(count('play_history'), 2)
 db.exec("INSERT INTO recommendation_daily VALUES ('2026-01-01', 0, '{}', 0)")
 db.exec(
   "CREATE TRIGGER reject_stats_clear BEFORE DELETE ON recommendation_daily BEGIN SELECT RAISE(ABORT, 'test rollback'); END"
 )
-assert.equal(command('clearStatisticsData').success, false)
+assert.equal((await command('clearStatisticsData')).success, false)
 assert.equal(count('play_history'), 2, 'failed clear must roll back every table')
 assert.equal(policy.getStatisticsState().generation, generation)
 db.exec('DROP TRIGGER reject_stats_clear')
-const cleared = command('clearStatisticsData').data
+const cleared = (await command('clearStatisticsData')).data
 for (const table of ['play_history', 'history', 'recommendation_daily'])
   assert.equal(count(table), 0)
 assert.equal(db.prepare('SELECT play_times FROM song').get().play_times, 0)
 assert.equal(db.prepare('SELECT preference FROM song').get().preference, 1)
 assert.equal(count('song_list'), 1)
-command('savePlayHistory', start(generation))
+await command('savePlayHistory', start(generation))
 recordSync(finish(generation, Date.now()))
 assert.equal(count('play_history'), 0, 'late old-session events cannot repopulate cleared data')
-command('savePlayHistory', start(cleared.generation))
+await command('savePlayHistory', start(cleared.generation))
 assert.equal(count('play_history'), 1, 'new sessions record normally after a clear')
-command('setStatisticsEnabled', { enabled: false })
+await command('setStatisticsEnabled', { enabled: false })
 assert.equal(
-  command('clearStatisticsData').data.enabled,
+  (await command('clearStatisticsData')).data.enabled,
   false,
   'clearing must not turn statistics back on'
 )

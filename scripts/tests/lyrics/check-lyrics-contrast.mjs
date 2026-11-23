@@ -234,8 +234,8 @@ const albumBackdrop = await readFile(
 )
 const background = { naturalWidth: 1024, getAttribute: () => 'current-cover' }
 page.imageRef = { value: background }
-page.sourceReady = false
-page.paint = () => {}
+page.loaded = false
+page.matchesCurrentCover = (source) => source === page.coverUrl.value
 page.emit = (_event, image) => page.extractCoverColors(image)
 vm.runInContext(
   ts.transpileModule(albumBackdrop.match(/function onLoad\(\): void {[^}]+}/)[0], {

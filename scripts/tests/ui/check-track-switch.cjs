@@ -28,10 +28,11 @@ app.whenReady().then(async () => {
     db = new Database(path.join(app.getPath('userData'), 'session.db'))
     db.pragma('journal_mode = WAL')
     db.exec(loadModule('src/main/database/schema.ts').schemaV1)
-    const { PLAYBACK_SESSION_KEY, PLAYBACK_QUEUE_KEY } = loadModule('src/shared/playbackSession.ts')
+    const sessionKeys = loadModule('src/shared/playbackSession.ts')
+    const { PLAYBACK_SESSION_KEY, PLAYBACK_SESSION_STATE_KEY, PLAYBACK_QUEUE_KEY } = sessionKeys
     const settings = loadModule('src/main/database/repository/settings.ts', {
       '../index': { getDatabase: () => db },
-      '../../../shared/playbackSession': { PLAYBACK_SESSION_KEY, PLAYBACK_QUEUE_KEY }
+      '../../../shared/playbackSession': sessionKeys
     })
     const writes = []
     const save = (kind, key, value) => {
@@ -43,7 +44,7 @@ app.whenReady().then(async () => {
     }
     const saveSession = (kind, input) => {
       const start = performance.now()
-      const applied = settings.savePlaybackSession(input)
+      const applied = settings.savePlaybackSession(input, kind === 'sync')
       const mainMs = performance.now() - start
       writes.push({
         kind,
@@ -181,7 +182,9 @@ app.whenReady().then(async () => {
       return {switchMs:durations,maxFrameGapMs:Math.max(...gaps),longTasksMs:longTasks,currentIndex:window.switchPlayer.currentQueueIndex};
     })()`)
     const switchWrites = [...writes]
-    const session = settings.getAppSetting(PLAYBACK_SESSION_KEY)
+    const session = settings.getAppSetting(
+      baseline ? PLAYBACK_SESSION_KEY : PLAYBACK_SESSION_STATE_KEY
+    )
     assert.equal(session.currentQueueIndex, 3)
     const queue = baseline ? session.queue : settings.getAppSetting(PLAYBACK_QUEUE_KEY)
     assert.equal(queue.length, 2419)
@@ -199,6 +202,8 @@ app.whenReady().then(async () => {
       assert.equal(switchWrites[0].queueWritten, false)
       assert.ok(switchWrites[0].bytes < 4096, 'switching should send only the small session state')
       assert.equal(session.queue, undefined)
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).queue.length, 2419)
+      assert.ok(settings.getAppSetting(PLAYBACK_SESSION_KEY).revision < session.revision)
     }
     writes.length = 0
     await window.webContents.executeJavaScript(
@@ -208,6 +213,7 @@ app.whenReady().then(async () => {
       assert.equal(writes.length, 1, 'explicit flush cancels the pending asynchronous save')
       assert.equal(writes[0].kind, 'sync', 'exit retains an immediate reliable save')
       assert.equal(writes[0].queueWritten, false, 'exit flush reuses the persisted queue')
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).currentQueueIndex, 4)
     }
     await window.webContents.executeJavaScript(
       `window.switchPlayer.queue[0].title='Edited queue title';window.switchPlayer.savePlaybackSessionSync();void 0;`
@@ -279,7 +285,7 @@ app.whenReady().then(async () => {
       assert.deepEqual(restore, { length: 2419, title: 'Edited queue title', index: 7 })
       assert.equal(writes[0].queueWritten, false, 'a new renderer reuses the restored queue')
 
-      const latest = settings.getAppSetting(PLAYBACK_SESSION_KEY)
+      const latest = settings.getAppSetting(PLAYBACK_SESSION_STATE_KEY)
       assert.equal(
         settings.savePlaybackSession({
           revision: latest.revision - 1,
@@ -300,7 +306,7 @@ app.whenReady().then(async () => {
       )
       db.exec('DROP TRIGGER fail_session_write')
       assert.equal(settings.getAppSetting(PLAYBACK_QUEUE_KEY).length, 2419)
-      assert.deepEqual(settings.getAppSetting(PLAYBACK_SESSION_KEY), latest)
+      assert.deepEqual(settings.getAppSetting(PLAYBACK_SESSION_STATE_KEY), latest)
 
       settings.setAppSetting(PLAYBACK_SESSION_KEY, {
         queue: [{ id: 1, title: 'Legacy', audio: '/legacy.flac' }],
@@ -313,7 +319,14 @@ app.whenReady().then(async () => {
       })()`)
       assert.equal(migrated, 'Legacy')
       assert.equal(settings.getAppSetting(PLAYBACK_QUEUE_KEY).length, 1)
-      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).queue, undefined)
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).queue[0].title, 'Legacy')
+
+      // Upgrade a database last written by the released split-session implementation.
+      settings.setAppSetting(PLAYBACK_SESSION_KEY, { revision: 7, currentQueueIndex: 0 })
+      settings.setAppSetting(PLAYBACK_QUEUE_KEY, [{ id: 2, title: 'Split', audio: '/split.flac' }])
+      settings.prepareCompatiblePlaybackSession()
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_KEY).queue[0].title, 'Split')
+      assert.equal(settings.getAppSetting(PLAYBACK_SESSION_STATE_KEY).revision, 7)
     }
     const output = path.resolve(
       'build',

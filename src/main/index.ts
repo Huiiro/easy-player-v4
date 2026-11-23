@@ -30,6 +30,10 @@ import { closeDatabase, initDatabase } from './database'
 import { startSearchIndexService } from './search/searchIndexService'
 import { registerDatabaseIpcHandlers } from './ipc/databaseIpcHandlers'
 import { getAppSetting, getSong, migrateSourceSecrets, setAppSetting } from './database/repository'
+import {
+  flushCompatiblePlaybackSession,
+  prepareCompatiblePlaybackSession
+} from './database/repository/settings'
 import { registerScanIpcHandlers } from './ipc/scanIpcHandlers'
 import {
   registerDuplicateFileIpcHandlers,
@@ -51,7 +55,8 @@ import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
 import {
   backgroundImageType,
-  migrateInlineBackground,
+  pruneBackgroundMedia,
+  restoreBackgroundCompatibility,
   resolveBackgroundMedia
 } from './service/backgroundMedia'
 import { registerDownloadIpcHandlers } from './ipc/downloadIpcHandlers'
@@ -269,6 +274,14 @@ async function quitApplication(): Promise<void> {
   ])
   tray?.destroy()
   tray = null
+  await pruneBackgroundMedia().catch(() => {
+    Logger.warn('[Appearance] could not clean up unused background files')
+  })
+  try {
+    flushCompatiblePlaybackSession()
+  } catch (error) {
+    Logger.warn('[Playback] could not flush the compatible session', logError(error))
+  }
   closeDatabase()
   // Do not let a hidden close-to-tray window intercept this explicit user
   // request. `app.exit` is intentional here; cleanup was completed above.
@@ -982,6 +995,11 @@ app.whenReady().then(() =>
         else if (!fallbackDockImage.isEmpty()) app.dock?.setIcon(fallbackDockImage)
       }
       const libraryDatabase = initDatabase()
+      try {
+        prepareCompatiblePlaybackSession()
+      } catch (error) {
+        Logger.warn('[Playback] could not prepare the compatible session', logError(error))
+      }
       searchIndexService = startSearchIndexService(
         libraryDatabase,
         () => {
@@ -1011,9 +1029,11 @@ app.whenReady().then(() =>
         arch: process.arch,
         packaged: app.isPackaged
       })
-      await migrateInlineBackground().catch(() => {
-        Logger.warn('[Appearance] could not migrate inline background image')
-      })
+      await restoreBackgroundCompatibility()
+        .then(pruneBackgroundMedia)
+        .catch(() => {
+          Logger.warn('[Appearance] could not prepare background files')
+        })
       await migrateSourceSecrets().catch(() => {
         Logger.warn('[Remote source] could not encrypt legacy credentials')
       })

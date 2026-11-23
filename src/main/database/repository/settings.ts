@@ -2,6 +2,7 @@ import { getDatabase } from '../index'
 import {
   PLAYBACK_QUEUE_KEY,
   PLAYBACK_SESSION_KEY,
+  PLAYBACK_SESSION_STATE_KEY,
   type PlaybackSessionWrite
 } from '../../../shared/playbackSession'
 
@@ -26,7 +27,38 @@ export function setAppSetting(key: string, value: unknown): void {
     .run(key, JSON.stringify(value))
 }
 
-export function savePlaybackSession({ revision, state, queue }: PlaybackSessionWrite): boolean {
+function writeCompatibleSession(state: object, queue: unknown): void {
+  if (!Array.isArray(queue)) throw new Error('Playback queue is missing')
+  setAppSetting(PLAYBACK_SESSION_KEY, { ...state, queue, compatible: true })
+}
+
+export function prepareCompatiblePlaybackSession(): void {
+  const previous = getAppSetting(PLAYBACK_SESSION_KEY) as {
+    revision?: number
+    queue?: unknown
+  } | null
+  if (!previous?.revision || Array.isArray(previous.queue)) return
+  const queue = getAppSetting(PLAYBACK_QUEUE_KEY)
+  if (!Array.isArray(queue)) return
+  getDatabase().transaction(() => {
+    setAppSetting(PLAYBACK_SESSION_STATE_KEY, previous)
+    writeCompatibleSession(previous, queue)
+  })()
+}
+
+export function flushCompatiblePlaybackSession(): void {
+  const previous = getAppSetting(PLAYBACK_SESSION_KEY) as { compatible?: boolean } | null
+  if (previous?.compatible !== true) return
+  const latest = getAppSetting(PLAYBACK_SESSION_STATE_KEY) as { revision?: number } | null
+  if (!latest?.revision) return
+  const queue = getAppSetting(PLAYBACK_QUEUE_KEY)
+  if (Array.isArray(queue)) writeCompatibleSession(latest, queue)
+}
+
+export function savePlaybackSession(
+  { revision, state, queue }: PlaybackSessionWrite,
+  flush = false
+): boolean {
   if (
     !Number.isSafeInteger(revision) ||
     revision < 1 ||
@@ -40,12 +72,17 @@ export function savePlaybackSession({ revision, state, queue }: PlaybackSessionW
 
   return getDatabase()
     .transaction(() => {
-      const previous = getAppSetting(PLAYBACK_SESSION_KEY) as { revision?: number } | null
+      const previous = (getAppSetting(PLAYBACK_SESSION_STATE_KEY) ??
+        getAppSetting(PLAYBACK_SESSION_KEY)) as { revision?: number } | null
       // An asynchronous save may reach the main process after a synchronous flush.
       if (typeof previous?.revision === 'number' && previous.revision >= revision) return false
       if (queue === undefined && !previous?.revision) throw new Error('Playback queue is missing')
       if (queue !== undefined) setAppSetting(PLAYBACK_QUEUE_KEY, queue)
-      setAppSetting(PLAYBACK_SESSION_KEY, { ...state, revision })
+      const snapshot = { ...state, revision }
+      setAppSetting(PLAYBACK_SESSION_STATE_KEY, snapshot)
+      // Keep a complete snapshot for older players, while cursor-only saves stay small.
+      if (queue !== undefined || flush)
+        writeCompatibleSession(snapshot, queue ?? getAppSetting(PLAYBACK_QUEUE_KEY))
       return true
     })
     .immediate()

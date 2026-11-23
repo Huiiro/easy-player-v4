@@ -6,6 +6,10 @@ import { PlayerBgType, resolvePlayerBgType } from '@/constants'
 import { chooseSpectrumColor } from './spectrumColor'
 const COVER_ANALYSIS_VERSION = 11
 
+function fullCoverUrl(source: string): string {
+  return source.replace('://cover-thumb?', '://cover?')
+}
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function usePlayerBackdrop(
   player: ReturnType<typeof usePlayerStore>,
@@ -56,7 +60,7 @@ export function usePlayerBackdrop(
   )
   const backgroundSource = computed(() => {
     if (useAlbumArtwork.value && displayedCoverUrl.value && !coverFailed.value)
-      return displayedCoverUrl.value
+      return fullCoverUrl(displayedCoverUrl.value)
     return null
   })
   watch(selectedPlayerBackground, (background) => {
@@ -131,9 +135,13 @@ export function usePlayerBackdrop(
   function extractCoverColors(image: HTMLImageElement): void {
     analyzeCoverImage(image, true)
   }
+  function matchesCurrentCover(source: string | null): boolean {
+    const current = coverUrl.value
+    return Boolean(current && (source === current || source === fullCoverUrl(current)))
+  }
   function analyzeCoverImage(image: HTMLImageElement, isBackground = false): void {
     const loadedSource = image.getAttribute('src')
-    if (loadedSource && loadedSource !== coverUrl.value) return
+    if (loadedSource && !matchesCurrentCover(loadedSource)) return
     const result = CoverAnalyzer.analyze({
       image,
       song: player.currentQueueSong,
@@ -176,7 +184,7 @@ export function usePlayerBackdrop(
     coverColorSource.value = source
   }
   function handleCoverError(event: Event): void {
-    if ((event.currentTarget as HTMLImageElement).getAttribute('src') !== coverUrl.value) return
+    if (!matchesCurrentCover((event.currentTarget as HTMLImageElement).getAttribute('src'))) return
     coverFailed.value = true
     displayedCoverUrl.value = null
     resetCoverPalette('failed')

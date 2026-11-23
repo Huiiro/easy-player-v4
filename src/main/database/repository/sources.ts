@@ -221,7 +221,7 @@ async function writeSource(source: MusicSource): Promise<boolean> {
   return (
     db
       .prepare(
-        'UPDATE music_source SET name = ?, type = ?, server = ?, base_url = ?, user = ?, secret = ?, auth_type = ?, status = ?, source_order = ?, imported_count = ?, song_count = ?, last_connect = ? WHERE id = ?'
+        'UPDATE music_source SET name = ?, type = ?, server = ?, base_url = ?, user = ?, secret = ?, auth_type = ? WHERE id = ?'
       )
       .run(
         name,
@@ -231,11 +231,6 @@ async function writeSource(source: MusicSource): Promise<boolean> {
         keepCredential ? row.user : null,
         connection.secret,
         connection.authType,
-        source.status,
-        source.sourceOrder,
-        source.importedCount,
-        source.songCount,
-        source.lastConnect,
         source.id
       ).changes > 0
   )

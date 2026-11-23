@@ -184,6 +184,11 @@ for (const route of ['tray', 'normal']) {
     stopLibraryAutoImport: () => order.push('stop-library'),
     stopDuplicateScans: () => order.push('stop-scans'),
     shutdownPlugins() {},
+    pruneBackgroundMedia: async () => {
+      assertOpen()
+      order.push('prune-backgrounds')
+    },
+    flushCompatiblePlaybackSession: assertOpen,
     closeDatabase: () => {
       assert(searchStopped, 'all quit paths must stop search before closing SQLite')
       closed = true
@@ -228,6 +233,7 @@ for (const route of ['tray', 'normal']) {
   workers[0].emit('message', { requestId: workers[0].request.requestId, terms: {}, complete: true })
   await settle()
   assert.equal(closed, true)
+  assert.ok(order.indexOf('prune-backgrounds') < order.indexOf('close-database'))
   for (const callback of lateWindowCallbacks)
     vm.runInContext(compile(`(${callback})`), context)({ preventDefault() {} })
   assert.equal(workers[0].terminated, true)

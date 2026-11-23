@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
+const emit = defineEmits<{ ready: [] }>()
+
 const props = withDefaults(
   defineProps<{
     primary: string
@@ -440,6 +442,7 @@ onMounted(() => {
   resizeObserver = new ResizeObserver(resize)
   resizeObserver.observe(canvas)
   resize()
+  emit('ready')
   if (props.active && props.bubblesEnabled && !props.reducedMotion) startAnimation()
 })
 

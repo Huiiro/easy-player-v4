@@ -15,6 +15,7 @@ const props = defineProps<{
 }>()
 
 const canvas = ref<HTMLCanvasElement>()
+const emit = defineEmits<{ ready: [] }>()
 const visible = ref(!document.hidden)
 let renderer: StageRenderer | undefined
 let observer: ResizeObserver | undefined
@@ -43,7 +44,10 @@ watch(() => {
 onMounted(() => {
   if (!canvas.value) return
   const context = canvas.value.getContext('2d')
-  if (!context) return
+  if (!context) {
+    emit('ready')
+    return
+  }
   renderer = new StageRenderer(context, props.cheerColors, props.cheerLights)
   watch([() => props.cheerColors, () => props.cheerLights], ([colors, lights]) =>
     renderer?.setCheer(colors, lights)
@@ -79,6 +83,7 @@ onMounted(() => {
   observer = new ResizeObserver(() => renderer?.resize())
   observer.observe(canvas.value)
   document.addEventListener('visibilitychange', syncActivity)
+  emit('ready')
 })
 
 onBeforeUnmount(() => {

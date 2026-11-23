@@ -16,6 +16,7 @@ const props = defineProps<{
   reducedMotion: boolean
 }>()
 const emit = defineEmits<{
+  ready: []
   unavailable: []
 }>()
 
@@ -32,6 +33,7 @@ let coverTargetLoaded = false
 let coverFade = 0
 let coverLoadToken = 0
 let coverImage: HTMLImageElement | null = null
+let painted = false
 
 function cancelCoverLoad(): void {
   coverLoadToken += 1
@@ -201,6 +203,10 @@ function render(now: number): void {
   gl.uniform1i(uniforms.coverBlurred!, 0)
   gl.uniform1f(uniforms.coverLoaded!, coverFade)
   gl.drawArrays(gl.TRIANGLES, 0, 3)
+  if (!painted) {
+    painted = true
+    emit('ready')
+  }
 }
 
 function start(): void {

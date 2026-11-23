@@ -44,14 +44,26 @@ app.whenReady().then(async () => {
           .toBuffer()
       )
     )
-    protocol.handle(
-      'easy-player-media',
-      (request) =>
-        new Response(
-          covers[Number(new URL(request.url).searchParams.get('path')) % covers.length],
-          { headers: { 'Content-Type': 'image/jpeg', 'Access-Control-Allow-Origin': '*' } }
-        )
-    )
+    const animatedPixels = Buffer.alloc(16 * 32 * 3)
+    animatedPixels.fill(Buffer.from([225, 20, 70]), 0, 16 * 16 * 3)
+    animatedPixels.fill(Buffer.from([20, 75, 225]), 16 * 16 * 3)
+    const animated = await sharp(animatedPixels, {
+      raw: { width: 16, height: 32, channels: 3, pageHeight: 16 }
+    })
+      .gif({ delay: [150, 150], loop: 0 })
+      .toBuffer()
+    assert.equal((await sharp(animated).metadata()).pages, 2)
+    protocol.handle('easy-player-media', (request) => {
+      const url = new URL(request.url)
+      const track = url.searchParams.get('path')
+      const isAnimated = backgroundResources && url.hostname === 'cover' && track === '0'
+      return new Response(isAnimated ? animated : covers[Number(track) % covers.length], {
+        headers: {
+          'Content-Type': isAnimated ? 'image/gif' : 'image/jpeg',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    })
     const styles = []
     let scope = 0
     const bundle = await esbuild.build({
@@ -256,19 +268,30 @@ app.whenReady().then(async () => {
         const gl=usesWebGL?canvas?.getContext('webgl'):null;
         if(usesWebGL&&!gl)throw Error('Expected an active WebGL context');
         ui.setPlayerBgType(mode);await Vue.nextTick();
-        if(outgoing&&outgoing.matches(selectors[mode])===false&&outgoing.isConnected)throw Error('Outgoing background still connected: '+outgoing.className);
-        for(let i=0;i<12&&!document.querySelector(selectors[mode]);i++)await window.panelWait(25);
-        if(document.querySelectorAll(all).length!==1||!document.querySelector(selectors[mode]))throw Error('Expected one mounted background: '+mode);
+        const changed = outgoing && !outgoing.matches(selectors[mode]);
+        if (changed) {
+          if (!outgoing.isConnected) throw Error('Outgoing artwork was removed before the handoff');
+          let blended = false;
+          for (let i = 0; i < 60 && outgoing.isConnected; i++) {
+            const incoming = document.querySelector('.panel-background-layer--revealing');
+            const opacity = incoming ? Number(getComputedStyle(incoming).opacity) : 0;
+            if (opacity > 0 && opacity < 1) {
+              blended = true;
+              if (getComputedStyle(outgoing.closest('.panel-background-layer')).opacity !== '1')
+                throw Error('The previous layer must remain opaque under the reveal');
+            }
+            await window.panelWait(25);
+          }
+          if (!blended || outgoing.isConnected) throw Error('Expected an uninterrupted fade and cleanup: '+mode);
+        }
+        if(document.querySelectorAll(all).length!==1||!document.querySelector(selectors[mode]))throw Error('Expected one settled background: '+mode);
         if(mode==='album'){
           const artwork=document.querySelector(selectors.album);
-          const surface=artwork.parentElement.querySelector('canvas');
-          for(let i=0;i<12&&!artwork.classList.contains('invisible');i++)await window.panelWait(25);
-          if(!artwork.classList.contains('invisible')||surface.width>512||surface.height>512||
-             surface.width>Math.ceil(artwork.clientWidth/4)||surface.height>Math.ceil(artwork.clientHeight/4))
-            throw Error('Album background must use the bounded prerendered surface');
-          const ctx=surface.getContext('2d');
-          const sample=ctx.getImageData(surface.width>>1,surface.height>>1,1,1).data;
-          if(sample[3]!==255||!(sample[0]||sample[1]||sample[2]))throw Error('Prerendered cover must display artwork');
+          if(!artwork.getAttribute('src').startsWith('easy-player-media://cover?') ||
+             getComputedStyle(artwork).visibility!=='visible' ||
+             artwork.closest('.panel-background-layer').querySelector('canvas'))
+            throw Error('Album artwork must keep the live original image visible');
+          if(round===0 && artwork.naturalWidth!==16) throw Error('Expected the full animated fixture');
         }
         if(gl&&outgoing!==document.querySelector(all)){
           for(let i=0;i<12&&!gl.isContextLost();i++)await window.panelWait(25);
@@ -289,6 +312,16 @@ app.whenReady().then(async () => {
       for(let i=0;i<20&&!coverUpdated();i++)await window.panelWait(25);
       if(!coverUpdated())throw Error('The latest cover was not shown');
     }
+    ui.setPlayerBgType('ambient');
+    for(let i=0;i<30&&!document.querySelector('.panel-background-layer--revealing');i++)await window.panelWait(20);
+    for(const mode of ['album','liquid','mesh']){
+      ui.setPlayerBgType(mode);await Vue.nextTick();
+      if(document.querySelectorAll('.panel-background-layer').length>2)throw Error('Rapid switches can retain only two layers');
+    }
+    for(let i=0;i<90&&(document.querySelectorAll(all).length!==1||!document.querySelector(selectors.mesh));i++)await window.panelWait(25);
+    if(document.querySelectorAll(all).length!==1||!document.querySelector(selectors.mesh))throw Error('Rapid switches must settle on the latest mode');
+    ui.reduceMotion=true;ui.setPlayerBgType('ambient');await Vue.nextTick();await Vue.nextTick();
+    if(document.querySelectorAll(all).length!==1||!document.querySelector(selectors.ambient))throw Error('Reduced motion must switch as soon as the new layer is ready');
     app.unmount();
     if(decoded.some(image=>image.hasAttribute('src')))throw Error('Closing the panel must release the current artwork');
     return;
@@ -1226,7 +1259,7 @@ app.whenReady().then(async () => {
         ui.reduceMotion=false;ui.pauseAnimationsOnBlur=false;player.rhythmVisualConfig.enabled=true;
         player.audioAnalysis.rms=0.35;player.audioAnalysis.lowEnergy=0.26;
         await PanelCheck.Vue.nextTick();await window.panelWait(350);
-        document.querySelector('.stage-background').parentElement.nextElementSibling.style.visibility='hidden';
+        document.querySelector('.stage-background').closest('.panel-background-layer').parentElement.nextElementSibling.style.visibility='hidden';
         player.audioAnalysis.beatSequence++;await PanelCheck.Vue.nextTick();await window.panelWait(55);
       })()`)
       fs.writeFileSync(
@@ -1234,7 +1267,7 @@ app.whenReady().then(async () => {
         (await window.webContents.capturePage()).toPNG()
       )
       await window.webContents.executeJavaScript(
-        "document.querySelector('.stage-background').parentElement.nextElementSibling.style.removeProperty('visibility');true"
+        "document.querySelector('.stage-background').closest('.panel-background-layer').parentElement.nextElementSibling.style.removeProperty('visibility');true"
       )
     }
     if (backgroundResources) {

@@ -173,11 +173,13 @@ await vm.runInNewContext(
     systemMedia: { dispose: async () => {} },
     systemMediaCommands: { dispose() {} },
     tray: null,
+    pruneBackgroundMedia: async () => {},
+    flushCompatiblePlaybackSession: () => order.push('save-compatible-session'),
     closeDatabase: () => order.push('close-database'),
     app: { exit: () => order.push('exit') }
   }
 )
-assert.deepEqual(order, ['save', 'stop', 'close-database', 'exit'])
+assert.deepEqual(order, ['save', 'stop', 'save-compatible-session', 'close-database', 'exit'])
 assert.equal(quitting.settings.get(checkpointKey).positionMs, 43000)
 quitting.callbacks.position(44000, 60000)
 quitting.callbacks.ended('transition', 'track.flac')

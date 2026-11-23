@@ -322,12 +322,13 @@ export type DatabaseResponse<T = unknown> =
 export function registerDatabaseIpcHandlers(playbackRenderer: () => WebContents | undefined): void {
   const savePlaybackSession = (
     sender: WebContents,
-    input: PlaybackSessionWrite
+    input: PlaybackSessionWrite,
+    flush = false
   ): DatabaseResponse<boolean> => {
     // The outgoing window can still unload after its replacement is created.
     if (sender !== playbackRenderer()) return { success: true, data: false }
     try {
-      return { success: true, data: library.savePlaybackSession(input) }
+      return { success: true, data: library.savePlaybackSession(input, flush) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
@@ -336,7 +337,7 @@ export function registerDatabaseIpcHandlers(playbackRenderer: () => WebContents 
     savePlaybackSession(event.sender, input)
   )
   ipcMain.on('database:save-playback-session-sync', (event, input: PlaybackSessionWrite) => {
-    event.returnValue = savePlaybackSession(event.sender, input)
+    event.returnValue = savePlaybackSession(event.sender, input, true)
   })
   ipcMain.on(
     'database:record-play-event-sync',

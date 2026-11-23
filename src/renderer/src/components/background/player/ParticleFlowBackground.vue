@@ -10,7 +10,7 @@ const props = defineProps<{
   beat: number
   beatSequence: number
 }>()
-const emit = defineEmits<{ unavailable: [] }>()
+const emit = defineEmits<{ ready: []; unavailable: [] }>()
 const canvas = ref<HTMLCanvasElement>()
 let renderer: ParticleFlowRenderer | undefined
 let observer: ResizeObserver | undefined
@@ -37,6 +37,7 @@ onMounted(() => {
     observer.observe(canvas.value)
     canvas.value.addEventListener('webglcontextlost', lost, { once: true })
     document.addEventListener('visibilitychange', syncActivity)
+    emit('ready')
   } catch (reason) {
     renderer?.dispose()
     renderer = undefined

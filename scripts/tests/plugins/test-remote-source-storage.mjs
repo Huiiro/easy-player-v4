@@ -131,6 +131,28 @@ try {
   )
   globalThis.remoteStorageFixture.available = true
   assert.deepEqual((await repository.getSource(source.id)).auth, input.auth)
+  const safeStorage = globalThis.remoteStorageFixture.safeStorage
+  const encrypt = safeStorage.encryptStringAsync
+  let started
+  let resume
+  const encrypting = new Promise((resolve) => (started = resolve))
+  const continueEncryption = new Promise((resolve) => (resume = resolve))
+  safeStorage.encryptStringAsync = async (value) => {
+    started()
+    await continueEncryption
+    return encrypt(value)
+  }
+  const editing = await repository.getSource(source.id)
+  const saving = repository.updateSource({ ...editing, name: 'Edited connection' })
+  await encrypting
+  repository.reorderSources([{ id: source.id, sourceOrder: 50 }])
+  repository.updateSourceStats(source.id, 77, 82)
+  repository.touchSource(source.id)
+  const synced = await repository.getSource(source.id)
+  resume()
+  assert.equal(await saving, true)
+  safeStorage.encryptStringAsync = encrypt
+  assert.deepEqual(await repository.getSource(source.id), { ...synced, name: 'Edited connection' })
   const token = { type: 'bearer', token: 'secret-token' }
   const dav = await repository.createSource({
     name: 'DAV',

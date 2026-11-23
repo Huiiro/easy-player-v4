@@ -36,6 +36,7 @@ import { normalizeRhythmVisualIntensity } from '@/utils/rhythmVisual'
 import {
   PLAYBACK_QUEUE_KEY,
   PLAYBACK_SESSION_KEY,
+  PLAYBACK_SESSION_STATE_KEY,
   type PlaybackSessionWrite
 } from '../../../../shared/playbackSession'
 
@@ -1265,15 +1266,23 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       const response = window.api.database.getSync(PLAYBACK_SESSION_KEY)
       if (!response.success || !response.data || typeof response.data !== 'object') return
-      const session = response.data as Partial<PlaybackSession & PlaybackCheckpoint> & {
+      type SavedSession = Partial<PlaybackSession & PlaybackCheckpoint> & {
         queue?: PersistedQueueSong[]
         revision?: number
+        compatible?: boolean
       }
-      let savedQueue = session.queue
-      const storedRevision = session.revision ?? 0
-      const splitQueue = Number.isSafeInteger(storedRevision) && storedRevision > 0
-      if (splitQueue) {
-        playbackSessionRevision = Math.max(playbackSessionRevision, storedRevision)
+      const legacy = response.data as SavedSession
+      const stateResponse = window.api.database.getSync(PLAYBACK_SESSION_STATE_KEY)
+      const latest = stateResponse.success ? (stateResponse.data as SavedSession | null) : null
+      const legacyRevision = Number.isSafeInteger(legacy.revision) ? (legacy.revision ?? 0) : 0
+      const latestRevision = Number.isSafeInteger(latest?.revision) ? (latest?.revision ?? 0) : 0
+      playbackSessionRevision = Math.max(playbackSessionRevision, legacyRevision, latestRevision)
+      // An older player rewrites the original setting without the compatibility marker.
+      const useLatest =
+        legacy.compatible === true && latest !== null && latestRevision >= legacyRevision
+      const session = useLatest ? latest : legacy
+      let savedQueue = legacy.queue
+      if (legacyRevision > 0 && !Array.isArray(savedQueue)) {
         const queueResponse = window.api.database.getSync(PLAYBACK_QUEUE_KEY)
         if (!queueResponse.success || !Array.isArray(queueResponse.data)) return
         savedQueue = queueResponse.data
@@ -1301,7 +1310,7 @@ export const usePlayerStore = defineStore('player', () => {
           ids.add(song.id)
           return true
         })
-        if (splitQueue && queue.value.length === savedQueue.length) {
+        if (useLatest && queue.value.length === savedQueue.length) {
           savedQueueSnapshot = persistedQueueSongs.value
           savedQueueRevision = playbackSessionRevision
         }

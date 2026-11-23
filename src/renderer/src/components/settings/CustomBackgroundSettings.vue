@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import BaseButton from '@/components/ui/BaseButton.vue'
 import SettingGroup from '@/components/settings/SettingGroup.vue'
-import { ref } from 'vue'
+import { nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseSlider from '@/components/ui/BaseSlider.vue'
 import BaseColorPicker from '@/components/ui/BaseColorPicker.vue'
 import { presetColors } from '@/constants/colors'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { flushPlayerDataStorage } from '@/stores/persistence'
 import { useMessage } from '@/components/ui/useMessage'
 
 const ui = useUIStore()
@@ -17,9 +18,7 @@ const importingBackground = ref(false)
 const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg'])
 function retireBackground(): void {
   if (!ui.customBg.url.startsWith('easy-player-media://background?')) return
-  const oldUrl = ui.customBg.url
-  // Let the old background leave the transition before removing its backing file.
-  setTimeout(() => void window.api.files.removeBackgroundMedia(oldUrl), 1500)
+  void window.api.files.removeBackgroundMedia(ui.customBg.url)
 }
 function chooseBackground(): void {
   backgroundInput.value?.click()
@@ -47,16 +46,20 @@ async function updateBackground(event: Event): Promise<void> {
       url: result.data.url,
       path: file.name
     })
+    await nextTick()
+    flushPlayerDataStorage()
   } catch {
     showError(t('settings.backgroundImportFailed'))
   } finally {
     importingBackground.value = false
   }
 }
-function clearBackground(): void {
+async function clearBackground(): Promise<void> {
   retireBackground()
   ui.clearCustomBackground()
   if (backgroundInput.value) backgroundInput.value.value = ''
+  await nextTick()
+  flushPlayerDataStorage()
 }
 </script>
 
@@ -92,6 +95,7 @@ function clearBackground(): void {
             variant="ghost"
             icon-only
             class="icon-button"
+            :disabled="importingBackground"
             type="button"
             :title="t('settings.removeBackground')"
             :aria-label="t('settings.removeBackground')"

@@ -20,7 +20,7 @@ import { getVolumeLevel } from '@/utils/volume'
 import { usePlayerBackdrop } from '@/components/player/usePlayerBackdrop'
 import SeekProgress from '@/components/player/SeekProgress.vue'
 import { useFooterAutoHide } from '@/components/player/useFooterAutoHide'
-import { PlayMode } from '@/constants'
+import { PlayMode, PlayerBgType } from '@/constants'
 import SvgIcon from '@/components/svg/SvgIcon.vue'
 import PlayerLyrics from '@/components/lyrics/PlayerLyricsV2.vue'
 import PlayQueueDrawer from '@/components/player/PlayQueueDrawer.vue'
@@ -248,7 +248,7 @@ let collapseTriggeredByPointer = false
 
 const coverUrl = computed(() => {
   const cover = player.currentQueueSong?.cover
-  // Share one bounded decode between the cover, palette sampler and background.
+  // Share a bounded decode between the cover, palette sampler and texture-based backgrounds.
   return cover
     ? `easy-player-media://cover-thumb?path=${encodeURIComponent(cover)}&size=1024`
     : null
@@ -465,11 +465,11 @@ const {
   liquidUnavailable,
   meshUnavailable,
   particlesUnavailable,
+  effectivePlayerBackground,
   useAmbientBackground,
   useLiquidBackground,
   useMeshBackground,
   useParticleBackground,
-  useCheerBackground,
   ambientIntensity,
   liquidCoverSource,
   backgroundSource,
@@ -496,10 +496,77 @@ const {
   rhythmAmount,
   isPanelVisible
 )
-// Avoid retaining a full-screen composite while the new background fades in.
-function finishBackgroundLeave(_element: Element, done: () => void): void {
-  done()
+interface PanelBackground {
+  key: string
+  kind: PlayerBgType
+  source?: string
 }
+
+const desiredBackground = computed<PanelBackground | null>(() => {
+  const kind = effectivePlayerBackground.value
+  if (kind === PlayerBgType.ALBUM) {
+    const source = backgroundSource.value
+    return source ? { key: source, kind, source } : null
+  }
+  if (!paletteReady.value && kind !== PlayerBgType.CHEER && kind !== PlayerBgType.PARTICLES)
+    return null
+  return { key: kind, kind }
+})
+const currentBackground = shallowRef<PanelBackground | null>(null)
+const incomingBackground = shallowRef<PanelBackground | null>(null)
+const revealingBackground = ref(false)
+const backgroundLayers = computed(() =>
+  [currentBackground.value, incomingBackground.value].filter(
+    (layer): layer is PanelBackground => layer !== null
+  )
+)
+
+function queueBackground(): void {
+  if (revealingBackground.value) return
+  const next = desiredBackground.value
+  incomingBackground.value = next?.key === currentBackground.value?.key ? null : next
+}
+
+function completeBackgroundReveal(): void {
+  if (!incomingBackground.value) return
+  currentBackground.value = incomingBackground.value
+  incomingBackground.value = null
+  revealingBackground.value = false
+  queueBackground()
+}
+
+function backgroundReady(layer: PanelBackground): void {
+  if (incomingBackground.value?.key !== layer.key || revealingBackground.value) return
+  if (!currentBackground.value || ui.reduceMotion) completeBackgroundReveal()
+  else revealingBackground.value = true
+}
+
+function albumBackgroundReady(layer: PanelBackground, image: HTMLImageElement): void {
+  extractCoverColors(image)
+  backgroundReady(layer)
+}
+
+function handleBackgroundUnavailable(layer: PanelBackground): void {
+  if (incomingBackground.value?.key === layer.key) {
+    incomingBackground.value = null
+    revealingBackground.value = false
+  }
+  if (desiredBackground.value?.key !== layer.key) {
+    queueBackground()
+    return
+  }
+  if (layer.kind === PlayerBgType.LIQUID) liquidUnavailable.value = true
+  if (layer.kind === PlayerBgType.MESH) meshUnavailable.value = true
+  if (layer.kind === PlayerBgType.PARTICLES) particlesUnavailable.value = true
+}
+
+watch(desiredBackground, queueBackground, { immediate: true })
+watch(
+  () => ui.reduceMotion,
+  (reduced) => {
+    if (reduced && revealingBackground.value) completeBackgroundReveal()
+  }
+)
 
 watch(
   [analysisPollingRate, analysisNeedsSpectrum],
@@ -637,22 +704,26 @@ function changeLyricsOffset(event: WheelEvent): void {
 <template>
   <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
     <div class="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
+      <div
+        v-for="layer in backgroundLayers"
+        :key="layer.key"
+        class="panel-background-layer absolute inset-0"
+        :class="{
+          'panel-background-layer--incoming': incomingBackground?.key === layer.key,
+          'panel-background-layer--revealing':
+            incomingBackground?.key === layer.key && revealingBackground
+        }"
+        @animationend.self="completeBackgroundReveal"
+      >
         <AlbumArtworkBackground
-          v-if="backgroundSource"
-          :key="backgroundSource"
-          :src="backgroundSource"
+          v-if="layer.kind === PlayerBgType.ALBUM && layer.source"
+          :src="layer.source"
           :style="{ transform: `scale(${1.1 + rhythmAmount * 0.1})` }"
-          class="absolute -inset-10 transition-transform duration-[var(--motion-duration-fast)]"
-          @load="extractCoverColors"
+          class="absolute -inset-10 size-[calc(100%_+_5rem)] transition-transform duration-[var(--motion-duration-fast)]"
+          @load="albumBackgroundReady(layer, $event)"
           @error="handleCoverError"
         />
-      </Transition>
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
-        <div
-          v-if="useLiquidBackground && !liquidUnavailable && paletteReady"
-          class="absolute inset-0"
-        >
+        <template v-else-if="layer.kind === PlayerBgType.LIQUID">
           <LiquidBackground
             class="liquid-background-canvas"
             :primary="coverColors.primary"
@@ -662,20 +733,19 @@ function changeLyricsOffset(event: WheelEvent): void {
             :energy="liquidEnergy"
             :bass="liquidBass"
             :beat="liquidBeat"
-            :active="player.isPlaying && isPanelVisible"
+            :active="useLiquidBackground && player.isPlaying && isPanelVisible"
             :reduced-motion="player.rhythmVisualConfig.reducedMotion"
-            @unavailable="liquidUnavailable = true"
+            @ready="backgroundReady(layer)"
+            @unavailable="handleBackgroundUnavailable(layer)"
           />
           <div class="absolute inset-0 liquid-background-soften" />
-        </div>
-      </Transition>
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
+        </template>
         <AmbientBubbleCanvas
-          v-if="useAmbientBackground && paletteReady"
+          v-else-if="layer.kind === PlayerBgType.AMBIENT"
           :primary="coverColors.primary"
           :secondary="coverColors.secondary"
           :tertiary="coverColors.tertiary"
-          :active="shouldAnimate"
+          :active="useAmbientBackground && shouldAnimate"
           :bubbles-enabled="
             player.rhythmVisualConfig.enabled &&
             !player.rhythmVisualConfig.reducedMotion &&
@@ -685,36 +755,33 @@ function changeLyricsOffset(event: WheelEvent): void {
           :energy="rhythmAmount"
           :beat-sequence="player.audioAnalysis.beatSequence"
           :intensity="ambientIntensity"
+          @ready="backgroundReady(layer)"
         />
-      </Transition>
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <MeshFlowBackground
-          v-if="useMeshBackground && !meshUnavailable && paletteReady"
+          v-else-if="layer.kind === PlayerBgType.MESH"
           :cover-src="coverFailed ? null : displayedCoverUrl"
           :primary="coverColors.primary"
           :secondary="coverColors.secondary"
           :tertiary="coverColors.tertiary"
-          :active="ui.showPlayer && isPanelVisible"
+          :active="useMeshBackground && ui.showPlayer && isPanelVisible"
           :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
           :energy="player.isPlaying ? liquidBass : 0"
-          @unavailable="meshUnavailable = true"
+          @ready="backgroundReady(layer)"
+          @unavailable="handleBackgroundUnavailable(layer)"
         />
-      </Transition>
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <ParticleFlowBackground
-          v-if="useParticleBackground && !particlesUnavailable"
-          :active="shouldAnimate"
+          v-else-if="layer.kind === PlayerBgType.PARTICLES"
+          :active="useParticleBackground && shouldAnimate"
           :reduced-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
           :energy="liquidEnergy"
           :bass="liquidBass"
           :beat="liquidBeat"
           :beat-sequence="player.audioAnalysis.beatSequence"
-          @unavailable="particlesUnavailable = true"
+          @ready="backgroundReady(layer)"
+          @unavailable="handleBackgroundUnavailable(layer)"
         />
-      </Transition>
-      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <StageBackground
-          v-if="useCheerBackground"
+          v-else
           :cover-src="!coverFailed && displayedCoverUrl === coverUrl ? displayedCoverUrl : null"
           :active="stageLightingActive"
           :analysis="player.audioAnalysis"
@@ -722,8 +789,9 @@ function changeLyricsOffset(event: WheelEvent): void {
           :cheer-colors="ui.activePlayerCheerColors"
           :cheer-lights="ui.playerCheerLights"
           :intensity="player.rhythmVisualConfig.intensity"
+          @ready="backgroundReady(layer)"
         />
-      </Transition>
+      </div>
     </div>
     <!-- content -->
     <section
@@ -1562,10 +1630,26 @@ function changeLyricsOffset(event: WheelEvent): void {
   padding-right: 2rem;
   padding-left: 2rem;
 }
-.panel-background-enter-active {
-  transition: opacity var(--motion-duration-theme) cubic-bezier(0.22, 0.61, 0.36, 1);
+.panel-background-layer {
+  background: #101416;
 }
-.panel-background-enter-from {
-  opacity: 0 !important;
+.panel-background-layer--incoming {
+  opacity: 0;
+}
+.panel-background-layer--revealing {
+  animation: panel-background-reveal 700ms cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+}
+@keyframes panel-background-reveal {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-background-layer--revealing {
+    animation-duration: 1ms;
+  }
 }
 </style>
