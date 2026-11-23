@@ -500,6 +500,24 @@ async function runFixture() {
       window.managerUi.lyricsFontSize = 2.4
       window.managerUi.karaokeAnimation = 'wave'
       host.style.setProperty('--lrc-size', '24px')
+      window.managerUi.lyricsStyle = 'none'
+      await wait()
+      window.managerUi.reduceMotion = false
+      lyricState.currentTime = 2100
+      const hasSpringOffset = () =>
+        rows.some((row) => {
+          const transform = getComputedStyle(row).transform
+          return transform !== 'none' && Math.abs(new DOMMatrix(transform).m42) > 1
+        })
+      for (let i = 0; i < 20 && !hasSpringOffset(); i++) await wait(25)
+      check(hasSpringOffset(), 'the default lyric style retains per-line spring scrolling')
+      window.managerUi.reduceMotion = true
+      await wait()
+      check(
+        rows.every((row) => getComputedStyle(row).transform === 'none'),
+        'reduced motion skips per-line spring scrolling'
+      )
+      window.managerUi.lyricsStyle = 'follow'
       window.managerUi.reduceMotion = false
       lyricState.song = song(9)
       lyricState.currentTime = 600

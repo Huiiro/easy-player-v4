@@ -177,6 +177,32 @@ app.whenReady().then(async () => {
     const desktop = await layout()
     assert.equal(desktop.overflow, false, 'Desktop home must not overflow horizontally')
     assert.equal(desktop.stats, 9, 'All existing overview metrics remain available')
+    const coverRequests = await window.webContents.executeJavaScript(`(async () => {
+      const page = document.querySelector('.home-page')
+      const scrollTop = page.scrollTop
+      document.querySelector('.home-ranked').scrollIntoView({ block: 'start', behavior: 'instant' })
+      for (let attempt = 0; attempt < 20 && !document.querySelector('img.home-ranked-cover'); attempt++)
+        await new Promise(resolve => setTimeout(resolve, 25))
+      const requests = [...document.querySelectorAll(
+        '.home-collection-cover img, img.home-ranked-cover'
+      )].map(img => ({
+        url: img.src,
+        ranked: img.matches('.home-ranked-cover'),
+        loading: img.loading
+      }))
+      page.scrollTop = scrollTop
+      return requests
+    })()`)
+    assert.ok(coverRequests.some(({ ranked }) => ranked))
+    assert.ok(coverRequests.some(({ ranked }) => !ranked))
+    for (const { url, ranked, loading } of coverRequests) {
+      const thumbnail = new URL(url)
+      if (ranked) {
+        assert.equal(thumbnail.hostname, 'cover-thumb')
+        assert.equal(thumbnail.searchParams.get('size'), '128')
+      }
+      assert.equal(loading, 'lazy')
+    }
     const numberMotion = await window.webContents.executeJavaScript(`(async()=>{
       const {Vue}=HomePreview;const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
       const check=(ok,message)=>{if(!ok)throw Error(message)};

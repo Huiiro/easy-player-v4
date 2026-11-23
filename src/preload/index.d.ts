@@ -462,8 +462,8 @@ declare global {
         onScanProgress(callback: (progress: ScanProgress) => void): () => void
       }
       files: {
-        removeBackgroundVideo(url: string): Promise<{ success: boolean }>
-        importBackgroundVideo(path: string): Promise<{
+        removeBackgroundMedia(url: string): Promise<{ success: boolean }>
+        importBackgroundMedia(path: string): Promise<{
           success: boolean
           data?: { url: string }
           error?: string

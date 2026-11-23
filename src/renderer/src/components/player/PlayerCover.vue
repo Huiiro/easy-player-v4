@@ -20,7 +20,7 @@ withDefaults(
   }>(),
   { effect: DEFAULT_PLAYER_COVER_EFFECT }
 )
-const emit = defineEmits<{ load: [event: Event]; error: [event: Event] }>()
+const emit = defineEmits<{ error: [event: Event] }>()
 </script>
 
 <template>
@@ -43,7 +43,6 @@ const emit = defineEmits<{ load: [event: Event]; error: [event: Event] }>()
           :alt="title"
           draggable="false"
           crossorigin="anonymous"
-          @load="emit('load', $event)"
           @error="emit('error', $event)"
         />
         <SvgIcon v-else name="common-music" class-name="size-20" />
@@ -61,7 +60,6 @@ const emit = defineEmits<{ load: [event: Event]; error: [event: Event] }>()
               :alt="title"
               draggable="false"
               crossorigin="anonymous"
-              @load="emit('load', $event)"
               @error="emit('error', $event)"
             />
             <SvgIcon v-else name="common-music" class-name="size-12" />

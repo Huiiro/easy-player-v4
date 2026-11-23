@@ -60,6 +60,7 @@ watch(
 )
 watch(() => [props.active, props.reducedMotion], syncActivity)
 onBeforeUnmount(() => {
+  if (canvas.value) canvas.value.style.display = 'none'
   observer?.disconnect()
   clearTimeout(resizeTimer)
   document.removeEventListener('visibilitychange', syncActivity)

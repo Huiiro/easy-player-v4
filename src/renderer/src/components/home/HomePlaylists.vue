@@ -55,6 +55,8 @@ function playlistCoverUrl(playlist: Playlist): string | null {
             :src="playlistCoverUrl(playlist)!"
             class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
             :alt="playlist.name"
+            loading="lazy"
+            decoding="async"
           />
           <SvgIcon
             v-else

@@ -7,6 +7,7 @@ const sharp = require('sharp')
 const assert = require('node:assert/strict')
 const esbuild = require('esbuild')
 const { parse, compileScript, compileStyle } = require('@vue/compiler-sfc')
+const backgroundResources = process.argv.includes('--background-resources')
 const baseline = process.argv.includes('--baseline')
 const mesh = process.argv.includes('--mesh')
 const particles = process.argv.includes('--particles')
@@ -238,6 +239,60 @@ app.whenReady().then(async () => {
    const router=createRouter({history:createMemoryHistory(),routes:['/','/artist/detail','/album/detail'].map(path=>({path,component:{render:()=>null}}))});app.use(router);await router.push('/');await router.isReady();
    const ui=useUIStore();ui.showPlayer=true;if(${cheer})ui.setPlayerBgType('ambient');ui.setPlayerBgType(${JSON.stringify(background)});ui.lyricSourceOrder=['database'];ui.autoSearchNetworkLyrics=false;ui.showPlayerSpectrum=false;
    app.mount('#app');await window.panelWait(700);
+   if(${backgroundResources}) {
+    const selectors={album:'.panel-background-item',ambient:'.ambient-bubble-layer',liquid:'.liquid-background-canvas',mesh:'.mesh-flow-background',particles:'.particle-flow-background',cheer:'.stage-background'};
+    const all=Object.values(selectors).join(',');
+    const decode=HTMLImageElement.prototype.decode, decoded=[];
+    HTMLImageElement.prototype.decode=function(){
+      if(this.getAttribute('src')?.startsWith('easy-player-media://cover-thumb'))decoded.push(this);
+      return decode.call(this);
+    };
+    const initialTrack=window.panelPlayer.currentQueueSong;
+    for(let round=0;round<3;round++){
+      for(const mode of Object.keys(selectors)){
+        const outgoing=document.querySelector(all);
+        const canvas=outgoing?.matches('canvas')?outgoing:outgoing?.querySelector('canvas');
+        const usesWebGL=outgoing?.matches([selectors.liquid,selectors.mesh,selectors.particles].join(','));
+        const gl=usesWebGL?canvas?.getContext('webgl'):null;
+        if(usesWebGL&&!gl)throw Error('Expected an active WebGL context');
+        ui.setPlayerBgType(mode);await Vue.nextTick();
+        if(outgoing&&outgoing.matches(selectors[mode])===false&&outgoing.isConnected)throw Error('Outgoing background still connected: '+outgoing.className);
+        for(let i=0;i<12&&!document.querySelector(selectors[mode]);i++)await window.panelWait(25);
+        if(document.querySelectorAll(all).length!==1||!document.querySelector(selectors[mode]))throw Error('Expected one mounted background: '+mode);
+        if(mode==='album'){
+          const artwork=document.querySelector(selectors.album);
+          const surface=artwork.parentElement.querySelector('canvas');
+          for(let i=0;i<12&&!artwork.classList.contains('invisible');i++)await window.panelWait(25);
+          if(!artwork.classList.contains('invisible')||surface.width>512||surface.height>512||
+             surface.width>Math.ceil(artwork.clientWidth/4)||surface.height>Math.ceil(artwork.clientHeight/4))
+            throw Error('Album background must use the bounded prerendered surface');
+          const ctx=surface.getContext('2d');
+          const sample=ctx.getImageData(surface.width>>1,surface.height>>1,1,1).data;
+          if(sample[3]!==255||!(sample[0]||sample[1]||sample[2]))throw Error('Prerendered cover must display artwork');
+        }
+        if(gl&&outgoing!==document.querySelector(all)){
+          for(let i=0;i<12&&!gl.isContextLost();i++)await window.panelWait(25);
+          if(!gl.isContextLost())throw Error('Outgoing WebGL context was not released');
+        }
+      }
+      for(const [style,selector] of [['vinyl','.vinyl-label img'],['standard','.cover-card img']]){
+        const previous=document.querySelector('.cover-frame img')?.getAttribute('src');
+        ui.setPlayerCoverStyle(style);await Vue.nextTick();
+        if(!previous||document.querySelector(selector)?.getAttribute('src')!==previous)throw Error('Cover style must use the current artwork');
+      }
+      if(decoded.length!==round)throw Error('Switching appearance decoded the same cover again');
+      window.panelPlayer.currentQueueSong={...initialTrack,id:200+round,cover:String(20+round)};
+      for(let i=0;i<20&&decoded.length<=round;i++)await window.panelWait(25);
+      if(decoded.length!==round+1)throw Error('Expected one decode per changed artwork');
+      if(round>0&&decoded[round-1].hasAttribute('src'))throw Error('Old cover decode still retains its source');
+      const coverUpdated=()=>document.querySelector('.cover-frame img')?.src.includes('path='+String(20+round)+'&');
+      for(let i=0;i<20&&!coverUpdated();i++)await window.panelWait(25);
+      if(!coverUpdated())throw Error('The latest cover was not shown');
+    }
+    app.unmount();
+    if(decoded.some(image=>image.hasAttribute('src')))throw Error('Closing the panel must release the current artwork');
+    return;
+   }
    const appearanceButton=document.querySelector('header button[aria-haspopup=dialog]');
    if(appearanceButton?.getAttribute('aria-label')!==zh.settings.playerBackground||appearanceButton.title!==zh.settings.playerBackground||
     appearanceButton.textContent.trim()||appearanceButton.querySelector('use')?.getAttribute('xlink:href')!=='#icon-common-settings')
@@ -353,7 +408,7 @@ app.whenReady().then(async () => {
    if(${mesh} && (ui.playerBgType!=='mesh'||!document.querySelector('.mesh-flow-background')))throw Error('Mesh background must remain selected and render inside the player');
    if(${particles} && (ui.playerBgType!=='particles'||!document.querySelector('.particle-flow-background')))throw Error('Particle background must remain selected and render inside the player');
    if(${liquid}) {
-    const canvas=document.querySelector('canvas.brightness-80');
+    const canvas=document.querySelector('canvas.liquid-background-canvas');
     const gl=canvas?.getContext('webgl');
     if(ui.playerBgType!=='liquid'||!gl?.getParameter(gl.CURRENT_PROGRAM))throw Error('Liquid background must remain selected and render inside the player');
    }
@@ -1182,6 +1237,15 @@ app.whenReady().then(async () => {
         "document.querySelector('.stage-background').parentElement.nextElementSibling.style.removeProperty('visibility');true"
       )
     }
+    if (backgroundResources) {
+      console.log(
+        'Player appearance: 18 background and 6 cover style switches, released WebGL contexts and artwork'
+      )
+      window.destroy()
+      app.exit(0)
+      return
+    }
+
     const result = await window.webContents.executeJavaScript(`(async()=>{
    const durations=[],gaps=[],longTasks=[];window.panelAnalysis=[];
    const observer=new PerformanceObserver(list=>longTasks.push(...list.getEntries().map(task=>task.duration)));observer.observe({type:'longtask'});

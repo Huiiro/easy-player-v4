@@ -6,9 +6,10 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const inlineBackground = process.env.STARTUP_INLINE_BACKGROUND === '1'
 const output = fs.mkdtempSync(path.join(os.tmpdir(), 'ep-startup-lifecycle-'))
 process.env.EASY_PLAYER_DATA_DIR = path.join(output, 'data')
-if (process.env.STARTUP_MAXIMIZED === '1' || process.env.STARTUP_MATERIAL) {
+if (process.env.STARTUP_MAXIMIZED === '1' || process.env.STARTUP_MATERIAL || inlineBackground) {
   const data = path.join(process.env.EASY_PLAYER_DATA_DIR, 'player_data')
   fs.mkdirSync(data, { recursive: true })
   const Database = require('better-sqlite3')
@@ -29,6 +30,22 @@ if (process.env.STARTUP_MAXIMIZED === '1' || process.env.STARTUP_MATERIAL) {
     database
       .prepare('INSERT INTO app_setting (key, value_json) VALUES (?, ?)')
       .run('window.material', JSON.stringify(process.env.STARTUP_MATERIAL))
+  }
+  if (inlineBackground) {
+    const original = fs.readFileSync('resources/icons/easy-player.png')
+    const prefs = {
+      useCustomBg: false,
+      customBg: {
+        kind: 'image',
+        url: `data:image/png;base64,${original.toString('base64')}`,
+        path: 'fixture.png',
+        blur: 12,
+        brightness: 76
+      }
+    }
+    database
+      .prepare('INSERT INTO app_setting (key, value_json) VALUES (?, ?)')
+      .run('pinia.ui.preferences.v1', JSON.stringify(JSON.stringify(prefs)))
   }
   database.close()
 }
@@ -124,6 +141,56 @@ const timeout = setTimeout(() => {
     path.join(output, 'app-ready.png'),
     (await window.webContents.capturePage()).toPNG()
   )
+  if (inlineBackground) {
+    const result = await window.webContents.executeJavaScript(`(async () => {
+      const ui = document.getElementById('app').__vue_app__.config.globalProperties.$pinia._s.get('ui')
+      const image = new Image()
+      image.src = ui.customBg.url
+      await image.decode()
+      return {
+        url: ui.customBg.url,
+        enabled: ui.useCustomBg,
+        blur: ui.customBg.blur,
+        brightness: ui.customBg.brightness,
+        width: image.naturalWidth
+      }
+    })()`)
+    assert.match(result.url, /^easy-player-media:\/\/background\?name=/)
+    assert.equal(result.enabled, false)
+    assert.equal(result.blur, 12)
+    assert.equal(result.brightness, 76)
+    assert.ok(result.width > 0)
+    const original = fs.readFileSync('resources/icons/easy-player.png')
+    const filename = new URL(result.url).searchParams.get('name')
+    const migrated = path.join(
+      process.env.EASY_PLAYER_DATA_DIR,
+      'player_data',
+      'backgrounds',
+      filename
+    )
+    assert.deepEqual(fs.readFileSync(migrated), original)
+
+    const input = path.resolve('resources/icons/easy-player.png')
+    const imported = await window.webContents.executeJavaScript(`(async () => {
+      const result = await window.api.files.importBackgroundMedia(${JSON.stringify(input)})
+      if (!result.success) throw Error(result.error)
+      const image = new Image()
+      image.src = result.data.url
+      await image.decode()
+      return { width: image.naturalWidth, url: result.data.url }
+    })()`)
+    assert.equal(imported.width, result.width)
+    assert.notEqual(imported.url, result.url)
+    assert.equal(
+      (
+        await window.webContents.executeJavaScript(
+          `window.api.files.removeBackgroundMedia(${JSON.stringify(imported.url)})`
+        )
+      ).success,
+      true
+    )
+    console.log('Inline background migration, managed image import and removal passed')
+  }
   let current = window
   for (const extreme of [true, false]) {
     await current.webContents.executeJavaScript(`document.getElementById('app').__vue_app__

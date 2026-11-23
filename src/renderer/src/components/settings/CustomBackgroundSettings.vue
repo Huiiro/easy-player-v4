@@ -15,25 +15,14 @@ const { error: showError } = useMessage()
 const backgroundInput = ref<HTMLInputElement | null>(null)
 const importingBackground = ref(false)
 const imageExtensions = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif', 'svg'])
-function retireVideo(): void {
-  if (ui.customBg.kind !== 'video' || !ui.customBg.url) return
+function retireBackground(): void {
+  if (!ui.customBg.url.startsWith('easy-player-media://background?')) return
   const oldUrl = ui.customBg.url
-  // Let the old video element leave the transition before removing its backing file.
-  setTimeout(() => void window.api.files.removeBackgroundVideo(oldUrl), 1500)
+  // Let the old background leave the transition before removing its backing file.
+  setTimeout(() => void window.api.files.removeBackgroundMedia(oldUrl), 1500)
 }
 function chooseBackground(): void {
   backgroundInput.value?.click()
-}
-function readImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () =>
-      typeof reader.result === 'string'
-        ? resolve(reader.result)
-        : reject(new Error('Invalid image'))
-    reader.onerror = () => reject(reader.error)
-    reader.readAsDataURL(file)
-  })
 }
 async function updateBackground(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
@@ -47,21 +36,17 @@ async function updateBackground(event: Event): Promise<void> {
   }
   importingBackground.value = true
   try {
-    let url: string
-    if (extension === 'mp4') {
-      const result = await window.api.files.importBackgroundVideo(
-        window.api.audio.getFilePath(file)
-      )
-      if (!result.success || !result.data) {
-        showError(result.error || t('settings.backgroundImportFailed'))
-        return
-      }
-      url = result.data.url
-    } else {
-      url = await readImage(file)
+    const result = await window.api.files.importBackgroundMedia(window.api.audio.getFilePath(file))
+    if (!result.success || !result.data) {
+      showError(result.error || t('settings.backgroundImportFailed'))
+      return
     }
-    retireVideo()
-    ui.setCustomBackground({ kind: extension === 'mp4' ? 'video' : 'image', url, path: file.name })
+    retireBackground()
+    ui.setCustomBackground({
+      kind: extension === 'mp4' ? 'video' : 'image',
+      url: result.data.url,
+      path: file.name
+    })
   } catch {
     showError(t('settings.backgroundImportFailed'))
   } finally {
@@ -69,7 +54,7 @@ async function updateBackground(event: Event): Promise<void> {
   }
 }
 function clearBackground(): void {
-  retireVideo()
+  retireBackground()
   ui.clearCustomBackground()
   if (backgroundInput.value) backgroundInput.value.value = ''
 }

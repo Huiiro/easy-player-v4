@@ -49,6 +49,11 @@ import { shutdownPlugins } from './plugins/runtime'
 import { registerNetworkSourceIpcHandlers } from './ipc/networkSourceIpcHandlers'
 import { registerMetadataIpcHandlers } from './ipc/metadataIpcHandlers'
 import { registerFileIpcHandlers } from './ipc/fileIpcHandlers'
+import {
+  backgroundImageType,
+  migrateInlineBackground,
+  resolveBackgroundMedia
+} from './service/backgroundMedia'
 import { registerDownloadIpcHandlers } from './ipc/downloadIpcHandlers'
 import { cacheRemoteSong } from './service/remoteSourceService'
 import { registerRemoteSourceIpcHandlers } from './ipc/remoteSourceIpcHandlers'
@@ -65,7 +70,6 @@ import {
   createDir,
   getCoverPath,
   getFontPath,
-  getBackgroundPath,
   getIconPath,
   getTrayIconPath,
   getTaskbarHelperPath,
@@ -524,30 +528,39 @@ function registerMediaProtocol(): void {
         return new Response('Not Found', { status: 404 })
       }
     }
-    const requestedPath = ['cover', 'cover-thumb', 'font', 'background'].includes(url.hostname)
-      ? url.searchParams.get('path')
-      : null
+    const requestedPath =
+      url.hostname === 'background'
+        ? resolveBackgroundMedia(url)
+        : ['cover', 'cover-thumb', 'font'].includes(url.hostname)
+          ? url.searchParams.get('path')
+          : null
     if (!requestedPath) return new Response('Not Found', { status: 404 })
 
-    const coverDirectory =
-      url.hostname === 'font'
-        ? getFontPath()
-        : url.hostname === 'background'
-          ? getBackgroundPath()
-          : getCoverPath()
+    const coverDirectory = url.hostname === 'font' ? getFontPath() : getCoverPath()
     const coverPath = resolve(requestedPath)
     const pathRelativeToCovers = relative(coverDirectory, coverPath)
     if (
-      pathRelativeToCovers.startsWith('..') ||
-      isAbsolute(pathRelativeToCovers) ||
+      (url.hostname !== 'background' &&
+        (pathRelativeToCovers.startsWith('..') || isAbsolute(pathRelativeToCovers))) ||
       !existsSync(coverPath)
     ) {
       return new Response('Not Found', { status: 404 })
     }
 
     if (url.hostname === 'background') {
-      if (!coverPath.toLowerCase().endsWith('.mp4'))
-        return new Response('Not Found', { status: 404 })
+      const imageType = backgroundImageType(coverPath)
+      if (imageType) {
+        const response = await net.fetch(pathToFileURL(coverPath).toString())
+        return new Response(response.body, {
+          status: response.status,
+          headers: {
+            'Content-Type': imageType,
+            'Access-Control-Allow-Origin': '*',
+            'X-Content-Type-Options': 'nosniff',
+            'Content-Security-Policy': "sandbox; default-src 'none'"
+          }
+        })
+      }
       const { size } = await fs.stat(coverPath)
       const range = request.headers.get('range')
       const match = range?.match(/^bytes=(\d*)-(\d*)$/)
@@ -997,6 +1010,9 @@ app.whenReady().then(() =>
         platform: process.platform,
         arch: process.arch,
         packaged: app.isPackaged
+      })
+      await migrateInlineBackground().catch(() => {
+        Logger.warn('[Appearance] could not migrate inline background image')
       })
       await migrateSourceSecrets().catch(() => {
         Logger.warn('[Remote source] could not encrypt legacy credentials')

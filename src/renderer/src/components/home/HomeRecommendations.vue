@@ -67,6 +67,8 @@ function recommendationCoverUrl(card: RecommendationCard): string | null {
             :src="recommendationCoverUrl(card)!"
             class="size-full object-cover transition-transform duration-[var(--motion-duration-standard)] group-hover:scale-105"
             :alt="t(`recommendation.${card.group}`)"
+            loading="lazy"
+            decoding="async"
           />
           <SvgIcon
             v-else

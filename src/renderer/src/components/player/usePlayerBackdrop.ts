@@ -1,4 +1,4 @@
-import { computed, nextTick, ref, watch, type Ref } from 'vue'
+import { computed, ref, watch, type Ref } from 'vue'
 import type { usePlayerStore } from '@/stores/player/playerStore'
 import type { useUIStore } from '@/stores/ui/uiStore'
 import { CoverAnalyzer } from '@/hooks/useImageColors'
@@ -48,7 +48,7 @@ export function usePlayerBackdrop(
     selectedPlayerBackground.value === PlayerBgType.AMBIENT ? 1 : 0.68
   )
   const liquidCoverSource = computed(() =>
-    coverColorSource.value === 'failed' ? null : coverUrl.value
+    coverFailed.value || coverColorSource.value === 'failed' ? null : displayedCoverUrl.value
   )
   const useMeshBackground = computed(() => effectivePlayerBackground.value === PlayerBgType.MESH)
   const useParticleBackground = computed(
@@ -83,18 +83,6 @@ export function usePlayerBackdrop(
   )
   const paletteReady = ref(!coverUrl.value || Boolean(initialPalette))
   const useDarkLyrics = ref(false)
-  const backgroundImage = ref<HTMLImageElement | null>(null)
-  const analyzedBackgrounds = new WeakSet<HTMLImageElement>()
-  // Cached images can load before Vue assigns the template ref.
-  watch(
-    backgroundImage,
-    async (image) => {
-      await nextTick()
-      if (image && image === backgroundImage.value && image.complete && image.naturalWidth)
-        analyzeCoverImage(image)
-    },
-    { flush: 'post' }
-  )
   const lyricColorStyle = computed(() => {
     if (useDarkLyrics.value && !ui.lyricsColors.overrideAutoContrast) return undefined
     return {
@@ -140,20 +128,17 @@ export function usePlayerBackdrop(
     if (analysisNeedsSpectrum.value) return 20
     return shouldAnimate.value ? 12 : 0
   })
-  function extractCoverColors(event: Event): void {
-    const image = event.currentTarget as HTMLImageElement
-    if (image) analyzeCoverImage(image)
+  function extractCoverColors(image: HTMLImageElement): void {
+    analyzeCoverImage(image, true)
   }
-  function analyzeCoverImage(image: HTMLImageElement): void {
-    const isBackground = image.classList.contains('panel-background-item') && useAlbumArtwork.value
-    if (isBackground && analyzedBackgrounds.has(image)) return
+  function analyzeCoverImage(image: HTMLImageElement, isBackground = false): void {
     const loadedSource = image.getAttribute('src')
     if (loadedSource && loadedSource !== coverUrl.value) return
     const result = CoverAnalyzer.analyze({
       image,
       song: player.currentQueueSong,
       isPanelBackground: isBackground,
-      backgroundFilter: getComputedStyle(image).filter,
+      backgroundFilter: isBackground ? getComputedStyle(image).filter : undefined,
       useLiquidBackground: useVibrantPalette.value,
       coverAnalysisVersion: COVER_ANALYSIS_VERSION,
       getLyricsRegion: (loadedImage) => {
@@ -178,7 +163,6 @@ export function usePlayerBackdrop(
     paletteReady.value = true
     // Cover thumbnail load events must never overwrite background contrast.
     if (isBackground) {
-      analyzedBackgrounds.add(image)
       useDarkLyrics.value = result.useDarkLyrics
       spectrumBackgroundLuminance.value =
         result.result?.averageLuminance ?? (result.useDarkLyrics ? 0.75 : 0.1)
@@ -198,12 +182,13 @@ export function usePlayerBackdrop(
     resetCoverPalette('failed')
     paletteReady.value = true
   }
+  let decodedCover: HTMLImageElement | null = null
+  watch(useVibrantPalette, () => {
+    if (decodedCover?.getAttribute('src') === coverUrl.value) analyzeCoverImage(decodedCover)
+  })
   watch(
-    [coverUrl, useVibrantPalette],
-    ([url], previous, onCleanup) => {
-      // A failed album cover selects the ambient palette. That palette change
-      // must not retry the same unreadable URL and switch the background back.
-      if (url === previous?.[0] && coverFailed.value) return
+    coverUrl,
+    (url, _, onCleanup) => {
       coverFailed.value = false
       const cached = CoverAnalyzer.getCachedPalette(
         player.currentQueueSong,
@@ -224,6 +209,7 @@ export function usePlayerBackdrop(
       const image = new Image()
       let active = true
       const releaseImage = (): void => {
+        if (decodedCover === image) decodedCover = null
         image.onload = image.onerror = null
         image.removeAttribute('src')
       }
@@ -233,18 +219,16 @@ export function usePlayerBackdrop(
       })
       image.crossOrigin = 'anonymous'
       image.onload = () => {
+        image.onload = image.onerror = null
         void image
           .decode()
           .catch(() => {})
           .then(() => {
             if (!active) return
-            try {
-              // Palette extraction must not depend on a visible cover's load event.
-              analyzeCoverImage(image)
-              displayedCoverUrl.value = url
-            } finally {
-              releaseImage()
-            }
+            // Keep only the current decode for palette changes and release it on track change.
+            decodedCover = image
+            analyzeCoverImage(image)
+            displayedCoverUrl.value = url
           })
       }
       image.onerror = () => {
@@ -273,7 +257,6 @@ export function usePlayerBackdrop(
     coverColorSource,
     selectedPlayerBackground,
     effectivePlayerBackground,
-    useAlbumArtwork,
     useAmbientBackground,
     useLiquidBackground,
     useMeshBackground,
@@ -286,7 +269,6 @@ export function usePlayerBackdrop(
     spectrumColor,
     paletteReady,
     useDarkLyrics,
-    backgroundImage,
     lyricColorStyle,
     shouldAnimate,
     liquidEnergy,

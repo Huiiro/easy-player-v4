@@ -192,6 +192,7 @@ export class MeshFlowRenderer {
     if (this.previousPixels) context.drawImage(this.previousPixels, 0, 0)
     context.globalAlpha = this.fade * this.fade * (3 - 2 * this.fade)
     if (this.currentPixels) context.drawImage(this.currentPixels, 0, 0)
+    this.releasePixels()
     this.previousPixels = context.canvas
     this.currentPixels = pixels
     this.upload(this.previous, context.canvas)
@@ -361,6 +362,13 @@ export class MeshFlowRenderer {
     this.schedule()
   }
 
+  private releasePixels(): void {
+    for (const pixels of [this.currentPixels, this.previousPixels]) {
+      if (pixels) pixels.width = pixels.height = 0
+    }
+    this.currentPixels = this.previousPixels = null
+  }
+
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
@@ -377,7 +385,7 @@ export class MeshFlowRenderer {
     for (const texture of this.textures) this.gl.deleteTexture(texture)
     for (const target of this.targets) this.gl.deleteFramebuffer(target)
     for (const program of this.programs) this.gl.deleteProgram(program)
-    this.currentPixels = this.previousPixels = null
+    this.releasePixels()
     if (!this.gl.isContextLost()) this.gl.getExtension('WEBGL_lose_context')?.loseContext()
     this.canvas.width = this.canvas.height = 1
   }

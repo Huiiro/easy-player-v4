@@ -97,10 +97,10 @@ function loadCover(source: string | null): void {
   image.crossOrigin = 'anonymous'
   image.onload = () => {
     if (!gl || !blurredCoverTexture || token !== coverLoadToken) return
+    const c = document.createElement('canvas')
     try {
       const size = 128
       const overscan = 16
-      const c = document.createElement('canvas')
       c.width = size
       c.height = size
 
@@ -124,6 +124,7 @@ function loadCover(source: string | null): void {
       coverTargetLoaded = false
       console.warn('[FluidBackground] Unable to upload cover texture', error)
     } finally {
+      c.width = c.height = 0
       if (coverImage === image) cancelCoverLoad()
     }
   }
@@ -373,6 +374,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  if (canvas.value) canvas.value.style.display = 'none'
   cancelCoverLoad()
   if (frame) cancelAnimationFrame(frame)
   if (resizeTimer) window.clearTimeout(resizeTimer)
@@ -399,9 +401,5 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <canvas
-    ref="canvas"
-    class="absolute inset-0 size-full pointer-events-none brightness-80 saturate-120"
-    aria-hidden="true"
-  />
+  <canvas ref="canvas" class="absolute inset-0 size-full pointer-events-none" aria-hidden="true" />
 </template>

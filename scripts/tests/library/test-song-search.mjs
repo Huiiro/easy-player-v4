@@ -649,13 +649,11 @@ try {
   assert.ok(
     statuses.every((status, index) => !index || status.revision > statuses[index - 1].revision)
   )
-  stopIndex.stop()
-  stopIndex = undefined
-
-  // A broken worker saves a usable basic index and retains a deferred retry.
+  // Let the next idle pass release the worker and its Japanese dictionary.
+  // The service must start a new worker for a later batch, including failure and retry.
+  await new Promise((resolveWait) => setTimeout(resolveWait, 1100))
   writeFileSync(join(directory, 'searchWorker.js'), "throw new Error('fixture worker failure')")
   add(21, '安静')
-  stopIndex = startSearchIndexService(db, () => {})
   await waitUntil(() =>
     Boolean(db.prepare('SELECT 1 FROM song_search_pending WHERE song_id=21 AND attempts>0').get())
   )

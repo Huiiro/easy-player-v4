@@ -9,10 +9,9 @@ import {
   type SaveDialogOptions
 } from 'electron'
 import { exportLibrary, importLibrary, recoverMovedSongs } from '../service/fileService'
-import { copyFile, mkdir, rm, stat } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
-import { extname, relative, resolve, isAbsolute } from 'node:path'
-import { getBackgroundPath } from '../utils/pathUtils'
+import { rm } from 'node:fs/promises'
+import { extname, isAbsolute } from 'node:path'
+import { importBackgroundMedia, resolveBackgroundMedia } from '../service/backgroundMedia'
 
 function showOpenDialogFor(
   event: Electron.IpcMainInvokeEvent,
@@ -30,41 +29,19 @@ function showSaveDialogFor(
 }
 
 export function registerFileIpcHandlers(): void {
-  ipcMain.handle('files:remove-background-video', async (_event, mediaUrl: string) => {
+  ipcMain.handle('files:remove-background-media', async (_event, mediaUrl: string) => {
     try {
-      const url = new URL(mediaUrl)
-      if (url.protocol !== 'easy-player-media:' || url.hostname !== 'background')
-        return { success: false }
-      const directory = getBackgroundPath()
-      const target = resolve(url.searchParams.get('path') || '')
-      const relativePath = relative(directory, target)
-      if (
-        relativePath.startsWith('..') ||
-        isAbsolute(relativePath) ||
-        !/^[0-9a-f-]{36}\.mp4$/i.test(relativePath)
-      )
-        return { success: false }
+      const target = resolveBackgroundMedia(new URL(mediaUrl))
+      if (!target) return { success: false }
       await rm(target, { force: true })
       return { success: true }
     } catch {
       return { success: false }
     }
   })
-  ipcMain.handle('files:import-background-video', async (_event, source: string) => {
-    if (typeof source !== 'string' || extname(source).toLowerCase() !== '.mp4')
-      return { success: false, error: 'Only MP4 files are supported.' }
+  ipcMain.handle('files:import-background-media', async (_event, source: string) => {
     try {
-      const info = await stat(source)
-      if (!info.isFile() || info.size === 0 || info.size > 2 * 1024 ** 3)
-        return { success: false, error: 'The video must be smaller than 2 GB.' }
-      const directory = getBackgroundPath()
-      await mkdir(directory, { recursive: true })
-      const target = getBackgroundPath(`${randomUUID()}.mp4`)
-      await copyFile(source, target)
-      return {
-        success: true,
-        data: { url: `easy-player-media://background?path=${encodeURIComponent(target)}` }
-      }
+      return { success: true, data: await importBackgroundMedia(source) }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

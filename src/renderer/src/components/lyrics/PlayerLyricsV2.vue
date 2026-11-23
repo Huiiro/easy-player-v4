@@ -86,7 +86,6 @@ let rowFocus = -1
 let motionRaf = 0
 let motionTime = 0
 let expectedScroll = 0
-let smoothScrollTarget: number | null = null
 let resizeObserver: ResizeObserver | undefined
 let lineVisibilityObserver: IntersectionObserver | undefined
 const visibleLineIndices = shallowRef(new Set<number>())
@@ -287,11 +286,6 @@ const requestSnapToCurrent = (): void => {
 // AMLL-inspired separation of layout targets, per-line springs and manual scrolling.
 // Native scrolling retains keyboard/touch support; row offsets provide the trailing wave.
 function stopMotion(): void {
-  if (smoothScrollTarget !== null) {
-    const viewport = viewportRef.value
-    if (viewport) viewport.scrollTo({ top: viewport.scrollTop, behavior: 'instant' })
-    smoothScrollTarget = null
-  }
   cancelAnimationFrame(motionRaf)
   motionRaf = 0
 }
@@ -359,22 +353,6 @@ const snapToCurrent = (): void => {
     )
     return
   }
-  // Glyph highlights have their own media clock. With lyric effects off,
-  // let the browser scroll both sentence-timed and word-timed rows.
-  if (ui.lyricsStyle === 'none') {
-    if (smoothScrollTarget === target) return
-    stopMotion()
-    if (rowSprings.size) {
-      rowSprings.forEach((_spring, idx) => lineRefs.value[idx]?.style.removeProperty('--scroll-y'))
-      rowSprings.clear()
-    }
-    if (Math.abs(viewport.scrollTop - target) >= 1) {
-      smoothScrollTarget = target
-      viewport.scrollTo({ top: target, behavior: 'smooth' })
-    }
-    return
-  }
-  if (smoothScrollTarget !== null) stopMotion()
   if (!motionRaf) scrollSpring.reset(viewport.scrollTop)
   scrollSpring.target = target
   if (
@@ -412,11 +390,6 @@ const handleScroll = (): void => {
   // Wheel/touch/keyboard handlers interrupt explicitly; browser clamping during
   // our own animation must not cancel every line spring.
   if (!viewport) return
-  if (smoothScrollTarget !== null) {
-    expectedScroll = viewport.scrollTop
-    if (Math.abs(expectedScroll - smoothScrollTarget) < 1) smoothScrollTarget = null
-    return
-  }
   if (motionRaf || Math.abs(viewport.scrollTop - expectedScroll) < 1) return
   handleInteraction()
   expectedScroll = viewport.scrollTop
@@ -635,9 +608,7 @@ const offscreenStyles = Array.from({ length: 6 }, (_, depth) => ({
 }))
 const depthStyles = computed(() => {
   const transform =
-    props.allowTransform && !ui.reduceMotion && ui.lyricsStyle !== 'none'
-      ? 'translateY(var(--scroll-y, 0px))'
-      : 'none'
+    props.allowTransform && !ui.reduceMotion ? 'translateY(var(--scroll-y, 0px))' : 'none'
   return offscreenStyles.map(({ opacity }, depth) => ({
     transform,
     opacity,

@@ -75,8 +75,8 @@ onMounted(() => {
     if (event.data.id !== requestId) return
     const canvas = canvasRef.value
     if (!canvas) return
-    canvas.width = event.data.width
-    canvas.height = event.data.height
+    if (canvas.width !== event.data.width) canvas.width = event.data.width
+    if (canvas.height !== event.data.height) canvas.height = event.data.height
     canvas
       .getContext('2d')
       ?.putImageData(
@@ -97,6 +97,9 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   if (drawFrame) cancelAnimationFrame(drawFrame)
   worker?.terminate()
+  worker = undefined
+  pendingRequest = null
+  if (canvasRef.value) canvasRef.value.width = canvasRef.value.height = 0
 })
 </script>
 

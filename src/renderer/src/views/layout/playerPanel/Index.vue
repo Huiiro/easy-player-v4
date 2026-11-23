@@ -28,6 +28,7 @@ import PlayerSpectrum from '@/components/player/PlayerSpectrum.vue'
 import eventBus from '@/utils/eventBus'
 import LyricsSearchDialog from '@/components/lyrics/LyricsSearchDialog.vue'
 import AddSongsToPlaylistDialog from '@/components/songlist/AddSongsToPlaylistDialog.vue'
+import AlbumArtworkBackground from '@/components/player/AlbumArtworkBackground.vue'
 import LiquidBackground from '@/components/background/player/LiquidBackground.vue'
 import MeshFlowBackground from '@/components/background/player/MeshFlowBackground.vue'
 import ParticleFlowBackground from '@/components/background/player/ParticleFlowBackground.vue'
@@ -464,7 +465,6 @@ const {
   liquidUnavailable,
   meshUnavailable,
   particlesUnavailable,
-  useAlbumArtwork,
   useAmbientBackground,
   useLiquidBackground,
   useMeshBackground,
@@ -477,7 +477,6 @@ const {
   spectrumColor,
   paletteReady,
   useDarkLyrics,
-  backgroundImage,
   lyricColorStyle,
   shouldAnimate,
   liquidEnergy,
@@ -497,9 +496,11 @@ const {
   rhythmAmount,
   isPanelVisible
 )
-function setBackgroundImage(element: unknown): void {
-  backgroundImage.value = element instanceof HTMLImageElement ? element : null
+// Avoid retaining a full-screen composite while the new background fades in.
+function finishBackgroundLeave(_element: Element, done: () => void): void {
+  done()
 }
+
 watch(
   [analysisPollingRate, analysisNeedsSpectrum],
   ([rate, includeSpectrum]) => player.setAudioAnalysisPollingRate(rate, includeSpectrum),
@@ -636,38 +637,24 @@ function changeLyricsOffset(event: WheelEvent): void {
 <template>
   <div class="fixed inset-0 z-40 isolate overflow-hidden bg-[#101416] text-text-l select-none">
     <div class="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
-      <Transition name="panel-background">
-        <img
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
+        <AlbumArtworkBackground
           v-if="backgroundSource"
-          :ref="setBackgroundImage"
           :key="backgroundSource"
           :src="backgroundSource"
           :style="{ transform: `scale(${1.1 + rhythmAmount * 0.1})` }"
-          class="panel-background-item absolute -inset-10 size-[calc(100%_+_5rem)] max-w-none object-cover transition-transform duration-[var(--motion-duration-fast)]"
-          :class="useAlbumArtwork ? 'opacity-100' : 'opacity-0'"
-          alt=""
-          crossorigin="anonymous"
+          class="absolute -inset-10 transition-transform duration-[var(--motion-duration-fast)]"
           @load="extractCoverColors"
           @error="handleCoverError"
         />
       </Transition>
-      <img
-        v-if="useLiquidBackground && coverUrl"
-        :key="coverUrl"
-        :src="coverUrl"
-        class="absolute size-px opacity-0"
-        alt=""
-        crossorigin="anonymous"
-        @load="extractCoverColors"
-        @error="handleCoverError"
-      />
-      <Transition name="panel-background">
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <div
           v-if="useLiquidBackground && !liquidUnavailable && paletteReady"
           class="absolute inset-0"
         >
           <LiquidBackground
-            :key="liquidCoverSource ? 'cover-liquid-background' : 'default-liquid-background'"
+            class="liquid-background-canvas"
             :primary="coverColors.primary"
             :secondary="coverColors.secondary"
             :tertiary="coverColors.tertiary"
@@ -682,7 +669,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           <div class="absolute inset-0 liquid-background-soften" />
         </div>
       </Transition>
-      <Transition name="panel-background">
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <AmbientBubbleCanvas
           v-if="useAmbientBackground && paletteReady"
           :primary="coverColors.primary"
@@ -700,7 +687,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           :intensity="ambientIntensity"
         />
       </Transition>
-      <Transition name="panel-background">
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <MeshFlowBackground
           v-if="useMeshBackground && !meshUnavailable && paletteReady"
           :cover-src="coverFailed ? null : displayedCoverUrl"
@@ -713,7 +700,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           @unavailable="meshUnavailable = true"
         />
       </Transition>
-      <Transition name="panel-background">
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <ParticleFlowBackground
           v-if="useParticleBackground && !particlesUnavailable"
           :active="shouldAnimate"
@@ -725,7 +712,7 @@ function changeLyricsOffset(event: WheelEvent): void {
           @unavailable="particlesUnavailable = true"
         />
       </Transition>
-      <Transition name="panel-background">
+      <Transition name="panel-background" @leave="finishBackgroundLeave">
         <StageBackground
           v-if="useCheerBackground"
           :cover-src="!coverFailed && displayedCoverUrl === coverUrl ? displayedCoverUrl : null"
@@ -813,7 +800,6 @@ function changeLyricsOffset(event: WheelEvent): void {
               :playing="player.isPlaying && isPanelVisible"
               :reduce-motion="ui.reduceMotion || player.rhythmVisualConfig.reducedMotion"
               :spin="ui.isCoverSpin"
-              @load="extractCoverColors"
               @error="handleCoverError"
             />
             <!-- title && artist -->
@@ -1207,10 +1193,9 @@ function changeLyricsOffset(event: WheelEvent): void {
 }
 .liquid-background-soften {
   background: rgba(8, 11, 20, 0.5);
-  backdrop-filter: brightness(0.9) saturate(1.62) contrast(1.14);
 }
-.panel-background-item {
-  filter: blur(64px) saturate(1.68) contrast(1.28) brightness(0.52);
+.liquid-background-canvas {
+  filter: brightness(0.8) saturate(1.2) brightness(0.9) saturate(1.62) contrast(1.14);
 }
 .panel-tool {
   display: flex;
@@ -1577,12 +1562,10 @@ function changeLyricsOffset(event: WheelEvent): void {
   padding-right: 2rem;
   padding-left: 2rem;
 }
-.panel-background-enter-active,
-.panel-background-leave-active {
-  transition: opacity 700ms cubic-bezier(0.22, 0.61, 0.36, 1);
+.panel-background-enter-active {
+  transition: opacity var(--motion-duration-theme) cubic-bezier(0.22, 0.61, 0.36, 1);
 }
-.panel-background-enter-from,
-.panel-background-leave-to {
+.panel-background-enter-from {
   opacity: 0 !important;
 }
 </style>

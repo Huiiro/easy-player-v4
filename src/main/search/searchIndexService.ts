@@ -98,6 +98,10 @@ export function startSearchIndexService(
     timeout = undefined
     pending?.reject(error)
     pending = undefined
+    releaseWorker()
+  }
+
+  function releaseWorker(): void {
     const previous = worker
     worker = undefined
     void previous?.terminate()
@@ -135,39 +139,38 @@ export function startSearchIndexService(
     let changed = false
     try {
       publish(true)
-      if (!isPlaybackOnly()) {
-        let firstInBatch = true
-        for (const row of pendingSearchRows(db)) {
-          if (stopped || isPlaybackOnly()) break
-          currentTitle = row.title
-          failed = false
-          publish(firstInBatch)
-          firstInBatch = false
-          const fields: SearchFields = {
-            title: row.title,
-            artist: row.artist,
-            album: row.album,
-            fileName: row.fileName
-          }
-          let result: WorkerResult
-          try {
-            result = await convert(fields)
-          } catch (error) {
-            if (!loggedFailure && !stopped)
-              Logger.warn('[Search] worker conversion failed', String(error))
-            loggedFailure = true
-            result = { requestId, terms: buildBasicSearchTerms(fields), complete: false }
-          }
-          if (stopped) return
-          if (!result.complete && !loggedFailure) {
-            Logger.warn(
-              '[Search] Japanese readings unavailable; basic terms saved, retry scheduled'
-            )
-            loggedFailure = true
-          }
-          changed = commitSearchTerms(db, row, result.terms, result.complete) || changed
-          currentTitle = null
+      const rows = isPlaybackOnly() ? [] : pendingSearchRows(db)
+      // Retain the dictionary between batches, then free the worker on the next idle pass.
+      if (!rows.length) releaseWorker()
+      let firstInBatch = true
+      for (const row of rows) {
+        if (stopped || isPlaybackOnly()) break
+        currentTitle = row.title
+        failed = false
+        publish(firstInBatch)
+        firstInBatch = false
+        const fields: SearchFields = {
+          title: row.title,
+          artist: row.artist,
+          album: row.album,
+          fileName: row.fileName
         }
+        let result: WorkerResult
+        try {
+          result = await convert(fields)
+        } catch (error) {
+          if (!loggedFailure && !stopped)
+            Logger.warn('[Search] worker conversion failed', String(error))
+          loggedFailure = true
+          result = { requestId, terms: buildBasicSearchTerms(fields), complete: false }
+        }
+        if (stopped) return
+        if (!result.complete && !loggedFailure) {
+          Logger.warn('[Search] Japanese readings unavailable; basic terms saved, retry scheduled')
+          loggedFailure = true
+        }
+        changed = commitSearchTerms(db, row, result.terms, result.complete) || changed
+        currentTitle = null
       }
       if (changed && !stopped) onChanged()
     } catch (error) {

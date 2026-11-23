@@ -194,11 +194,7 @@ const stats = {
   useDarkText: false
 }
 const page = {
-  useAlbumArtwork: { value: true },
-  useLiquidBackground: { value: false },
   useVibrantPalette: { value: false },
-  useAmbientBackground: { value: false },
-  analyzedBackgrounds: new WeakSet(),
   coverUrl: { value: 'current-cover' },
   player: { currentQueueSong: { id: 'current' } },
   COVER_ANALYSIS_VERSION: 11,
@@ -229,20 +225,34 @@ vm.runInContext(
   ts.transpileModule(handlers, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText,
   page
 )
-const background = { classList: { contains: () => true }, getAttribute: () => 'current-cover' }
-const thumbnail = { classList: { contains: () => false }, getAttribute: () => 'current-cover' }
-page.extractCoverColors({ currentTarget: background })
-page.analyzeCoverImage(background)
-assert.equal(analyses, 1, 'load event plus cached-image watcher must analyze only once')
+const albumBackdrop = await readFile(
+  new URL(
+    '../../../src/renderer/src/components/player/AlbumArtworkBackground.vue',
+    import.meta.url
+  ),
+  'utf8'
+)
+const background = { naturalWidth: 1024, getAttribute: () => 'current-cover' }
+page.imageRef = { value: background }
+page.sourceReady = false
+page.paint = () => {}
+page.emit = (_event, image) => page.extractCoverColors(image)
+vm.runInContext(
+  ts.transpileModule(albumBackdrop.match(/function onLoad\(\): void {[^}]+}/)[0], {
+    compilerOptions: { target: ts.ScriptTarget.ES2022 }
+  }).outputText,
+  page
+)
+page.onLoad()
+page.onLoad()
+assert.equal(analyses, 1, 'a cached image and a subsequent load event report artwork only once')
 page.useDarkLyrics.value = true
-page.extractCoverColors({ currentTarget: thumbnail })
+page.analyzeCoverImage({ getAttribute: () => 'current-cover' })
 assert.equal(page.useDarkLyrics.value, true, 'thumbnail must not overwrite background contrast')
 const beforeStale = analyses
-page.extractCoverColors({ currentTarget: { ...background, getAttribute: () => 'previous-cover' } })
+page.extractCoverColors({ ...background, getAttribute: () => 'previous-cover' })
 assert.equal(analyses, beforeStale, 'late events from old artwork must be ignored')
 page.window.innerWidth = 600
 page.window.innerHeight = 1000
 assert.equal(analyses, beforeStale, 'window resize must not trigger analysis')
-console.log(
-  'Page load checks passed: ref timing, duplicate load, thumbnail ordering, stale source.'
-)
+console.log('Page load checks passed: duplicate load, thumbnail ordering, stale source.')

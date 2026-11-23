@@ -47,6 +47,7 @@ onMounted(() => {
 watch(() => [props.active, props.reducedMotion], syncActivity)
 watch(() => [props.energy, props.bass, props.beat, props.beatSequence], syncAudio)
 onBeforeUnmount(() => {
+  if (canvas.value) canvas.value.style.display = 'none'
   observer?.disconnect()
   document.removeEventListener('visibilitychange', syncActivity)
   canvas.value?.removeEventListener('webglcontextlost', lost)
