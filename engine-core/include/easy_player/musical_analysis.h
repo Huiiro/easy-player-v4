@@ -32,7 +32,10 @@ public:
             mono /= channels_;
             // Low-pass before decimation for chroma analysis.
             filtered_ += 0.35 * (mono - filtered_);
-            if (samples_++ % stride_ == 0) mono_.push_back(filtered_);
+            if (until_next_mono_sample_-- == 0) {
+                mono_.push_back(filtered_);
+                until_next_mono_sample_ = stride_ - 1;
+            }
             energy_ += energy / channels_;
             if (++in_hop_ == hop_) {
                 const double rms = std::sqrt(energy_ / hop_);
@@ -53,36 +56,46 @@ private:
         const double maximum = *std::max_element(envelope_.begin(), envelope_.end());
         const double mean = std::accumulate(envelope_.begin(), envelope_.end(), 0.0) / envelope_.size();
         if (maximum < 0.0005) return;
+        const double threshold = std::max(maximum * 0.16, mean * 1.5);
         std::vector<int> peaks;
         for (int i = 1; i + 1 < static_cast<int>(envelope_.size()); ++i) {
-            if (envelope_[i] < std::max(maximum * 0.16, mean * 1.5) ||
+            if (envelope_[i] < threshold ||
                 envelope_[i] < envelope_[i - 1] || envelope_[i] < envelope_[i + 1]) continue;
             if (!peaks.empty() && (i - peaks.back()) * hop_seconds < 0.18) {
                 if (envelope_[i] > envelope_[peaks.back()]) peaks.back() = i;
             } else peaks.push_back(i);
         }
         if (peaks.size() < 8) return;
+        struct Onset { double time, weight; };
+        std::vector<Onset> onsets;
+        onsets.reserve(peaks.size());
+        double weight = 0;
+        for (int peak : peaks) {
+            const double onset_weight = std::sqrt(envelope_[peak]);
+            onsets.push_back({peak * hop_seconds, onset_weight});
+            weight += onset_weight;
+        }
+        const double normalizer = std::max(weight, 1e-12);
+        const double span = (peaks.back() - peaks.front()) * hop_seconds;
         // Search continuous tempo candidates; a soft onset tolerance avoids
         // integer-lag quantization at tempos such as 123 BPM.
         double best = 0, period = 0, phase = 0;
         for (double bpm = 65; bpm <= 180; bpm += 0.25) {
             const double candidate = 60.0 / bpm;
-            for (int seed = 0; seed < std::min<int>(8, peaks.size()); ++seed) {
-                const double origin = peaks[seed] * hop_seconds;
-                double support = 0, weight = 0;
+            const double expected = std::max(1.0, span / candidate + 1);
+            for (int seed = 0; seed < 8; ++seed) {
+                const double origin = onsets[seed].time;
+                double support = 0;
                 int hits = 0;
-                for (int peak : peaks) {
-                    const double cycles = (peak * hop_seconds - origin) / candidate;
+                for (const auto& onset : onsets) {
+                    const double cycles = (onset.time - origin) / candidate;
                     const double distance = std::abs(cycles - std::round(cycles)) * candidate;
-                    const double w = std::sqrt(envelope_[peak]);
-                    weight += w;
                     const double match = std::max(0.0, 1.0 - distance / 0.045);
-                    support += w * match;
+                    support += onset.weight * match;
                     if (distance < 0.035) ++hits;
                 }
-                const double expected = std::max(1.0, (peaks.back() - peaks.front()) * hop_seconds / candidate + 1);
                 const double coverage = std::min(1.0, hits / expected);
-                const double score = support / std::max(weight, 1e-12) * coverage;
+                const double score = support / normalizer * coverage;
                 if (score > best) { best = score; period = candidate; phase = origin; }
             }
         }
@@ -114,7 +127,7 @@ private:
         result.first_bar = result.first_beat + strong * period;
     }
     void tonality(MusicalProfile& result) const {
-        constexpr int window = 2048;
+        static constexpr int window = 2048;
         if (mono_.size() < window * 4) return;
         const double rate = double(rate_) / stride_;
         std::array<double, 12> chroma{};
@@ -123,10 +136,16 @@ private:
             const double frequency = 440.0 * std::pow(2.0, (48 + n - 69) / 12.0);
             coefficients[n] = 2.0 * std::cos(6.283185307179586 * frequency / rate);
         }
+        static const auto hann = [] {
+            std::array<double, window> weights{};
+            for (int i = 0; i < window; ++i)
+                weights[i] = 0.5 - 0.5 * std::cos(6.283185307179586 * i / (window - 1));
+            return weights;
+        }();
         std::array<double, window> block{};
         for (size_t at = 0; at + window <= mono_.size(); at += window) {
             for (int i = 0; i < window; ++i)
-                block[i] = mono_[at + i] * (0.5 - 0.5 * std::cos(6.283185307179586 * i / (window - 1)));
+                block[i] = mono_[at + i] * hann[i];
             for (int n = 0; n < 48; ++n) {
                 double a = 0, b = 0;
                 for (double sample : block) { const double value = sample + coefficients[n] * a - b; b = a; a = value; }
@@ -160,7 +179,7 @@ private:
     }
     int rate_, channels_;
     double start_;
-    int hop_, stride_, samples_ = 0, in_hop_ = 0;
+    int hop_, stride_, until_next_mono_sample_ = 0, in_hop_ = 0;
     double energy_ = 0, previous_ = 0, filtered_ = 0;
     std::vector<double> envelope_, mono_;
 };

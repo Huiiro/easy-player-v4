@@ -693,8 +693,11 @@ export class AudioEngineManager {
     if (!this.engine) return null
     return this.engine.getAudioChain()
   }
-  getAudioAnalysis(includeSpectrum = false): unknown {
-    return this.engine?.getAudioAnalysis(includeSpectrum) ?? null
+  getAudioAnalysis(includeSpectrum = false, includeEqSpectrum = false): unknown {
+    return this.engine?.getAudioAnalysis(includeSpectrum, includeEqSpectrum) ?? null
+  }
+  setEqSpectrumAnalysisEnabled(enabled: boolean): boolean {
+    return this.engine?.setEqSpectrumAnalysisEnabled?.(enabled && !isPlaybackOnly()) === true
   }
   setAnalysisEnabled(enabled: boolean): boolean {
     return this.engine?.setAnalysisEnabled?.(enabled && !isPlaybackOnly()) === true

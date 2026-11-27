@@ -272,7 +272,10 @@ declare global {
         }>
         getStatus(): Promise<{ success: boolean; data?: PlaybackStatus; error?: string }>
         getAudioChain(): Promise<{ success: boolean; data?: AudioChainStatus; error?: string }>
-        getAudioAnalysis(includeSpectrum?: boolean): Promise<{
+        getAudioAnalysis(
+          includeSpectrum?: boolean,
+          includeEqSpectrum?: boolean
+        ): Promise<{
           success: boolean
           data?: {
             outputTimeMs: number
@@ -290,10 +293,14 @@ declare global {
             shortTermLufs: number
             integratedLufs: number
             spectrum?: number[]
+            eqSpectrum?: number[]
           }
           error?: string
         }>
         setAnalysisEnabled(enabled: boolean): Promise<{ success: boolean; error?: string }>
+        setEqSpectrumAnalysisEnabled(
+          enabled: boolean
+        ): Promise<{ success: boolean; error?: string }>
         attachRenderer(): Promise<{
           success: boolean
           data?: Array<{ reason: string; filePath: string; nextFilePath?: string }>

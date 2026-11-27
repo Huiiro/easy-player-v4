@@ -23,17 +23,25 @@ import { useEqEditor } from './useEqEditor'
 import { useMessage } from '@/components/ui/useMessage'
 import { BUILT_IN_EQ_PRESETS, useEqPresetStore } from '@/stores/player/eqPresetStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
+import { useUIStore } from '@/stores/ui/uiStore'
 import type { LegacyId } from './dspEffectFields'
 import type { DspNodeConfig } from '@/types/audio'
 
 type NodeId = DspNodeConfig['id']
 type ExtraId = 'output' | 'playback' | 'resampler' | 'transition'
 type Selection = NodeId | ExtraId
+const { active = true } = defineProps<{ active?: boolean }>()
 const player = usePlayerStore()
+const ui = useUIStore()
 const eqPresets = useEqPresetStore()
 const { t, te } = useI18n()
 const { success, warning } = useMessage()
 const selected = ref<Selection>('output')
+watch(
+  () => active && selected.value === 'eq',
+  (shown) => player.setEqSpectrumActive(shown),
+  { immediate: true }
+)
 const {
   selectedEqIndex,
   eqHistory,
@@ -408,7 +416,6 @@ async function restoreDefaults(): Promise<void> {
 }
 
 onMounted(() => {
-  player.setLoudnessAnalysisEnabled(true)
   player.setAudioControlAnalysisActive(true)
   void Promise.allSettled([
     player.loadOutputDeviceSettings(),
@@ -438,7 +445,7 @@ onBeforeUnmount(() => {
   stopEqComparison()
   if (clipGuardTimer) clearTimeout(clipGuardTimer)
   player.setAudioControlAnalysisActive(false)
-  player.setLoudnessAnalysisEnabled(false)
+  player.setEqSpectrumActive(false)
 })
 </script>
 
@@ -704,6 +711,8 @@ onBeforeUnmount(() => {
           <EqResponseGraph
             v-model:selected-index="selectedEqIndex"
             :bands="player.eqBands"
+            :spectrum="player.eqSpectrum"
+            :reduce-motion="ui.reduceMotion"
             :sample-rate="
               player.audioChain?.backendFormat.sampleRate ||
               player.audioChain?.sourceFormat.sampleRate ||
@@ -714,6 +723,9 @@ onBeforeUnmount(() => {
             @commit="commitEq"
           />
           <p class="text-[11px] text-text-l">{{ t('ap.v2EqGraphDesc') }}</p>
+          <p v-if="player.eqSpectrum" class="text-[11px] text-text-l">
+            {{ t('ap.v2EqOutputSpectrum') }}
+          </p>
           <div v-if="selectedEqBand" class="rounded-lg border border-border p-3">
             <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
               <span class="font-medium">

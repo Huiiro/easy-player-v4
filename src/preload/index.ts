@@ -154,13 +154,18 @@ const audioAPI = {
   getEngineInfo: () => ipcRenderer.invoke('audio:command', { action: 'getEngineInfo', params: {} }),
   getStatus: () => ipcRenderer.invoke('audio:command', { action: 'getStatus', params: {} }),
   getAudioChain: () => ipcRenderer.invoke('audio:command', { action: 'getAudioChain', params: {} }),
-  getAudioAnalysis: (includeSpectrum = true) =>
+  getAudioAnalysis: (includeSpectrum = true, includeEqSpectrum = false) =>
     ipcRenderer.invoke('audio:command', {
       action: 'getAudioAnalysis',
-      params: { includeSpectrum }
+      params: { includeSpectrum, includeEqSpectrum }
     }),
   setAnalysisEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('audio:command', { action: 'setAnalysisEnabled', params: { enabled } }),
+  setEqSpectrumAnalysisEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'setEqSpectrumAnalysisEnabled',
+      params: { enabled }
+    }),
   attachRenderer: () =>
     ipcRenderer.invoke('audio:command', { action: 'attachRenderer', params: {} }),
   switchPlaybackView: (enabled: boolean) => ipcRenderer.invoke('audio:switch-view', enabled),

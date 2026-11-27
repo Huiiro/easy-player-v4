@@ -71,6 +71,11 @@ if(SAMPLERATE_INCLUDE_DIR AND SAMPLERATE_LIBRARY AND SOUNDTOUCH_INCLUDE_DIR AND 
   endforeach()
   if(FFMPEG_TEST_INCLUDE AND FFMPEG_TEST_avcodec AND FFMPEG_TEST_avformat AND FFMPEG_TEST_avutil AND FFMPEG_TEST_swresample)
     include(../../engine-core/engine_core_sources.cmake)
+    add_executable(eq_spectrum_analysis_test eq_spectrum_analysis_test.cpp)
+    target_compile_features(eq_spectrum_analysis_test PRIVATE cxx_std_17)
+    target_include_directories(eq_spectrum_analysis_test PRIVATE ${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR} ${FFMPEG_TEST_INCLUDE})
+    target_link_libraries(eq_spectrum_analysis_test PRIVATE ${FFMPEG_TEST_avutil})
+    add_test(NAME eq_spectrum_analysis COMMAND eq_spectrum_analysis_test)
     add_executable(audio_backend_recovery_test audio_backend_recovery_test.cpp ${EASY_PLAYER_ENGINE_CORE_SOURCES})
     target_compile_features(audio_backend_recovery_test PRIVATE cxx_std_17)
     target_include_directories(audio_backend_recovery_test PRIVATE ${EASY_PLAYER_ENGINE_CORE_INCLUDE_DIR}

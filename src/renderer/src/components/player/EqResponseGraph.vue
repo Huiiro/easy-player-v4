@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { EqBand } from '@/types/audio'
 
@@ -7,6 +7,8 @@ const props = defineProps<{
   bands: EqBand[]
   sampleRate: number
   selectedIndex: number
+  spectrum?: number[]
+  reduceMotion?: boolean
 }>()
 const emit = defineEmits<{
   (event: 'update:selectedIndex', value: number): void
@@ -16,6 +18,7 @@ const emit = defineEmits<{
 }>()
 const { t } = useI18n()
 const svg = ref<SVGSVGElement | null>(null)
+const spectrumCanvas = ref<HTMLCanvasElement | null>(null)
 const hoveredIndex = ref<number | null>(null)
 let pendingDrag: { index: number; pointerId: number; clientX: number; clientY: number } | null =
   null
@@ -23,7 +26,7 @@ const draggingIndex = ref<number | null>(null)
 const width = 800
 const height = 300
 const left = 46
-const right = 20
+const right = 48
 const top = 18
 const bottom = 32
 const plotWidth = width - left - right
@@ -34,6 +37,12 @@ const minDisplayDb = -18
 const maxDisplayDb = 18
 const frequencyTicks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000]
 const gainTicks = [-12, -6, 0, 6, 12]
+const spectrumFloorDb = -72
+const spectrumTicks = [0, -18, -36, -54, -72]
+let displayedSpectrum = new Float32Array(0)
+let spectrumFrame = 0
+let lastSpectrumFrameTime = 0
+let spectrumColor = ''
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -59,6 +68,93 @@ function gainY(db: number): number {
 function yGain(y: number): number {
   return clamp(maxDisplayDb - ((y - top) / plotHeight) * (maxDisplayDb - minDisplayDb), -12, 12)
 }
+function spectrumY(db: number): number {
+  return top + (clamp(db, spectrumFloorDb, 0) / spectrumFloorDb) * plotHeight
+}
+
+function stopSpectrumAnimation(): void {
+  cancelAnimationFrame(spectrumFrame)
+  spectrumFrame = 0
+  lastSpectrumFrameTime = 0
+}
+
+function drawSpectrum(now: number): void {
+  spectrumFrame = 0
+  const context = spectrumCanvas.value?.getContext('2d')
+  const spectrum = props.spectrum
+  if (!context || !spectrum?.length || document.hidden) return
+
+  const elapsed = lastSpectrumFrameTime ? Math.max(0, now - lastSpectrumFrameTime) : 1000 / 60
+  lastSpectrumFrameTime = now
+  const attack = 1 - Math.exp(-elapsed / 16)
+  const release = 1 - Math.exp(-elapsed / 36)
+  let moving = false
+  const floor = spectrumY(spectrumFloorDb)
+  const step = plotWidth / Math.max(1, spectrum.length - 1)
+  context.clearRect(0, 0, width, height)
+  context.beginPath()
+  spectrum.forEach((level, index) => {
+    const target = clamp(level, spectrumFloorDb, 0)
+    const previous = displayedSpectrum[index]
+    const delta = target - previous
+    const animate = !props.reduceMotion && Math.abs(delta) > 0.2
+    const db = animate ? previous + delta * (delta > 0 ? attack : release) : target
+    moving ||= animate
+    displayedSpectrum[index] = db
+    // The native points use the same logarithmic spacing as the EQ axis.
+    const x = left + index * step
+    if (index === 0) context.moveTo(x, spectrumY(db))
+    else context.lineTo(x, spectrumY(db))
+  })
+  context.lineWidth = 1.4
+  context.strokeStyle = spectrumColor
+  context.globalAlpha = 0.8
+  context.stroke()
+  context.lineTo(width - right, floor)
+  context.lineTo(left, floor)
+  context.closePath()
+  context.fillStyle = spectrumColor
+  context.globalAlpha = 0.2
+  context.fill()
+  context.globalAlpha = 1
+  if (moving) spectrumFrame = requestAnimationFrame(drawSpectrum)
+  else lastSpectrumFrameTime = 0
+}
+
+watch(
+  [spectrumCanvas, () => props.spectrum, () => props.reduceMotion],
+  ([canvas, spectrum]) => {
+    if (!canvas) return
+    if (!spectrum?.length) {
+      stopSpectrumAnimation()
+      canvas.getContext('2d')?.clearRect(0, 0, width, height)
+      displayedSpectrum = new Float32Array(0)
+      return
+    }
+    const color = getComputedStyle(canvas).color
+    const colorChanged = color !== spectrumColor
+    spectrumColor = color
+    if (displayedSpectrum.length !== spectrum.length) {
+      stopSpectrumAnimation()
+      displayedSpectrum = Float32Array.from(spectrum, (level) => clamp(level, spectrumFloorDb, 0))
+      drawSpectrum(performance.now())
+      return
+    }
+    const changed =
+      colorChanged ||
+      spectrum.some(
+        (level, index) =>
+          Math.abs(clamp(level, spectrumFloorDb, 0) - displayedSpectrum[index]) > 0.2
+      )
+    if (props.reduceMotion) {
+      stopSpectrumAnimation()
+      if (changed) drawSpectrum(performance.now())
+    } else if (changed && !spectrumFrame) spectrumFrame = requestAnimationFrame(drawSpectrum)
+  },
+  { flush: 'post' }
+)
+onBeforeUnmount(stopSpectrumAnimation)
+
 function formatFrequency(frequency: number): string {
   return frequency >= 1000
     ? `${Number((frequency / 1000).toFixed(1))}k`
@@ -245,94 +341,112 @@ function nudge(index: number, event: KeyboardEvent): void {
 </script>
 
 <template>
-  <svg
-    ref="svg"
-    class="block w-full touch-none rounded-lg border border-border bg-bg-l/30"
-    :class="draggingIndex !== null ? 'cursor-grabbing' : hoveredIndex !== null ? 'cursor-grab' : ''"
-    :viewBox="`0 0 ${width} ${height}`"
-    role="group"
-    :aria-label="t('ap.v2EqGraph')"
-    @pointerdown="startDrag"
-    @pointermove="movePointer"
-    @pointerup="endDrag"
-    @pointercancel="endDrag"
-    @lostpointercapture="endDrag"
-    @pointerleave="hoveredIndex = null"
-    @dblclick="toggleBand"
-  >
-    <g v-for="db in gainTicks" :key="`gain-${db}`">
-      <line
-        :x1="left"
-        :x2="width - right"
-        :y1="gainY(db)"
-        :y2="gainY(db)"
-        stroke="var(--color-border)"
-        :stroke-width="db === 0 ? 1.4 : 0.7"
-      />
-      <text
-        :x="left - 8"
-        :y="gainY(db) + 4"
-        text-anchor="end"
-        fill="currentColor"
-        class="text-[11px] text-text-l"
-      >
-        {{ db > 0 ? `+${db}` : db }}
-      </text>
-    </g>
-    <g v-for="frequency in frequencyTicks" :key="`frequency-${frequency}`">
-      <line
-        :x1="frequencyX(frequency)"
-        :x2="frequencyX(frequency)"
-        :y1="top"
-        :y2="height - bottom"
-        stroke="var(--color-border)"
-        stroke-width="0.7"
-      />
-      <text
-        :x="frequencyX(frequency)"
-        :y="height - 10"
-        text-anchor="middle"
-        fill="currentColor"
-        class="text-[11px] text-text-l"
-      >
-        {{ formatFrequency(frequency) }}
-      </text>
-    </g>
-    <path :d="responsePath" fill="none" stroke="var(--color-primary)" stroke-width="2.5" />
-    <g
-      v-for="(point, index) in points"
-      :key="index"
-      :opacity="point.enabled ? 1 : selectedIndex === index ? 0.38 : 0.2"
+  <div class="relative overflow-hidden rounded-lg border border-border bg-bg-l/30">
+    <canvas
+      ref="spectrumCanvas"
+      class="pointer-events-none absolute inset-0 size-full text-text-l"
+      :width="width"
+      :height="height"
+      aria-hidden="true"
+    />
+    <svg
+      ref="svg"
+      class="relative block w-full touch-none"
+      :class="
+        draggingIndex !== null ? 'cursor-grabbing' : hoveredIndex !== null ? 'cursor-grab' : ''
+      "
+      :viewBox="`0 0 ${width} ${height}`"
+      role="group"
+      :aria-label="t('ap.v2EqGraph')"
+      @pointerdown="startDrag"
+      @pointermove="movePointer"
+      @pointerup="endDrag"
+      @pointercancel="endDrag"
+      @lostpointercapture="endDrag"
+      @pointerleave="hoveredIndex = null"
+      @dblclick="toggleBand"
     >
-      <circle
-        v-if="selectedIndex === index"
-        :cx="point.x"
-        :cy="point.y"
-        r="11"
-        fill="none"
-        stroke="var(--color-primary)"
-        stroke-width="1.5"
-      />
-      <circle
-        :cx="point.x"
-        :cy="point.y"
-        :r="selectedIndex === index ? 6 : 4.5"
-        :fill="point.enabled ? 'var(--color-primary)' : 'var(--color-bg)'"
-        :stroke="
-          point.enabled || selectedIndex === index ? 'var(--color-primary)' : 'var(--color-text-l)'
-        "
-        stroke-width="2"
-        tabindex="0"
-        role="slider"
-        :aria-label="`${formatFrequency(bands[index].frequencyHz)} Hz`"
-        :aria-valuemin="-12"
-        :aria-valuemax="12"
-        :aria-valuenow="bands[index].gainDb"
-        @focus="emit('update:selectedIndex', index)"
-        @keydown="nudge(index, $event)"
-        @keydown.enter.prevent="emit('toggle:band', index)"
-        @keydown.space.prevent="emit('toggle:band', index)"
-      />
-    </g>
-  </svg>
+      <g v-for="db in gainTicks" :key="`gain-${db}`">
+        <line
+          :x1="left"
+          :x2="width - right"
+          :y1="gainY(db)"
+          :y2="gainY(db)"
+          stroke="var(--color-border)"
+          :stroke-width="db === 0 ? 1.4 : 0.7"
+        />
+        <text
+          :x="left - 8"
+          :y="gainY(db) + 4"
+          text-anchor="end"
+          fill="currentColor"
+          class="text-[11px] text-text-l"
+        >
+          {{ db > 0 ? `+${db}` : db }}
+        </text>
+      </g>
+      <g v-for="frequency in frequencyTicks" :key="`frequency-${frequency}`">
+        <line
+          :x1="frequencyX(frequency)"
+          :x2="frequencyX(frequency)"
+          :y1="top"
+          :y2="height - bottom"
+          stroke="var(--color-border)"
+          stroke-width="0.7"
+        />
+        <text
+          :x="frequencyX(frequency)"
+          :y="height - 10"
+          text-anchor="middle"
+          fill="currentColor"
+          class="text-[11px] text-text-l"
+        >
+          {{ formatFrequency(frequency) }}
+        </text>
+      </g>
+      <g v-if="spectrum?.length" fill="currentColor" class="text-[10px] text-text-l">
+        <text v-for="db in spectrumTicks" :key="db" :x="width - right + 8" :y="spectrumY(db) + 3">
+          {{ db === 0 ? '0 dBFS' : db }}
+        </text>
+      </g>
+      <path :d="responsePath" fill="none" stroke="var(--color-primary)" stroke-width="2.5" />
+      <g
+        v-for="(point, index) in points"
+        :key="index"
+        :opacity="point.enabled ? 1 : selectedIndex === index ? 0.38 : 0.2"
+      >
+        <circle
+          v-if="selectedIndex === index"
+          :cx="point.x"
+          :cy="point.y"
+          r="11"
+          fill="none"
+          stroke="var(--color-primary)"
+          stroke-width="1.5"
+        />
+        <circle
+          :cx="point.x"
+          :cy="point.y"
+          :r="selectedIndex === index ? 6 : 4.5"
+          :fill="point.enabled ? 'var(--color-primary)' : 'var(--color-bg)'"
+          :stroke="
+            point.enabled || selectedIndex === index
+              ? 'var(--color-primary)'
+              : 'var(--color-text-l)'
+          "
+          stroke-width="2"
+          tabindex="0"
+          role="slider"
+          :aria-label="`${formatFrequency(bands[index].frequencyHz)} Hz`"
+          :aria-valuemin="-12"
+          :aria-valuemax="12"
+          :aria-valuenow="bands[index].gainDb"
+          @focus="emit('update:selectedIndex', index)"
+          @keydown="nudge(index, $event)"
+          @keydown.enter.prevent="emit('toggle:band', index)"
+          @keydown.space.prevent="emit('toggle:band', index)"
+        />
+      </g>
+    </svg>
+  </div>
 </template>

@@ -29,6 +29,7 @@ function run(source, mocks, globals = {}) {
 const listeners = new Map()
 const documentListeners = new Map()
 const timers = new Map()
+const eqSpectrumRequests = []
 let timerId = 0
 let nativeState = 'ready'
 const emit = (type, data) => {
@@ -67,7 +68,13 @@ const logs = { entries: [], addEntry() {} }
 const globals = {
   window: {
     api: {
-      audio: { setAnalysisEnabled: async () => ({ success: true }) },
+      audio: {
+        setAnalysisEnabled: async () => ({ success: true }),
+        setEqSpectrumAnalysisEnabled: async (enabled) => {
+          eqSpectrumRequests.push(enabled)
+          return { success: true }
+        }
+      },
       database: {
         command: async () => ({ success: true, data: [] }),
         savePlaybackSession: async () => ({ success: true, data: true }),
@@ -213,6 +220,46 @@ assert.equal(await systemAction('play'), true)
 assert.equal(player.isPlaying, true)
 assert.equal(await systemAction('play'), true, 'repeated play must not pause playback')
 assert.equal(player.isPlaying, true)
+
+let finishEqSpectrum
+bridge.getAudioAnalysis = (includeSpectrum, includeEqSpectrum) => {
+  assert.equal(includeSpectrum, false, 'the EQ does not request the player spectrum')
+  assert.equal(includeEqSpectrum, true)
+  return new Promise((resolve) => (finishEqSpectrum = resolve))
+}
+player.setEqSpectrumActive(true)
+assert.deepEqual(eqSpectrumRequests, [true])
+globals.document.hidden = true
+documentListeners.get('visibilitychange')()
+assert.deepEqual(eqSpectrumRequests, [true, false])
+const levels = [-55, -48, -62]
+finishEqSpectrum({ eqSpectrum: levels })
+await new Promise(setImmediate)
+assert.equal(player.eqSpectrum, undefined, 'a late frame must not appear after the window hides')
+assert.equal(timers.size, 0)
+
+globals.document.hidden = false
+documentListeners.get('visibilitychange')()
+assert.equal(eqSpectrumRequests.at(-1), true)
+finishEqSpectrum({ eqSpectrum: levels })
+await new Promise(setImmediate)
+assert.deepEqual(player.eqSpectrum, levels)
+assert.equal(timers.size, 1)
+assert.equal(await player.pause(), true)
+await Vue.nextTick()
+assert.equal(eqSpectrumRequests.at(-1), false)
+assert.equal(player.eqSpectrum, undefined)
+assert.equal(timers.size, 0)
+
+assert.equal(await player.play(), true)
+await Vue.nextTick()
+assert.equal(eqSpectrumRequests.at(-1), true)
+player.setEqSpectrumActive(false)
+assert.equal(eqSpectrumRequests.at(-1), false)
+finishEqSpectrum({ eqSpectrum: levels })
+await new Promise(setImmediate)
+assert.equal(player.eqSpectrum, undefined)
+assert.equal(timers.size, 0)
 
 let finishAnalysis
 bridge.getAudioAnalysis = () => new Promise((resolve) => (finishAnalysis = resolve))

@@ -393,12 +393,17 @@ export function registerIpcHandlers(
           case 'getAudioAnalysis':
             return {
               success: true,
-              data: engine.getAudioAnalysis(params?.includeSpectrum === true)
+              data: engine.getAudioAnalysis(
+                params?.includeSpectrum === true,
+                params?.includeEqSpectrum === true
+              )
             }
           case 'setLoudnessAnalysisEnabled':
             return { success: engine.setLoudnessAnalysisEnabled(params.enabled === true) }
           case 'setSpectrumAnalysisEnabled':
             return { success: engine.setSpectrumAnalysisEnabled(params.enabled === true) }
+          case 'setEqSpectrumAnalysisEnabled':
+            return { success: engine.setEqSpectrumAnalysisEnabled(params?.enabled === true) }
 
           case 'getTrackInfo': {
             return { success: false, error: t('useOpen') }

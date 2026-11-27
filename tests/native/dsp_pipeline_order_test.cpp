@@ -32,6 +32,22 @@ float run_gain_order(bool limiter_first) {
     return output[1];
 }
 
+bool monitor_precedes_master_volume() {
+    DspPipeline pipeline;
+    pipeline.set_preamp_db(6.0f, true);
+    pipeline.set_master_volume(0.0f);
+    pipeline.reset({48000, 16, 2});
+    pipeline.configure({48000, 16, 2}, {48000, 16, 2}, BackendType::WASAPI_EXCLUSIVE, 64);
+    RingBuffer monitor(2, 1);
+    const float input[] = {0.1f, -0.1f};
+    float output[2]{};
+    float preview[2]{};
+    pipeline.process(input, 1, 2, false, output, 1, 2, &monitor);
+    return monitor.read(preview, 1) == 1 &&
+           preview[0] > 0.19f && preview[1] < -0.19f &&
+           output[0] == 0.0f && output[1] == 0.0f;
+}
+
 std::vector<float> run_reverb(bool delay_enabled, bool delay_first) {
     constexpr int frames = 4096;
     DspPipeline pipeline;
@@ -58,6 +74,10 @@ std::vector<float> run_reverb(bool delay_enabled, bool delay_first) {
 }
 
 int main() {
+    if (!monitor_precedes_master_volume()) {
+        std::fprintf(stderr, "the EQ monitor must measure DSP output before master volume\n");
+        return 6;
+    }
     const float normal = run_gain_order(false);
     const float reordered = run_gain_order(true);
     if (!(normal > 0.49f && normal < 0.52f && reordered > 0.95f)) {

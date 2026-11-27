@@ -4,6 +4,7 @@
 #include "crossfeed_processor.h"
 #include "output_clip_guard.h"
 #include "partitioned_convolver.h"
+#include "ring_buffer.h"
 #include <samplerate.h>
 #include <soundtouch/SoundTouch.h>
 
@@ -399,7 +400,8 @@ public:
     // The source FIFO is owned by AudioEngine. This node only consumes the
     // frames libsamplerate reports, preserving SRC_STATE across callbacks.
     ProcessResult process(const float* input, int input_frames, int input_channels,
-                          bool end_of_input, float* output, int frames, int output_channels) noexcept {
+                          bool end_of_input, float* output, int frames, int output_channels,
+                          RingBuffer* pre_volume_monitor = nullptr) noexcept {
         ProcessResult result;
         const int samples = frames * output_channels;
         if (samples <= 0 || input_channels <= 0 || output_channels <= 0) return result;
@@ -470,8 +472,10 @@ public:
         } else if (matrix_frames > 0) {
             apply_channel_matrix(matrix_input, input_channels, output, output_channels, matrix_frames);
         }
-        if (!playback_only_.load(std::memory_order_acquire))
+        if (!playback_only_.load(std::memory_order_acquire)) {
             process_ordered_nodes(output, frames, output_channels);
+            if (pre_volume_monitor) pre_volume_monitor->write(output, frames, 0);
+        }
         apply_smoothed_gain(
             output,
             samples,

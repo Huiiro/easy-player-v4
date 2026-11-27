@@ -290,7 +290,7 @@ eventBus.on('openAudioControls', openAudioControls)
     </div>
   </header>
   <BaseDialog v-model="audioControlsVisible" :title="t('footer.audioControls')" width="max-w-6xl">
-    <AudioControlPanelV2 />
+    <AudioControlPanelV2 :active="audioControlsVisible" />
   </BaseDialog>
 </template>
 

@@ -1699,6 +1699,7 @@ export default {
     v2VolumeHelp: 'Final playback volume.',
     v2SpeedHelp: 'Set playback speed from 0.5× to 2×.',
     v2EqGraph: 'Equalizer frequency response',
+    v2EqOutputSpectrum: 'Live spectrum before master volume (dBFS)',
     v2EqGraphDesc:
       'Drag points to adjust the sound. Double-click to toggle a band, or use arrow keys to fine-tune.',
     v2SelectedBand: 'Band {number}',

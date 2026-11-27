@@ -1659,6 +1659,7 @@ export default {
     v2VolumeHelp: '最终播放音量。',
     v2SpeedHelp: '调整为原速的 0.5 至 2 倍。',
     v2EqGraph: '均衡器频率响应图',
+    v2EqOutputSpectrum: '主音量前的实时频谱（dBFS）',
     v2EqGraphDesc: '拖动圆点调整音效，双击启用或停用频段，方向键可微调。',
     v2SelectedBand: '频段 {number}',
     eqUndo: '撤销 EQ',

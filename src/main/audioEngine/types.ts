@@ -172,6 +172,7 @@ export type AudioCommandAction =
   | 'getAudioAnalysis'
   | 'setLoudnessAnalysisEnabled'
   | 'setSpectrumAnalysisEnabled'
+  | 'setEqSpectrumAnalysisEnabled'
   | 'getTrackInfo'
 
 export type AudioEventType =

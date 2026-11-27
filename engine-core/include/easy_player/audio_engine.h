@@ -1,4 +1,5 @@
 #pragma once
+#include <optional>
 #include "auto_mix.h"
 #include "vocal_mix.h"
 #include "audio_backend.h"
@@ -60,6 +61,7 @@ struct AudioAnalysisSnapshot {
     float short_term_lufs = -70.0f;
     float integrated_lufs = -70.0f;
     std::array<float, 64> spectrum{};
+    std::optional<std::array<float, 128>> eq_spectrum; // 20 Hz to 20 kHz in dBFS
 };
 
 struct AutoMixStemRequest {
@@ -169,7 +171,8 @@ public:
     bool is_playing() const { return state_ == EngineState::Playing; }
     int glitch_count() const { return glitch_count_.load(); }
     AudioChainStatus audio_chain_status() const;
-    AudioAnalysisSnapshot audio_analysis_snapshot() const;
+    AudioAnalysisSnapshot audio_analysis_snapshot(bool include_spectrum = true, bool include_eq_spectrum = false) const;
+    void set_eq_spectrum_analysis_enabled(bool enabled);
     void set_analysis_enabled(bool enabled) {
         {
             std::lock_guard<std::mutex> lock(analysis_wait_mutex_);
@@ -297,6 +300,7 @@ private:
     uint8_t dop_output_marker_ = 0x05;
     // Final PCM analysis tap: audio callback is sole producer and never waits.
     std::unique_ptr<RingBuffer> analysis_ring_buffer_;
+    std::unique_ptr<RingBuffer> eq_monitor_ring_buffer_;
     std::atomic<uint64_t> analysis_dropped_frames_{0};
     std::vector<float> analysis_work_buffer_;
     std::unique_ptr<std::thread> analysis_thread_;
@@ -310,8 +314,8 @@ private:
     std::atomic<float> analysis_onset_strength_{0.0f};
     std::atomic<uint64_t> analysis_beat_sequence_{0};
     std::atomic<float> analysis_bpm_{0.0f};
-    std::atomic<float> analysis_momentary_lufs_{-70.0f};
-    std::atomic<float> analysis_short_term_lufs_{-70.0f};
+    std::atomic<double> analysis_momentary_energy_{0.0};
+    std::atomic<double> analysis_short_term_energy_{0.0};
     std::atomic<float> analysis_integrated_lufs_{-70.0f};
     std::atomic<bool> playback_only_{false};
     std::atomic<bool> analysis_enabled_{false};
@@ -319,6 +323,13 @@ private:
     std::atomic<bool> spectrum_analysis_enabled_{false};
     std::atomic<uint64_t> analysis_reset_generation_{0};
     std::array<std::atomic<float>, 64> analysis_spectrum_{};
+    // Odd revisions request EQ spectrum analysis. Changes invalidate work
+    // from the previous subscription, even if the graph closes and reopens
+    // between two PCM blocks.
+    std::atomic<uint64_t> eq_spectrum_request_{0};
+    mutable std::mutex eq_spectrum_mutex_;
+    decltype(AudioAnalysisSnapshot::eq_spectrum) eq_spectrum_;
+    uint64_t eq_spectrum_reset_generation_ = 0;
     // Preallocated source-format buffer. The audio callback never allocates;
     // it reads here before channel conversion/DSP writes backend-format PCM.
     std::vector<float> source_work_buffer_;

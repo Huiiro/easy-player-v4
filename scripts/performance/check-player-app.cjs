@@ -20,7 +20,8 @@ require.cache[oldPath] = {
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 const errors = []
 const presentations = []
-const checkPeaks = process.env.PERF_PLAYER_PEAKS === '1'
+const compareNativeLyrics = process.env.PERF_COMPARE_NATIVE_LYRICS === '1'
+const checkPeaks = compareNativeLyrics || process.env.PERF_PLAYER_PEAKS === '1'
 app.on('browser-window-created', (_event, window) => {
   window.once('show', () => {
     presentations.push({
@@ -44,15 +45,34 @@ async function samplePlaybackPeaks(js, phase) {
   app.getAppMetrics()
   for (let i = 0; i < 240; i++) {
     await sleep(250)
-    const processes = app
-      .getAppMetrics()
-      .map(({ type, cpu }) => ({ type, cpu: cpu.percentCPUUsage }))
-    samples.push({ cpu: processes.reduce((total, entry) => total + entry.cpu, 0), processes })
+    const metrics = app.getAppMetrics()
+    const processes = metrics.map(({ type, cpu }) => ({ type, cpu: cpu.percentCPUUsage }))
+    const sample = { cpu: processes.reduce((total, entry) => total + entry.cpu, 0), processes }
+    if (compareNativeLyrics) {
+      sample.workingMiB =
+        metrics.reduce((sum, entry) => sum + entry.memory.workingSetSize, 0) / 1024
+      sample.privateMiB =
+        metrics.reduce((sum, entry) => sum + (entry.memory.privateBytes || 0), 0) / 1024
+    }
+    samples.push(sample)
   }
   const end = (await js('window.api.audio.getStatus()')).data
   if (end.positionMs - start.positionMs < 59000 || end.glitchCount !== start.glitchCount)
     throw Error('Interrupted playback during ' + phase)
   const values = samples.map((sample) => sample.cpu).sort((a, b) => a - b)
+  if (compareNativeLyrics) {
+    return {
+      electron: process.versions.electron,
+      sampleSeconds: (end.positionMs - start.positionMs) / 1000,
+      glitches: end.glitchCount - start.glitchCount,
+      avgWorkingMiB:
+        samples.reduce((total, sample) => total + sample.workingMiB, 0) / samples.length,
+      avgPrivateMiB:
+        samples.reduce((total, sample) => total + sample.privateMiB, 0) / samples.length,
+      avgElectronCpu: values.reduce((total, cpu) => total + cpu, 0) / values.length,
+      memorySamples: samples.length
+    }
+  }
   return {
     mean: values.reduce((total, cpu) => total + cpu, 0) / values.length,
     p95: values[Math.ceil(values.length * 0.95) - 1],
@@ -154,7 +174,7 @@ async function run() {
       song.cover = cover
       database.prepare('UPDATE song SET cover = ?, lrc = ? WHERE id = ?').run(cover, lrc, song.id)
     }
-    if (checkPeaks) {
+    if (checkPeaks && !compareNativeLyrics) {
       const timed = Array.from({ length: 100 }, (_, line) => {
         const start = line * 2000
         const words = Array.from(
@@ -170,6 +190,10 @@ async function run() {
     await js(`${p}.rhythmVisualConfig.enabled = false`)
   }
   database.close()
+  if (compareNativeLyrics) {
+    const result = await js("window.api.audio.selectOutputDevice('wasapi_shared', 'default')")
+    if (!result?.success) throw Error('Could not select WASAPI shared')
+  }
   await js(`${p}.setQueue(${JSON.stringify(songs)}); ${p}.setVolume(0)`)
   const playing = await js(`${p}.playQueueItem(0)`)
   if (!playing) throw Error('Playback failed')
@@ -180,7 +204,7 @@ async function run() {
       `${ui}.lyricSourceMode='database'; ${ui}.showPlayerSpectrum=false; ${ui}.setPlayerBgType('album'); ${ui}.showPlayer=true`
     )
     const report = {}
-    for (const [index, phase] of ['line', 'word'].entries()) {
+    for (const [index, phase] of (compareNativeLyrics ? ['line'] : ['line', 'word']).entries()) {
       if (index && !(await js(`${p}.playQueueItem(${index})`))) throw Error('Track switch failed')
       await sleep(2500)
       const rows = await js("document.querySelectorAll('.lyric-line').length")
@@ -189,7 +213,10 @@ async function run() {
       report[phase] = await samplePlaybackPeaks(js, phase)
     }
     fs.writeFileSync(
-      path.join(buildDir, 'playback-panel-peaks.json'),
+      path.join(
+        buildDir,
+        compareNativeLyrics ? 'playback-electron-lyrics.json' : 'playback-panel-peaks.json'
+      ),
       JSON.stringify(report, null, 2)
     )
     await js('window.api.audio.stop()')

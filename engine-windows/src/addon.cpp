@@ -284,6 +284,7 @@ public:
             InstanceMethod("getAudioAnalysis", &AudioEngineWrapper::GetAudioAnalysis),
             InstanceMethod("setLoudnessAnalysisEnabled", &AudioEngineWrapper::SetLoudnessAnalysisEnabled),
             InstanceMethod("setSpectrumAnalysisEnabled", &AudioEngineWrapper::SetSpectrumAnalysisEnabled),
+            InstanceMethod("setEqSpectrumAnalysisEnabled", &AudioEngineWrapper::SetEqSpectrumAnalysisEnabled),
             InstanceMethod("setAnalysisEnabled", &AudioEngineWrapper::SetAnalysisEnabled),
             InstanceMethod("setPlaybackOnly", &AudioEngineWrapper::SetPlaybackOnly),
             InstanceMethod("getGlitchCount", &AudioEngineWrapper::GetGlitchCount),
@@ -1157,7 +1158,10 @@ private:
         return obj;
     }
     Napi::Value GetAudioAnalysis(const Napi::CallbackInfo& info) {
-        const auto value = engine_->audio_analysis_snapshot(); auto obj = Napi::Object::New(info.Env());
+        const bool include_spectrum = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        const bool include_eq_spectrum = info.Length() > 1 && info[1].IsBoolean() && info[1].As<Napi::Boolean>().Value();
+        const auto value = engine_->audio_analysis_snapshot(include_spectrum, include_eq_spectrum);
+        auto obj = Napi::Object::New(info.Env());
         obj.Set("outputTimeMs", Napi::Number::New(info.Env(), value.output_time_ms)); obj.Set("analysisTimeMs", Napi::Number::New(info.Env(), value.analysis_time_ms)); obj.Set("analysisLatencyMs", Napi::Number::New(info.Env(), value.analysis_latency_ms)); obj.Set("rms", Napi::Number::New(info.Env(), value.rms));
         obj.Set("lowEnergy", Napi::Number::New(info.Env(), value.low_energy)); obj.Set("onsetStrength", Napi::Number::New(info.Env(), value.onset_strength));
         obj.Set("droppedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.dropped_frames)));
@@ -1168,17 +1172,27 @@ private:
         obj.Set("momentaryLufs", Napi::Number::New(info.Env(), value.momentary_lufs));
         obj.Set("shortTermLufs", Napi::Number::New(info.Env(), value.short_term_lufs));
         obj.Set("integratedLufs", Napi::Number::New(info.Env(), value.integrated_lufs));
-        const bool include_spectrum = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
         if (include_spectrum) {
             auto spectrum = Napi::Array::New(info.Env(), value.spectrum.size());
             for (size_t i = 0; i < value.spectrum.size(); ++i) spectrum.Set(i, Napi::Number::New(info.Env(), value.spectrum[i]));
             obj.Set("spectrum", spectrum);
+        }
+        if (value.eq_spectrum) {
+            auto spectrum = Napi::Array::New(info.Env(), value.eq_spectrum->size());
+            for (size_t i = 0; i < value.eq_spectrum->size(); ++i)
+                spectrum.Set(i, Napi::Number::New(info.Env(), (*value.eq_spectrum)[i]));
+            obj.Set("eqSpectrum", spectrum);
         }
         return obj;
     }
     Napi::Value SetAnalysisEnabled(const Napi::CallbackInfo& info) {
         const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
         engine_->set_analysis_enabled(enabled);
+        return Napi::Boolean::New(info.Env(), true);
+    }
+    Napi::Value SetEqSpectrumAnalysisEnabled(const Napi::CallbackInfo& info) {
+        const bool enabled = info.Length() > 0 && info[0].IsBoolean() && info[0].As<Napi::Boolean>().Value();
+        engine_->set_eq_spectrum_analysis_enabled(enabled);
         return Napi::Boolean::New(info.Env(), true);
     }
     Napi::Value SetPlaybackOnly(const Napi::CallbackInfo& info) {

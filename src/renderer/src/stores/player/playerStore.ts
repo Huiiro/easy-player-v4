@@ -1781,12 +1781,18 @@ export const usePlayerStore = defineStore('player', () => {
   async function refreshAudioChain(): Promise<void> {
     audioChain.value = await audioBridge.getAudioChain()
   }
-  async function refreshAudioAnalysis(includeSpectrum = false): Promise<void> {
+  async function refreshAudioAnalysis(
+    includeSpectrum = false,
+    includeEqSpectrum = false
+  ): Promise<void> {
     if (ui.extremePlayback) return
-    const snapshot = await audioBridge.getAudioAnalysis(includeSpectrum)
+    const revision = eqSpectrumRevision
+    const snapshot = await audioBridge.getAudioAnalysis(includeSpectrum, includeEqSpectrum)
     if (!snapshot || ui.extremePlayback) return
+    const { eqSpectrum: levels, ...meters } = snapshot
+    if (includeEqSpectrum && revision === eqSpectrumRevision) eqSpectrum.value = levels
     audioAnalysis.value = {
-      ...snapshot,
+      ...meters,
       clipGuardLimitedFrames: snapshot.clipGuardLimitedFrames ?? 0,
       clipGuardReductionDb: snapshot.clipGuardReductionDb ?? 0,
       spectrum: snapshot.spectrum ?? audioAnalysis.value.spectrum
@@ -1897,7 +1903,12 @@ export const usePlayerStore = defineStore('player', () => {
   let eventsSubscribed = false
   let analysisTimer: ReturnType<typeof setTimeout> | undefined
   const audioControlAnalysisPollingRate = 2
+  const eqSpectrumPollingRate = 30
+  const eqSpectrum = shallowRef<number[]>()
   let audioControlAnalysisActive = false
+  let eqSpectrumRequested = false
+  let audioAnalysisIncludesEqSpectrum = false
+  let eqSpectrumRevision = 0
   let playerPanelAnalysisPollingRate = 0
   let playerPanelAnalysisIncludesSpectrum = false
   let audioAnalysisPollingRate = 0
@@ -1919,7 +1930,11 @@ export const usePlayerStore = defineStore('player', () => {
     )
       return
     analysisRefreshInFlight = true
-    void refreshAudioAnalysis(audioAnalysisIncludesSpectrum).finally(() => {
+    const requestStarted = performance.now()
+    void refreshAudioAnalysis(
+      audioAnalysisIncludesSpectrum,
+      audioAnalysisIncludesEqSpectrum
+    ).finally(() => {
       analysisRefreshInFlight = false
       if (
         !eventsSubscribed ||
@@ -1929,13 +1944,14 @@ export const usePlayerStore = defineStore('player', () => {
         audioAnalysisPollingRate <= 0
       )
         return
-      analysisTimer = setTimeout(
-        () => {
-          analysisTimer = undefined
-          startAudioAnalysisPolling()
-        },
-        Math.round(1000 / audioAnalysisPollingRate)
-      )
+      const interval = 1000 / audioAnalysisPollingRate
+      const delay = audioAnalysisIncludesEqSpectrum
+        ? Math.max(0, interval - (performance.now() - requestStarted))
+        : interval
+      analysisTimer = setTimeout(() => {
+        analysisTimer = undefined
+        startAudioAnalysisPolling()
+      }, Math.round(delay))
     })
   }
 
@@ -1957,17 +1973,42 @@ export const usePlayerStore = defineStore('player', () => {
     updateAudioAnalysisPolling()
   }
 
+  function setEqSpectrumActive(active: boolean): void {
+    if (eqSpectrumRequested === active) return
+    eqSpectrumRequested = active
+    updateAudioAnalysisPolling()
+  }
+
+  watch(state, () => {
+    if (eqSpectrumRequested) updateAudioAnalysisPolling()
+  })
+
   function updateAudioAnalysisPolling(): void {
+    const includeEqSpectrum =
+      eqSpectrumRequested &&
+      eventsSubscribed &&
+      documentVisible &&
+      !ui.extremePlayback &&
+      state.value === 'playing'
     const normalized =
       ui.extremePlayback || !documentVisible
         ? 0
         : Math.max(
             playerPanelAnalysisPollingRate,
-            audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0
+            audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0,
+            includeEqSpectrum ? eqSpectrumPollingRate : 0
           )
     const includeSpectrum = normalized > 0 && playerPanelAnalysisIncludesSpectrum
     void window.api.audio.setAnalysisEnabled(normalized > 0)
+    const eqSpectrumChanged = audioAnalysisIncludesEqSpectrum !== includeEqSpectrum
+    if (eqSpectrumChanged) {
+      audioAnalysisIncludesEqSpectrum = includeEqSpectrum
+      eqSpectrumRevision++
+      eqSpectrum.value = undefined
+      void window.api.audio.setEqSpectrumAnalysisEnabled(includeEqSpectrum)
+    }
     if (
+      !eqSpectrumChanged &&
       audioAnalysisPollingRate === normalized &&
       audioAnalysisIncludesSpectrum === includeSpectrum
     )
@@ -2134,6 +2175,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (!statistics.ready) void statistics.refresh().catch(() => undefined)
     void loadRecommendationScores()
     document.addEventListener('visibilitychange', handleDocumentVisibility)
+    if (eqSpectrumRequested) updateAudioAnalysisPolling()
     startAudioAnalysisPolling()
     unsubs.push(
       audioBridge.onStateChanged((data) => {
@@ -2194,6 +2236,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function unsubscribe(): void {
     eventsSubscribed = false
+    if (audioAnalysisIncludesEqSpectrum) updateAudioAnalysisPolling()
     document.removeEventListener('visibilitychange', handleDocumentVisibility)
     flushHistory(true, 'closed')
     unsubs.forEach((fn) => fn())
@@ -2275,6 +2318,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentDeviceId,
     audioChain,
     audioAnalysis,
+    eqSpectrum,
     rhythmVisualConfig,
     preampEnabled,
     preampDb,
@@ -2388,6 +2432,7 @@ export const usePlayerStore = defineStore('player', () => {
     setLoudnessAnalysisEnabled,
     setAudioAnalysisPollingRate,
     setAudioControlAnalysisActive,
+    setEqSpectrumActive,
     initializePersistentState,
     loadRhythmVisualConfig,
     saveRhythmVisualConfig,

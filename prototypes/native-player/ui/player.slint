@@ -1,0 +1,115 @@
+import { Button, Slider } from "std-widgets.slint";
+
+export component Player inherits Window {
+    title: "Easy Player · Native";
+    preferred-width: 840px;
+    preferred-height: 620px;
+    min-width: 460px;
+    min-height: 400px;
+    background: #111831;
+    default-font-size: 14px;
+
+    in property <string> track: "尚未打开音频";
+    in property <string> status: "打开本地音频以开始播放";
+    in property <string> time-label: "0:00 / 0:00";
+    in property <float> position: 0;
+    in property <bool> loaded: false;
+    in property <bool> playing: false;
+    in property <[string]> lines;
+    in property <int> current-line: -1;
+    out property <float> scroll-offset: lyric-panel.offset / 1px;
+    private property <bool> adjusting-progress: false;
+    callback open-audio();
+    callback open-lyrics();
+    callback toggle-play();
+    callback seek(float);
+
+    changed position => {
+        if !root.adjusting-progress {
+            progress-slider.value = root.position;
+        }
+    }
+
+    VerticalLayout {
+        padding-left: 34px;
+        padding-right: 34px;
+        padding-top: 22px;
+        padding-bottom: 20px;
+        spacing: 12px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            Text {
+                text: "Easy Player";
+                font-size: 24px;
+                font-weight: 700;
+                color: #f3f6ff;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
+            }
+            Button { text: "打开音频"; clicked => { root.open-audio(); } }
+            Button { text: "选择歌词"; enabled: root.loaded; clicked => { root.open-lyrics(); } }
+        }
+
+        lyric-panel := Rectangle {
+            vertical-stretch: 1;
+            background: #192341;
+            border-radius: 16px;
+            clip: true;
+
+            property <length> row-height: 56px;
+            property <length> offset: max(0, root.current-line) * self.row-height;
+            property <int> first: max(0, floor((self.offset - self.height / 2) / self.row-height) - 1);
+            property <int> visible-count: min(root.lines.length - self.first, ceil(self.height / self.row-height) + 3);
+            animate offset { duration: 280ms; easing: ease-out; }
+
+            if root.lines.length == 0 : Text {
+                text: root.loaded ? "暂无同步歌词" : "歌词";
+                color: #aab6d2;
+                font-size: 18px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                width: parent.width;
+                height: parent.height;
+            }
+
+            for slot in lyric-panel.visible-count : Text {
+                property <int> line-index: lyric-panel.first + slot;
+                property <bool> active: self.line-index == root.current-line;
+                x: 30px;
+                y: (parent.height - lyric-panel.row-height) / 2 + self.line-index * lyric-panel.row-height - lyric-panel.offset;
+                width: parent.width - 60px;
+                height: lyric-panel.row-height;
+                text: root.lines[self.line-index];
+                font-size: self.active ? 23px : 17px;
+                font-weight: self.active ? 700 : 400;
+                color: self.active ? #f3f6ff : #9eaaca;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                wrap: word-wrap;
+                overflow: elide;
+            }
+        }
+
+        Text { text: root.track; font-size: 17px; color: #f3f6ff; overflow: elide; }
+        HorizontalLayout {
+            spacing: 12px;
+            Button { text: root.playing ? "暂停" : "播放"; enabled: root.loaded; clicked => { root.toggle-play(); } }
+            progress-slider := Slider {
+                enabled: root.loaded;
+                minimum: 0;
+                maximum: 1;
+                step: 0.01;
+                horizontal-stretch: 1;
+                changed(value) => { root.adjusting-progress = true; }
+                released(value) => {
+                    root.adjusting-progress = false;
+                    root.seek(value);
+                    self.value = root.position;
+                }
+            }
+            Text { text: root.time-label; color: #d7dff3; vertical-alignment: center; }
+        }
+        Text { text: root.status; color: #aab6d2; overflow: elide; }
+    }
+}
