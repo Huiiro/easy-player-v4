@@ -43,10 +43,28 @@ const handlers = new Map(),
   trackedDirectories = [],
   changes = [],
   messages = [],
+  playback = [],
+  importedSongs = new Map(),
   listeners = new Map()
 let mount, unmount, releaseAudio
 let pauseAudio = true
-const ui = { ignoreShortSongs: true }
+const ui = { ignoreShortSongs: true, playOnFileDrop: false }
+const player = {
+  queue: [{ id: 0 }],
+  addToQueue(songs, insertAfterCurrent) {
+    assert.equal(insertAfterCurrent, true)
+    playback.push('add')
+    this.queue.splice(1, 0, ...songs.filter((song) => !this.queue.some(({ id }) => id === song.id)))
+  },
+  async playQueueItem(index) {
+    playback.push(this.queue[index].audio)
+    return true
+  }
+}
+function resolvedSong(file, options) {
+  if (!importedSongs.has(file)) importedSongs.set(file, { id: importedSongs.size + 1, audio: file })
+  options.onSong?.(importedSongs.get(file).id, file)
+}
 const sender = { isDestroyed: () => false, send: (channel) => changes.push(channel) }
 const event = { sender }
 const dropMessages = load('src/renderer/src/i18n/locales/zh.ts').default.dropImport
@@ -66,13 +84,20 @@ const mocks = {
     trackMusicDirectory: (directory) => trackedDirectories.push(directory)
   },
   '../service/applicationShutdown': { isApplicationShuttingDown: () => false },
+  '../database/repository/songs': {
+    getSongsByIds: (ids) =>
+      Array.from(ids, (id) => [...importedSongs.values()].find((song) => song.id === id))
+  },
   '../service/scanService': {
     SUPPORTED_EXTENSIONS: formats.SUPPORTED_AUDIO_EXTENSIONS,
-    async scanMusicDirectory(directory, _callback, files, ignoreShortSongs) {
+    async scanMusicDirectory(directory, _callback, files, ignoreShortSongs, options) {
       if (files === undefined) {
         calls.push({ kind: 'folder', directory, ignoreShortSongs })
         if (path.basename(directory) === 'unreadable') throw Error('Folder inaccessible')
         const count = path.basename(directory) === 'empty' ? 0 : 2
+        for (let index = 0; index < count; index++) {
+          resolvedSong(path.join(directory, index + '.flac'), options)
+        }
         _callback?.(count, count, count, 0)
         return { added: count, duplicates: 0, skipped: 0, total: count }
       }
@@ -88,6 +113,11 @@ const mocks = {
         ? files.filter((file) => path.basename(file) === 'short.wav').length
         : 0
       const failed = files.filter((file) => path.basename(file) === 'invalid.wav').length
+      for (const file of files) {
+        if (path.basename(file) === 'invalid.wav') continue
+        if (ignoreShortSongs && path.basename(file) === 'short.wav') continue
+        resolvedSong(file, options)
+      }
       return {
         added: files.length - duplicates - skipped - failed,
         duplicates,
@@ -133,9 +163,10 @@ const document = {
 const api = {
   audio: { getFilePath: (file) => file.path },
   library: {
-    importLocalMusicFiles: (files, ignore) => invoke('library:import-local-files', files, ignore),
-    scanLocalMusicFolder: (directory, ignore) =>
-      invoke('library:scan-local-folder', directory, ignore)
+    importLocalMusicFiles: (files, ignore, includeSongs) =>
+      invoke('library:import-local-files', files, ignore, includeSongs),
+    scanLocalMusicFolder: (directory, ignore, includeSongs) =>
+      invoke('library:scan-local-folder', directory, ignore, includeSongs)
   },
   plugins: { importPackage: (file) => invoke('plugins:import', file) },
   files: { importLibrary: (file) => invoke('files:import-library', file) }
@@ -153,6 +184,7 @@ const hook = load(
     },
     'vue-i18n': { useI18n: () => ({ t }) },
     '@/stores/ui/uiStore': { useUIStore: () => ui },
+    '@/stores/player/playerStore': { usePlayerStore: () => player },
     '@/utils/eventBus': { emit: (name) => changes.push(name) },
     '@/components/ui/useMessage': {
       useMessage: () =>
@@ -316,6 +348,41 @@ assert.deepEqual(
   'Duplicate-only drops do not claim success or failure'
 )
 assert(changes.includes('library:scan-progress'), 'Folder imports reuse scan progress')
+assert.deepEqual(playback, [], 'The default drop behavior only imports to the library')
+ui.playOnFileDrop = true
+drop(['duplicate.mp3', 'disc-b/second.flac', 'third.mp3', 'short.wav', 'invalid.wav'])
+await flush()
+const dropPath = (...parts) => path.resolve('build/drop-fixture', ...parts)
+assert.deepEqual(playback, ['add', dropPath('duplicate.mp3')])
+assert.deepEqual(
+  player.queue.map((song) => song.audio),
+  [undefined, dropPath('duplicate.mp3'), dropPath('disc-b', 'second.flac'), dropPath('third.mp3')],
+  'Enabled drops keep the queue, preserve file order across directories and omit unusable imports'
+)
+drop(['duplicate.mp3'])
+await flush()
+assert.deepEqual(playback.slice(-2), ['add', dropPath('duplicate.mp3')])
+assert.equal(player.queue.length, 4, 'An already queued track plays without being added twice')
+drop(['Album', 'invalid.wav'], ['Files'], ['Album'])
+await flush()
+assert.deepEqual(playback.slice(-2), ['add', dropPath('Album', '0.flac')])
+assert.deepEqual(
+  player.queue.slice(1, 3).map((song) => song.audio),
+  [dropPath('Album', '0.flac'), dropPath('Album', '1.flac')],
+  'Dropped folders play their imported songs'
+)
+const beforeUnplayable = playback.length
+drop(['empty', 'short.wav', 'invalid.wav', 'theme.EPP'], ['Files'], ['empty'])
+await flush()
+assert.equal(playback.length, beforeUnplayable, 'Drops without usable audio leave playback alone')
+ui.playOnFileDrop = false
+drop(['next.flac'])
+await flush()
+assert.equal(
+  playback.length,
+  beforeUnplayable,
+  'Switching the setting off takes effect on the next drop'
+)
 await assert.rejects(invoke('library:import-local-files', ['relative.mp3']))
 await assert.rejects(invoke('library:import-local-files', [path.resolve('not-audio.epp')]))
 assert.equal((await invoke('plugins:import', path.resolve('bad.txt'))).success, false)

@@ -69,6 +69,22 @@ export function getSong(id: number): Song | null {
   return row ? attachTags([mapSong(row)])[0] : null
 }
 
+export function getSongsByIds(ids: number[]): Song[] {
+  if (!ids.length) return []
+  const db = getDatabase()
+  const songsById = new Map<number, Song>()
+  const uniqueIds = [...new Set(ids)]
+  // Keep both the song query and tag lookups within SQLite's parameter limit.
+  for (let offset = 0; offset < uniqueIds.length; offset += 500) {
+    const batch = uniqueIds.slice(offset, offset + 500)
+    const rows = db
+      .prepare(`SELECT ${songColumns} FROM song WHERE id IN (${batch.map(() => '?').join(',')})`)
+      .all(...batch) as SongRow[]
+    for (const song of attachTags(rows.map(mapSong))) songsById.set(song.id, song)
+  }
+  return uniqueIds.map((id) => songsById.get(id)).filter((song) => song !== undefined)
+}
+
 export function updateSongCoverAnalysis(
   id: number,
   analysis: {

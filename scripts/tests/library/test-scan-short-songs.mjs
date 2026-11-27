@@ -13,6 +13,7 @@ const durations = [0, 4.999, 5, 5.001, undefined]
 const files = durations.map((_, index) => path.join(root, `${index}.mp3`))
 let imported = []
 const importedGenres = []
+const existingAudio = new Map()
 let covers = 0
 const audioFormats = {}
 vm.runInNewContext(
@@ -36,12 +37,12 @@ const mocks = {
   '../database': {
     getDatabase: () => ({
       prepare: (sql) => ({
-        get: () => (sql.includes('FROM folder') ? { id: 1 } : undefined),
+        get: (file) => (sql.includes('FROM folder') ? { id: 1 } : existingAudio.get(file)),
         run: (song) => {
           assert.ok(sql.includes('INSERT OR IGNORE INTO song'))
           importedGenres.push(song.genre)
           imported.push(song.audio)
-          return { changes: 1 }
+          return { changes: 1, lastInsertRowid: imported.length }
         }
       })
     })
@@ -97,6 +98,19 @@ assert.equal(result.added, 3)
 assert.equal(result.duplicates, 0)
 assert.equal(result.skipped, 2)
 assert.deepEqual(progress.at(-1), [5, 5, 3, 0], 'Skipped songs still advance scan progress')
+
+existingAudio.set(files[2], { id: 42 })
+const acceptedSongs = []
+const selectedResult = await exports.scanMusicDirectory(root, undefined, files.slice(1, 4), true, {
+  onSong: (id, file) => acceptedSongs.push([id, file])
+})
+assert.deepEqual(acceptedSongs, [
+  [42, files[2]],
+  [4, files[3]]
+])
+assert.equal(selectedResult.duplicates, 1)
+assert.equal(selectedResult.skipped, 1)
+existingAudio.clear()
 
 imported = []
 covers = 0
@@ -218,6 +232,9 @@ let dialogArgs
 const scanCalls = []
 const ipcExports = {}
 const ipcMocks = {
+  '../database/repository/songs': {
+    getSongsByIds: () => assert.fail('The single-file picker does not load the songs for playback')
+  },
   '../service/applicationShutdown': { isApplicationShuttingDown: () => false },
   '../i18n': mocks['../i18n'],
   '../service/operationLogger': mocks['./operationLogger'],

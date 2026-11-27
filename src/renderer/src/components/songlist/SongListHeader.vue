@@ -5,8 +5,8 @@ import SvgIcon from '@/components/svg/SvgIcon.vue'
 import BaseMenu from '@/components/ui/BaseMenu.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import type {
-  OptionalSongColumn,
   SongListColumns,
+  SongListDisplayField,
   SongSortField as SortField
 } from '@/utils/songListLayout'
 
@@ -55,7 +55,7 @@ const emit = defineEmits<{
   toggleCompact: []
   toggleSize: []
   toggleDividers: []
-  toggleColumn: [column: OptionalSongColumn]
+  toggleColumn: [column: SongListDisplayField]
   batchPlay: []
   batchAddToPlaylist: []
   batchEditTags: []
@@ -141,48 +141,52 @@ const sourceMenuItems = computed(() => {
     ])
   ]
 })
-const columnMenuLabels = {
-  genre: { show: 'songList.showGenreColumn', hide: 'songList.hideGenreColumn' },
-  year: { show: 'songList.showYearColumn', hide: 'songList.hideYearColumn' },
-  playTimes: { show: 'songList.showPlayTimesColumn', hide: 'songList.hidePlayTimesColumn' },
-  disableNetworkLyrics: {
-    show: 'songList.showDisableNetworkLyrics',
-    hide: 'songList.hideDisableNetworkLyrics'
-  },
-  instrumental: { show: 'songList.showInstrumental', hide: 'songList.hideInstrumental' },
-  preference: { show: 'songList.showPreferenceColumn', hide: 'songList.hidePreferenceColumn' },
-  remoteSource: { show: 'songList.showRemoteSourceColumn', hide: 'songList.hideRemoteSourceColumn' }
+const columnMenuLabels: Record<SongListDisplayField, string> = {
+  genre: 'songList.genre',
+  year: 'songList.year',
+  playTimes: 'songList.playTimes',
+  format: 'songDetails.format',
+  sampleRate: 'songDetails.sampleRate',
+  bitrate: 'songDetails.bitrate',
+  disableNetworkLyrics: 'lyrics.disableNetwork',
+  instrumental: 'lyrics.instrumental',
+  preference: 'songList.preferenceColumn',
+  remoteSource: 'songList.remoteSourceColumn'
 }
-function columnMenuItems(columns: OptionalSongColumn[]): {
-  label: string
+function displayMenuItem(
+  key: string,
+  enabled: boolean,
   onClick: () => void
-}[] {
-  return columns.map((column) => ({
-    label: t(columnMenuLabels[column][props.columns?.[column] ? 'hide' : 'show']),
-    onClick: () => emit('toggleColumn', column)
-  }))
+): {
+  label: string
+  ariaLabel: string
+  trailingIcon?: string
+  onClick: () => void
+} {
+  const label = t(key)
+  return {
+    label,
+    ariaLabel: t(enabled ? 'songList.displayOptionOn' : 'songList.displayOptionOff', { label }),
+    trailingIcon: enabled ? 'common-check' : undefined,
+    onClick
+  }
+}
+function columnMenuItems(columns: SongListDisplayField[]): ReturnType<typeof displayMenuItem>[] {
+  return columns.map((column) =>
+    displayMenuItem(columnMenuLabels[column], !!props.columns?.[column], () =>
+      emit('toggleColumn', column)
+    )
+  )
 }
 const moreMenuItems = computed(() => [
   {
     type: 'group' as const,
     label: t('songList.displayOptions'),
     children: [
-      {
-        label: t(props.small ? 'songList.standardLayout' : 'songList.smallLayout'),
-        onClick: () => emit('toggleSize')
-      },
-      {
-        label: props.compact ? t('songList.normalMode') : t('songList.compactMode'),
-        onClick: () => emit('toggleCompact')
-      },
-      {
-        label: props.showFileName ? t('songList.showTitle') : t('songList.showFileName'),
-        onClick: () => emit('toggleFileName')
-      },
-      {
-        label: t(props.hideDividers ? 'songList.showDividers' : 'songList.hideDividers'),
-        onClick: () => emit('toggleDividers')
-      }
+      displayMenuItem('songList.smallLayout', !!props.small, () => emit('toggleSize')),
+      displayMenuItem('songList.cover', !props.compact, () => emit('toggleCompact')),
+      displayMenuItem('songList.fileName', props.showFileName, () => emit('toggleFileName')),
+      displayMenuItem('songList.rowDividers', !props.hideDividers, () => emit('toggleDividers'))
     ]
   },
   { type: 'divider' as const },
@@ -190,6 +194,12 @@ const moreMenuItems = computed(() => [
     type: 'group' as const,
     label: t('songList.informationColumns'),
     children: columnMenuItems(['genre', 'year', 'playTimes'])
+  },
+  { type: 'divider' as const },
+  {
+    type: 'group' as const,
+    label: t('songList.audioDetails'),
+    children: columnMenuItems(['format', 'sampleRate', 'bitrate'])
   },
   { type: 'divider' as const },
   {
@@ -389,7 +399,7 @@ const batchMenuItems = computed(() => [
           <span class="sr-only">{{ t('songList.refresh') }}</span>
         </button>
         <!-- more -->
-        <BaseMenu :items="moreMenuItems" size="sm" width="w-56" :max-height="440">
+        <BaseMenu :items="moreMenuItems" size="sm" width="w-56" :max-height="false">
           <template #trigger>
             <button
               class="header-button header-control header-icon-control"

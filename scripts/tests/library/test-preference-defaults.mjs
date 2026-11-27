@@ -128,6 +128,9 @@ assert.deepEqual(JSON.parse(JSON.stringify(ui.songListColumns)), {
   genre: false,
   year: false,
   playTimes: false,
+  format: false,
+  sampleRate: false,
+  bitrate: false,
   disableNetworkLyrics: false,
   instrumental: false,
   preference: false,
@@ -135,6 +138,8 @@ assert.deepEqual(JSON.parse(JSON.stringify(ui.songListColumns)), {
 })
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('songPlayTrigger'))
 assert.equal(ui.songPlayTrigger, 'double', 'song rows retain double click by default')
+assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playOnFileDrop'))
+assert.equal(ui.playOnFileDrop, false, 'drops are import-only by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLyricsFontFamily'))
 assert.equal(ui.playerLyricsFontFamily, '', 'lyrics follow interface fonts by default')
 assert.ok(uiModule.UI_PREFERENCE_KEYS.includes('playerLayout'))
@@ -427,16 +432,24 @@ assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
   genre: true,
   year: true,
   playTimes: true,
+  format: false,
+  sampleRate: false,
+  bitrate: false,
   disableNetworkLyrics: false,
   instrumental: false,
   preference: false,
   remoteSource: false
 })
+columnsUi.songListColumns.format = true
+columnsUi.songListColumns.bitrate = true
 columnsUi.$persist()
 assert.deepEqual(JSON.parse(savedUiPreferences).songListColumns, {
   genre: true,
   year: true,
   playTimes: true,
+  format: true,
+  sampleRate: false,
+  bitrate: true,
   disableNetworkLyrics: false,
   instrumental: false,
   preference: false,
@@ -447,6 +460,9 @@ assert.deepEqual(JSON.parse(JSON.stringify(columnsUi.songListColumns)), {
   genre: false,
   year: false,
   playTimes: false,
+  format: false,
+  sampleRate: false,
+  bitrate: false,
   disableNetworkLyrics: false,
   instrumental: false,
   preference: false,

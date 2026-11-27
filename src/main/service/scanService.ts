@@ -92,6 +92,7 @@ export async function scanMusicDirectory(
     background?: boolean
     shouldContinue?: () => boolean
     shouldImportFile?: (file: string) => boolean
+    onSong?: (id: number, file: string) => void
   } = {}
 ): Promise<ScanResult> {
   return logOperation(
@@ -142,7 +143,7 @@ export async function scanMusicDirectory(
         @diskNo, @folderId, 1
       )
     `)
-      const existsSong = db.prepare('SELECT 1 FROM song WHERE audio = ?')
+      const findSong = db.prepare('SELECT id FROM song WHERE audio = ?')
       const coverDir = getCoverPath()
       await fs.promises.mkdir(coverDir, { recursive: true })
 
@@ -161,8 +162,10 @@ export async function scanMusicDirectory(
             skipped++
             continue
           }
-          if (existsSong.get(fullPath)) {
+          const existing = findSong.get(fullPath) as { id: number } | undefined
+          if (existing) {
             duplicates++
+            options.onSong?.(existing.id, fullPath)
             continue
           }
 
@@ -214,8 +217,16 @@ export async function scanMusicDirectory(
             diskNo: common.disk.no || null,
             folderId: folder.id
           })
-          if (result.changes > 0) added++
-          else duplicates++
+          if (result.changes > 0) {
+            added++
+            options.onSong?.(Number(result.lastInsertRowid), fullPath)
+          } else {
+            duplicates++
+            if (options.onSong) {
+              const duplicate = findSong.get(fullPath) as { id: number } | undefined
+              if (duplicate) options.onSong(duplicate.id, fullPath)
+            }
+          }
         } catch (error) {
           if (!active()) break
           failed++

@@ -20,7 +20,9 @@ export type OptionalSongColumn =
   | 'instrumental'
   | 'preference'
   | 'remoteSource'
-export type SongListColumns = Record<OptionalSongColumn, boolean>
+export type SongAudioDetail = 'format' | 'sampleRate' | 'bitrate'
+export type SongListDisplayField = OptionalSongColumn | SongAudioDetail
+export type SongListColumns = Record<SongListDisplayField, boolean>
 
 export function normalizeSongListColumns(value: unknown): SongListColumns {
   const columns = value && typeof value === 'object' ? (value as Partial<SongListColumns>) : {}
@@ -28,6 +30,9 @@ export function normalizeSongListColumns(value: unknown): SongListColumns {
     genre: columns.genre === true,
     year: columns.year === true,
     playTimes: columns.playTimes === true,
+    format: columns.format === true,
+    sampleRate: columns.sampleRate === true,
+    bitrate: columns.bitrate === true,
     disableNetworkLyrics: columns.disableNetworkLyrics === true,
     instrumental: columns.instrumental === true,
     preference: columns.preference === true,

@@ -107,6 +107,7 @@ export const UI_PREFERENCE_KEYS = [
   'pinAudioControlsToHeader',
   'pinLightweightModeToHeader',
   'autoPlayOnRestore',
+  'playOnFileDrop',
   'songPlayTrigger',
   'playQueuePosition',
   'closeToTray',
@@ -350,6 +351,9 @@ export const useUIStore = defineStore(
       genre: false,
       year: false,
       playTimes: false,
+      format: false,
+      sampleRate: false,
+      bitrate: false,
       disableNetworkLyrics: false,
       instrumental: false,
       preference: false,
@@ -366,6 +370,7 @@ export const useUIStore = defineStore(
     const pinAudioControlsToHeader = ref(true)
     const pinLightweightModeToHeader = ref(false)
     const autoPlayOnRestore = ref(false)
+    const playOnFileDrop = ref(false)
     const songPlayTrigger = ref<'single' | 'double'>('double')
     const playQueuePosition = ref<'left' | 'right'>('right')
     const closeToTray = ref(false)
@@ -1137,6 +1142,7 @@ export const useUIStore = defineStore(
       pinAudioControlsToHeader,
       pinLightweightModeToHeader,
       autoPlayOnRestore,
+      playOnFileDrop,
       songPlayTrigger,
       playQueuePosition,
       closeToTray,

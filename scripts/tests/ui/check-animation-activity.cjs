@@ -77,10 +77,16 @@ async function checkActivity() {
   let instance = mount()
   await wait(250)
   const toggle = () => document.querySelector('[role=switch][aria-label="失焦时暂停动效"]')
+  const dropToggle = () => document.querySelector('[role=switch][aria-label="拖入后立即播放"]')
   check(
     ui.pauseAnimationsOnBlur === true && toggle().getAttribute('aria-checked') === 'true',
     'Preference and setting default to pause on blur'
   )
+  check(
+    !ui.playOnFileDrop && dropToggle().getAttribute('aria-checked') === 'false',
+    'Drops default to import only'
+  )
+  dropToggle().click()
   const canvas = document.querySelector('.declarative-theme-background canvas')
   check(canvas.classList.contains('ready'), 'Independent shader fixture initializes')
   const gl = canvas.getContext('webgl2')
@@ -119,6 +125,10 @@ async function checkActivity() {
   await wait(160)
   flushPlayerDataStorage()
   check(
+    JSON.parse(settings.get('pinia.ui.preferences.v1')).playOnFileDrop === true,
+    'Playing on drop can be enabled and persisted'
+  )
+  check(
     JSON.parse(settings.get('pinia.ui.preferences.v1')).pauseAnimationsOnBlur === false,
     'Preference is persisted'
   )
@@ -130,11 +140,19 @@ async function checkActivity() {
     ui.pauseAnimationsOnBlur === false && toggle().getAttribute('aria-checked') === 'false',
     'Preference survives renderer recreation'
   )
+  check(
+    ui.playOnFileDrop && dropToggle().getAttribute('aria-checked') === 'true',
+    'Playing on drop survives renderer recreation'
+  )
   ui.resetPreferences()
   await wait()
   check(
     ui.pauseAnimationsOnBlur === true && toggle().getAttribute('aria-checked') === 'true',
     'Restore defaults reenables blur pausing'
+  )
+  check(
+    !ui.playOnFileDrop && dropToggle().getAttribute('aria-checked') === 'false',
+    'Restore defaults returns drops to import only'
   )
   ui.$dispose()
   instance.unmount()

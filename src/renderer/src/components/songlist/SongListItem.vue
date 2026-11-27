@@ -46,7 +46,7 @@ const emit = defineEmits<{
   reorderDrop: [id: number, event: DragEvent]
 }>()
 
-const { t } = useI18n()
+const { t, n } = useI18n()
 const router = useRouter()
 const ui = useUIStore()
 const activateSong = useSongActivation()
@@ -76,6 +76,33 @@ const highlightedAlbum = computed(() =>
 const displayedGenre = computed(() =>
   formatGenres(props.song.genre, ui.genreSeparator, ui.normalizeMetadataSeparator)
 )
+const audioDetails = computed(() => {
+  const { format, sampleRate, bitrate } = props.song
+  const details: string[] = []
+  if (props.columns?.format && format?.trim()) details.push(format.trim().toUpperCase())
+  if (
+    props.columns?.sampleRate &&
+    typeof sampleRate === 'number' &&
+    Number.isFinite(sampleRate) &&
+    sampleRate > 0
+  ) {
+    const inMegahertz = sampleRate >= 1_000_000
+    const rate = n(sampleRate / (inMegahertz ? 1_000_000 : 1000), {
+      maximumFractionDigits: inMegahertz ? 4 : 3,
+      useGrouping: false
+    })
+    details.push(`${rate} ${inMegahertz ? 'MHz' : 'kHz'}`)
+  }
+  if (
+    props.columns?.bitrate &&
+    typeof bitrate === 'number' &&
+    Number.isFinite(bitrate) &&
+    bitrate > 0
+  ) {
+    details.push(`${n(bitrate, { maximumFractionDigits: 0, useGrouping: false })} kbps`)
+  }
+  return details.join(' · ')
+})
 
 watch(
   () => props.song.cover,
@@ -220,7 +247,7 @@ function openAlbum(event: MouseEvent): void {
             </span>
           </span>
           <span
-            v-if="song.playTime || song.tags?.length"
+            v-if="song.playTime || audioDetails || song.tags?.length"
             class="mt-0.5 min-w-0"
             :class="small ? 'flex items-center gap-2' : 'block'"
           >
@@ -233,19 +260,29 @@ function openAlbum(event: MouseEvent): void {
               {{ t('history.lastPlayed', { time: formatPlayTime(song.playTime) }) }}
             </span>
             <span
-              v-if="song.tags?.length"
-              class="flex min-w-0 gap-1 overflow-hidden"
+              v-if="audioDetails || song.tags?.length"
+              class="flex min-w-0 items-center gap-1.5 overflow-hidden"
               :class="{ 'mt-0.5': !small && song.playTime }"
             >
               <span
-                v-for="tag in song.tags"
-                :key="tag.id"
-                class="max-w-24 shrink-0 truncate rounded-full px-1.5 py-px text-[10px] text-white"
+                v-if="audioDetails"
+                class="song-list-audio-details max-w-full shrink-0 truncate text-[10px] tabular-nums text-text-l"
                 :class="small ? 'leading-3' : 'leading-4'"
-                :style="{ backgroundColor: tag.color || '#7c3aed' }"
-                :title="tag.name"
-                >{{ tag.name }}</span
+                :title="audioDetails"
               >
+                {{ audioDetails }}
+              </span>
+              <span v-if="song.tags?.length" class="flex min-w-0 gap-1 overflow-hidden">
+                <span
+                  v-for="tag in song.tags"
+                  :key="tag.id"
+                  class="max-w-24 shrink-0 truncate rounded-full px-1.5 py-px text-[10px] text-white"
+                  :class="small ? 'leading-3' : 'leading-4'"
+                  :style="{ backgroundColor: tag.color || '#7c3aed' }"
+                  :title="tag.name"
+                  >{{ tag.name }}</span
+                >
+              </span>
             </span>
           </span>
         </span>

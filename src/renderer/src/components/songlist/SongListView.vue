@@ -14,7 +14,7 @@ import {
   songListRowHeight,
   songPlayCount,
   songYear,
-  type OptionalSongColumn,
+  type SongListDisplayField,
   type SongSortField as SortField
 } from '@/utils/songListLayout'
 import SongListHeader from './SongListHeader.vue'
@@ -72,7 +72,7 @@ function syncScrollLayout(): void {
   scrollLeft.value = element.scrollLeft
   contentWidth.value = element.clientWidth
 }
-function toggleColumn(column: OptionalSongColumn): void {
+function toggleColumn(column: SongListDisplayField): void {
   uiStore.songListColumns = { ...columns.value, [column]: !columns.value[column] }
 }
 watch(columns, () => void nextTick(syncScrollLayout))

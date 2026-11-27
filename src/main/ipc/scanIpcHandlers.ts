@@ -11,6 +11,8 @@ import {
 } from '../service/libraryAutoImport'
 import type { LibraryWatchDirectory } from '../../shared/libraryAutoImport'
 import { isApplicationShuttingDown } from '../service/applicationShutdown'
+import { getSongsByIds } from '../database/repository/songs'
+import type { Song } from '../database/types'
 
 export const SELECT_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:select-local-folder'
 export const SCAN_LOCAL_MUSIC_FOLDER_CHANNEL = 'library:scan-local-folder'
@@ -24,12 +26,18 @@ export interface ScanProgress {
   duplicates: number
 }
 
-export type ScanLocalMusicResult = { directory: string; result: ScanResult }
+export type LocalMusicImportResult = ScanResult & { songs?: Song[] }
+export type ScanLocalMusicResult = { directory: string; result: LocalMusicImportResult }
 
 export function registerScanIpcHandlers(): void {
   ipcMain.handle(
     'library:import-local-files',
-    async (_event, files: unknown, ignoreShortSongs = true): Promise<ScanResult> => {
+    async (
+      _event,
+      files: unknown,
+      ignoreShortSongs = true,
+      includeSongs = false
+    ): Promise<LocalMusicImportResult> => {
       if (
         !Array.isArray(files) ||
         !files.length ||
@@ -42,18 +50,27 @@ export function registerScanIpcHandlers(): void {
       )
         throw new Error('Invalid audio file paths')
       const groups = new Map<string, string[]>()
-      for (const file of new Set<string>(files.map((file) => path.resolve(file)))) {
+      const paths = new Set<string>(files.map((file) => path.resolve(file)))
+      for (const file of paths) {
         const directory = path.dirname(file)
-        groups.set(directory, [...(groups.get(directory) ?? []), file])
+        const group = groups.get(directory)
+        if (group) group.push(file)
+        else groups.set(directory, [file])
       }
-      const result: ScanResult = { added: 0, duplicates: 0, skipped: 0, total: 0 }
+      const result: LocalMusicImportResult = { added: 0, duplicates: 0, skipped: 0, total: 0 }
+      const songIds = new Map<string, number>()
+      const onSong =
+        includeSongs === true
+          ? (id: number, file: string): void => void songIds.set(file, id)
+          : undefined
       for (const [directory, selected] of groups) {
         try {
           const scanned = await scanMusicDirectory(
             directory,
             undefined,
             selected,
-            ignoreShortSongs !== false
+            ignoreShortSongs !== false,
+            { onSong }
           )
           for (const key of ['added', 'duplicates', 'skipped', 'total'] as const)
             result[key] += scanned[key]
@@ -61,6 +78,14 @@ export function registerScanIpcHandlers(): void {
           // An inaccessible directory must not discard the rest of a multi-folder drop.
           result.total += selected.length
         }
+      }
+      if (onSong) {
+        result.songs = getSongsByIds(
+          [...paths].flatMap((file) => {
+            const id = songIds.get(file)
+            return id === undefined ? [] : [id]
+          })
+        )
       }
       return result
     }
@@ -115,8 +140,16 @@ export function registerScanIpcHandlers(): void {
 
   ipcMain.handle(
     SCAN_LOCAL_MUSIC_FOLDER_CHANNEL,
-    async (event, directory: string, ignoreShortSongs = true): Promise<ScanLocalMusicResult> => {
+    async (
+      event,
+      directory: string,
+      ignoreShortSongs = true,
+      includeSongs = false
+    ): Promise<ScanLocalMusicResult> => {
       return logOperation('[IPC] library:scan-local-folder', { directory }, async () => {
+        const songIds: number[] = []
+        const onSong =
+          includeSongs === true ? (id: number): void => void songIds.push(id) : undefined
         const result = await scanMusicDirectory(
           directory,
           (current, total, added, duplicates) => {
@@ -130,12 +163,13 @@ export function registerScanIpcHandlers(): void {
             }
           },
           undefined,
-          ignoreShortSongs !== false
+          ignoreShortSongs !== false,
+          { onSong }
         )
         if (!isApplicationShuttingDown()) trackMusicDirectory(directory)
         return {
           directory,
-          result
+          result: onSong ? { ...result, songs: getSongsByIds(songIds) } : result
         }
       })
     }

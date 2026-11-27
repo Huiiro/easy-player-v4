@@ -92,6 +92,16 @@ function setSmartShuffle(value: boolean | string | number): void {
         />
       </SettingRow>
       <SettingRow
+        :label="t('settings.playOnFileDrop')"
+        :description="t('settings.playOnFileDropDescription')"
+      >
+        <BaseSwitch
+          v-model="ui.playOnFileDrop"
+          :aria-label="t('settings.playOnFileDrop')"
+          size="md"
+        />
+      </SettingRow>
+      <SettingRow
         :label="t('settings.autoPlayOnRestore')"
         :description="t('settings.autoPlayOnRestoreDescription')"
       >

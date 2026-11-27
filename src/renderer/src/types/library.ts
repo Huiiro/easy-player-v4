@@ -17,6 +17,9 @@ export interface LibrarySong {
   duration: number | null
   year?: number | null
   genre?: string | null
+  format?: string | null
+  sampleRate?: number | null
+  bitrate?: number | null
   playTimes?: number
   cover: string | null
   coverAnalysisPath?: string | null

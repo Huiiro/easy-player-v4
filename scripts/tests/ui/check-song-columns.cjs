@@ -42,9 +42,17 @@ async function runChecks() {
   })
   window.player = { currentQueueSong: null }
   const fixture = [
-    { id: 1, year: 2000, playTimes: 2, genre: 'Pop;ROCK' },
-    { id: 2, year: 2020, playTimes: 12, genre: null },
-    { id: 3, year: null, playTimes: 0, genre: '' },
+    {
+      id: 1,
+      year: 2000,
+      playTimes: 2,
+      genre: 'Pop;ROCK',
+      format: 'flac',
+      sampleRate: 44100,
+      bitrate: 950
+    },
+    { id: 2, year: 2020, playTimes: 12, genre: null, format: 'DSF', sampleRate: 2822400 },
+    { id: 3, year: null, playTimes: 0, genre: '', sampleRate: 0, bitrate: null },
     { id: 4, year: 1980, playTimes: 100, genre: 'Jazz' },
     { id: 5, year: 0, playTimes: 10, genre: null },
     ...Array.from({ length: 30 }, (_, index) => ({
@@ -147,14 +155,30 @@ async function runChecks() {
       name + ': header and data tracks align'
     )
   }
-  async function menuAction(trigger, label) {
-    document.querySelector('header button[aria-label="' + trigger + '"]').click()
-    await wait(220)
-    const option = [...document.querySelectorAll('.ep-menu-item')].find(
+  function menuOption(label) {
+    return [...document.querySelectorAll('.ep-menu-item')].find(
       (button) => button.textContent.trim() === label
     )
+  }
+  function hasTrailingCheck(option) {
+    return (
+      option?.lastElementChild?.querySelector('use')?.getAttribute('xlink:href') ===
+      '#icon-common-check'
+    )
+  }
+  async function menuAction(trigger, label, checked) {
+    document.querySelector('header button[aria-label="' + trigger + '"]').click()
+    await wait(220)
+    const option = menuOption(label)
     check(!!option, 'menu exposes ' + label)
-    if (label === '播放次数') {
+    if (checked !== undefined) {
+      check(hasTrailingCheck(option) === checked, 'menu shows the current visibility for ' + label)
+      check(
+        option.getAttribute('aria-label') === label + (checked ? '，已开启' : '，已关闭'),
+        'menu announces the current visibility for ' + label
+      )
+    }
+    if (trigger === '排序' && label === '播放次数') {
       const group = option.parentElement
       check(
         group.querySelectorAll('.ep-menu-item').length === 1 &&
@@ -162,10 +186,17 @@ async function runChecks() {
         'play count sort has a separate group after a divider'
       )
     }
-    if (label.includes('列')) {
+    const displayGroup = [
+      ['流派', '年份', '播放次数'],
+      ['格式', '采样率', '码率'],
+      ['不搜索网络歌词', '纯音乐', '喜好', '远程来源']
+    ].find((group) => group.includes(label))
+    if (trigger === '更多' && displayGroup) {
       const group = option.parentElement
       check(
-        group.querySelectorAll('.ep-menu-item').length === (label.includes('标记') ? 4 : 3) &&
+        [...group.querySelectorAll('.ep-menu-item')]
+          .map((item) => item.textContent.trim())
+          .join() === displayGroup.join() &&
           group.previousElementSibling?.classList.contains('h-px'),
         'column toggles are grouped by information or flags after a divider'
       )
@@ -185,6 +216,7 @@ async function runChecks() {
     cells(document.querySelector('.song-list-columns')).length === 5,
     'new columns are hidden by default'
   )
+  check(!scroller.querySelector('.song-list-audio-details'), 'audio details are hidden by default')
   aligned('default columns with vertical scrollbar')
   const menuFrames = []
   document.querySelector('header button[aria-label="更多"]').click()
@@ -228,7 +260,7 @@ async function runChecks() {
   check(
     menuFrames.every(
       (frame) =>
-        frame.dividers.length === 2 &&
+        frame.dividers.length === 3 &&
         frame.dividers.every(
           (divider) =>
             Math.abs(divider.height - 1) < 0.01 &&
@@ -238,10 +270,28 @@ async function runChecks() {
     ),
     'group dividers retain the same one-pixel thickness, width and inset throughout opening'
   )
+  const expandedMoreMenu = document.querySelector('.ep-menu')
+  const displayLabels = [...expandedMoreMenu.querySelectorAll('.ep-menu-item')].map((item) =>
+    item.textContent.trim()
+  )
+  check(
+    new Set(displayLabels).size === 14 &&
+      displayLabels.every((label) => !/^(显示|隐藏|使用)/.test(label)),
+    'More menu gives each display option one fixed label'
+  )
+  check(
+    getComputedStyle(expandedMoreMenu).overflowY === 'visible' &&
+      expandedMoreMenu.scrollHeight <= expandedMoreMenu.clientHeight &&
+      expandedMoreMenu.getBoundingClientRect().bottom <= innerHeight,
+    'More menu fits all options in the viewport without scrolling'
+  )
+  check(
+    hasTrailingCheck(menuOption('封面')) && hasTrailingCheck(menuOption('分割线')),
+    'default-visible covers and dividers have trailing check marks'
+  )
   document.querySelector('header button[aria-label="更多"]').click()
   await wait(220)
-  for (const label of ['显示流派列', '显示年份列', '显示播放次数列'])
-    await menuAction('更多', label)
+  for (const label of ['流派', '年份', '播放次数']) await menuAction('更多', label)
   check(
     ['genre', 'year', 'playTimes'].every((column) => window.ui.songListColumns[column]),
     'more menu toggles all three persisted preference fields'
@@ -299,7 +349,41 @@ async function runChecks() {
       cells(rows()[0])[4].textContent.trim() === 'Pop / ROCK',
     'genre column uses the shared separator formatting rule'
   )
-  await menuAction('更多', '隐藏年份列')
+  const queryCountBeforeAudioDetails = queries
+  const rowForTrack = (id) =>
+    rows().find((row) => row.querySelector('.song-list-name')?.textContent.trim() === `Track ${id}`)
+  const detailsForTrack = (id) => rowForTrack(id)?.querySelector('.song-list-audio-details')
+  await menuAction('更多', '格式', false)
+  check(detailsForTrack(1)?.textContent.trim() === 'FLAC', 'format can be shown independently')
+  await menuAction('更多', '采样率', false)
+  await menuAction('更多', '码率', false)
+  const audioDetails = detailsForTrack(1)
+  const firstTag = rowForTrack(1)?.querySelector('[title="Favorite tracks"]')
+  check(
+    audioDetails?.textContent.trim() === 'FLAC · 44.1 kHz · 950 kbps' &&
+      firstTag?.getBoundingClientRect().left >= audioDetails.getBoundingClientRect().right,
+    'format, sample rate and bitrate appear together before the tags'
+  )
+  check(
+    detailsForTrack(2)?.textContent.trim() === 'DSF · 2.8224 MHz' && !detailsForTrack(3),
+    'high sample rates use MHz and missing or invalid metadata is omitted'
+  )
+  document.querySelector('header button[aria-label="更多"]').click()
+  await wait(220)
+  check(
+    ['格式', '采样率', '码率'].every((label) => hasTrailingCheck(menuOption(label))),
+    'enabled audio details have check marks on the right'
+  )
+  document.querySelector('header button[aria-label="更多"]').click()
+  await wait(220)
+  await menuAction('更多', '采样率', true)
+  check(
+    detailsForTrack(1)?.textContent.trim() === 'FLAC · 950 kbps' &&
+      queries === queryCountBeforeAudioDetails,
+    'hiding one field updates the list without querying songs again'
+  )
+  aligned('audio details do not add grid columns')
+  await menuAction('更多', '年份', true)
   check(
     !window.ui.songListColumns.year &&
       ![...document.querySelector('.song-list-columns').children].some(
@@ -317,17 +401,24 @@ async function runChecks() {
     await wait()
     aligned('column combination ' + mask)
   }
-  window.ui.songListColumns = { genre: true, year: true, playTimes: true }
+  window.ui.songListColumns = {
+    genre: true,
+    year: true,
+    playTimes: true,
+    format: true,
+    sampleRate: true,
+    bitrate: true
+  }
   await wait()
-  await menuAction('更多', '隐藏封面')
+  await menuAction('更多', '封面')
   check(
     window.ui.compactSongList &&
       rows().every((row) => row.parentElement.getBoundingClientRect().height === 56),
     'compact mode retains optional columns with 56px rows'
   )
   aligned('compact mode')
-  await menuAction('更多', '显示禁用网络歌词标记')
-  await menuAction('更多', '显示纯音乐标记')
+  await menuAction('更多', '不搜索网络歌词')
+  await menuAction('更多', '纯音乐')
   aligned('lyric flag columns')
   const headers = [...document.querySelector('.song-list-columns').children].map(
     (cell) => cell.getAttribute('aria-label') || cell.textContent.trim()
@@ -343,13 +434,13 @@ async function runChecks() {
         '#icon-common-no-internet',
     'song rows render persisted lyric flags'
   )
-  await menuAction('更多', '隐藏纯音乐标记')
+  await menuAction('更多', '纯音乐')
   check(
     !window.ui.songListColumns.instrumental && window.ui.songListColumns.disableNetworkLyrics,
     'flag visibility switches are independent'
   )
   aligned('one lyric flag column')
-  await menuAction('更多', '使用紧凑布局')
+  await menuAction('更多', '紧凑布局')
   check(
     window.ui.smallSongList &&
       rows().every((row) => row.parentElement.getBoundingClientRect().height === 40),
@@ -360,7 +451,7 @@ async function runChecks() {
     'small layout uses smaller text throughout the row'
   )
   aligned('small layout without covers')
-  await menuAction('更多', '显示封面')
+  await menuAction('更多', '封面')
   check(
     window.ui.smallSongList &&
       !window.ui.compactSongList &&
@@ -377,7 +468,7 @@ async function runChecks() {
     'history and tags stay inside a small row'
   )
   aligned('small layout with covers')
-  await menuAction('更多', '使用标准布局')
+  await menuAction('更多', '紧凑布局')
   check(
     !window.ui.smallSongList &&
       rows().every((row) => row.parentElement.getBoundingClientRect().height === 64),
@@ -388,19 +479,19 @@ async function runChecks() {
   scroller.dispatchEvent(new Event('scroll'))
   await wait()
   const firstVisibleSong = cells(rows()[0])[0].textContent.trim()
-  await menuAction('更多', '使用紧凑布局')
+  await menuAction('更多', '紧凑布局')
   check(
     cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
       Math.abs(scroller.scrollTop - (8 * 40 + (17 / 64) * 40)) < 1,
     'shrinking layout preserves the first visible song and relative row offset'
   )
-  await menuAction('更多', '使用标准布局')
+  await menuAction('更多', '紧凑布局')
   check(
     cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
       Math.abs(scroller.scrollTop - (8 * 64 + 17)) < 2,
     'restoring standard layout keeps the same visible song'
   )
-  await menuAction('更多', '隐藏封面')
+  await menuAction('更多', '封面')
   check(
     cells(rows()[0])[0].textContent.trim() === firstVisibleSong &&
       Math.abs(scroller.scrollTop - (8 * 56 + (17 / 64) * 56)) < 2,

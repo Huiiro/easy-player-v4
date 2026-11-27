@@ -1,13 +1,16 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUIStore } from '@/stores/ui/uiStore'
+import { usePlayerStore } from '@/stores/player/playerStore'
 import { useMessage } from '@/components/ui/useMessage'
+import type { LibrarySong } from '@/types/library'
 import eventBus from '@/utils/eventBus'
 import { importFileKind } from '../../../shared/audioFormats'
 
 /** Capture external files before a nested sorting target or Chromium can consume the drop. */
 export function useFileDropImport(): void {
   const ui = useUIStore()
+  const player = usePlayerStore()
   const { t } = useI18n()
   const { success, info, warning, error } = useMessage()
   let queue = Promise.resolve()
@@ -19,7 +22,8 @@ export function useFileDropImport(): void {
   async function importFiles(
     paths: string[],
     directories: Set<string>,
-    unresolved: number
+    unresolved: number,
+    playOnDrop: boolean
   ): Promise<void> {
     if (disposed) return
     const files = paths.filter((file) => !directories.has(file))
@@ -58,23 +62,42 @@ export function useFileDropImport(): void {
       failed += Math.max(0, result.total - result.added - result.duplicates - result.skipped)
       if (result.added) eventBus.emit('scanFinished')
     }
+    const folderSongs: LibrarySong[] = []
     for (const directory of directories) {
       try {
         const response = await window.api.library.scanLocalMusicFolder(
           directory,
-          ui.ignoreShortSongs
+          ui.ignoreShortSongs,
+          playOnDrop
         )
         recordAudioImport(response.result)
+        for (const song of response.result.songs ?? []) folderSongs.push(song)
       } catch (reason) {
         recordFailure(reason)
       }
     }
+    let fileSongs: LibrarySong[] = []
     if (audio.length) {
       try {
-        const result = await window.api.library.importLocalMusicFiles(audio, ui.ignoreShortSongs)
+        const result = await window.api.library.importLocalMusicFiles(
+          audio,
+          ui.ignoreShortSongs,
+          playOnDrop
+        )
         recordAudioImport(result)
+        fileSongs = result.songs ?? []
       } catch (reason) {
         recordFailure(reason, audio.length)
+      }
+    }
+    const songs = [...fileSongs, ...folderSongs]
+    if (playOnDrop && !disposed && songs.length) {
+      try {
+        player.addToQueue(songs, true)
+        const index = player.queue.findIndex((song) => song.id === songs[0].id)
+        if (index < 0 || !(await player.playQueueItem(index))) error(t('settings.openAudioFailed'))
+      } catch {
+        error(t('settings.openAudioFailed'))
       }
     }
     for (const file of packages) {
@@ -153,8 +176,9 @@ export function useFileDropImport(): void {
       }
     }
     // Snapshot File paths synchronously; DataTransfer expires after the drop handler returns.
+    const playOnDrop = ui.playOnFileDrop === true
     queue = queue
-      .then(() => importFiles([...paths], directories, unresolved))
+      .then(() => importFiles([...paths], directories, unresolved, playOnDrop))
       .catch(() => {
         error(t('dropImport.failed', { count: paths.size + unresolved || 1 }))
       })

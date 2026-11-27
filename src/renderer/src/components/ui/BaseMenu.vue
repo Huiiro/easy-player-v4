@@ -12,6 +12,7 @@ defineOptions({
 
 type MenuItemType = {
   label?: string
+  ariaLabel?: string
   value?: string | number
   icon?: string // use svg icon
   iconClass?: string
@@ -38,7 +39,7 @@ const props = withDefaults(
     side?: Side
     width?: string
     teleport?: boolean
-    maxHeight?: number | string
+    maxHeight?: number | string | false
     size?: ControlSize
     appearance?: 'default' | 'glass'
   }>(),
@@ -73,6 +74,7 @@ const menuTransition = {
   leaveToClass: 'opacity-0'
 }
 const maxHeightStyle = computed(() => {
+  if (props.maxHeight === false) return undefined
   const value = props.maxHeight ?? '60vh'
 
   return {
@@ -138,6 +140,7 @@ function handleClick(item: MenuItemType): void {
                 <MenuItem v-else v-slot="{ active }" :disabled="child.disabled">
                   <button
                     type="button"
+                    :aria-label="child.ariaLabel"
                     :disabled="child.disabled"
                     :data-active="active"
                     :data-selected="isSelected(child)"
@@ -172,6 +175,7 @@ function handleClick(item: MenuItemType): void {
             <MenuItem v-else v-slot="{ active }" :disabled="item.disabled">
               <button
                 type="button"
+                :aria-label="item.ariaLabel"
                 :disabled="item.disabled"
                 :data-active="active"
                 :data-selected="isSelected(item)"

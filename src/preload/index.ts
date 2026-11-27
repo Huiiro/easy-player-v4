@@ -26,6 +26,7 @@ import type {
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { LyricSearchRequest } from '../shared/networkSources'
+import type { LocalMusicImportResult, ScanLocalMusicResult } from '../main/ipc/scanIpcHandlers'
 
 // ── Audio API exposed to renderer ──
 const audioAPI = {
@@ -405,24 +406,26 @@ const libraryAPI = {
     return () => ipcRenderer.removeListener('library:auto-imported', handler)
   },
   importLocalMusicFile: (ignoreShortSongs = true) =>
-    ipcRenderer.invoke('library:import-local-file', ignoreShortSongs) as Promise<{
-      directory: string
-      result: { added: number; duplicates: number; skipped: number; total: number }
-    } | null>,
-  importLocalMusicFiles: (files: string[], ignoreShortSongs = true) =>
-    ipcRenderer.invoke('library:import-local-files', files, ignoreShortSongs) as Promise<{
-      added: number
-      duplicates: number
-      skipped: number
-      total: number
-    }>,
+    ipcRenderer.invoke(
+      'library:import-local-file',
+      ignoreShortSongs
+    ) as Promise<ScanLocalMusicResult | null>,
+  importLocalMusicFiles: (files: string[], ignoreShortSongs = true, includeSongs = false) =>
+    ipcRenderer.invoke(
+      'library:import-local-files',
+      files,
+      ignoreShortSongs,
+      includeSongs
+    ) as Promise<LocalMusicImportResult>,
   selectLocalMusicFolder: () =>
     ipcRenderer.invoke('library:select-local-folder') as Promise<string | null>,
-  scanLocalMusicFolder: (directory: string, ignoreShortSongs = true) =>
-    ipcRenderer.invoke('library:scan-local-folder', directory, ignoreShortSongs) as Promise<{
-      directory: string
-      result: { added: number; duplicates: number; skipped: number; total: number }
-    }>,
+  scanLocalMusicFolder: (directory: string, ignoreShortSongs = true, includeSongs = false) =>
+    ipcRenderer.invoke(
+      'library:scan-local-folder',
+      directory,
+      ignoreShortSongs,
+      includeSongs
+    ) as Promise<ScanLocalMusicResult>,
   showSongInFolder: (songId: number) =>
     ipcRenderer.invoke('library:show-song-in-folder', songId) as Promise<{
       success: boolean
