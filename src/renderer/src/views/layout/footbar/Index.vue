@@ -533,7 +533,7 @@ onBeforeUnmount(() => {
                 type="button"
                 :aria-label="t('footer.volumeValue', { value: Math.round(player.volume * 100) })"
               >
-                <SvgIcon :name="volumeIcon" class-name="size-5" /></button
+                <SvgIcon :name="volumeIcon" class-name="size-6" /></button
             ></template>
             <b class="tabular-nums text-text">{{ Math.round(player.volume * 100) }}%</b>
             <input
@@ -621,7 +621,7 @@ onBeforeUnmount(() => {
                   v-show="collapsed || footerActionsWidth < 72"
                   class="ep-footer-menu-volume flex items-center gap-2 px-3 py-2 text-sm"
                 >
-                  <SvgIcon :name="volumeIcon" class-name="size-4 shrink-0" />
+                  <SvgIcon :name="volumeIcon" class-name="size-5 shrink-0" />
                   <label for="footer-menu-volume">{{ t('footer.volume') }}</label>
                   <input
                     id="footer-menu-volume"

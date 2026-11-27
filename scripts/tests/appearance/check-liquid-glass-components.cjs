@@ -502,6 +502,39 @@ app.whenReady().then(async () => {
     assert.equal(gallery.panel, true)
     assert(gallery.controls >= 6)
     assert.equal(gallery.smallContexts, 0)
+    const switchGaps = await win.webContents.executeJavaScript(`
+      (() => {
+        const { createApp, h } = Components.Vue
+        const host = document.body.appendChild(document.createElement('div'))
+        const switches = createApp({
+          render: () => ['xs', 'sm', 'md', 'lg'].flatMap(size =>
+            [false, true].map(modelValue => h(Components.Switch, { size, modelValue }))
+          )
+        })
+        switches.mount(host)
+        try {
+          return Array.from(host.querySelectorAll('.ep-switch'), button => {
+            const track = button.querySelector('.ep-switch-track').getBoundingClientRect()
+            const thumb = button.querySelector('.ep-switch-thumb').getBoundingClientRect()
+            return {
+              top: thumb.top - track.top,
+              bottom: track.bottom - thumb.bottom,
+              end: button.getAttribute('aria-checked') === 'true'
+                ? track.right - thumb.right
+                : thumb.left - track.left
+            }
+          })
+        } finally {
+          switches.unmount()
+          host.remove()
+        }
+      })()
+    `)
+    assert.deepEqual(
+      switchGaps,
+      Array.from({ length: 8 }, () => ({ top: 2, bottom: 2, end: 2 })),
+      'Glass switch thumbs are vertically centered and evenly inset at both ends in every size'
+    )
     await win.webContents.executeJavaScript(
       `[...document.querySelectorAll('button')].find(e=>e.textContent.trim()==='滚动以显示回到顶部').click();void 0`
     )

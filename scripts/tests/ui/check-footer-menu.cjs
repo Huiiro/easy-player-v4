@@ -200,6 +200,12 @@ async function runChecks() {
       getComputedStyle(action('.ep-footer-menu-' + category)).display !== 'none',
       'collapsed menu exposes ' + category
     )
+  const menuVolumeHeight = action('.ep-footer-menu-volume svg').getBBox().height
+  const menuQueueHeight = action('.ep-footer-menu-queue svg').getBBox().height
+  check(
+    menuVolumeHeight >= 0.9 * menuQueueHeight && menuQueueHeight > 0,
+    'collapsed menu volume glyph matches the scale of its neighboring icons'
+  )
   const box = menu().getBoundingClientRect()
   const naturalMenuHeight = menu().querySelector('.ep-footer-more-list').scrollHeight + 2
   check(
@@ -340,6 +346,26 @@ async function runChecks() {
     ),
     'default layout exposes all action icons at 1280px, including likes and desktop lyrics'
   )
+  const volumeIcon = toolbar.querySelector('.ep-footer-action-volume svg')
+  const queueIconHeight = toolbar.querySelector('.ep-footer-action-queue svg').getBBox().height
+  for (const [level, name] of [
+    [0, 'mute'],
+    [0.2, 'low'],
+    [0.5, 'middle'],
+    [0.9, 'high']
+  ]) {
+    window.footerPlayer.volume = level
+    await nextTick()
+    const glyphHeight = volumeIcon.getBBox().height
+    check(
+      volumeIcon.querySelector('use').getAttribute('xlink:href') ===
+        '#icon-volume-volume-' + name &&
+        glyphHeight >= 0.9 * queueIconHeight &&
+        glyphHeight <= 1.1 * queueIconHeight,
+      'volume glyph matches neighboring toolbar icons at ' + name + ' volume'
+    )
+  }
+  window.footerPlayer.volume = 0.5
   more().click()
   await wait()
   for (const width of [71, 72, 111, 112, 151, 152, 191, 192, 231, 232, 271, 272]) {
@@ -531,9 +557,22 @@ app.whenReady().then(async () => {
       if (!event.message.includes('Security Warning')) console.log(event.message)
     })
     const fixture = path.join(app.getPath('userData'), 'index.html')
+    const icons = [
+      'control/playlist',
+      ...['mute', 'low', 'middle', 'high'].map((level) => 'volume/volume-' + level)
+    ]
+    const symbols = icons
+      .map((name) => {
+        const svg = fs.readFileSync(path.join('src/renderer/src/assets/svg', name + '.svg'), 'utf8')
+        const [, viewBox, content] = svg.match(
+          /<svg\b[^>]*viewBox="([^"]+)"[^>]*>([\s\S]*?)<\/svg>/
+        )
+        return `<symbol id="icon-${name.replace('/', '-')}" viewBox="${viewBox}">${content}</symbol>`
+      })
+      .join('')
     fs.writeFileSync(
       fixture,
-      '<html><head></head><body><div id="app" style="position:fixed;inset:auto 0 0;height:auto;min-height:0"></div></body></html>'
+      `<html><head></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true">${symbols}</svg><div id="app" style="position:fixed;inset:auto 0 0;height:auto;min-height:0"></div></body></html>`
     )
     await win.loadFile(fixture)
     win.webContents.debugger.attach('1.3')

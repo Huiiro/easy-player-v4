@@ -136,6 +136,13 @@ ${scope} .ep-backtop::before { background: color-mix(in srgb, var(--color-primar
 ${scope} :is(.ep-switch-track, .ep-switch-thumb, .ep-progress-thumb) {
   background-image: ${token('--ep-glass-control-highlight')};
   box-shadow: ${token('--ep-glass-control-shadow')};
+}
+/* Keep the stroke from shifting the track's absolutely positioned thumb. */
+${scope} .ep-switch-track {
+  outline: 1px solid ${token('--ep-glass-control-border')};
+  outline-offset: -1px;
+}
+${scope} :is(.ep-switch-thumb, .ep-progress-thumb) {
   border: 1px solid ${token('--ep-glass-control-border')};
   box-sizing: border-box;
 }
