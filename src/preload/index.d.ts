@@ -1,4 +1,9 @@
 import type { RemoteConnection } from '../shared/remoteSources'
+import type {
+  ApplyAudioProcessingProfileResult,
+  AudioSettingsResult,
+  RestartAudioEngineResult
+} from '../shared/audioProcessingProfiles'
 import type { LibraryAutoImportEvent, LibraryWatchDirectory } from '../shared/libraryAutoImport'
 import type {
   DuplicateFileReport,
@@ -127,6 +132,11 @@ declare global {
         setVolume(volume: number): Promise<{ success: boolean }>
         setPreamp(db: number, enabled: boolean): Promise<{ success: boolean }>
         resetAudioProcessingSettings(): Promise<{ success: boolean; error?: string }>
+        listAudioProcessingProfiles(): Promise<AudioSettingsResult & { data?: string[] }>
+        saveAudioProcessingProfile(name: string): Promise<AudioSettingsResult>
+        applyAudioProcessingProfile(name: string): Promise<ApplyAudioProcessingProfileResult>
+        deleteAudioProcessingProfile(name: string): Promise<AudioSettingsResult>
+        restartAudioEngine(): Promise<RestartAudioEngineResult>
         setReplayGain(config: {
           mode: 'off' | 'track' | 'album'
           preventClipping: boolean
@@ -285,6 +295,7 @@ declare global {
             lowEnergy: number
             onsetStrength: number
             droppedFrames: number
+            glitchCount?: number
             clipGuardLimitedFrames: number
             clipGuardReductionDb: number
             beatSequence: number

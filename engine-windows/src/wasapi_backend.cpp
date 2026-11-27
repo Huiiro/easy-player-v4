@@ -100,7 +100,6 @@ struct WasapiBackend::Impl {
     // Format
     WAVEFORMATEX* wave_format = nullptr;
     UINT32  buffer_frames = 0;
-    int     bytes_per_frame = 0;   // nBlockAlign
     double  latency_ms = 0.0;
     bool    is_f32 = true;         // whether the buffer expects float32 samples
     int     pcm_bits = 0;          // 16/24/32 when the exclusive buffer is PCM
@@ -111,13 +110,47 @@ struct WasapiBackend::Impl {
     AudioCallback callback;
     RawAudioCallback raw_callback;
     bool raw_transport = false;
+    bool dop_needs_prefill = true;
+    uint8_t dop_marker = 0x05;
 
     // f32→s16 scratch buffer (only used in exclusive s16 fallback)
     std::vector<float> scratch;
     // DoP callback produces packed PCM24; some devices require 24 valid bits
     // in a 32-bit container. Allocate this before starting the render thread.
     std::vector<uint8_t> dop_scratch;
+
+    void fill_dop_buffer(BYTE* output, int frames, bool render);
 };
+
+void WasapiBackend::Impl::fill_dop_buffer(BYTE* output, int frames, bool render) {
+    const int channels = wave_format->nChannels;
+    const bool in_32 = pcm_bits == 32;
+    uint8_t* packed = in_32 ? dop_scratch.data() : output;
+    const int rendered = render && raw_callback
+        ? std::clamp(raw_callback(packed, frames, channels), 0, frames)
+        : 0;
+
+    // Keep the device's marker sequence continuous through startup and short writes.
+    for (int frame = 0; frame < frames; ++frame) {
+        for (int channel = 0; channel < channels; ++channel) {
+            const size_t sample = static_cast<size_t>(frame) * channels + channel;
+            uint8_t* source = packed + sample * 3;
+            if (frame >= rendered) {
+                source[0] = 0x69;
+                source[1] = 0x69;
+            }
+            source[2] = dop_marker;
+            if (in_32) {
+                BYTE* dest = output + sample * 4;
+                dest[0] = 0;
+                dest[1] = source[0];
+                dest[2] = source[1];
+                dest[3] = source[2];
+            }
+        }
+        dop_marker = dop_marker == 0x05 ? 0xFA : 0x05;
+    }
+}
 
 // ──────────────────────────────────────────────────────────
 // Audio thread procedure
@@ -147,9 +180,18 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
     }
 
     int channels   = impl->wave_format->nChannels;
-    int frame_size = impl->bytes_per_frame;
-
-    HRESULT hr = impl->audio_client->Start();
+    HRESULT hr = S_OK;
+    if (impl->raw_transport && impl->dop_needs_prefill) {
+        BYTE* data = nullptr;
+        hr = impl->render_client->GetBuffer(impl->buffer_frames, &data);
+        if (SUCCEEDED(hr)) {
+            impl->dop_marker = 0x05;
+            impl->fill_dop_buffer(data, static_cast<int>(impl->buffer_frames), false);
+            hr = impl->render_client->ReleaseBuffer(impl->buffer_frames, 0);
+            if (SUCCEEDED(hr)) impl->dop_needs_prefill = false;
+        }
+    }
+    if (SUCCEEDED(hr)) hr = impl->audio_client->Start();
     if (FAILED(hr)) {
         impl->thread_error.store(hr, std::memory_order_release);
         impl->running.store(false, std::memory_order_release);
@@ -193,31 +235,7 @@ static unsigned __stdcall wasapi_thread_proc(void* param) {
         }
 
         if (impl->raw_transport) {
-            const bool dop_in_32 = impl->pcm_valid_bits == 24 && impl->pcm_bits == 32;
-            const size_t packed_bytes = static_cast<size_t>(available) * channels * 3;
-            if (dop_in_32 && impl->dop_scratch.size() < packed_bytes) {
-                std::memset(data, 0, static_cast<size_t>(available) * frame_size);
-                impl->thread_error.store(E_FAIL, std::memory_order_release);
-                impl->running.store(false, std::memory_order_release);
-            } else {
-                uint8_t* raw_data = dop_in_32 ? impl->dop_scratch.data() : data;
-                const int rendered = std::clamp(
-                    impl->raw_callback ? impl->raw_callback(raw_data, static_cast<int>(available), channels) : 0,
-                    0, static_cast<int>(available));
-                if (dop_in_32) {
-                    const size_t samples = static_cast<size_t>(rendered) * channels;
-                    for (size_t i = 0; i < samples; ++i) {
-                        data[i * 4] = 0;
-                        data[i * 4 + 1] = raw_data[i * 3];
-                        data[i * 4 + 2] = raw_data[i * 3 + 1];
-                        data[i * 4 + 3] = raw_data[i * 3 + 2];
-                    }
-                }
-                if (rendered < static_cast<int>(available)) {
-                    std::memset(data + rendered * frame_size, 0,
-                                (static_cast<int>(available) - rendered) * frame_size);
-                }
-            }
+            impl->fill_dop_buffer(data, static_cast<int>(available), true);
         } else if (impl->is_f32) {
             // Direct f32 write — WASAPI Shared mix format, or Exclusive f32
             float* f32_data = reinterpret_cast<float*>(data);
@@ -576,7 +594,6 @@ AudioFormat WasapiBackend::open(
         return {};
     }
 
-    impl_->bytes_per_frame = fmt->nBlockAlign;
     // Integer PCM callbacks must never allocate on the MMCSS render thread.
     impl_->scratch.assign(static_cast<size_t>(impl_->buffer_frames) * fmt->nChannels, 0.0f);
     if (impl_->raw_transport && impl_->pcm_valid_bits == 24 && impl_->pcm_bits == 32) {
@@ -585,9 +602,10 @@ AudioFormat WasapiBackend::open(
         impl_->dop_scratch.clear();
     }
 
-    // Calculate latency
+    // Prefer the opened stream's reported latency.
     REFERENCE_TIME period = 0;
-    client->GetDevicePeriod(nullptr, &period);
+    if (FAILED(client->GetStreamLatency(&period)) || period <= 0)
+        client->GetDevicePeriod(nullptr, &period);
     if (period > 0) {
         impl_->latency_ms = (double)period / 10000.0; // hns → ms
     } else {
@@ -625,6 +643,11 @@ AudioFormat WasapiBackend::open(
     current_format_.bit_depth   = impl_->is_f32 ? fmt->wBitsPerSample :
         (impl_->pcm_valid_bits > 0 ? impl_->pcm_valid_bits : fmt->wBitsPerSample);
     current_format_.channels    = fmt->nChannels;
+    current_format_.container_bits = fmt->wBitsPerSample;
+    current_format_.floating_point = impl_->is_f32;
+    LPWSTR opened_id = nullptr;
+    if (SUCCEEDED(dev->GetId(&opened_id)) && opened_id) opened_device_id_ = opened_id;
+    CoTaskMemFree(opened_id);
     buffer_frames_ = (int)impl_->buffer_frames;
     latency_ms_    = impl_->latency_ms;
 
@@ -664,6 +687,7 @@ AudioFormat WasapiBackend::open_dop(
         impl_->raw_transport = false;
         return {};
     }
+    impl_->dop_needs_prefill = true;
     LOG_DEBUG("WASAPI Exclusive DoP transport opened: " +
              std::to_string(actual.sample_rate) + "Hz, " +
              std::to_string(actual.channels) + "ch, PCM24 carrier (" +
@@ -676,6 +700,9 @@ AudioFormat WasapiBackend::open_dop(
 bool WasapiBackend::start() {
     if (!impl_->audio_client || active_) return false;
 
+    // A DoP pause wakes the render thread to stop it. Discard any remaining
+    // wake-up before starting the device again.
+    if (impl_->raw_transport) ResetEvent(impl_->event_handle);
     impl_->startup_event = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     if (!impl_->startup_event) return false;
 
@@ -761,6 +788,7 @@ bool WasapiBackend::flush_checked() {
         LOG_ERROR("WasapiBackend flush Reset failed: hr=" + log_hex(hr));
         return false;
     }
+    impl_->dop_needs_prefill = true;
     if (restart && !start()) return false;
     LOG_DEBUG("WasapiBackend flushed");
     return true;
@@ -798,5 +826,6 @@ void WasapiBackend::close() {
         impl_->wave_format = nullptr;
     }
     impl_->com_guard.reset();
+    opened_device_id_.clear();
     LOG_DEBUG("WasapiBackend closed");
 }

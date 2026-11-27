@@ -39,6 +39,54 @@ static void run(DspPipeline& pipeline, int source_rate, int output_rate, int tot
     }
 }
 
+static void live_speed_changes() {
+    constexpr int rate = 48000;
+    constexpr int block = 128;
+    DspPipeline pipeline;
+    pipeline.configure({rate, 16, 2}, {rate, 16, 2}, BackendType::ASIO, block);
+    std::vector<float> old_audio((block * 2 + 64) * 2, 0.25f);
+    std::vector<float> new_audio(old_audio.size(), -0.25f);
+    std::vector<float> output(block * 2);
+    const auto render = [&](const std::vector<float>& input) {
+        return pipeline.process(input.data(), static_cast<int>(input.size() / 2), 2,
+                                false, output.data(), block, 2);
+    };
+
+    CHECK(pipeline.set_playback_speed_config({true, 0.5f}));
+    int consumed = 0;
+    int generated = 0;
+    for (int callback = 0; callback < 1500; ++callback) {
+        const auto result = render(old_audio);
+        consumed += result.input_frames_used;
+        generated += result.output_frames_generated;
+        if (callback >= 50) CHECK(result.output_frames_generated == block);
+    }
+    CHECK(consumed * 2 - generated < rate / 4);
+
+    // The 1x bypass must play the old tail before consuming any dry input.
+    CHECK(pipeline.set_playback_speed_config({false, 1.0f}));
+    int tail = 0;
+    bool bypassed = false;
+    for (int callback = 0; callback < 100 && !bypassed; ++callback) {
+        const auto result = render(new_audio);
+        bypassed = result.input_frames_used == block;
+        if (!bypassed) tail += result.output_frames_generated;
+    }
+    CHECK(tail > 0 && bypassed && output.front() == new_audio.front());
+
+    // A fast move away from 1x must never replay samples from the old segment.
+    CHECK(pipeline.set_playback_speed_config({true, 2.0f}));
+    bool heard_new_audio = false;
+    for (int callback = 0; callback < 100; ++callback) {
+        const auto result = render(new_audio);
+        for (int i = 0; i < result.output_frames_generated * 2; ++i) {
+            CHECK(output[i] <= 0.0f);
+            heard_new_audio |= output[i] < -0.1f;
+        }
+    }
+    CHECK(heard_new_audio);
+}
+
 int main() {
     try {
         DspPipeline pipeline;
@@ -48,6 +96,7 @@ int main() {
             run(pipeline, 48000, 44100, 48000, 512, speed);
             run(pipeline, 44100, 48000, 44100, 4800, speed);
         }
+        live_speed_changes();
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
     std::cout << "Short/long streams, speed changes, SRC, repeated EOF and pipeline reuse passed\n";
 }

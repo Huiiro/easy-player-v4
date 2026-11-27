@@ -10,6 +10,7 @@ using PlatformAudioBackendFactory = WindowsAudioBackendFactory;
 #include <windows.h>
 #endif
 #include <napi.h>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -229,6 +230,7 @@ public:
             InstanceMethod("pause", &AudioEngineWrapper::Pause),
             InstanceMethod("stop", &AudioEngineWrapper::Stop),
             InstanceMethod("stopAsync", &AudioEngineWrapper::StopAsync),
+            InstanceMethod("restart", &AudioEngineWrapper::Restart),
             InstanceMethod("seek", &AudioEngineWrapper::Seek),
             InstanceMethod("setVolume", &AudioEngineWrapper::SetVolume),
             InstanceMethod("setPreamp", &AudioEngineWrapper::SetPreamp),
@@ -308,21 +310,7 @@ public:
         : Napi::ObjectWrap<AudioEngineWrapper>(info)
         , engine_(std::make_unique<AudioEngine>(std::make_shared<PlatformAudioBackendFactory>()))
     {
-        // Wire engine callbacks to JS
-        engine_->set_state_callback([this](EngineState state) {
-            NotifyState(state);
-        });
-        engine_->set_position_callback([this](double pos_ms, double dur_ms) {
-            NotifyPosition(pos_ms, dur_ms);
-        });
-        engine_->set_error_callback([this](int code, const std::string& msg) {
-            NotifyError(code, msg);
-        });
-        engine_->set_track_ended_callback([this](const std::string& reason, const std::string& file_path) {
-            NotifyTrackEnded(reason, file_path);
-        });
-
-        // Wire logger to JS console
+        BindEngineCallbacks(*engine_);
         Logger::instance().set_callback([this](LogLevel level, const std::string& msg) {
             NotifyLog(level, msg);
         });
@@ -331,10 +319,26 @@ public:
     ~AudioEngineWrapper() override {
         // Join background analysis while the callback holders are still alive.
         engine_.reset();
+        engine_events_->store(false);
         Logger::instance().set_callback({});
     }
 
 private:
+    void BindEngineCallbacks(AudioEngine& engine) {
+        engine.set_state_callback([this](EngineState state) {
+            NotifyState(state);
+        });
+        engine.set_position_callback([this](double pos_ms, double dur_ms) {
+            NotifyPosition(pos_ms, dur_ms);
+        });
+        engine.set_error_callback([this](int code, const std::string& msg) {
+            NotifyError(code, msg);
+        });
+        engine.set_track_ended_callback([this](const std::string& reason, const std::string& file_path) {
+            NotifyTrackEnded(reason, file_path);
+        });
+    }
+
     // ── Commands ──
 
     Napi::Value RejectCommand(const Napi::CallbackInfo& info, const char* name, const char* expected) {
@@ -388,6 +392,7 @@ private:
         Napi::Promise Promise() const { return deferred_.Promise(); }
 
         void Execute() override {
+            std::lock_guard<std::mutex> lock(owner_->operation_mutex_);
             const auto started = std::chrono::steady_clock::now();
             const auto before = owner_->engine_->state();
             const auto context = [&] {
@@ -399,7 +404,6 @@ private:
             };
             try {
                 LOG_DEBUG(context() + " begin");
-                std::lock_guard<std::mutex> lock(owner_->operation_mutex_);
                 result_ = open_ ? owner_->engine_->open(path_) : owner_->engine_->stop();
                 if (result_) LOG_DEBUG(context() + " completed");
                 else if (open_) LOG_WARN(context() + " returned false");
@@ -479,6 +483,21 @@ private:
         const auto promise = worker->Promise();
         worker->Queue();
         return promise;
+    }
+
+    Napi::Value Restart(const Napi::CallbackInfo& info) {
+        std::unique_lock<std::mutex> lock(operation_mutex_, std::try_to_lock);
+        if (!lock.owns_lock()) return Napi::Boolean::New(info.Env(), false);
+        return RunBoolCommand(info, "restart", [&](std::string&) {
+            auto events = std::make_shared<std::atomic<bool>>(true);
+            auto replacement = std::make_unique<AudioEngine>(std::make_shared<PlatformAudioBackendFactory>());
+            BindEngineCallbacks(*replacement);
+            engine_ = std::move(replacement);
+            // Stop delivering queued callbacks from the old engine after its threads have joined.
+            engine_events_->store(false);
+            engine_events_ = std::move(events);
+            return true;
+        });
     }
 
     Napi::Value Seek(const Napi::CallbackInfo& info) {
@@ -1128,12 +1147,16 @@ private:
     }
 
     Napi::Value GetAudioChain(const Napi::CallbackInfo& info) {
+        std::unique_lock<std::mutex> lock(operation_mutex_, std::try_to_lock);
+        if (!lock.owns_lock()) return info.Env().Null();
         const auto chain = engine_->audio_chain_status();
         const auto make_format = [&info](const AudioFormat& format) {
             auto obj = Napi::Object::New(info.Env());
             obj.Set("sampleRate", Napi::Number::New(info.Env(), format.sample_rate));
             obj.Set("bitDepth", Napi::Number::New(info.Env(), format.bit_depth));
             obj.Set("channels", Napi::Number::New(info.Env(), format.channels));
+            obj.Set("containerBits", Napi::Number::New(info.Env(), format.container_bits));
+            obj.Set("floatingPoint", Napi::Boolean::New(info.Env(), format.floating_point));
             return obj;
         };
         const auto make_strings = [&info](const std::vector<std::string>& values) {
@@ -1147,6 +1170,17 @@ private:
         auto obj = Napi::Object::New(info.Env());
         obj.Set("sourceFormat", make_format(chain.source_format));
         obj.Set("backendFormat", make_format(chain.backend_format));
+        obj.Set("originalFormat", make_format(chain.original_format));
+        obj.Set("decodedPcmFormat", make_format(chain.decoded_pcm_format));
+        obj.Set("sourceCodec", Napi::String::New(info.Env(), chain.source_codec));
+        obj.Set("sourceLabel", Napi::String::New(info.Env(), chain.source_label));
+        obj.Set("outputTransport", Napi::String::New(info.Env(), chain.output_transport));
+        obj.Set("dopFallbackReason", Napi::String::New(info.Env(), chain.dop_fallback_reason));
+        obj.Set("dopCarrierRate", Napi::Number::New(info.Env(), chain.dop_carrier_rate));
+        obj.Set("outputDeviceId", Napi::String::New(info.Env(),
+            std::u16string(chain.output_device_id.begin(), chain.output_device_id.end())));
+        obj.Set("outputBufferFrames", Napi::Number::New(info.Env(), chain.output_buffer_frames));
+        obj.Set("outputLatencyMs", Napi::Number::New(info.Env(), chain.output_latency_ms));
         obj.Set("activeNodes", make_strings(chain.active_nodes));
         obj.Set("bypassedNodes", make_strings(chain.bypassed_nodes));
         obj.Set("bitPerfectBlockers", make_strings(chain.bit_perfect_blockers));
@@ -1165,6 +1199,7 @@ private:
         obj.Set("outputTimeMs", Napi::Number::New(info.Env(), value.output_time_ms)); obj.Set("analysisTimeMs", Napi::Number::New(info.Env(), value.analysis_time_ms)); obj.Set("analysisLatencyMs", Napi::Number::New(info.Env(), value.analysis_latency_ms)); obj.Set("rms", Napi::Number::New(info.Env(), value.rms));
         obj.Set("lowEnergy", Napi::Number::New(info.Env(), value.low_energy)); obj.Set("onsetStrength", Napi::Number::New(info.Env(), value.onset_strength));
         obj.Set("droppedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.dropped_frames)));
+        obj.Set("glitchCount", Napi::Number::New(info.Env(), value.glitch_count));
         obj.Set("clipGuardLimitedFrames", Napi::Number::New(info.Env(), static_cast<double>(value.clip_guard_limited_frames)));
         obj.Set("clipGuardReductionDb", Napi::Number::New(info.Env(), value.clip_guard_reduction_db));
         obj.Set("beatSequence", Napi::Number::New(info.Env(), static_cast<double>(value.beat_sequence)));
@@ -1262,7 +1297,8 @@ private:
     void NotifyState(EngineState state) {
         if (!state_tsfn_) return;
         int s = (int)state;
-        state_tsfn_->NonBlockingCall([s](Napi::Env env, Napi::Function jsCallback) {
+        state_tsfn_->NonBlockingCall([s, events = engine_events_](Napi::Env env, Napi::Function jsCallback) {
+            if (!events->load()) return;
             jsCallback.Call({Napi::Number::New(env, s)});
         });
     }
@@ -1270,7 +1306,8 @@ private:
     void NotifyPosition(double pos_ms, double dur_ms) {
         if (!pos_tsfn_) return;
         double p = pos_ms, d = dur_ms;
-        pos_tsfn_->NonBlockingCall([p, d](Napi::Env env, Napi::Function jsCallback) {
+        pos_tsfn_->NonBlockingCall([p, d, events = engine_events_](Napi::Env env, Napi::Function jsCallback) {
+            if (!events->load()) return;
             jsCallback.Call({
                 Napi::Number::New(env, p),
                 Napi::Number::New(env, d)
@@ -1280,7 +1317,8 @@ private:
 
     void NotifyTrackEnded(const std::string& reason, const std::string& file_path) {
         if (!track_ended_tsfn_) return;
-        track_ended_tsfn_->NonBlockingCall([reason, file_path](Napi::Env env, Napi::Function jsCallback) {
+        track_ended_tsfn_->NonBlockingCall([reason, file_path, events = engine_events_](Napi::Env env, Napi::Function jsCallback) {
+            if (!events->load()) return;
             jsCallback.Call({Napi::String::New(env, reason), Napi::String::New(env, file_path)});
         });
     }
@@ -1289,7 +1327,8 @@ private:
         if (!error_tsfn_) return;
         int c = code;
         std::string m = msg;
-        error_tsfn_->NonBlockingCall([c, m](Napi::Env env, Napi::Function jsCallback) {
+        error_tsfn_->NonBlockingCall([c, m, events = engine_events_](Napi::Env env, Napi::Function jsCallback) {
+            if (!events->load()) return;
             jsCallback.Call({
                 Napi::Number::New(env, c),
                 Napi::String::New(env, m)
@@ -1311,6 +1350,7 @@ private:
 
     // ── Members ──
     std::unique_ptr<AudioEngine> engine_;
+    std::shared_ptr<std::atomic<bool>> engine_events_ = std::make_shared<std::atomic<bool>>(true);
     // `open` and `stop` can synchronously probe media, close CoreAudio and
     // join decoder threads. IPC runs them through AsyncWorker; this mutex also
     // keeps the synchronous shutdown path from racing that worker.

@@ -40,6 +40,8 @@ import {
   type PlaybackSessionWrite
 } from '../../../../shared/playbackSession'
 
+const maxConsecutivePlaybackFailures = 5
+
 export const usePlayerStore = defineStore('player', () => {
   const { warning, success, info } = useMessage()
   const ui = useUIStore()
@@ -192,6 +194,7 @@ export const usePlayerStore = defineStore('player', () => {
     startsRound: boolean
   } | null = null
   const unavailableSongIds = new Set<number>()
+  let consecutivePlaybackFailures = 0
   let queueRevision = 0
   let queuePlaybackInProgress = false
   let playbackEpoch = 0
@@ -589,6 +592,7 @@ export const usePlayerStore = defineStore('player', () => {
     queuePlaylistId.value = playlistId
     currentQueueIndex.value = -1
     unavailableSongIds.clear()
+    consecutivePlaybackFailures = 0
     resolvedQueuePaths.clear()
     shufflePlayedSongIds.clear()
     normalShuffleOrder = null
@@ -620,11 +624,15 @@ export const usePlayerStore = defineStore('player', () => {
     if (!song) return false
     const startsRound = shuffleReservation?.songId === song.id && shuffleReservation.startsRound
     const songName = displaySongName(song)
+    currentQueueIndex.value = index
     if (song.songStatus === 0) {
-      warning(t('queue.trackSkipped', { title: songName }))
+      useLogStore().addEntry({
+        level: 'warn',
+        message: `Skipping unavailable track “${songName}”`,
+        timestamp: Date.now()
+      })
       return false
     }
-    currentQueueIndex.value = index
     schedulePlaybackSessionSave()
     let remoteFile: { success: boolean; data?: string; error?: string } | null = null
     try {
@@ -635,7 +643,6 @@ export const usePlayerStore = defineStore('player', () => {
     if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
     if (song.sourceId && (!remoteFile?.success || !remoteFile.data)) {
       console.warn('[player] Unable to cache remote song:', remoteFile?.error)
-      warning(t('queue.trackSkipped', { title: songName }))
       useLogStore().addEntry({
         level: 'warn',
         message: `Skipping unavailable remote track “${songName}”: ${remoteFile?.error || 'cache failed'}`,
@@ -645,10 +652,17 @@ export const usePlayerStore = defineStore('player', () => {
     }
     const path = remoteFile?.data || song.audio
     resolvedQueuePaths.set(song.id, path)
-    const opened = await openFile(path)
-    if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
-    currentQueueIndex.value = queue.value.findIndex((item) => item.id === song.id)
-    const started = opened && (await play(startOrigin))
+    let started = false
+    let playbackError = ''
+    try {
+      const opened = await openFile(path)
+      if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id))
+        return false
+      currentQueueIndex.value = queue.value.findIndex((item) => item.id === song.id)
+      started = opened && (await play(startOrigin))
+    } catch (error) {
+      playbackError = String(error)
+    }
     if (revision !== queueRevision || !queue.value.some((item) => item.id === song.id)) return false
     currentQueueIndex.value = queue.value.findIndex((item) => item.id === song.id)
     if (started) {
@@ -657,18 +671,31 @@ export const usePlayerStore = defineStore('player', () => {
       beginHistory(song, startOrigin)
       return true
     }
-    warning(t('queue.trackSkipped', { title: songName }))
     useLogStore().addEntry({
       level: 'warn',
-      message: `Skipping unplayable track “${songName}”`,
+      message: `Skipping unplayable track “${songName}”${playbackError ? `: ${playbackError}` : ''}`,
       timestamp: Date.now()
     })
     return false
   }
 
+  function finishFailedQueuePlayback(): void {
+    currentFile.value = null
+    trackInfo.value = null
+    positionMs.value = 0
+    durationMs.value = 0
+    state.value = 'stopped'
+    stopAudioAnalysisPolling()
+    savePlaybackSessionSync()
+    warning(
+      consecutivePlaybackFailures >= maxConsecutivePlaybackFailures
+        ? t('queue.playbackFailureLimit', { count: maxConsecutivePlaybackFailures })
+        : t('queue.playbackFailureExhausted')
+    )
+  }
+
   /**
-   * Starts the requested queue item, then keeps advancing through distinct candidates
-   * when a local file is missing or a remote source cannot provide its cached stream.
+   * Tries distinct candidates within the consecutive playback failure limit.
    */
   async function playQueueItem(
     index: number,
@@ -681,6 +708,7 @@ export const usePlayerStore = defineStore('player', () => {
   ): Promise<boolean> {
     if (index < 0 || index >= queue.value.length) return false
     if (queuePlaybackInProgress) return false
+    if (startOrigin !== 'automatic') consecutivePlaybackFailures = 0
     if (reason === 'selected') unavailableSongIds.delete(queue.value[index].id)
     queuePlaybackInProgress = true
     const revision = queueRevision
@@ -722,20 +750,16 @@ export const usePlayerStore = defineStore('player', () => {
         if (revision !== queueRevision) return false
         unavailableSongIds.add(candidateId)
         shuffleReservation = null
+        if (++consecutivePlaybackFailures >= maxConsecutivePlaybackFailures) break
         candidate = nextIndex(
           new Set(queue.value.flatMap((song, index) => (attempted.has(song.id) ? [index] : [])))
         )
       }
-      currentFile.value = null
-      trackInfo.value = null
-      positionMs.value = 0
-      durationMs.value = 0
-      state.value = 'stopped'
-      savePlaybackSessionSync()
+      finishFailedQueuePlayback()
       return false
     } finally {
       queuePlaybackInProgress = false
-      void syncNextTrack()
+      if (currentFile.value) void syncNextTrack()
     }
   }
 
@@ -1023,7 +1047,10 @@ export const usePlayerStore = defineStore('player', () => {
     if (queuePlaybackInProgress) return
     const revision = ++nextTrackRevision
     const index =
-      !ui.extremePlayback && !stopAfterCurrent.value && transitionConfig.value.gaplessEnabled
+      currentFile.value &&
+      !ui.extremePlayback &&
+      !stopAfterCurrent.value &&
+      transitionConfig.value.gaplessEnabled
         ? previewNextIndex()
         : -1
     const song = queue.value[index]
@@ -1099,7 +1126,10 @@ export const usePlayerStore = defineStore('player', () => {
     reason: 'next' | 'previous' | 'selected' | 'stopped' = 'stopped',
     preserveQueueRequest = false
   ): Promise<boolean> {
-    if (!preserveQueueRequest) queueRevision++
+    if (!preserveQueueRequest) {
+      queueRevision++
+      consecutivePlaybackFailures = 0
+    }
     playbackEpoch++
     nextTrackRevision++
     preparedNextIndex = -1
@@ -1463,6 +1493,57 @@ export const usePlayerStore = defineStore('player', () => {
     void syncNextTrack()
     return result
   }
+
+  async function applyAudioProcessingProfile(
+    name: string
+  ): Promise<{ success: boolean; error?: string }> {
+    const result = await audioBridge.applyAudioProcessingProfile(name)
+    if (!result.success) return result
+    if (result.preamp) {
+      preampDb.value = result.preamp.db
+      preampEnabled.value = result.preamp.enabled
+    }
+    await initializePersistentState()
+    await refreshAudioChain()
+    void syncNextTrack()
+    return result
+  }
+
+  async function restartAudioEngine(): Promise<{ success: boolean; error?: string }> {
+    if (queuePlaybackInProgress || autoAdvanceInProgress) {
+      return { success: false, error: 'playback_busy' }
+    }
+    const epoch = playbackEpoch
+    const result = await audioBridge.restartAudioEngine()
+    if (!result.success && !result.restarted) return result
+    if (epoch === playbackEpoch) {
+      ++playbackEpoch
+      ++nextTrackRevision
+      preparedNextIndex = -1
+      preparedNextPath = ''
+      preparedNextSongId = undefined
+      nextTrackRequest = null
+      state.value = 'idle'
+      pauseHistory()
+      if (currentFile.value) {
+        if (result.resume?.filePath === currentFile.value)
+          positionMs.value = result.resume.positionMs
+        deferredRestore = { filePath: currentFile.value, positionMs: positionMs.value }
+      }
+      schedulePlaybackSessionSave()
+    }
+    updateAudioAnalysisPolling()
+    setLoudnessAnalysisEnabled(audioPipelineLoudness, 'pipeline')
+    await Promise.allSettled([
+      loadOutputDeviceSettings(),
+      loadImpulseResponseConfig(),
+      refreshAudioChain(),
+      refreshAudioAnalysis(),
+      audioBridge.setSpectrumAnalysisEnabled(audioAnalysisIncludesSpectrum),
+      window.api.audio.setEqSpectrumAnalysisEnabled(audioAnalysisIncludesEqSpectrum)
+    ])
+    return result
+  }
   async function loadReplayGain(): Promise<void> {
     const c = await audioBridge.getReplayGain()
     if (c) replayGainConfig.value = c
@@ -1778,18 +1859,22 @@ export const usePlayerStore = defineStore('player', () => {
     devices.value = await audioBridge.enumerateDevices()
   }
 
-  async function refreshAudioChain(): Promise<void> {
-    audioChain.value = await audioBridge.getAudioChain()
+  async function refreshAudioChain(): Promise<boolean> {
+    const snapshot = await audioBridge.getAudioChain()
+    if (!snapshot) return false
+    audioChain.value = snapshot
+    return true
   }
   async function refreshAudioAnalysis(
     includeSpectrum = false,
     includeEqSpectrum = false
-  ): Promise<void> {
-    if (ui.extremePlayback) return
+  ): Promise<boolean> {
+    if (ui.extremePlayback) return false
     const revision = eqSpectrumRevision
     const snapshot = await audioBridge.getAudioAnalysis(includeSpectrum, includeEqSpectrum)
-    if (!snapshot || ui.extremePlayback) return
-    const { eqSpectrum: levels, ...meters } = snapshot
+    if (!snapshot || ui.extremePlayback) return false
+    const { eqSpectrum: levels, glitchCount: glitches, ...meters } = snapshot
+    if (glitches !== undefined) glitchCount.value = glitches
     if (includeEqSpectrum && revision === eqSpectrumRevision) eqSpectrum.value = levels
     audioAnalysis.value = {
       ...meters,
@@ -1797,9 +1882,19 @@ export const usePlayerStore = defineStore('player', () => {
       clipGuardReductionDb: snapshot.clipGuardReductionDb ?? 0,
       spectrum: snapshot.spectrum ?? audioAnalysis.value.spectrum
     }
+    return true
   }
-  function setLoudnessAnalysisEnabled(enabled: boolean): void {
-    void audioBridge.setLoudnessAnalysisEnabled(enabled && !ui.extremePlayback)
+  let audioPipelineLoudness = false
+  let developerLoudness = false
+  function setLoudnessAnalysisEnabled(
+    enabled: boolean,
+    consumer: 'pipeline' | 'dev' = 'dev'
+  ): void {
+    if (consumer === 'pipeline') audioPipelineLoudness = enabled
+    else developerLoudness = enabled
+    void audioBridge.setLoudnessAnalysisEnabled(
+      (audioPipelineLoudness || developerLoudness) && !ui.extremePlayback
+    )
   }
 
   /**
@@ -1902,10 +1997,10 @@ export const usePlayerStore = defineStore('player', () => {
   let unsubs: (() => void)[] = []
   let eventsSubscribed = false
   let analysisTimer: ReturnType<typeof setTimeout> | undefined
-  const audioControlAnalysisPollingRate = 2
+  const audioPipelineAnalysisPollingRate = 2
   const eqSpectrumPollingRate = 30
   const eqSpectrum = shallowRef<number[]>()
-  let audioControlAnalysisActive = false
+  let audioPipelineAnalysisActive = false
   let eqSpectrumRequested = false
   let audioAnalysisIncludesEqSpectrum = false
   let eqSpectrumRevision = 0
@@ -1967,9 +2062,9 @@ export const usePlayerStore = defineStore('player', () => {
     updateAudioAnalysisPolling()
   }
 
-  function setAudioControlAnalysisActive(active: boolean): void {
-    if (audioControlAnalysisActive === active) return
-    audioControlAnalysisActive = active
+  function setAudioPipelineAnalysisActive(active: boolean): void {
+    if (audioPipelineAnalysisActive === active) return
+    audioPipelineAnalysisActive = active
     updateAudioAnalysisPolling()
   }
 
@@ -1995,7 +2090,7 @@ export const usePlayerStore = defineStore('player', () => {
         ? 0
         : Math.max(
             playerPanelAnalysisPollingRate,
-            audioControlAnalysisActive ? audioControlAnalysisPollingRate : 0,
+            audioPipelineAnalysisActive ? audioPipelineAnalysisPollingRate : 0,
             includeEqSpectrum ? eqSpectrumPollingRate : 0
           )
     const includeSpectrum = normalized > 0 && playerPanelAnalysisIncludesSpectrum
@@ -2035,6 +2130,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (!currentFile.value || (filePath && filePath !== currentFile.value)) return
     if (queuePlaybackInProgress) return
     if (reason === 'transition') {
+      consecutivePlaybackFailures = 0
       const epoch = ++playbackEpoch
       const incomingPath = nextFilePath || preparedNextPath
       const index = nextFilePath
@@ -2104,6 +2200,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (autoAdvanceInProgress || (!filePath && now - lastTrackEndedAt < 500)) return
     lastTrackEndedAt = now
     autoAdvanceInProgress = true
+    if (reason !== 'decode_error') consecutivePlaybackFailures = 0
     state.value = 'stopped'
     stopAudioAnalysisPolling()
     useLogStore().addEntry({
@@ -2116,6 +2213,15 @@ export const usePlayerStore = defineStore('player', () => {
       if (stopAfterCurrent.value) {
         stopAfterCurrent.value = false
       } else {
+        if (reason === 'decode_error') {
+          if (currentQueueSong.value) unavailableSongIds.add(currentQueueSong.value.id)
+          const next =
+            ++consecutivePlaybackFailures < maxConsecutivePlaybackFailures ? previewNextIndex() : -1
+          if (next < 0 || next === currentQueueIndex.value) {
+            finishFailedQueuePlayback()
+            return
+          }
+        }
         await playNext(undefined, true)
       }
     } finally {
@@ -2191,6 +2297,8 @@ export const usePlayerStore = defineStore('player', () => {
         if (data.trackInfo) {
           trackInfo.value = data.trackInfo as TrackInfo
         }
+        // Backend recovery can publish "playing" again after reopening the device.
+        if (audioPipelineAnalysisActive && data.state === 'playing') void refreshAudioChain()
       })
     )
     unsubs.push(window.api.miniPlayer.onAction(handleMiniPlayerAction))
@@ -2209,7 +2317,7 @@ export const usePlayerStore = defineStore('player', () => {
 
     unsubs.push(
       audioBridge.onAudioChainChanged((data) => {
-        audioChain.value = data
+        if (data) audioChain.value = data
       })
     )
     unsubs.push(
@@ -2384,6 +2492,8 @@ export const usePlayerStore = defineStore('player', () => {
     setVolume,
     setPreamp,
     resetAudioProcessingSettings,
+    applyAudioProcessingProfile,
+    restartAudioEngine,
     loadReplayGain,
     setReplayGain,
     loadPlaybackSpeed,
@@ -2431,7 +2541,7 @@ export const usePlayerStore = defineStore('player', () => {
     refreshAudioAnalysis,
     setLoudnessAnalysisEnabled,
     setAudioAnalysisPollingRate,
-    setAudioControlAnalysisActive,
+    setAudioPipelineAnalysisActive,
     setEqSpectrumActive,
     initializePersistentState,
     loadRhythmVisualConfig,

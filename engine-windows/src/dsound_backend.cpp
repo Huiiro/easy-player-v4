@@ -274,6 +274,12 @@ AudioFormat DSoundBackend::open(
     current_format_.sample_rate = fmt.nSamplesPerSec;
     current_format_.bit_depth = fmt.wBitsPerSample;
     current_format_.channels = fmt.nChannels;
+    current_format_.container_bits = fmt.wBitsPerSample;
+    GUID default_id{};
+    wchar_t opened_id[64]{};
+    if (SUCCEEDED(GetDeviceID(&DSDEVID_DefaultPlayback, &default_id)) &&
+        StringFromGUID2(default_id, opened_id, 64) > 0) opened_device_id_ = opened_id;
+    else opened_device_id_ = L"default";
 
     buffer_frames_ = half_frames; // half buffer = 100ms
     latency_ms_ = (double)(half_frames * 2) / fmt.nSamplesPerSec * 1000.0; // total 200ms

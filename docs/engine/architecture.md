@@ -4,7 +4,8 @@
 
 ```text
 engine-core/       Cross-platform decoder, playback state, DSP and backend contracts
-engine-windows/    WASAPI, ASIO, DirectSound and the Electron N-API adapter
+engine-windows/    WASAPI, ASIO, DirectSound and the desktop N-API adapter
+engine-macos/      Core Audio backend and device factory
 engine-android/    AAudio backend, JNI bridge and Android build integration
 src/               Existing Electron/Vue desktop application
 mobile/            Reserved Flutter application
@@ -15,6 +16,9 @@ because `npm run build:native` invokes it. It links `engine-core` with
 `engine-windows`; it contains no engine implementation files itself.
 
 ## Core boundary
+
+The [core module map](../../engine-core/README.md#source-modules) shows where
+playback, decoding and DSP are implemented.
 
 `AudioEngine` owns the parts that must behave consistently on every platform:
 
@@ -48,9 +52,11 @@ The factory is responsible for platform policy:
 
 ```text
 control thread ── open/play/seek/DSP configuration
-decoder thread ── FFmpeg decode → PCM ring buffer
-audio thread   ── ring buffer → DSP → AudioBackend callback
-analysis thread ─ final PCM analysis → spectrum/loudness snapshot
+decoder thread ── FFmpeg decode and track overlap → PCM or DoP ring buffer
+audio thread   ── PCM ring buffer → DSP → device output, or DoP ring buffer → device output
+analysis thread ─ PCM analysis taps → spectrum/beat/loudness snapshots
+Auto Mix worker ─ independent decoders → overlap plan for the active track pair
+timer thread   ── position and end-of-track notifications
 ```
 
 Only the control thread changes engine configuration. The audio callback uses

@@ -135,6 +135,29 @@ export interface DspSettings {
   outputDevice: PersistedOutputDevice
 }
 
+export type AudioProcessingSettings = Omit<DspSettings, 'volume' | 'outputDevice'>
+
+interface AudioProcessingProfile {
+  name: string
+  settings: AudioProcessingSettings
+}
+
+const AUDIO_PROCESSING_PROFILES_KEY = 'audio.processing-profiles'
+
+export function loadAudioProcessingProfiles(): AudioProcessingProfile[] {
+  const profiles = getAppSetting(AUDIO_PROCESSING_PROFILES_KEY)
+  return Array.isArray(profiles)
+    ? profiles.filter(
+        (profile): profile is AudioProcessingProfile =>
+          typeof profile?.name === 'string' && profile.settings?.version === 1
+      )
+    : []
+}
+
+export function saveAudioProcessingProfiles(profiles: AudioProcessingProfile[]): void {
+  setAppSetting(AUDIO_PROCESSING_PROFILES_KEY, profiles)
+}
+
 export const defaultDspSettings = (): DspSettings => ({
   version: 1,
   volume: 1,

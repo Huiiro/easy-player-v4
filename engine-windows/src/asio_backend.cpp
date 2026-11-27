@@ -455,6 +455,17 @@ AudioFormat AsioBackend::open(const std::wstring& dev_id,
     }
     current_format_.sample_rate=(int)sr;current_format_.bit_depth=valid_bits;
     current_format_.channels=uc;buffer_frames_=(int)impl_->buffer_size;
+    const auto container_bits = [](int type) {
+        if (type == ASIOSTInt16LSB) return 16;
+        if (type == ASIOSTInt24LSB) return 24;
+        return 32;
+    };
+    const int first_container_bits = container_bits(impl_->channel_types.front());
+    current_format_.container_bits = std::all_of(impl_->channel_types.begin(), impl_->channel_types.end(),
+        [&](int type) { return container_bits(type) == first_container_bits; }) ? first_container_bits : 0;
+    current_format_.floating_point = std::all_of(impl_->channel_types.begin(), impl_->channel_types.end(),
+        [](int type) { return type == ASIOSTFloat32LSB; });
+    opened_device_id_ = cs;
 
     LOG_DEBUG("AsioBackend opened: "+impl_->driver_name+" "+std::to_string(current_format_.sample_rate)+"Hz "+
              std::to_string(uc)+"ch "+std::to_string(impl_->buffer_size)+"samp");
@@ -582,4 +593,5 @@ void AsioBackend::close() {
     impl_->events.store(BackendEventNone, std::memory_order_release);
     impl_->com.reset(); // IASIO released before COM, on the creating thread.
     current_format_ = {}; buffer_frames_ = 0; latency_ms_ = 0;
+    opened_device_id_.clear();
 }

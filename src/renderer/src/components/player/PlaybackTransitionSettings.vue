@@ -13,30 +13,10 @@ const mixDisabledBySpeed = computed(
 )
 </script>
 <template>
-  <div class="space-y-4 text-xs">
+  <div class="space-y-6 text-xs">
     <AutoMixRuntimeSettings />
-    <p class="text-text-l">{{ t('ap.pauseFadeDesc') }}</p>
-    <div class="flex items-center gap-3">
-      <BaseSwitch
-        v-model="player.transitionConfig.pauseFadeEnabled"
-        class="w-fit text-left"
-        @change="player.setTransitionConfig()"
-      >
-        {{ t('ap.pauseFade') }}
-      </BaseSwitch>
-    </div>
-    <DspKnobField
-      v-if="player.transitionConfig.pauseFadeEnabled"
-      v-model="player.transitionConfig.pauseFadeMs"
-      :label="t('ap.pauseFadeDuration')"
-      :description="t('ap.pauseFadeDesc')"
-      :min="50"
-      :max="1000"
-      :step="10"
-      unit="ms"
-      @change="player.setTransitionConfig()"
-    />
-    <div class="flex items-center gap-3">
+    <section class="space-y-3">
+      <h4 class="text-sm font-semibold">{{ t('ap.trackTransitions') }}</h4>
       <BaseSwitch
         v-model="player.transitionConfig.gaplessEnabled"
         class="w-fit text-left"
@@ -44,59 +24,81 @@ const mixDisabledBySpeed = computed(
       >
         {{ t('ap.gapless') }}
       </BaseSwitch>
-    </div>
-    <p v-if="mixDisabledBySpeed" class="text-text-l" role="status">
-      {{ t('ap.crossfadeDisabledBySpeed') }}
-    </p>
-    <fieldset
-      :disabled="mixDisabledBySpeed"
-      :aria-label="t('ap.crossfade')"
-      class="min-w-0 space-y-4"
-      :class="mixDisabledBySpeed && 'opacity-50'"
-    >
-      <div class="flex items-center gap-3">
-        <BaseSwitch
-          v-model="player.transitionConfig.crossfadeEnabled"
-          class="w-fit text-left"
-          :disabled="!player.transitionConfig.gaplessEnabled"
-          @change="player.setTransitionConfig()"
-        >
-          {{ t('ap.crossfade') }}
-        </BaseSwitch>
-      </div>
-      <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3">
-        <BaseSwitch
-          v-model="player.transitionConfig.crossfadeAuto"
-          class="w-fit text-left"
-          @change="player.setTransitionConfig()"
-        >
-          {{ t('ap.crossfadeAuto') }}
-        </BaseSwitch>
-      </div>
-      <div
-        v-if="player.transitionConfig.crossfadeEnabled && player.transitionConfig.crossfadeAuto"
-        class="space-y-1"
+      <p v-if="mixDisabledBySpeed" class="text-text-l" role="status">
+        {{ t('ap.crossfadeDisabledBySpeed') }}
+      </p>
+      <fieldset
+        :disabled="mixDisabledBySpeed"
+        :aria-label="t('ap.crossfade')"
+        class="min-w-0 space-y-3"
+        :class="mixDisabledBySpeed && 'opacity-50'"
       >
-        <BaseSwitch
-          v-model="player.transitionConfig.crossfadeVocalCue"
-          class="w-fit text-left"
-          @change="player.setTransitionConfig()"
+        <div class="flex items-center gap-3">
+          <BaseSwitch
+            v-model="player.transitionConfig.crossfadeEnabled"
+            class="w-fit text-left"
+            :disabled="!player.transitionConfig.gaplessEnabled"
+            @change="player.setTransitionConfig()"
+          >
+            {{ t('ap.crossfade') }}
+          </BaseSwitch>
+        </div>
+        <div v-if="player.transitionConfig.crossfadeEnabled" class="flex items-center gap-3">
+          <BaseSwitch
+            v-model="player.transitionConfig.crossfadeAuto"
+            class="w-fit text-left"
+            @change="player.setTransitionConfig()"
+          >
+            {{ t('ap.crossfadeAuto') }}
+          </BaseSwitch>
+        </div>
+        <div
+          v-if="player.transitionConfig.crossfadeEnabled && player.transitionConfig.crossfadeAuto"
+          class="space-y-1"
         >
-          {{ t('ap.crossfadeVocalCue') }}
-        </BaseSwitch>
-        <p class="text-text-l">{{ t('ap.crossfadeVocalCueDesc') }}</p>
-      </div>
+          <BaseSwitch
+            v-model="player.transitionConfig.crossfadeVocalCue"
+            class="w-fit text-left"
+            @change="player.setTransitionConfig()"
+          >
+            {{ t('ap.crossfadeVocalCue') }}
+          </BaseSwitch>
+          <p class="text-text-l">{{ t('ap.crossfadeVocalCueDesc') }}</p>
+        </div>
+        <DspKnobField
+          v-if="player.transitionConfig.crossfadeEnabled"
+          v-model="player.transitionConfig.crossfadeMs"
+          :label="t('ap.crossfade')"
+          :description="t('ap.crossfadeAutoDesc')"
+          :min="0"
+          :max="30000"
+          :step="100"
+          unit="ms"
+          @change="player.setTransitionConfig()"
+        />
+      </fieldset>
+    </section>
+    <section class="space-y-3">
+      <h4 class="text-sm font-semibold">{{ t('ap.pauseResume') }}</h4>
+      <BaseSwitch
+        v-model="player.transitionConfig.pauseFadeEnabled"
+        class="w-fit text-left"
+        @change="player.setTransitionConfig()"
+      >
+        {{ t('ap.pauseFade') }}
+      </BaseSwitch>
       <DspKnobField
-        v-if="player.transitionConfig.crossfadeEnabled"
-        v-model="player.transitionConfig.crossfadeMs"
-        :label="t('ap.crossfade')"
-        :description="t('ap.crossfadeAutoDesc')"
-        :min="0"
-        :max="30000"
-        :step="100"
+        v-if="player.transitionConfig.pauseFadeEnabled"
+        v-model="player.transitionConfig.pauseFadeMs"
+        :label="t('ap.pauseFadeDuration')"
+        :description="t('ap.pauseFadeDesc')"
+        :min="50"
+        :max="1000"
+        :step="10"
         unit="ms"
         @change="player.setTransitionConfig()"
       />
-    </fieldset>
+      <p v-else class="text-text-l">{{ t('ap.pauseFadeDesc') }}</p>
+    </section>
   </div>
 </template>

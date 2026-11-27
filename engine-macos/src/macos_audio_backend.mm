@@ -59,7 +59,7 @@ AudioFormat MacOSAudioBackend::open(const std::wstring&, const AudioFormat& requ
     impl_->queue.store(queue, std::memory_order_release);
 
     impl_->callback = std::move(callback);
-    impl_->format = {sample_rate, 32, channels};
+    impl_->format = {sample_rate, 32, channels, 32, true};
     // About 20 ms, clamped to a safe lower bound. Triple buffering avoids
     // scheduling gaps without adding noticeable latency.
     impl_->buffer_frames = std::max(256, sample_rate / 50);
@@ -86,6 +86,7 @@ AudioFormat MacOSAudioBackend::open(const std::wstring&, const AudioFormat& requ
     }
     LOG_DEBUG("CoreAudio opened: " + std::to_string(sample_rate) + "Hz/" +
              std::to_string(channels) + "ch float PCM");
+    opened_device_id_ = L"default";
     return impl_->format;
 }
 
@@ -125,6 +126,7 @@ void MacOSAudioBackend::close() {
     impl_->callback = nullptr;
     impl_->format = {};
     impl_->buffer_frames = 0;
+    opened_device_id_.clear();
     closing_.store(false, std::memory_order_release);
 }
 

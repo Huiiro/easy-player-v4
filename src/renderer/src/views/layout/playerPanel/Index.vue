@@ -52,6 +52,9 @@ const StageBackground = defineAsyncComponent(() =>
   import('@/components/background/player/StageBackground.vue').then((module) => module.default)
 )
 const player = usePlayerStore()
+const speedPreview = ref<number | null>(null)
+const displayedSpeed = computed(() => speedPreview.value ?? player.playbackSpeedConfig.speed)
+let speedWheelTimer: number | undefined
 const volumeIcon = computed(() => `volume-volume-${getVolumeLevel(player.volume)}`)
 const { t } = useI18n()
 const router = useRouter()
@@ -679,18 +682,37 @@ function seekTo(positionMs: number): void {
 function cyclePlayMode(): void {
   player.setPlayMode(((player.playMode + 1) % 4) as PlayMode)
 }
-function setSpeed(event: Event): void {
+function previewSpeed(event: Event): void {
+  window.clearTimeout(speedWheelTimer)
+  speedWheelTimer = undefined
+  const speed = Number((event.target as HTMLInputElement).value)
+  speedPreview.value = speed === player.playbackSpeedConfig.speed ? null : speed
+}
+function commitSpeed(event: Event): void {
   setPlaybackSpeed(Number((event.target as HTMLInputElement).value))
 }
 function setPlaybackSpeed(speed: number): void {
-  player.playbackSpeedConfig.speed = Math.round(Math.max(0.5, Math.min(2, speed)) * 10) / 10
-  player.playbackSpeedConfig.enabled = player.playbackSpeedConfig.speed !== 1
+  window.clearTimeout(speedWheelTimer)
+  speedWheelTimer = undefined
+  speedPreview.value = null
+  const enabled = speed !== 1
+  if (speed === player.playbackSpeedConfig.speed && enabled === player.playbackSpeedConfig.enabled)
+    return
+  player.playbackSpeedConfig = { speed, enabled }
   void player.setPlaybackSpeed()
 }
 function changeSpeed(event: WheelEvent): void {
   event.preventDefault()
-  setPlaybackSpeed(player.playbackSpeedConfig.speed + (event.deltaY < 0 ? 0.1 : -0.1))
+  if (event.deltaY === 0) return
+  const next = displayedSpeed.value + (event.deltaY < 0 ? 0.1 : -0.1)
+  const speed = Math.round(Math.max(0.5, Math.min(2, next)) * 10) / 10
+  speedPreview.value = speed
+  window.clearTimeout(speedWheelTimer)
+  speedWheelTimer = window.setTimeout(() => setPlaybackSpeed(speed), 120)
 }
+onUnmounted(() => {
+  if (speedWheelTimer !== undefined) setPlaybackSpeed(displayedSpeed.value)
+})
 function changeVolume(event: WheelEvent): void {
   event.preventDefault()
   void player.setVolume(Math.max(0, Math.min(1, player.volume + (event.deltaY < 0 ? 0.05 : -0.05))))
@@ -972,7 +994,7 @@ function changeLyricsOffset(event: WheelEvent): void {
                     <svg-icon name="common-speed" class-name="w-[16px] h-[16px]" />
                   </button>
                 </template>
-                <b>{{ player.playbackSpeedConfig.speed.toFixed(1) }}×</b>
+                <b>{{ displayedSpeed.toFixed(1) }}×</b>
                 <input
                   :aria-label="t('playerPanel.speed')"
                   type="range"
@@ -980,8 +1002,9 @@ function changeLyricsOffset(event: WheelEvent): void {
                   min="0.5"
                   max="2"
                   step="0.1"
-                  :value="player.playbackSpeedConfig.speed"
-                  @input="setSpeed($event)"
+                  :value="displayedSpeed"
+                  @input="previewSpeed"
+                  @change="commitSpeed"
                 />
               </BaseTooltip>
               <!-- lyrics timing -->

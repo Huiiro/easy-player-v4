@@ -25,6 +25,7 @@ const { t } = useI18n()
       :max="2"
       :step="0.05"
       :decimals="2"
+      :live="false"
       unit="×"
       @change="player.setPlaybackSpeed()"
     />

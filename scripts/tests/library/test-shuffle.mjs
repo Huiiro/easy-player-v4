@@ -46,6 +46,7 @@ let holdNextTrackResponse = false
 const nextTrackResponses = []
 const openedPaths = []
 const broken = new Set()
+const playbackWarnings = []
 const bridge = new Proxy(
   {
     stop: async () => {
@@ -146,8 +147,14 @@ const module = load(
     '@/stores/statistics/statisticsStore': {
       useStatisticsStore: () => ({ enabled: true, generation: 'test', ready: true })
     },
-    '@/components/ui/useMessage': { useMessage: () => ({ warning() {}, success() {}, info() {} }) },
-    '@/i18n': { t: (key) => key },
+    '@/components/ui/useMessage': {
+      useMessage: () => ({
+        warning: (message) => playbackWarnings.push(message),
+        success() {},
+        info() {}
+      })
+    },
+    '@/i18n': { t: (key, args) => (args?.count === undefined ? key : `${key}:${args.count}`) },
     '@/constants': { PlayMode: { List: 0, Random: 1, Single: 2 } },
     '@/utils/eventBus': { default: { emit() {} } }
   },
@@ -627,6 +634,86 @@ assert.equal(
   'failed candidates are each attempted before giving up'
 )
 broken.clear()
+
+const bounded = player()
+bounded.setPlayMode(0)
+let opensBeforeFailure = openedPaths.length
+let warningsBeforeFailure = playbackWarnings.length
+for (const song of songs.slice(0, 6)) broken.add(song.audio)
+assert.equal(await bounded.playCollection(songs, songs[0].id), false)
+assert.deepEqual(
+  openedPaths.slice(opensBeforeFailure),
+  songs.slice(0, 5).map((song) => song.audio)
+)
+assert.equal(bounded.state, 'stopped')
+assert.deepEqual(playbackWarnings.slice(warningsBeforeFailure), ['queue.playbackFailureLimit:5'])
+warningsBeforeFailure = playbackWarnings.length
+assert.equal(
+  await bounded.playQueueItem(5),
+  true,
+  'manual playback can recover after reaching the cap'
+)
+assert.equal(bounded.currentQueueSong.id, songs[6].id)
+assert.equal(
+  playbackWarnings.length,
+  warningsBeforeFailure,
+  'successful recovery does not notify per failure'
+)
+broken.clear()
+
+const shortQueue = player()
+shortQueue.setPlayMode(0)
+shortQueue.setQueue([{ ...songs[0], songStatus: 0 }, songs[1]])
+assert.equal(
+  await shortQueue.playQueueItem(0),
+  true,
+  'a known missing track still advances to the next candidate'
+)
+assert.equal(shortQueue.currentQueueSong.id, songs[1].id)
+broken.add(songs[0].audio)
+broken.add(songs[1].audio)
+warningsBeforeFailure = playbackWarnings.length
+assert.equal(await shortQueue.playCollection(songs.slice(0, 2), songs[0].id), false)
+assert.deepEqual(playbackWarnings.slice(warningsBeforeFailure), ['queue.playbackFailureExhausted'])
+broken.clear()
+
+const repeatedDecodeFailure = player()
+repeatedDecodeFailure.setPlayMode(0)
+repeatedDecodeFailure.subscribeToEvents()
+await repeatedDecodeFailure.playCollection(songs, songs[0].id)
+broken.add(songs[1].audio)
+warningsBeforeFailure = playbackWarnings.length
+for (const index of [0, 2, 3, 4]) {
+  assert.equal(repeatedDecodeFailure.currentFile, songs[index].audio)
+  ended({ reason: 'decode_error', filePath: songs[index].audio })
+  await settle()
+}
+assert.equal(
+  repeatedDecodeFailure.currentFile,
+  null,
+  'decoder errors and failed opens share the same cap'
+)
+assert.equal(repeatedDecodeFailure.state, 'stopped')
+assert.deepEqual(playbackWarnings.slice(warningsBeforeFailure), ['queue.playbackFailureLimit:5'])
+broken.clear()
+
+const completedTrackResetsLimit = player()
+completedTrackResetsLimit.setPlayMode(0)
+completedTrackResetsLimit.subscribeToEvents()
+for (const song of songs.slice(0, 4)) broken.add(song.audio)
+assert.equal(await completedTrackResetsLimit.playCollection(songs, songs[0].id), true)
+broken.add(songs[5].audio)
+warningsBeforeFailure = playbackWarnings.length
+ended({ reason: 'eof', filePath: songs[4].audio })
+await settle()
+assert.equal(
+  completedTrackResetsLimit.currentFile,
+  songs[6].audio,
+  'normal EOF resets the failure limit'
+)
+assert.equal(playbackWarnings.length, warningsBeforeFailure)
+broken.clear()
+
 await p.playCollection([songs[0], { ...songs[1], songStatus: 0 }], songs[0].id)
 assert.equal(p.getNextQueueIndex(), 0, 'only playable song may repeat')
 await p.playCollection([], null)

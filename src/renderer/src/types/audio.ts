@@ -42,11 +42,23 @@ export interface AudioFormat {
   sampleRate: number
   bitDepth: number
   channels: number
+  containerBits?: number
+  floatingPoint?: boolean
 }
 
 export interface AudioChainStatus {
   sourceFormat: AudioFormat
   backendFormat: AudioFormat
+  originalFormat?: AudioFormat
+  decodedPcmFormat?: AudioFormat
+  sourceCodec?: string
+  sourceLabel?: string
+  outputTransport?: '' | 'pcm' | 'pcm_conversion' | 'dop'
+  dopFallbackReason?: string
+  dopCarrierRate?: number
+  outputDeviceId?: string
+  outputBufferFrames?: number
+  outputLatencyMs?: number
   activeNodes: string[]
   bypassedNodes: string[]
   bitPerfectBlockers: string[]

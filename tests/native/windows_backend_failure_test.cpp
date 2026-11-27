@@ -26,13 +26,17 @@ struct ClientStub : ComStub<15> {
 };
 struct RenderStub : ComStub<5> {
     bool fail_buffer = false;
+    HANDLE packet_ready = nullptr;
     std::array<float, 128> data{};
     RenderStub() {
         set(3, +[](RenderStub* self, UINT32, BYTE** output) -> HRESULT {
             *output = reinterpret_cast<BYTE*>(self->data.data());
             return self->fail_buffer ? AUDCLNT_E_DEVICE_INVALIDATED : S_OK;
         });
-        set(4, +[](RenderStub*, UINT32, DWORD) -> HRESULT { return S_OK; });
+        set(4, +[](RenderStub* self, UINT32, DWORD) -> HRESULT {
+            if (self->packet_ready) SetEvent(self->packet_ready);
+            return S_OK;
+        });
     }
 };
 struct NotifyStub : ComStub<4> {
@@ -64,12 +68,24 @@ struct WindowsBackendTest {
         im.render_client = reinterpret_cast<IAudioRenderClient*>(&render);
         im.wave_format = static_cast<WAVEFORMATEX*>(CoTaskMemAlloc(sizeof(WAVEFORMATEX)));
         *im.wave_format = {}; im.wave_format->nChannels = 2;
-        im.bytes_per_frame = 8; im.buffer_frames = 64;
+        im.buffer_frames = 64;
         im.event_handle = CreateEventW(nullptr, FALSE, FALSE, nullptr);
         CHECK(im.event_handle);
         im.callback = [](float* output, int frames, int channels) {
             std::fill(output, output + frames * channels, 0.0f); return frames;
         };
+    }
+    static void prepare_dop(WasapiBackend& backend, int container_bits, RawAudioCallback callback) {
+        auto& im = *backend.impl_;
+        im.raw_transport = true;
+        im.pcm_bits = container_bits;
+        im.pcm_valid_bits = 24;
+        im.buffer_frames = 33;
+        im.raw_callback = std::move(callback);
+        if (container_bits == 32) im.dop_scratch.resize(im.buffer_frames * 2 * 3);
+    }
+    static void request_buffer(WasapiBackend& backend) {
+        CHECK(SetEvent(backend.impl_->event_handle));
     }
     static void prepare(DSoundBackend& backend, BufferStub& buffer) {
         auto& im = *backend.impl_;
@@ -119,6 +135,67 @@ static void wasapi_failures() {
     }
 }
 
+static void wasapi_dop() {
+    for (int container_bits : {24, 32}) {
+        const std::unique_ptr<void, decltype(&CloseHandle)> packet_ready(
+            CreateEventW(nullptr, FALSE, FALSE, nullptr), CloseHandle);
+        CHECK(packet_ready);
+        ClientStub client;
+        RenderStub render;
+        render.packet_ready = packet_ready.get();
+        int frames_to_render = 1;
+        WasapiBackend backend(true);
+        WindowsBackendTest::prepare(backend, client, render);
+        WindowsBackendTest::prepare_dop(backend, container_bits,
+            [&frames_to_render](uint8_t* output, int, int channels) {
+                if (frames_to_render) {
+                    for (int channel = 0; channel < channels; ++channel) {
+                        output[channel * 3] = static_cast<uint8_t>(0x12 + channel);
+                        output[channel * 3 + 1] = static_cast<uint8_t>(0x34 + channel);
+                        output[channel * 3 + 2] = 0x05;
+                    }
+                }
+                return frames_to_render;
+            });
+
+        auto check_packet = [&](uint8_t marker, bool has_payload) {
+            CHECK(WaitForSingleObject(packet_ready.get(), 2000) == WAIT_OBJECT_0);
+            const auto* data = reinterpret_cast<const uint8_t*>(render.data.data());
+            const int bytes_per_sample = container_bits / 8;
+            for (int frame = 0; frame < 33; ++frame) {
+                for (int channel = 0; channel < 2; ++channel) {
+                    const auto* sample = data + (frame * 2 + channel) * bytes_per_sample;
+                    if (bytes_per_sample == 4) CHECK(*sample++ == 0);
+                    CHECK(sample[0] == (has_payload && frame == 0 ? 0x12 + channel : 0x69));
+                    CHECK(sample[1] == (has_payload && frame == 0 ? 0x34 + channel : 0x69));
+                    CHECK(sample[2] == marker);
+                }
+                marker = marker == 0x05 ? 0xFA : 0x05;
+            }
+        };
+
+        CHECK(backend.start());
+        check_packet(0x05, false);
+        WindowsBackendTest::request_buffer(backend);
+        check_packet(0xFA, true);
+        CHECK(backend.stop());
+
+        frames_to_render = 0;
+        CHECK(backend.start());
+        CHECK(WaitForSingleObject(packet_ready.get(), 0) == WAIT_TIMEOUT);
+        WindowsBackendTest::request_buffer(backend);
+        check_packet(0x05, false);
+        CHECK(backend.flush_checked());
+        check_packet(0x05, false);
+        CHECK(backend.stop());
+
+        CHECK(backend.flush_checked());
+        render.fail_buffer = true;
+        CHECK(!backend.start());
+        CHECK(backend.take_events() & BackendEventFailure);
+    }
+}
+
 static void dsound_failures() {
     {
         BufferStub buffer; DSoundBackend backend;
@@ -144,7 +221,7 @@ static void dsound_failures() {
 }
 
 int main() {
-    try { wasapi_failures(); dsound_failures(); }
+    try { wasapi_failures(); wasapi_dop(); dsound_failures(); }
     catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }
-    std::cout << "WASAPI/DirectSound startup, render failure and checked seek flush passed\n";
+    std::cout << "WASAPI/DirectSound startup, render failure, checked seek flush and DoP passed\n";
 }

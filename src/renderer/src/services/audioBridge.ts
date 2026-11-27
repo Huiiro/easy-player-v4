@@ -63,6 +63,12 @@ export const audioBridge = {
   async resetAudioProcessingSettings(): Promise<{ success: boolean; error?: string }> {
     return window.api.audio.resetAudioProcessingSettings()
   },
+  listAudioProcessingProfiles: () => window.api.audio.listAudioProcessingProfiles(),
+  saveAudioProcessingProfile: (name: string) => window.api.audio.saveAudioProcessingProfile(name),
+  applyAudioProcessingProfile: (name: string) => window.api.audio.applyAudioProcessingProfile(name),
+  deleteAudioProcessingProfile: (name: string) =>
+    window.api.audio.deleteAudioProcessingProfile(name),
+  restartAudioEngine: () => window.api.audio.restartAudioEngine(),
   async setReplayGain(config: {
     mode: 'off' | 'track' | 'album'
     preventClipping: boolean
@@ -250,6 +256,7 @@ export const audioBridge = {
     lowEnergy: number
     onsetStrength: number
     droppedFrames: number
+    glitchCount?: number
     clipGuardLimitedFrames: number
     clipGuardReductionDb: number
     beatSequence: number

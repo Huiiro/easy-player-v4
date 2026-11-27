@@ -52,6 +52,7 @@ struct AudioAnalysisSnapshot {
     float low_energy = 0.0f;
     float onset_strength = 0.0f;
     uint64_t dropped_frames = 0;
+    int glitch_count = 0;
     uint64_t clip_guard_limited_frames = 0;
     float clip_guard_reduction_db = 0.0f;
     // Monotonically increasing event counter; not a sticky beat flag.
@@ -217,6 +218,7 @@ private:
     void update_replay_gain_for_track();
     void analysis_thread_func();
     void stop_analysis_thread();
+    bool start_output(bool resuming);
     void close_output();
     bool reopen_output(bool resume);
     bool prepare_next_decoder_locked();
@@ -250,6 +252,7 @@ private:
     // DoP must be explicitly enabled because a PCM device cannot report
     // whether the downstream DAC will interpret its PCM24 carrier as DoP.
     bool dop_enabled_ = false;
+    const char* dop_fallback_reason_ = "";
     int replay_gain_mode_ = 0; // 0 Off, 1 Track, 2 Album
     bool replay_gain_prevent_clipping_ = true;
 

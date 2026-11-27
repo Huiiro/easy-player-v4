@@ -66,6 +66,22 @@ const audioAPI = {
     ipcRenderer.invoke('audio:command', { action: 'setPreamp', params: { db, enabled } }),
   resetAudioProcessingSettings: () =>
     ipcRenderer.invoke('audio:command', { action: 'resetAudioProcessingSettings', params: {} }),
+  listAudioProcessingProfiles: () =>
+    ipcRenderer.invoke('audio:command', { action: 'listAudioProcessingProfiles', params: {} }),
+  saveAudioProcessingProfile: (name: string) =>
+    ipcRenderer.invoke('audio:command', { action: 'saveAudioProcessingProfile', params: { name } }),
+  deleteAudioProcessingProfile: (name: string) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'deleteAudioProcessingProfile',
+      params: { name }
+    }),
+  applyAudioProcessingProfile: (name: string) =>
+    ipcRenderer.invoke('audio:command', {
+      action: 'applyAudioProcessingProfile',
+      params: { name }
+    }),
+  restartAudioEngine: () =>
+    ipcRenderer.invoke('audio:command', { action: 'restartAudioEngine', params: {} }),
   setReplayGain: (config: unknown) =>
     ipcRenderer.invoke('audio:command', { action: 'setReplayGain', params: { config } }),
   getReplayGain: () => ipcRenderer.invoke('audio:command', { action: 'getReplayGain', params: {} }),

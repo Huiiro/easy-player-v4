@@ -12,13 +12,22 @@ import {
 import { app } from 'electron'
 import { isPlaybackOnly, setPlaybackOnly } from '../service/playbackMode'
 import { Logger } from '../service/loggerService'
-import { AudioChainStatus, DeviceInfo } from './types'
+import { AudioChainStatus, DeviceInfo, EngineState } from './types'
 import {
+  audioProcessingProfileNameLimit,
+  type ApplyAudioProcessingProfileResult,
+  type AudioSettingsResult,
+  type RestartAudioEngineResult
+} from '../../shared/audioProcessingProfiles'
+import {
+  AudioProcessingSettings,
   DspSettings,
   PersistedOutputBackend,
   defaultDspSettings,
   defaultEqBands,
+  loadAudioProcessingProfiles,
   loadDspSettings,
+  saveAudioProcessingProfiles,
   saveDspSettings
 } from './dspSettings'
 
@@ -59,6 +68,7 @@ export class AudioEngineManager {
   private dspSettingsSaveTimer: ReturnType<typeof setTimeout> | undefined
   private shuttingDown = false
   private deviceEvents?: ReturnType<typeof setInterval>
+  private pendingPlaybackOperations = 0
 
   constructor() {
     this.dspSettings = loadDspSettings()
@@ -165,9 +175,13 @@ export class AudioEngineManager {
         // The Windows backends already switch tracks without stalling Electron's
         // message loop. CoreAudio teardown/open can wait noticeably on macOS, so
         // only macOS uses the N-API worker path.
-        return process.platform === 'darwin'
-          ? this.engine.openAsync(filePath)
-          : this.engine.open(filePath)
+        if (process.platform !== 'darwin') return this.engine.open(filePath)
+        this.pendingPlaybackOperations++
+        try {
+          return await this.engine.openAsync(filePath)
+        } finally {
+          this.pendingPlaybackOperations--
+        }
       },
       { successLevel: 'debug', warnOnFalse: true }
     )
@@ -219,10 +233,46 @@ export class AudioEngineManager {
         clearTimeout(this.stemRequestTimer)
         this.stemService?.cancel()
         if (!this.engine) return false
-        return process.platform === 'darwin' ? this.engine.stopAsync() : this.engine.stop()
+        if (process.platform !== 'darwin') return this.engine.stop()
+        this.pendingPlaybackOperations++
+        try {
+          return await this.engine.stopAsync()
+        } finally {
+          this.pendingPlaybackOperations--
+        }
       },
       { successLevel: 'debug', warnOnFalse: false }
     )
+  }
+
+  restartEngine(): RestartAudioEngineResult {
+    if (this.shuttingDown || !this.engine?.restart) {
+      return { success: false, error: 'restart_unavailable' }
+    }
+    if (this.pendingPlaybackOperations > 0) return { success: false, error: 'playback_busy' }
+
+    const status = this.getStatus()
+    const filePath = status?.trackInfo?.filePath
+    const resume =
+      filePath &&
+      [EngineState.Ready, EngineState.Playing, EngineState.Paused].includes(status.state)
+        ? {
+            filePath,
+            positionMs: Number.isFinite(status.positionMs) ? Math.max(0, status.positionMs) : 0
+          }
+        : undefined
+    if (!this.engine.restart()) return { success: false, error: 'restart_failed' }
+
+    clearTimeout(this.stemRequestTimer)
+    this.stemService?.cancel()
+    try {
+      this.engine.setPlaybackOnly?.(isPlaybackOnly())
+      this.restoreDspSettings()
+      return { success: true, resume }
+    } catch (error) {
+      Logger.error('[AudioEngineManager] Could not restore settings after restart:', error)
+      return { success: false, error: 'restart_settings_failed', restarted: true, resume }
+    }
   }
 
   seek(positionMs: number): boolean {
@@ -554,65 +604,113 @@ export class AudioEngineManager {
     return this.engine?.getLimiter() ?? null
   }
 
-  resetAudioProcessingSettings(): { success: boolean; error?: string } {
+  listAudioProcessingProfiles(): string[] {
+    return loadAudioProcessingProfiles().map((profile) => profile.name)
+  }
+
+  saveAudioProcessingProfile(rawName: unknown): AudioSettingsResult {
     if (!this.engine) return { success: false, error: 'Audio engine unavailable' }
+    const name = typeof rawName === 'string' ? rawName.trim() : ''
+    if (!name || name.length > audioProcessingProfileNameLimit) {
+      return { success: false, error: 'invalid_profile_name' }
+    }
+    const profiles = loadAudioProcessingProfiles()
+    if (profiles.some((profile) => profile.name.toLowerCase() === name.toLowerCase())) {
+      return { success: false, error: 'profile_name_exists' }
+    }
+    const { volume, outputDevice, ...settings } = this.dspSettings
+    settings.eqBands = this.engine.getEqBands()
+    saveAudioProcessingProfiles([...profiles, { name, settings }])
+    return { success: true }
+  }
+
+  applyAudioProcessingProfile(name: unknown): ApplyAudioProcessingProfileResult {
+    const profile = loadAudioProcessingProfiles().find((item) => item.name === name)
+    if (!profile) return { success: false, error: 'profile_not_found' }
+    return this.applyAudioProcessingSettings(profile.settings, 'profile')
+  }
+
+  deleteAudioProcessingProfile(name: unknown): AudioSettingsResult {
+    const profiles = loadAudioProcessingProfiles()
+    const remaining = profiles.filter((profile) => profile.name !== name)
+    if (remaining.length === profiles.length) return { success: false, error: 'profile_not_found' }
+    saveAudioProcessingProfiles(remaining)
+    return { success: true }
+  }
+
+  resetAudioProcessingSettings(): AudioSettingsResult {
+    return this.applyAudioProcessingSettings(
+      { ...defaultDspSettings(), eqBands: defaultEqBands() },
+      'defaults'
+    )
+  }
+
+  private applyAudioProcessingSettings(
+    settings: AudioProcessingSettings,
+    mode: 'defaults' | 'profile'
+  ): ApplyAudioProcessingProfileResult {
+    if (!this.engine) return { success: false, error: 'Audio engine unavailable' }
+    if (this.pendingPlaybackOperations > 0) return { success: false, error: 'playback_busy' }
 
     const previous = this.dspSettings
-    const previousEqBands = this.engine.getEqBands()
-    const defaults = defaultDspSettings()
-    defaults.eqBands = defaultEqBands()
-
-    const apply = (settings: DspSettings, eqBands: DspSettings['eqBands']): void => {
-      const steps: [string, () => boolean][] = [
-        ['DSP nodes', () => this.engine.setDspNodes(settings.dspNodes)],
-        ['ReplayGain', () => this.engine.setReplayGain(settings.replayGain)],
-        ['playback speed', () => this.engine.setPlaybackSpeed(settings.playbackSpeed)],
-        ['EQ', () => this.engine.setEqBands(eqBands)],
-        ['compressor', () => this.engine.setCompressorConfig(settings.compressor)],
-        ['delay', () => this.engine.setDelayConfig(settings.delay)],
-        ['reverb', () => this.engine.setReverbConfig(settings.reverb)],
-        ['chorus', () => this.engine.setChorusConfig(settings.chorus)],
-        ['noise gate', () => this.engine.setNoiseGateConfig(settings.noiseGate)],
-        ['phaser', () => this.engine.setPhaserConfig(settings.phaser)],
-        ['channel matrix', () => this.engine.setChannelMatrixConfig(settings.channelMatrix)],
-        ['stereo field', () => this.engine.setStereoFieldConfig?.(settings.stereoField) ?? false],
-        ['crossfeed', () => this.engine.setCrossfeedConfig?.(settings.crossfeed) ?? false],
-        [
-          'impulse response',
-          () => this.engine.setImpulseResponseConfig?.(settings.impulseResponse) ?? false
-        ],
-        ['limiter', () => this.engine.setLimiter(settings.limiter)],
-        ['resampler', () => this.engine.setResamplerConfig(settings.resampler)],
-        ['DoP', () => this.engine.setDopEnabled(settings.dopEnabled)],
-        ['transition', () => this.engine.setTransitionConfig(settings.transition)]
-      ]
-      this.engine.setPreamp(settings.preamp.db, settings.preamp.enabled)
-      for (const [name, run] of steps) {
-        if (!run()) throw new Error(`Failed to apply ${name} defaults`)
-      }
-    }
-
+    const current = { ...previous, eqBands: this.engine.getEqBands() }
+    const steps = (settings: AudioProcessingSettings): [string, () => boolean][] => [
+      [
+        'preamp',
+        () => {
+          this.engine.setPreamp(settings.preamp.db, settings.preamp.enabled)
+          return true
+        }
+      ],
+      ['DSP nodes', () => this.engine.setDspNodes(settings.dspNodes)],
+      ['ReplayGain', () => this.engine.setReplayGain(settings.replayGain)],
+      ['playback speed', () => this.engine.setPlaybackSpeed(settings.playbackSpeed)],
+      ['EQ', () => this.engine.setEqBands(settings.eqBands)],
+      ['compressor', () => this.engine.setCompressorConfig(settings.compressor)],
+      ['delay', () => this.engine.setDelayConfig(settings.delay)],
+      ['reverb', () => this.engine.setReverbConfig(settings.reverb)],
+      ['chorus', () => this.engine.setChorusConfig(settings.chorus)],
+      ['noise gate', () => this.engine.setNoiseGateConfig(settings.noiseGate)],
+      ['phaser', () => this.engine.setPhaserConfig(settings.phaser)],
+      ['channel matrix', () => this.engine.setChannelMatrixConfig(settings.channelMatrix)],
+      ['stereo field', () => this.engine.setStereoFieldConfig?.(settings.stereoField) ?? false],
+      ['crossfeed', () => this.engine.setCrossfeedConfig?.(settings.crossfeed) ?? false],
+      [
+        'impulse response',
+        () => this.engine.setImpulseResponseConfig?.(settings.impulseResponse) ?? false
+      ],
+      ['limiter', () => this.engine.setLimiter(settings.limiter)],
+      ['resampler', () => this.engine.setResamplerConfig(settings.resampler)],
+      ['DoP', () => this.engine.setDopEnabled(settings.dopEnabled)],
+      ['transition', () => this.engine.setTransitionConfig(settings.transition)]
+    ]
+    let attempted = 0
     try {
-      apply(defaults, defaults.eqBands)
-      this.dspSettings = {
-        ...defaults,
+      for (const [name, run] of steps(settings)) {
+        attempted++
+        if (!run()) throw new Error(`Failed to apply ${name} ${mode}`)
+      }
+      const next: DspSettings = {
+        ...settings,
         volume: previous.volume,
         outputDevice: previous.outputDevice
       }
-      saveDspSettings(this.dspSettings)
+      saveDspSettings(next)
+      this.dspSettings = next
       if (this.dspSettingsSaveTimer) clearTimeout(this.dspSettingsSaveTimer)
       this.dspSettingsSaveTimer = undefined
-      return { success: true }
+      return { success: true, preamp: next.preamp }
     } catch (error) {
-      this.dspSettings = previous
-      Logger.error('[AudioEngineManager] Failed to reset audio processing settings:', error)
-      try {
-        apply(previous, previousEqBands)
-      } catch (rollbackError) {
-        Logger.error(
-          '[AudioEngineManager] Failed to restore audio processing settings:',
-          rollbackError
-        )
+      Logger.error('[AudioEngineManager] Failed to apply audio processing settings:', error)
+      for (const [name, rollback] of steps(current).slice(0, attempted)) {
+        try {
+          if (!rollback()) throw new Error(`Failed to restore ${name}`)
+        } catch (rollbackError) {
+          Logger.error(
+            '[AudioEngineManager] Failed to restore audio processing settings:',
+            rollbackError
+          )
+        }
       }
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }

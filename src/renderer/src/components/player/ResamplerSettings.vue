@@ -17,8 +17,9 @@ const qualityOptions = computed(() => [
 ])
 </script>
 <template>
-  <div class="space-y-4 text-xs">
-    <div class="flex items-center gap-3">
+  <div class="space-y-6 text-xs">
+    <section class="space-y-3">
+      <h4 class="text-sm font-semibold">{{ t('ap.resamplingSettings') }}</h4>
       <BaseSwitch
         v-model="player.resamplerConfig.forceOutputRate"
         class="w-fit text-left"
@@ -26,28 +27,29 @@ const qualityOptions = computed(() => [
       >
         {{ t('ap.forceOutputRate') }}
       </BaseSwitch>
-    </div>
-    <div class="flex flex-wrap gap-3">
-      <BaseSelect
-        v-model="player.resamplerConfig.targetSampleRate"
-        teleport
-        :options="sampleRateOptions"
-        :disabled="!player.resamplerConfig.forceOutputRate"
-        class="w-44"
-        @change="player.setResamplerConfig(player.resamplerConfig)"
-      />
-      <BaseSelect
-        v-model="player.resamplerConfig.quality"
-        teleport
-        :options="qualityOptions"
-        class="w-44"
-        @change="player.setResamplerConfig(player.resamplerConfig)"
-      />
-    </div>
-    <p v-if="player.currentBackend === 'wasapi_shared'" class="text-text-l">
-      {{ t('ap.resamplerSharedHelp') }}
-    </p>
-    <div class="flex items-center gap-3">
+      <div class="flex flex-wrap gap-3">
+        <BaseSelect
+          v-model="player.resamplerConfig.targetSampleRate"
+          teleport
+          :options="sampleRateOptions"
+          :disabled="!player.resamplerConfig.forceOutputRate"
+          class="w-44"
+          @change="player.setResamplerConfig(player.resamplerConfig)"
+        />
+        <BaseSelect
+          v-model="player.resamplerConfig.quality"
+          teleport
+          :options="qualityOptions"
+          class="w-44"
+          @change="player.setResamplerConfig(player.resamplerConfig)"
+        />
+      </div>
+      <p v-if="player.currentBackend === 'wasapi_shared'" class="text-text-l">
+        {{ t('ap.resamplerSharedHelp') }}
+      </p>
+    </section>
+    <section class="space-y-3">
+      <h4 class="text-sm font-semibold">{{ t('ap.dopTransport') }}</h4>
       <BaseSwitch
         class="w-fit text-left"
         :model-value="player.dopEnabled"
@@ -55,7 +57,7 @@ const qualityOptions = computed(() => [
       >
         {{ t('ap.enableDoP') }}
       </BaseSwitch>
-    </div>
-    <p class="text-text-l">{{ t('ap.dopDesc') }} {{ t('ap.dopNextPlayback') }}</p>
+      <p class="text-text-l">{{ t('ap.dopDesc') }} {{ t('ap.dopNextPlayback') }}</p>
+    </section>
   </div>
 </template>

@@ -38,6 +38,8 @@ struct AudioFormat {
     int sample_rate;
     int bit_depth;
     int channels;
+    int container_bits = 0;
+    bool floating_point = false;
 };
 
 // Audio callback invoked from the real-time audio thread.
@@ -74,6 +76,7 @@ public:
 
     virtual int buffer_size_frames() const = 0;
     virtual double latency_ms() const = 0;
+    const std::wstring& opened_device_id() const { return opened_device_id_; }
 
     // Discard buffered audio and reset the playback buffer.
     // Called after seek to prevent old audio from playing.
@@ -82,4 +85,7 @@ public:
     virtual bool flush_checked() { flush(); return true; }
     // Consumed from the host control thread, never from an audio callback.
     virtual unsigned take_events() { return BackendEventNone; }
+
+protected:
+    std::wstring opened_device_id_;
 };

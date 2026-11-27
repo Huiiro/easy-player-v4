@@ -1,3 +1,22 @@
+import type { DspNodeConfig } from '@/types/audio'
+
+export const nodeLabels: Record<DspNodeConfig['id'], string> = {
+  channel_matrix: 'channelMatrix',
+  replay_gain: 'replayGain',
+  preamp: 'preamp',
+  eq: 'eq',
+  compressor: 'compressor',
+  delay: 'delay',
+  reverb: 'reverb',
+  chorus: 'chorus',
+  noise_gate: 'noiseGate',
+  phaser: 'phaser',
+  stereo_field: 'stereoField',
+  crossfeed: 'crossfeed',
+  impulse_response: 'irCorrection',
+  limiter: 'limiter'
+}
+
 export type LegacyId = 'compressor' | 'delay' | 'reverb' | 'chorus' | 'noise_gate' | 'phaser'
 export type Field = {
   key: string

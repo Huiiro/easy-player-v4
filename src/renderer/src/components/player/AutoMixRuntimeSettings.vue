@@ -53,9 +53,9 @@ async function uninstall(): Promise<void> {
 </script>
 
 <template>
-  <div class="rounded-lg border border-border p-3 space-y-2" aria-live="polite">
-    <div class="flex items-center justify-between gap-3">
-      <span class="font-medium">{{ t('ap.stemComponentTitle') }}</span>
+  <section class="space-y-3 rounded-lg border border-border p-3" aria-live="polite">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h4 class="text-sm font-semibold">{{ t('ap.stemComponentTitle') }}</h4>
       <div class="flex items-center gap-3">
         <span v-if="status?.installed && !busy" class="text-text-l">
           {{ t('ap.stemComponentReady') }}
@@ -110,7 +110,7 @@ async function uninstall(): Promise<void> {
     <p v-if="status?.error || localError" role="alert" class="text-red-400">
       {{ t('ap.stemComponentFailed') }} {{ status?.error || localError }}
     </p>
-  </div>
+  </section>
   <BaseConfirmDialog
     v-model="uninstallVisible"
     :title="t('ap.stemComponentUninstall')"

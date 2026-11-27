@@ -31,14 +31,17 @@ app.whenReady().then(async () => {
           import { useSongActivation } from './src/renderer/src/hooks/useSongActivation';
           import DspEffectEditor from './src/renderer/src/components/player/DspEffectEditor.vue';
           import AudioOutputSettings from './src/renderer/src/components/player/AudioOutputSettings.vue';
-          import ImpulseResponseEditor from './src/renderer/src/components/player/ImpulseResponseEditor.vue';
+          import AudioChainDiagnostics from './src/renderer/src/components/player/AudioChainDiagnostics.vue';
+          import AudioControlPanelV2 from './src/renderer/src/components/player/AudioControlPanelV2.vue';
+          import { createPinia } from 'pinia';
+          import en from './src/renderer/src/i18n/locales/en';
           import LibrarySettings from './src/renderer/src/components/settings/LibrarySettings.vue';
           import DuplicateTaskHost from './src/renderer/src/components/scan/DuplicateTaskHost.vue';
           import GlobalNotifications from './src/renderer/src/components/ui/GlobalNotifications.vue';
           import zh from './src/renderer/src/i18n/locales/zh';
           import eventBus from './src/renderer/src/utils/eventBus';
           import SongDetailsDialog from './src/renderer/src/components/songlist/SongDetailsDialog.vue';
-          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus, zh };`,
+          export { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, AudioChainDiagnostics, AudioControlPanelV2, createPinia, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus, zh, en };`,
         resolveDir: process.cwd()
       },
       bundle: true,
@@ -124,7 +127,7 @@ app.whenReady().then(async () => {
       `const style = document.createElement('style'); style.textContent = ${JSON.stringify(css)}; document.head.append(style);`
     )
     const results = await window.webContents.executeJavaScript(`(async () => {
-      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, ImpulseResponseEditor, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus } = Checks;
+      const { Vue, UI, createI18n, FloatingPanel, floatingPosition, fromHex, rgbaToHex, hsvaToRgba, AppPageOutlet, PlayerPanelTransition, createRouter, createMemoryHistory, useEqEditor, useSongSelection, useCardLibrary, useSongActions, useFooterSwipe, useSeekProgress, useSongActivation, DspEffectEditor, AudioOutputSettings, AudioChainDiagnostics, AudioControlPanelV2, createPinia, LibrarySettings, SongDetailsDialog, GlobalNotifications, DuplicateTaskHost, eventBus, en } = Checks;
       const { createApp, h, reactive, nextTick, onMounted, onActivated } = Vue;
       const results = [];
       function check(value, message) { if (!value) throw new Error(message); results.push(message); }
@@ -134,7 +137,8 @@ app.whenReady().then(async () => {
         activeApp?.unmount(); document.body.innerHTML = '<div id="app"></div>';
         const state = reactive(props);
         activeApp = createApp({ render: () => h(component, state, slots) });
-        activeApp.use(createI18n({ legacy:false, locale:'en', missingWarn:false, fallbackWarn:false, messages:{ en:{ settings:{autoImportSongsAdded:'Automatically imported {count} new songs'}, common:{close:'Close',cancel:'Cancel'}, ui:{clear:'Clear',selectPlaceholder:'Select',empty:'Empty',color:'Color',colorValue:'Color value',presets:'Presets',hue:'Hue',saturation:'Saturation',brightness:'Brightness',alpha:'Opacity'} } } }));
+        activeApp.use(createPinia());
+        activeApp.use(createI18n({ legacy:false, locale:'en', missingWarn:false, fallbackWarn:false, messages:{ en:{ ap:en.ap, settings:{autoImportSongsAdded:'Automatically imported {count} new songs'}, common:{close:'Close',cancel:'Cancel'}, ui:{clear:'Clear',selectPlaceholder:'Select',empty:'Empty',color:'Color',colorValue:'Color value',presets:'Presets',hue:'Hue',saturation:'Saturation',brightness:'Brightness',alpha:'Opacity'} } } }));
         activeApp.mount('#app'); await wait(); return state;
       }
       window.__activationUi=reactive({songPlayTrigger:'double'});
@@ -380,13 +384,276 @@ app.whenReady().then(async () => {
       window.__uiPlayer=reactive({devices:[{backend:'asio',id:'same',name:'ASIO device'},{backend:'wasapi_shared',id:'same',name:'WASAPI device'}],currentBackend:'asio',currentDeviceId:'same',volume:0.5,selectOutputDevice:async device=>{selectedBackend=device.backend;return true},refreshAudioChain:async()=>{},refreshDevices:async()=>{}});
       await mount(AudioOutputSettings);document.querySelector('.ep-select').click();await wait();document.querySelectorAll('[role=option]')[1].click();await wait();
       check(selectedBackend==='wasapi_shared','output selector distinguishes identical device IDs across backends');
-      let irFailure,irCleared=0;
-      window.__uiPlayer=reactive({impulseResponseConfig:{path:'original.wav',enabled:false,gainDb:0,autoGain:true},setImpulseResponseConfig:async()=>({success:false,error:'unsupported'}),loadImpulseResponseConfig:async()=>{}});
+      const outputPlayer=window.__uiPlayer;
+      const format=(sampleRate,bitDepth,extra={})=>({sampleRate,bitDepth,channels:2,...extra});
+      const dop={sourceFormat:format(2822400,1),originalFormat:format(2822400,1),sourceLabel:'DSD64',
+        backendFormat:format(176400,24,{containerBits:32}),outputTransport:'dop',
+        outputDeviceId:'SAME',outputBufferFrames:1764,outputLatencyMs:10,activeNodes:['DoP encoded transport'],
+        eqPeakDb:0,eqAutoPreampDb:0};
+      outputPlayer.audioChain=dop;
+      await wait();
+      check(document.querySelector('fieldset').disabled && document.querySelector('fieldset input').value==='50',
+        'DoP disables output volume while keeping the stored percentage visible');
+      outputPlayer.glitchCount=4;
+      outputPlayer.audioAnalysis={analysisTimeMs:2000,rms:0.5,momentaryLufs:-14,shortTermLufs:-16,integratedLufs:-18,droppedFrames:32};
+      await mount(AudioChainDiagnostics,{loudness:true});
+      let diagnostics=document.querySelector('#app').textContent;
+      check(diagnostics.includes('24 valid bits in a 32-bit container') && diagnostics.includes('ASIO device') &&
+        diagnostics.includes('1,764 frames') && diagnostics.includes('10.0 ms') && !diagnostics.includes('-14.0 LUFS'),
+        'DoP diagnostics display the actual device, carrier and buffer without PCM meters');
+      const fallbackChain={...dop,originalFormat:format(5644800,1),sourceLabel:'DSD128',
+        sourceCodec:'DSD (Direct Stream Digital), least significant bit first',
+        decodedPcmFormat:format(176400,32,{floatingPoint:true}),backendFormat:format(176400,16),
+        outputTransport:'pcm_conversion',dopFallbackReason:'carrierRejected',dopCarrierRate:352800,activeNodes:[]};
+      outputPlayer.audioChain=fallbackChain;
+      await wait();
+      diagnostics=document.querySelector('#app').textContent;
+      const originalFormatCard=[...document.querySelectorAll('#app dt')]
+        .find((label)=>label.textContent.trim()===en.ap.originalAudioFormat).parentElement;
+      check(diagnostics.includes('352.8 kHz') && diagnostics.includes('32-bit float') &&
+        originalFormatCard.lastElementChild.textContent.trim()==='DSD' && diagnostics.includes('-14.0 LUFS'),
+        'PCM fallback displays the DSD abbreviation, rejected carrier, decoded PCM and live loudness');
+      outputPlayer.audioChain={...fallbackChain,sourceLabel:'flac',sourceCodec:'FLAC (Free Lossless Audio Codec)'};
+      await wait();
+      check(originalFormatCard.lastElementChild.textContent.trim()==='FLAC',
+        'original format uses the FLAC abbreviation from the short codec name');
+      outputPlayer.audioChain=fallbackChain;
+      await mount(AudioOutputSettings);
+      check(!document.querySelector('fieldset').disabled,'PCM fallback restores software volume');
+      const analysisActivity=[],loudnessActivity=[];
+      let chainReads=0, meterReads=0, canRefreshChain=true;
+      Object.assign(outputPlayer, {
+        audioChain:{...outputPlayer.audioChain,activeNodes:['DSD to PCM conversion','Impulse response','Output clip guard'],
+          bypassedNodes:['Limiter'],bitPerfectBlockers:['DSD source was converted to PCM'],
+          eqPeakDb:3.5,eqAutoPreampDb:3.5},
+        audioAnalysis:{...outputPlayer.audioAnalysis,clipGuardLimitedFrames:256,clipGuardReductionDb:1.2},
+        state:'playing',
+        setAudioPipelineAnalysisActive:(value)=>analysisActivity.push(value),
+        setEqSpectrumActive:()=>{},
+        replayGainConfig:{mode:'off'},eqBands:[],dspNodes:[{id:'impulse_response',enabled:true}],
+        impulseResponseConfig:{path:'original.wav',enabled:true,gainDb:0,autoGain:true},
+        resamplerConfig:{forceOutputRate:false,targetSampleRate:48000,quality:'best'},dopEnabled:false,
+        playbackSpeedConfig:{enabled:false,speed:1},transitionConfig:{gaplessEnabled:true,
+          crossfadeEnabled:false,pauseFadeEnabled:true,pauseFadeMs:180},
+        setLoudnessAnalysisEnabled:(enabled,consumer)=>loudnessActivity.push([enabled,consumer]),
+        loadOutputDeviceSettings:async()=>{},
+        refreshAudioChain:async()=>{
+          chainReads++;
+          if(!canRefreshChain)return false;
+          outputPlayer.audioChain.outputLatencyMs=10+chainReads;
+          return true;
+        },
+        refreshAudioAnalysis:async()=>{meterReads++;return true;}
+      });
+      for(const method of ['EqBands','ReplayGain','PlaybackSpeed','ResamplerConfig','DopEnabled',
+        'TransitionConfig','DspNodes','CompressorConfig','DelayConfig','ReverbConfig','ChorusConfig',
+        'NoiseGateConfig','PhaserConfig','ChannelMatrixConfig','StereoFieldConfig','CrossfeedConfig',
+        'ImpulseResponseConfig','Limiter']) outputPlayer['load'+method]=async()=>{};
+      const audioControls=reactive({open:true});
+      await mount({setup:()=>()=>h(UI.BaseDialog,{modelValue:audioControls.open,title:'Audio controls',width:'max-w-6xl'},
+        ()=>h(AudioControlPanelV2,{active:audioControls.open}))});
+      const audioDialog=document.querySelector('[role=dialog]');
+      const openPipeline=audioDialog.querySelector('nav > button');
+      const firstRead=10+chainReads;
+      check(openPipeline.textContent.trim()===en.ap.audioPipeline && openPipeline.getAttribute('aria-current')==='true' &&
+        analysisActivity.join()==='true' && chainReads===1 && meterReads===1 && audioDialog.textContent.includes(firstRead.toFixed(1)+' ms'),
+        'Audio pipeline is first in General settings and opens by default inside the dialog');
+      const refreshPipelineButton=[...audioDialog.querySelectorAll('button')].find((button)=>button.textContent.trim()==='Refresh status');
+      const pipelineHeader=refreshPipelineButton.closest('header');
+      check(pipelineHeader.textContent.includes('ASIO') && pipelineHeader.textContent.includes('Bit-perfect unavailable') &&
+        !pipelineHeader.querySelector('p'), 'pipeline status badges and refresh share a header without helper copy');
+      function audioHeaderSpacing(header) {
+        const heading=header.querySelector('h3');
+        const style=getComputedStyle(header);
+        return [getComputedStyle(heading).fontSize,getComputedStyle(heading.parentElement).gap,
+          style.padding,getComputedStyle(header.nextElementSibling).padding].join('|');
+      }
+      const pipelineHeaderSpacing=audioHeaderSpacing(pipelineHeader);
+      async function checkFixedAudioHeader(header,message) {
+        const scroller=header.nextElementSibling;
+        const content=scroller.firstElementChild;
+        const previousHeight=content.style.minHeight;
+        content.style.minHeight='1200px';
+        const top=header.getBoundingClientRect().top;
+        scroller.scrollTop=180;await wait();
+        check(scroller.scrollTop>100 && Math.abs(header.getBoundingClientRect().top-top)<=1 &&
+          scroller.getBoundingClientRect().top>=header.getBoundingClientRect().bottom &&
+          getComputedStyle(header).backgroundColor==='rgba(0, 0, 0, 0)' &&
+          getComputedStyle(header).borderBottomWidth==='0px' && audioHeaderSpacing(header)===pipelineHeaderSpacing,message);
+        scroller.scrollTop=0;
+        content.style.minHeight=previousHeight;
+      }
+      await wait(200);
+      await checkFixedAudioHeader(pipelineHeader,'Audio pipeline keeps a transparent fixed header above its scrollable content');
+      const signalPath=audioDialog.querySelector('ol[aria-labelledby="audio-signal-path"]');
+      const signalNodes=[...signalPath.children].map((node)=>node.lastElementChild);
+      check(signalNodes.map((node)=>node.textContent.trim()).join('|')===
+        [en.ap.signalSource,en.ap.dsdPcmOutput,'Convolution',en.ap.outputClipGuard,en.ap.signalOutput].join('|') &&
+        signalNodes.every((node)=>node.className===signalNodes[0].className) &&
+        !signalPath.closest('section').textContent.includes(en.ap.limiter) &&
+        !signalPath.closest('section').textContent.includes(en.ap.bitPerfectReasons.dsdConversion),
+        'signal path shows only active nodes and endpoints with matching styles and no extra copy');
+      check(document.querySelector('#audio-signal-path use').getAttribute('xlink:href')==='#icon-common-signal' &&
+        signalNodes.map((node)=>node.querySelector('use').getAttribute('xlink:href')).join('|')===
+          '#icon-common-broadcast|#icon-common-node|#icon-common-node|#icon-common-node|#icon-common-sound',
+        'signal path uses distinct icons for the source, processing nodes and device output');
+      const loudnessHeader=audioDialog.querySelector('#audio-loudness-analysis');
+      const levelSection=loudnessHeader.closest('section');
+      const loudnessSwitch=loudnessHeader.nextElementSibling;
+      check(loudnessSwitch.matches('[role=switch][aria-checked=true][aria-labelledby="audio-loudness-analysis"]') &&
+        loudnessHeader.querySelector('use').getAttribute('xlink:href')==='#icon-common-audio' &&
+        loudnessActivity.at(-1)?.join()==='true,pipeline' && levelSection.textContent.includes('-14.0 LUFS'),
+        'loudness analysis starts enabled with the audio icon and switch beside the title');
+      loudnessSwitch.click();await wait();
+      const eqReadouts=[...levelSection.querySelectorAll('dt')]
+        .filter((label)=>[en.ap.eqPeak,en.ap.eqAutoPreamp].includes(label.textContent.trim()));
+      check(eqReadouts.length===2 && eqReadouts.every((label)=>label.nextElementSibling.textContent.trim()==='3.5 dB') &&
+        !levelSection.textContent.includes('-14.0 LUFS') && loudnessActivity.at(-1)?.join()==='false,pipeline',
+        'EQ peak and headroom stay visible when loudness analysis is turned off');
+      const clipGuard=levelSection.nextElementSibling;
+      check(clipGuard.getAttribute('aria-labelledby')==='audio-clip-guard' &&
+        !levelSection.textContent.includes(en.ap.outputClipGuard) && clipGuard.textContent.includes('-1.2 dB'),
+        'clip guard uses a separate row and keeps its gain reduction visible with loudness off');
+      const standbyBadge=clipGuard.querySelector('.text-success');
+      const reductionLine=standbyBadge.parentElement.nextElementSibling;
+      check(standbyBadge.textContent.trim()===en.ap.clipGuardStandingBy &&
+        reductionLine.textContent.includes('-1.2 dB') && reductionLine.offsetTop>standbyBadge.offsetTop,
+        'clip guard shows success while standing by and places reduction below the status');
+      outputPlayer.audioAnalysis.clipGuardLimitedFrames+=256;
+      await wait();
+      check(clipGuard.querySelector('.text-warning')?.textContent.trim()===en.ap.clipGuardWorking,
+        'clip guard uses the warning style while engaging');
+      refreshPipelineButton.click();await wait();
+      const refreshedLatency=(firstRead+1).toFixed(1)+' ms';
+      check(chainReads===2 && meterReads===2 && audioDialog.textContent.includes(refreshedLatency),
+        'refresh status rereads both the backend and playback counters');
+      canRefreshChain=false;
+      refreshPipelineButton.click();await wait();
+      check(chainReads===3 && meterReads===3 && audioDialog.textContent.includes(refreshedLatency),
+        'a failed pipeline refresh keeps the last latency reading');
+      const outputTab=[...audioDialog.querySelectorAll('nav button')].find((button)=>button.textContent.trim()===en.ap.outputSettings);
+      outputTab.click();await wait();
+      check(analysisActivity.at(-1)===false && audioDialog===document.querySelector('[role=dialog]') &&
+        outputTab.getAttribute('aria-current')==='true' && !audioDialog.contains(refreshPipelineButton),
+        'switching audio control pages stops pipeline polling and keeps the dialog open');
+      await checkFixedAudioHeader(audioDialog.querySelector('h3').closest('header'),
+        'General settings uses the same fixed, borderless header and title spacing as the audio pipeline');
+      const audioGroupTitles=()=>[...audioDialog.querySelectorAll('h4')].map(heading=>heading.textContent.trim()).join('|');
+      check(audioGroupTitles()===[en.ap.outputDevice,en.ap.outputVolume].join('|'),
+        'Output settings groups device selection and output volume under subheadings');
+      const refreshOutputButton=findButton(audioDialog,en.ap.refreshDevice);
+      check(refreshOutputButton.className===refreshPipelineButton.className &&
+        refreshOutputButton.querySelector('use')?.getAttribute('xlink:href')===
+          refreshPipelineButton.querySelector('use')?.getAttribute('xlink:href'),
+        'Output device and audio pipeline refresh buttons use the same size, style and icon');
+      let completeDeviceRefresh;
+      outputPlayer.refreshDevices=()=>new Promise(resolve=>{completeDeviceRefresh=resolve;});
+      refreshOutputButton.click();await wait();
+      check(refreshOutputButton.disabled && refreshOutputButton.getAttribute('aria-busy')==='true',
+        'Device refresh shows the shared loading state while updating the list');
+      completeDeviceRefresh();await wait();
+      outputPlayer.refreshDevices=async()=>{};
+      const audioNav=audioDialog.querySelector('nav');
+      findButton(audioNav,en.ap.resampler).click();await wait();
+      check(audioGroupTitles()===[en.ap.resamplingSettings,en.ap.dopTransport].join('|'),
+        'Resampler settings groups sample-rate conversion and DoP under subheadings');
+      window.api.audio={onEvent:()=>()=>{},
+        getStemRuntimeStatus:async()=>({phase:'not-installed',installed:false,supported:true})};
+      findButton(audioNav,en.ap.transitionSettings).click();await wait();
+      check(audioDialog.querySelector('h3').textContent.trim()===en.ap.transitionSettings &&
+        audioGroupTitles()===[en.ap.stemComponentTitle,en.ap.trackTransitions,en.ap.pauseResume].join('|') &&
+        getComputedStyle(audioDialog.querySelector('h4').closest('section')).borderTopWidth!=='0px' &&
+        !!findButton(audioDialog,en.ap.gapless),
+        'Playback transitions shows a bordered vocal protection group above the playback controls');
+      openPipeline.click();await wait();
+      check(audioDialog.querySelector('[role=switch][aria-labelledby="audio-loudness-analysis"]').getAttribute('aria-checked')==='false' &&
+        loudnessActivity.at(-1)?.join()==='false,pipeline',
+        'returning to the pipeline keeps the selected loudness setting within the dialog');
+      const convolutionTab=[...audioDialog.querySelectorAll('nav button')]
+        .find((button)=>button.textContent.trim().endsWith('Convolution'));
+      convolutionTab.click();await wait();
+      check(audioDialog.querySelector('h3').textContent.trim()==='Convolution' &&
+        audioDialog.textContent.includes('Import WAV filter') && audioDialog.textContent.includes('room correction') &&
+        audioDialog.textContent.includes('Adjust the output level after convolution.'),
+        'the Convolution page describes WAV filters, room correction and gain');
+      outputPlayer.setImpulseResponseConfig=async()=>({success:false,error:'native_unavailable'});
       window.api.audio={getFilePath:()=> 'new.wav'};
-      await mount(ImpulseResponseEditor,{error:'',onLoadError:code=>irFailure=code,onClearError:()=>irCleared++});
       const importIr=async()=>{const data=new DataTransfer();data.items.add(new File(['test'],'new.wav',{type:'audio/wav'}));const input=document.querySelector('input[type=file]');input.files=data.files;input.dispatchEvent(new Event('change',{bubbles:true}));await wait();};
-      await importIr();check(window.__uiPlayer.impulseResponseConfig.path==='original.wav' && irFailure==='unsupported','failed impulse import restores previous config and reports error');
-      window.__uiPlayer.setImpulseResponseConfig=async()=>({success:true});await importIr();check(window.__uiPlayer.impulseResponseConfig.path==='new.wav' && irCleared===1,'successful impulse import commits new config and clears error');
+      const convolutionError=en.ap.irErrors.native_unavailable;
+      await importIr();check(outputPlayer.impulseResponseConfig.path==='original.wav' &&
+        audioDialog.textContent.includes(convolutionError),'failed WAV filter import restores the previous filter and shows a convolution error');
+      outputPlayer.setImpulseResponseConfig=async()=>({success:true});await importIr();
+      check(outputPlayer.impulseResponseConfig.path==='new.wav' && !audioDialog.textContent.includes(convolutionError),
+        'successful WAV filter import saves the new filter and clears the error');
+      const nodeHeader=audioDialog.querySelector('h3').closest('header');
+      await checkFixedAudioHeader(nodeHeader,'DSP nodes use the same fixed, borderless header and title spacing as the audio pipeline');
+      check(!!nodeHeader.querySelector('[role=switch]'),'The DSP switch stays in the fixed header');
+      const generalTabs=[...audioDialog.querySelectorAll('nav > button')];
+      const advancedTab=generalTabs.at(-1);
+      function findButton(root,label) {
+        return [...root.querySelectorAll('button')].find(button=>button.textContent.trim()===label);
+      }
+      check(advancedTab.textContent.trim()===en.ap.advancedAudioSettings && !findButton(audioDialog,en.ap.resetAudioSettings),
+        'Advanced settings is the final General settings page and the reset action moved out of the sidebar');
+      const storedProfiles=['Speakers'], advancedActions=[];
+      Object.assign(window.api.audio,{
+        listAudioProcessingProfiles:async()=>({success:true,data:[...storedProfiles]}),
+        saveAudioProcessingProfile:async(name)=>{storedProfiles.push(name);return {success:true};},
+        deleteAudioProcessingProfile:async(name)=>{storedProfiles.splice(storedProfiles.indexOf(name),1);return {success:true};}
+      });
+      outputPlayer.applyAudioProcessingProfile=async(name)=>{advancedActions.push(name);return {success:true};};
+      outputPlayer.restartAudioEngine=async()=>{advancedActions.push('restart');return {success:true};};
+      outputPlayer.resetAudioProcessingSettings=async()=>{advancedActions.push('reset');return {success:true};};
+      advancedTab.click();await wait();
+      const saveProfileButton=findButton(audioDialog,en.ap.saveAudioProfile);
+      check(saveProfileButton.className===findButton(audioDialog,en.ap.applyAudioProfile).className &&
+        [...audioDialog.querySelectorAll('h4')].every(heading=>
+          getComputedStyle(heading.closest('section')).borderTopWidth==='0px'),
+        'Advanced audio settings uses matching save and apply colors and borderless groups');
+      check([en.ap.applyAudioProfile,en.ap.deleteAudioProfile].every(label=>
+        findButton(audioDialog,label).parentElement===saveProfileButton.parentElement) &&
+        saveProfileButton.parentElement.contains(audioDialog.querySelector('.ep-select')),
+        'Saved profiles and their save, apply and delete actions share an EQ-style toolbar');
+      saveProfileButton.click();await wait();
+      const saveDialog=[...document.querySelectorAll('[role=dialog]')].find(dialog=>dialog!==audioDialog);
+      const profileName=saveDialog.querySelector('#audio-profile-name');
+      check(!!profileName && findButton(saveDialog,en.ap.saveAudioProfile).disabled,
+        'Saving a profile opens a naming dialog with confirmation disabled until a name is entered');
+      profileName.value='Headphones';profileName.dispatchEvent(new Event('input',{bubbles:true}));await wait();
+      findButton(saveDialog,en.ap.saveAudioProfile).click();await wait(250);
+      check(storedProfiles.includes('Headphones') && audioDialog.textContent.includes('Headphones'),
+        'saving current audio processing creates and selects a named profile');
+      findButton(audioDialog,en.ap.applyAudioProfile).click();await wait();
+      check(advancedActions.join()==='Headphones','Advanced settings applies the selected profile');
+      findButton(audioDialog,en.ap.deleteAudioProfile).click();await wait();
+      const deleteDialog=[...document.querySelectorAll('[role=dialog]')].find(dialog=>dialog!==audioDialog);
+      check(deleteDialog.textContent.includes('Headphones') && storedProfiles.includes('Headphones'),
+        'Deleting a saved profile asks for confirmation and names the selected profile');
+      findButton(deleteDialog,en.ap.deleteAudioProfile).click();await wait(250);
+      check(storedProfiles.join()==='Speakers' && audioDialog.querySelector('.ep-select').textContent.includes('Speakers'),
+        'After deleting a profile the remaining profile is selected');
+      function isDangerWithRefreshIcon(button) {
+        return button.classList.contains('ep-button--danger') &&
+          button.querySelector('use')?.getAttribute('xlink:href')==='#icon-common-refresh';
+      }
+      check([en.ap.restartAudioEngine,en.ap.resetAudioSettings].every(label=>
+        isDangerWithRefreshIcon(findButton(audioDialog,label))),
+        'The restart and restore actions show a refresh icon and use the danger style');
+      for(const [label, action] of [[en.ap.restartAudioEngine,'restart'],[en.ap.resetAudioSettings,'reset']]) {
+        findButton(audioDialog,label).click();await wait();
+        const confirmDialog=[...document.querySelectorAll('[role=dialog]')].find(dialog=>dialog!==audioDialog);
+        check(confirmDialog && !advancedActions.includes(action),'Audio engine maintenance asks for confirmation');
+        const confirmOperation=findButton(confirmDialog,label);
+        check(isDangerWithRefreshIcon(confirmOperation),'The '+action+' confirmation uses a refresh icon and the danger style');
+        confirmOperation.click();await wait(250);
+        check(advancedActions.at(-1)===action,'Advanced settings runs the confirmed '+action+' action');
+      }
+      audioControls.open=false;await wait(250);
+      canRefreshChain=true;
+      audioControls.open=true;await wait();
+      check(document.querySelector('[role=dialog] nav > button[aria-current=true]')?.textContent.trim()===en.ap.audioPipeline &&
+        analysisActivity.at(-1)===true,
+        'reopening audio controls returns to the Audio pipeline');
       activeApp.unmount(); document.body.innerHTML = '<div id="app"></div>';
       let aMounts=0, aActivations=0;
       const A={setup(){onMounted(()=>aMounts++);onActivated(()=>aActivations++);return()=>[h('p','A'),h('p','Fragment root')];}};

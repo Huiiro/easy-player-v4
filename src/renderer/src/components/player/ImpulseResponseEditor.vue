@@ -68,7 +68,7 @@ async function applyIr(): Promise<void> {
     <DspKnobField
       v-model="player.impulseResponseConfig.gainDb"
       :label="t('ap.irManualGain')"
-      :description="t('ap.irTotalGain')"
+      :description="t('ap.irManualGainHelp')"
       :min="-24"
       :max="12"
       :step="0.5"

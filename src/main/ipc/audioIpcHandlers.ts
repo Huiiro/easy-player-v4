@@ -169,6 +169,37 @@ export function registerIpcHandlers(
             sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
             return result
           }
+          case 'listAudioProcessingProfiles':
+            return { success: true, data: engine.listAudioProcessingProfiles() }
+          case 'saveAudioProcessingProfile':
+            return engine.saveAudioProcessingProfile(params?.name)
+          case 'deleteAudioProcessingProfile':
+            return engine.deleteAudioProcessingProfile(params?.name)
+          case 'applyAudioProcessingProfile': {
+            const result = engine.applyAudioProcessingProfile(params?.name)
+            sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return result
+          }
+          case 'restartAudioEngine': {
+            const result = engine.restartEngine()
+            if (!result.success && !result.restarted) return result
+            pendingEnds.length = 0
+            try {
+              saveCheckpoint({
+                ...(result.resume && {
+                  currentFile: result.resume.filePath,
+                  positionMs: result.resume.positionMs
+                }),
+                wasPlaying: false
+              })
+            } catch {
+              // Checkpoint failures are already logged and do not undo the restart.
+            }
+            onPlaybackState?.('idle')
+            sendEvent(mainWindow, 'stateChanged', { state: 'idle', trackInfo: null })
+            sendEvent(mainWindow, 'audioChainChanged', engine.getAudioChain())
+            return result
+          }
           case 'setReplayGain':
             return { success: engine.setReplayGain(params.config) }
           case 'getReplayGain':

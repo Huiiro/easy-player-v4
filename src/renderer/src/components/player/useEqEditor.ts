@@ -145,6 +145,7 @@ export function useEqEditor(
     if (id === 'eq') return
     stopEqComparison()
     if (eqPendingSnapshot) commitEq()
+    else if (eqCommitTimer) applyEq()
   })
   const selectedEqPreset = computed(
     () =>

@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/ui/BaseDialog.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import SvgIcon from '@/components/svg/SvgIcon.vue'
 import DspKnobField from '@/components/player/DspKnobField.vue'
 import EqResponseGraph from '@/components/player/EqResponseGraph.vue'
 import ChannelMatrixEditor from './ChannelMatrixEditor.vue'
@@ -14,6 +13,9 @@ import PreampEditor from './PreampEditor.vue'
 import StereoFieldEditor from './StereoFieldEditor.vue'
 import CrossfeedEditor from './CrossfeedEditor.vue'
 import AudioOutputSettings from './AudioOutputSettings.vue'
+import AudioAdvancedSettings from './AudioAdvancedSettings.vue'
+import AudioPipelinePage from './AudioPipelinePage.vue'
+import AudioSettingsPageHeader from './AudioSettingsPageHeader.vue'
 import PlaybackSpeedSettings from './PlaybackSpeedSettings.vue'
 import ResamplerSettings from './ResamplerSettings.vue'
 import PlaybackTransitionSettings from './PlaybackTransitionSettings.vue'
@@ -24,11 +26,11 @@ import { useMessage } from '@/components/ui/useMessage'
 import { BUILT_IN_EQ_PRESETS, useEqPresetStore } from '@/stores/player/eqPresetStore'
 import { usePlayerStore } from '@/stores/player/playerStore'
 import { useUIStore } from '@/stores/ui/uiStore'
-import type { LegacyId } from './dspEffectFields'
+import { nodeLabels, type LegacyId } from './dspEffectFields'
 import type { DspNodeConfig } from '@/types/audio'
 
 type NodeId = DspNodeConfig['id']
-type ExtraId = 'output' | 'playback' | 'resampler' | 'transition'
+type ExtraId = 'output' | 'playback' | 'resampler' | 'transition' | 'pipeline' | 'advanced'
 type Selection = NodeId | ExtraId
 const { active = true } = defineProps<{ active?: boolean }>()
 const player = usePlayerStore()
@@ -36,9 +38,16 @@ const ui = useUIStore()
 const eqPresets = useEqPresetStore()
 const { t, te } = useI18n()
 const { success, warning } = useMessage()
-const selected = ref<Selection>('output')
+const selected = ref<Selection>('pipeline')
+const eqSpectrumVisible = ref(true)
+const pipelineLoudnessEnabled = ref(true)
+const dopActive = computed(
+  () =>
+    player.audioChain?.outputTransport === 'dop' ||
+    player.audioChain?.activeNodes.includes('DoP encoded transport') === true
+)
 watch(
-  () => active && selected.value === 'eq',
+  () => active && selected.value === 'eq' && eqSpectrumVisible.value && !dopActive.value,
   (shown) => player.setEqSpectrumActive(shown),
   { immediate: true }
 )
@@ -68,39 +77,32 @@ const {
 } = useEqEditor(player, eqPresets, selected)
 
 const rightScrollRef = ref<HTMLElement | null>(null)
-const detailSectionRef = ref<HTMLElement | null>(null)
-const pipelineExpanded = ref(true)
+const pipelinePage = ref<InstanceType<typeof AudioPipelinePage> | null>(null)
+watch(
+  () => active,
+  (shown) => {
+    if (shown) selectSection('pipeline')
+  }
+)
+watch(
+  () => [active, player.state, player.currentFile, player.trackInfo],
+  () => {
+    if (active && selected.value !== 'pipeline') void player.refreshAudioChain()
+  }
+)
 const draggingId = ref<NodeId | null>(null)
 const impulseEditor = ref<InstanceType<typeof ImpulseResponseEditor> | null>(null)
 const irError = ref('')
-const resetDialogOpen = ref(false)
-const resetting = ref(false)
 const savePresetDialogOpen = ref(false)
 const presetName = ref('')
 const editingPresetId = ref<string | undefined>()
-const clipGuardRecentlyActive = ref(false)
-let clipGuardTimer: ReturnType<typeof setTimeout> | undefined
-const nodeLabels: Record<NodeId, string> = {
-  channel_matrix: 'channelMatrix',
-  replay_gain: 'replayGain',
-  preamp: 'preamp',
-  eq: 'eq',
-  compressor: 'compressor',
-  delay: 'delay',
-  reverb: 'reverb',
-  chorus: 'chorus',
-  noise_gate: 'noiseGate',
-  phaser: 'phaser',
-  stereo_field: 'stereoField',
-  crossfeed: 'crossfeed',
-  impulse_response: 'irCorrection',
-  limiter: 'limiter'
-}
 const extras: { id: ExtraId; label: string }[] = [
+  { id: 'pipeline', label: 'audioPipeline' },
   { id: 'output', label: 'outputSettings' },
   { id: 'playback', label: 'playSpeed' },
   { id: 'resampler', label: 'resampler' },
-  { id: 'transition', label: 'gapless' }
+  { id: 'transition', label: 'transitionSettings' },
+  { id: 'advanced', label: 'advancedAudioSettings' }
 ]
 const legacyIds: LegacyId[] = ['compressor', 'delay', 'reverb', 'chorus', 'noise_gate', 'phaser']
 const lastReplayGainMode = ref<'track' | 'album'>('track')
@@ -124,10 +126,8 @@ function label(id: Selection): string {
 function selectSection(id: Selection): void {
   selected.value = id
   void nextTick(() => {
-    const scroller = rightScrollRef.value
-    const detail = detailSectionRef.value
-    if (!scroller || !detail) return
-    scroller.scrollTop += detail.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+    if (rightScrollRef.value) rightScrollRef.value.scrollTop = 0
+    pipelinePage.value?.scrollToTop()
   })
 }
 function isEnabled(id: NodeId): boolean {
@@ -233,122 +233,6 @@ function startDrag(id: NodeId, event: DragEvent): void {
   if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 
-watch(
-  () => player.audioAnalysis.clipGuardLimitedFrames,
-  (count, previous) => {
-    if (count <= previous) return
-    clipGuardRecentlyActive.value = true
-    if (clipGuardTimer) clearTimeout(clipGuardTimer)
-    clipGuardTimer = setTimeout(() => (clipGuardRecentlyActive.value = false), 1500)
-  }
-)
-const clipGuardStatus = computed(() => {
-  if (!player.audioChain?.activeNodes.includes('Output clip guard'))
-    return t('ap.clipGuardBypassed')
-  if (player.state !== 'playing') return t('ap.clipGuardStandingBy')
-  return clipGuardRecentlyActive.value ? t('ap.clipGuardWorking') : t('ap.clipGuardStandingBy')
-})
-function backendLabel(backend: string): string {
-  if (backend === 'wasapi_shared') return t('ap.wasapiShared')
-  if (backend === 'wasapi_exclusive') return t('ap.wasapiExclusive')
-  if (backend === 'asio') return 'ASIO'
-  if (backend === 'directsound')
-    return window.electron.process.platform === 'darwin' ? 'CoreAudio' : 'DirectSound'
-  return backend
-}
-const bitPerfectLabel = computed(() => {
-  if (player.audioChain?.isBitPerfect) return t('ap.bitPerfectVerified')
-  if (player.audioChain?.bitPerfectVerificationState === 'eligible_unverified')
-    return t('ap.bitPerfectCandidate')
-  return t('ap.bitPerfectUnavailable')
-})
-function pipelineLabel(node: string): string {
-  if (node === 'ReplayGain') return t('ap.replayGain')
-  if (node === 'libsamplerate SRC (stateful)') {
-    if (player.currentBackend === 'wasapi_shared') return t('ap.resamplerAutomaticShared')
-    const { forceOutputRate, targetSampleRate } = player.resamplerConfig
-    if (!forceOutputRate || targetSampleRate !== player.audioChain?.backendFormat.sampleRate) {
-      return t('ap.resamplerAutomatic')
-    }
-    return t('ap.resampler')
-  }
-  if (node === 'Resampler') return t('ap.resampler')
-  if (node === 'Channel routing') return t('ap.channelRouting')
-  if (node === 'SoundTouch tempo' || node === 'Playback speed') return t('ap.playSpeed')
-  const match = Object.entries(nodeLabels).find(
-    ([id]) => id.replaceAll('_', ' ').toLowerCase() === node.toLowerCase()
-  )
-  if (node === 'Parametric EQ' || node === 'EQ') return t('ap.eq')
-  if (node === 'Master volume') return t('ap.volume')
-  if (node === 'Crossfade') return t('ap.crossfade')
-  if (node === 'Pause fade') return t('ap.pauseFade')
-  if (node === 'DoP encoded transport') return t('ap.dopTransport')
-  if (node === 'Output clip guard') return t('ap.outputClipGuard')
-  return match ? label(match[0] as NodeId) : node
-}
-
-const bitPerfectReasonKeys: Record<string, string> = {
-  'Sample-rate conversion is active': 'sampleRateConversion',
-  'Channel count conversion is active': 'channelCountConversion',
-  'Playback speed is not unity': 'playbackSpeed',
-  'Channel matrix controls are enabled': 'channelMatrix',
-  'ReplayGain is active': 'replayGain',
-  'Preamp is enabled': 'preamp',
-  'Parametric EQ is enabled': 'eq',
-  'Compressor is enabled': 'compressor',
-  'Delay is enabled': 'delay',
-  'Reverb is enabled': 'reverb',
-  'Chorus is enabled': 'chorus',
-  'Noise Gate is enabled': 'noiseGate',
-  'Phaser is enabled': 'phaser',
-  'Stereo field is enabled': 'stereoField',
-  'Crossfeed is enabled': 'crossfeed',
-  'Impulse response is enabled': 'impulseResponse',
-  'Limiter is enabled': 'limiter',
-  'Master volume gain is not unity': 'masterVolume',
-  'Output backend is not active': 'outputInactive',
-  'Backend is not WASAPI Exclusive or ASIO': 'backendMode',
-  'Backend sample rate differs from the source': 'sampleRateMismatch',
-  'Backend channel count differs from the source': 'channelCountMismatch',
-  'Backend precision is lower than the source': 'precisionMismatch',
-  'Current f32 output path requires retained hardware verification': 'hardwareVerification',
-  'DSD source was converted to PCM': 'dsdConversion',
-  'Crossfade mixes consecutive tracks': 'crossfade',
-  'Pause and resume use a PCM gain envelope': 'pauseFade',
-  'DoP is an encoded DSD transport, not PCM bit-perfect': 'dopTransport'
-}
-function bitPerfectReason(reason: string): string {
-  const key = bitPerfectReasonKeys[reason]
-  return key ? t(`ap.bitPerfectReasons.${key}`) : reason
-}
-
-const resetStepLabels: Record<string, string> = {
-  'DSP nodes': 'dspNode',
-  ReplayGain: 'replayGain',
-  'playback speed': 'playSpeed',
-  EQ: 'eq',
-  compressor: 'compressor',
-  delay: 'delay',
-  reverb: 'reverb',
-  chorus: 'chorus',
-  'noise gate': 'noiseGate',
-  phaser: 'phaser',
-  'channel matrix': 'channelMatrix',
-  'stereo field': 'stereoField',
-  crossfeed: 'crossfeed',
-  'impulse response': 'irCorrection',
-  limiter: 'limiter',
-  resampler: 'resampler',
-  DoP: 'enableDoP',
-  transition: 'transitionSettings'
-}
-function resetFailureReason(error?: string): string {
-  if (error === 'Audio engine unavailable') return t('ap.resetEngineUnavailable')
-  const failedNode = error?.match(/^Failed to apply (.+) defaults$/)?.[1]
-  const key = failedNode ? resetStepLabels[failedNode] : undefined
-  return key ? t(`ap.${key}`) : t('ap.resetUnknownError')
-}
-
 const eqPresetOptions = computed(() => [
   ...BUILT_IN_EQ_PRESETS.map((preset) => ({
     value: preset.id,
@@ -393,34 +277,16 @@ function showIrError(code?: string): void {
   irError.value = te(key) ? t(key) : t('ap.irLoadFailed')
   warning(irError.value)
 }
-async function restoreDefaults(): Promise<void> {
-  if (resetting.value) return
-  resetting.value = true
-  stopEqComparison()
+function onProcessingChanged(): void {
   cancelPendingCommit()
-  try {
-    const result = await player.resetAudioProcessingSettings()
-    if (!result.success) {
-      warning(t('ap.resetAudioSettingsFailed', { reason: resetFailureReason(result.error) }))
-      return
-    }
-    irError.value = ''
-    clearHistory()
-    resetDialogOpen.value = false
-    success(t('ap.resetAudioSettingsDone'))
-  } catch (error) {
-    warning(t('ap.resetAudioSettingsFailed', { reason: resetFailureReason(String(error)) }))
-  } finally {
-    resetting.value = false
-  }
+  irError.value = ''
+  clearHistory()
 }
 
 onMounted(() => {
-  player.setAudioControlAnalysisActive(true)
   void Promise.allSettled([
     player.loadOutputDeviceSettings(),
     player.refreshDevices(),
-    player.refreshAudioChain(),
     player.loadEqBands(),
     player.loadReplayGain(),
     player.loadPlaybackSpeed(),
@@ -443,8 +309,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   stopEqComparison()
-  if (clipGuardTimer) clearTimeout(clipGuardTimer)
-  player.setAudioControlAnalysisActive(false)
   player.setEqSpectrumActive(false)
 })
 </script>
@@ -525,316 +389,225 @@ onBeforeUnmount(() => {
           </span>
         </div>
       </nav>
-      <div class="p-2">
-        <button
-          class="flex justify-center items-center gap-1 w-full rounded-lg border border-border px-2 py-2 text-xs hover:border-primary hover:text-primary"
-          type="button"
-          @click="resetDialogOpen = true"
-        >
-          <svg-icon name="common-refresh" class-name="size-3" />
-          {{ t('ap.resetAudioSettings') }}
-        </button>
-      </div>
     </aside>
 
-    <div
-      ref="rightScrollRef"
-      class="min-h-0 min-w-0 flex-1 space-y-3 overflow-y-auto overscroll-contain [scrollbar-gutter:stable] custom-scrollbar"
-    >
-      <section class="rounded-xl border border-border p-3">
-        <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-          <div class="flex items-center gap-1">
-            <h3 class="text-xs font-semibold">{{ t('ap.audioPipeline') }}</h3>
-            <button
-              type="button"
-              class="inline-flex size-6 items-center justify-center rounded text-text-l hover:bg-text/5 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
-              :title="t(pipelineExpanded ? 'ap.collapsePipeline' : 'ap.expandPipeline')"
-              :aria-label="t(pipelineExpanded ? 'ap.collapsePipeline' : 'ap.expandPipeline')"
-              :aria-expanded="pipelineExpanded"
-              aria-controls="audio-pipeline-details"
-              @click="pipelineExpanded = !pipelineExpanded"
-            >
-              <SvgIcon
-                :name="pipelineExpanded ? 'arrow-arrow-up' : 'arrow-arrow-down'"
-                class-name="size-4"
-              />
-            </button>
-          </div>
-          <div class="flex flex-wrap items-center justify-end gap-2 text-[11px]">
-            <span class="rounded-full border border-border px-2 py-0.5 text-text-l">
-              {{ backendLabel(player.currentBackend) }}
-            </span>
-            <span class="rounded-full border border-border px-2 py-0.5">{{ bitPerfectLabel }}</span>
-          </div>
-        </div>
-        <div v-show="pipelineExpanded" id="audio-pipeline-details">
-          <template v-if="player.audioChain">
-            <p class="mt-2 text-[11px] text-text-l">
-              {{ t('ap.input') }} {{ player.audioChain.sourceFormat.sampleRate || '—' }} Hz ·
-              {{ player.audioChain.sourceFormat.channels || '—' }} {{ t('ap.channels') }} →
-              {{ t('ap.output') }} {{ player.audioChain.backendFormat.sampleRate || '—' }} Hz ·
-              {{ player.audioChain.backendFormat.channels || '—' }} {{ t('ap.channels') }}
-            </p>
-            <div class="mt-3">
-              <div class="mb-1 text-[11px] text-text-l">{{ t('ap.signalPath') }}</div>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <template
-                  v-for="(node, index) in player.audioChain.activeNodes"
-                  :key="`active-${index}`"
-                >
-                  <span v-if="index" class="text-[11px] text-text-l">→</span>
-                  <span class="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] text-primary">
-                    {{ pipelineLabel(node) }}
-                  </span>
-                </template>
-                <span v-if="!player.audioChain.activeNodes.length" class="text-[11px] text-text-l">
-                  {{ t('ap.noActiveNodes') }}
-                </span>
-              </div>
-            </div>
-            <div v-if="player.audioChain.bypassedNodes.length" class="mt-2">
-              <div class="mb-1 text-[11px] text-text-l">{{ t('ap.bypass') }}</div>
-              <div class="flex flex-wrap gap-1.5">
-                <span
-                  v-for="(node, index) in player.audioChain.bypassedNodes"
-                  :key="`bypassed-${index}`"
-                  class="rounded bg-text/5 px-1.5 py-0.5 text-[11px] text-text-l"
-                >
-                  {{ pipelineLabel(node) }}
-                </span>
-              </div>
-            </div>
-            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[11px] tabular-nums text-text-l">
-              <span>{{ t('ap.eqPeak') }} {{ player.audioChain.eqPeakDb.toFixed(1) }} dB</span>
-              <span>
-                {{ t('ap.eqAutoPreamp') }}
-                {{ player.audioChain.eqAutoPreampDb.toFixed(1) }} dB
-              </span>
-              <span>{{ t('ap.outputClipGuard') }}: {{ clipGuardStatus }}</span>
-              <span v-if="player.audioAnalysis.clipGuardLimitedFrames > 0">
-                {{ t('ap.clipGuardRecentReduction') }} -{{
-                  player.audioAnalysis.clipGuardReductionDb.toFixed(1)
-                }}
-                dB
-              </span>
-            </div>
-            <p
-              v-if="player.audioChain.bitPerfectBlockers.length"
-              class="mt-2 text-[11px] text-text-l"
-            >
-              {{ player.audioChain.bitPerfectBlockers.map(bitPerfectReason).join(' · ') }}
-            </p>
-          </template>
-          <p v-else class="mt-2 text-xs text-text-l">{{ t('ap.bitPerfectUnavailable') }}</p>
-        </div>
-      </section>
-
-      <section ref="detailSectionRef" class="rounded-xl border border-border p-4">
-        <div
-          class="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border pb-4"
-        >
-          <div>
-            <h3 class="text-sm font-semibold">{{ label(selected) }}</h3>
-            <p v-if="isNodeId(selected)" class="mt-1 text-[11px] text-text-l">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <AudioPipelinePage
+        v-if="selected === 'pipeline'"
+        ref="pipelinePage"
+        v-model:loudness="pipelineLoudnessEnabled"
+        :active="active"
+      />
+      <section v-else class="flex min-h-0 flex-1 flex-col rounded-xl">
+        <AudioSettingsPageHeader :title="label(selected)">
+          <template v-if="isNodeId(selected)" #details>
+            <p class="text-[11px] text-text-l">
               {{
                 t('ap.v2Position', {
                   position: player.dspNodes.findIndex((node) => node.id === selected) + 1
                 })
               }}
             </p>
-          </div>
+          </template>
           <BaseSwitch
             v-if="isNodeId(selected)"
             :model-value="isEnabled(selected)"
             :aria-label="label(selected)"
             @change="(value) => setNodeEnabled(selected as NodeId, value)"
           />
-        </div>
+        </AudioSettingsPageHeader>
 
-        <DspEffectEditor v-if="isLegacyId(selected) || selected === 'limiter'" :effect="selected" />
-        <ChannelMatrixEditor v-else-if="selected === 'channel_matrix'" />
-        <ReplayGainEditor v-else-if="selected === 'replay_gain'" />
-        <PreampEditor v-else-if="selected === 'preamp'" />
-        <!-- eq -->
-        <div v-else-if="selected === 'eq'" class="space-y-4 text-xs">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-text-l">{{ t('ap.eqPreset') }}</span>
-            <BaseSelect
-              :model-value="selectedEqPreset"
-              :options="eqPresetOptions"
-              class="w-44"
-              @change="selectEqPreset"
-            />
-            <button
-              class="rounded border border-border px-2.5 py-1.5 hover:border-primary"
-              @click="openPresetDialog"
-            >
-              {{ t('ap.saveEqPreset') }}
-            </button>
-            <button
-              v-if="eqPresets.customPresets.some((item) => item.id === selectedEqPreset)"
-              class="rounded border border-danger px-2.5 py-1.5 text-danger"
-              @click="eqPresets.deletePreset(selectedEqPreset)"
-            >
-              {{ t('ap.deleteEqPreset') }}
-            </button>
-            <button
-              class="rounded border border-border px-2.5 py-1.5 hover:border-primary"
-              @click="resetEq"
-            >
-              {{ t('ap.resetEq') }}
-            </button>
-            <button
-              class="rounded border border-border px-2.5 py-1.5 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="eqHistory.length === 0"
-              @click="undoEq"
-            >
-              {{ t('ap.eqUndo') }}
-            </button>
-            <button
-              class="rounded border border-border px-2.5 py-1.5 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-              :disabled="eqFuture.length === 0"
-              @click="redoEq"
-            >
-              {{ t('ap.eqRedo') }}
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-4 text-text-l">
-            <span>
-              {{ t('ap.eqPeak') }} {{ player.audioChain?.eqPeakDb?.toFixed(1) ?? '—' }} dB
-            </span>
-            <span>
-              {{ t('ap.eqAutoPreamp') }}
-              {{ player.audioChain?.eqAutoPreampDb?.toFixed(1) ?? '—' }} dB
-            </span>
-          </div>
-          <EqResponseGraph
-            v-model:selected-index="selectedEqIndex"
-            :bands="player.eqBands"
-            :spectrum="player.eqSpectrum"
-            :reduce-motion="ui.reduceMotion"
-            :sample-rate="
-              player.audioChain?.backendFormat.sampleRate ||
-              player.audioChain?.sourceFormat.sampleRate ||
-              48000
-            "
-            @update:band="updateEqBand"
-            @toggle:band="toggleEqBand"
-            @commit="commitEq"
+        <div
+          ref="rightScrollRef"
+          class="custom-scrollbar min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 [scrollbar-gutter:stable] sm:px-5 sm:pb-5"
+        >
+          <DspEffectEditor
+            v-if="isLegacyId(selected) || selected === 'limiter'"
+            :effect="selected"
           />
-          <p class="text-[11px] text-text-l">{{ t('ap.v2EqGraphDesc') }}</p>
-          <p v-if="player.eqSpectrum" class="text-[11px] text-text-l">
-            {{ t('ap.v2EqOutputSpectrum') }}
-          </p>
-          <div v-if="selectedEqBand" class="rounded-lg border border-border p-3">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <span class="font-medium">
-                {{ t('ap.v2SelectedBand', { number: selectedEqIndex + 1 }) }}
+          <ChannelMatrixEditor v-else-if="selected === 'channel_matrix'" />
+          <ReplayGainEditor v-else-if="selected === 'replay_gain'" />
+          <PreampEditor v-else-if="selected === 'preamp'" />
+          <!-- eq -->
+          <div v-else-if="selected === 'eq'" class="space-y-4 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-text-l">{{ t('ap.eqPreset') }}</span>
+              <BaseSelect
+                :model-value="selectedEqPreset"
+                :options="eqPresetOptions"
+                class="w-44"
+                @change="selectEqPreset"
+              />
+              <button
+                class="rounded border border-border px-2.5 py-1.5 hover:border-primary"
+                @click="openPresetDialog"
+              >
+                {{ t('ap.saveEqPreset') }}
+              </button>
+              <button
+                v-if="eqPresets.customPresets.some((item) => item.id === selectedEqPreset)"
+                class="rounded border border-danger px-2.5 py-1.5 text-danger"
+                @click="eqPresets.deletePreset(selectedEqPreset)"
+              >
+                {{ t('ap.deleteEqPreset') }}
+              </button>
+              <button
+                class="rounded border border-border px-2.5 py-1.5 hover:border-primary"
+                @click="resetEq"
+              >
+                {{ t('ap.resetEq') }}
+              </button>
+              <button
+                class="rounded border border-border px-2.5 py-1.5 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                :disabled="eqHistory.length === 0"
+                @click="undoEq"
+              >
+                {{ t('ap.eqUndo') }}
+              </button>
+              <button
+                class="rounded border border-border px-2.5 py-1.5 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                :disabled="eqFuture.length === 0"
+                @click="redoEq"
+              >
+                {{ t('ap.eqRedo') }}
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-4 text-text-l">
+              <span>
+                {{ t('ap.eqPeak') }} {{ player.audioChain?.eqPeakDb?.toFixed(1) ?? '—' }} dB
               </span>
-              <div class="flex flex-wrap items-center gap-2">
-                <button
-                  class="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-                  :disabled="!previousSelectedEqBand || !!eqComparison"
-                  @click="undoSelectedEqBand"
-                >
-                  {{ t('ap.eqBandUndo') }}
-                </button>
-                <button
-                  class="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-                  :class="eqComparison ? 'border-primary text-primary' : ''"
-                  :disabled="!previousSelectedEqBand && !eqComparison"
-                  :aria-pressed="!!eqComparison"
-                  @click="toggleEqComparison"
-                >
-                  {{ t(eqComparison ? 'ap.eqBandCompareBack' : 'ap.eqBandCompare') }}
-                </button>
-                <div class="flex items-center gap-2">
-                  <BaseSwitch
-                    class="w-fit text-left"
-                    :model-value="selectedEqBand.enabled"
-                    :disabled="!!eqComparison"
-                    @change="
-                      (value) => {
-                        updateEqBand(selectedEqIndex, { enabled: value === true })
-                        commitEq()
-                      }
-                    "
+              <span>
+                {{ t('ap.eqAutoPreamp') }}
+                {{ player.audioChain?.eqAutoPreampDb?.toFixed(1) ?? '—' }} dB
+              </span>
+            </div>
+            <BaseSwitch v-model="eqSpectrumVisible" size="sm" :disabled="dopActive">
+              {{ t('ap.showEqSpectrum') }}
+            </BaseSwitch>
+            <EqResponseGraph
+              v-model:selected-index="selectedEqIndex"
+              :bands="player.eqBands"
+              :spectrum="eqSpectrumVisible && !dopActive ? player.eqSpectrum : undefined"
+              :reduce-motion="ui.reduceMotion"
+              :sample-rate="
+                player.audioChain?.backendFormat.sampleRate ||
+                player.audioChain?.sourceFormat.sampleRate ||
+                48000
+              "
+              @update:band="updateEqBand"
+              @toggle:band="toggleEqBand"
+              @commit="commitEq"
+            />
+            <p class="text-[11px] text-text-l">{{ t('ap.v2EqGraphDesc') }}</p>
+            <p
+              v-if="eqSpectrumVisible && !dopActive && player.eqSpectrum"
+              class="text-[11px] text-text-l"
+            >
+              {{ t('ap.v2EqOutputSpectrum') }}
+            </p>
+            <div v-if="selectedEqBand" class="rounded-lg border border-border p-3">
+              <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <span class="font-medium">
+                  {{ t('ap.v2SelectedBand', { number: selectedEqIndex + 1 }) }}
+                </span>
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    class="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="!previousSelectedEqBand || !!eqComparison"
+                    @click="undoSelectedEqBand"
                   >
-                    {{ t('ap.eqActive') }}
-                  </BaseSwitch>
+                    {{ t('ap.eqBandUndo') }}
+                  </button>
+                  <button
+                    class="rounded border border-border px-2 py-1 hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
+                    :class="eqComparison ? 'border-primary text-primary' : ''"
+                    :disabled="!previousSelectedEqBand && !eqComparison"
+                    :aria-pressed="!!eqComparison"
+                    @click="toggleEqComparison"
+                  >
+                    {{ t(eqComparison ? 'ap.eqBandCompareBack' : 'ap.eqBandCompare') }}
+                  </button>
+                  <div class="flex items-center gap-2">
+                    <BaseSwitch
+                      class="w-fit text-left"
+                      :model-value="selectedEqBand.enabled"
+                      :disabled="!!eqComparison"
+                      @change="
+                        (value) => {
+                          updateEqBand(selectedEqIndex, { enabled: value === true })
+                          commitEq()
+                        }
+                      "
+                    >
+                      {{ t('ap.eqActive') }}
+                    </BaseSwitch>
+                  </div>
                 </div>
               </div>
+              <fieldset class="flex min-w-0 flex-wrap gap-3" :disabled="!!eqComparison">
+                <DspKnobField
+                  :model-value="selectedEqBand.frequencyHz"
+                  :label="t('ap.v2Frequency')"
+                  :description="t('ap.v2FrequencyHelp')"
+                  :min="selectedEqFrequencyLimits.min"
+                  :max="selectedEqFrequencyLimits.max"
+                  :step="0.1"
+                  :decimals="1"
+                  :live="false"
+                  scale="log"
+                  unit="Hz"
+                  @update:model-value="updateEqBand(selectedEqIndex, { frequencyHz: $event })"
+                  @change="commitEq"
+                />
+                <DspKnobField
+                  :model-value="selectedEqBand.gainDb"
+                  :label="t('ap.eqGain')"
+                  :description="t('ap.v2GainHelp')"
+                  :min="-12"
+                  :max="12"
+                  :step="0.1"
+                  :decimals="1"
+                  :live="false"
+                  unit="dB"
+                  @update:model-value="updateEqBand(selectedEqIndex, { gainDb: $event })"
+                  @change="commitEq"
+                />
+                <DspKnobField
+                  :model-value="selectedEqBand.q"
+                  :label="t('ap.v2Q')"
+                  :description="t('ap.v2QHelp')"
+                  :min="0.1"
+                  :max="24"
+                  :step="0.1"
+                  :decimals="1"
+                  :live="false"
+                  @update:model-value="updateEqBand(selectedEqIndex, { q: $event })"
+                  @change="commitEq"
+                />
+              </fieldset>
             </div>
-            <fieldset class="flex min-w-0 flex-wrap gap-3" :disabled="!!eqComparison">
-              <DspKnobField
-                :model-value="selectedEqBand.frequencyHz"
-                :label="t('ap.v2Frequency')"
-                :description="t('ap.v2FrequencyHelp')"
-                :min="selectedEqFrequencyLimits.min"
-                :max="selectedEqFrequencyLimits.max"
-                :step="0.1"
-                :decimals="1"
-                :live="false"
-                scale="log"
-                unit="Hz"
-                @update:model-value="updateEqBand(selectedEqIndex, { frequencyHz: $event })"
-                @change="commitEq"
-              />
-              <DspKnobField
-                :model-value="selectedEqBand.gainDb"
-                :label="t('ap.eqGain')"
-                :description="t('ap.v2GainHelp')"
-                :min="-12"
-                :max="12"
-                :step="0.1"
-                :decimals="1"
-                :live="false"
-                unit="dB"
-                @update:model-value="updateEqBand(selectedEqIndex, { gainDb: $event })"
-                @change="commitEq"
-              />
-              <DspKnobField
-                :model-value="selectedEqBand.q"
-                :label="t('ap.v2Q')"
-                :description="t('ap.v2QHelp')"
-                :min="0.1"
-                :max="24"
-                :step="0.1"
-                :decimals="1"
-                :live="false"
-                @update:model-value="updateEqBand(selectedEqIndex, { q: $event })"
-                @change="commitEq"
-              />
-            </fieldset>
           </div>
+          <StereoFieldEditor v-else-if="selected === 'stereo_field'" />
+          <CrossfeedEditor v-else-if="selected === 'crossfeed'" />
+          <ImpulseResponseEditor
+            v-else-if="selected === 'impulse_response'"
+            ref="impulseEditor"
+            :error="irError"
+            @load-error="showIrError"
+            @clear-error="irError = ''"
+          />
+          <AudioOutputSettings v-else-if="selected === 'output'" />
+          <PlaybackSpeedSettings v-else-if="selected === 'playback'" />
+          <ResamplerSettings v-else-if="selected === 'resampler'" />
+          <PlaybackTransitionSettings v-else-if="selected === 'transition'" />
+          <AudioAdvancedSettings
+            v-else-if="selected === 'advanced'"
+            @processing-changed="onProcessingChanged"
+          />
         </div>
-        <StereoFieldEditor v-else-if="selected === 'stereo_field'" />
-        <CrossfeedEditor v-else-if="selected === 'crossfeed'" />
-        <ImpulseResponseEditor
-          v-else-if="selected === 'impulse_response'"
-          ref="impulseEditor"
-          :error="irError"
-          @load-error="showIrError"
-          @clear-error="irError = ''"
-        />
-        <AudioOutputSettings v-else-if="selected === 'output'" />
-        <PlaybackSpeedSettings v-else-if="selected === 'playback'" />
-        <ResamplerSettings v-else-if="selected === 'resampler'" />
-        <PlaybackTransitionSettings v-else-if="selected === 'transition'" />
       </section>
     </div>
 
-    <BaseDialog v-model="resetDialogOpen" :title="t('ap.resetAudioSettings')" width="max-w-sm">
-      <p class="text-sm">{{ t('ap.resetAudioSettingsConfirm') }}</p>
-      <template #footer>
-        <BaseButton variant="cancel" @click="resetDialogOpen = false">
-          {{ t('common.cancel') }}
-        </BaseButton>
-        <BaseButton :disabled="resetting" @click="restoreDefaults">
-          {{ t('ap.resetAudioSettings') }}
-        </BaseButton>
-      </template>
-    </BaseDialog>
     <BaseDialog
       v-model="savePresetDialogOpen"
       :title="t(editingPresetId ? 'ap.updateEqPreset' : 'ap.saveEqPreset')"

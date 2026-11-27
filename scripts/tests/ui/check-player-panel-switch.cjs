@@ -434,6 +434,25 @@ app.whenReady().then(async () => {
     anchor.dispatchEvent(new PointerEvent('pointerenter'));await Vue.nextTick();await window.panelWait(180);
     const tooltip=document.querySelector('.ep-tooltip');
     if(!tooltip||!tooltip.querySelector('input[type="range"]')||getComputedStyle(tooltip).visibility!=='visible')throw Error('Hover hint must preserve the interactive control popup: '+label);
+    if(label===zh.playerPanel.speed){
+      const commits=[];
+      window.panelPlayer.setPlaybackSpeed=()=>commits.push(window.panelPlayer.playbackSpeedConfig.speed);
+      const range=tooltip.querySelector('input[type="range"]');
+      for(const value of ['2','0.5','1','1.6']){
+        range.value=value;
+        range.dispatchEvent(new Event('input',{bubbles:true}));
+        await Vue.nextTick();
+      }
+      if(commits.length||window.panelPlayer.playbackSpeedConfig.speed!==1||tooltip.querySelector('b').textContent!=='1.6×')
+        throw Error('Speed drags preview values without changing playback');
+      range.dispatchEvent(new Event('change',{bubbles:true}));
+      if(commits.join()!=='1.6')throw Error('Only the released speed is sent to playback');
+      for(const deltaY of [-1,1,-1])anchor.dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY}));
+      if(commits.length!==1)throw Error('Wheel bursts should defer playback changes');
+      await window.panelWait(200);
+      if(commits.join()!=='1.6,1.7')throw Error('Only the final wheel speed is sent to playback');
+      window.panelPlayer.playbackSpeedConfig={enabled:false,speed:1};
+    }
     anchor.dispatchEvent(new PointerEvent('pointerleave'));
     document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));
     await Vue.nextTick();await window.panelWait(200);
